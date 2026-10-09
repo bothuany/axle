@@ -1,0 +1,460 @@
+diff --git a/product.json b/product.json
+index 64e1c4d2..13ff6435 100644
+--- a/product.json
++++ b/product.json
+@@ -1,6 +1,6 @@
+ {
+-	"nameShort": "Code - OSS",
+-	"nameLong": "Code - OSS",
++	"nameShort": "Flow",
++	"nameLong": "Flow",
+ 	"applicationName": "code-oss",
+ 	"dataFolderName": ".vscode-oss",
+ 	"sharedDataFolderName": ".vscode-oss-shared",
+@@ -246,5 +246,12 @@
+ 		"GitHub.copilot-chat"
+ 	],
+ 	"sessionsWindowAllowedExtensions": [],
+-	"voiceWsUrl": "wss://falcon-caas.mai.microsoft.com/voice-code/api/v1/realtime/voice"
++	"voiceWsUrl": "wss://falcon-caas.mai.microsoft.com/voice-code/api/v1/realtime/voice",
++	"extensionsGallery": {
++		"serviceUrl": "https://open-vsx.org/vscode/gallery",
++		"itemUrl": "https://open-vsx.org/vscode/item",
++		"latestUrlTemplate": "https://open-vsx.org/vscode/gallery/{publisher}/{name}/latest",
++		"controlUrl": "https://raw.githubusercontent.com/EclipseFdn/publish-extensions/refs/heads/master/extension-control/extensions.json"
++	},
++	"extensionUrlTemplate": "https://open-vsx.org/vscode/gallery/{publisher}/{name}/latest"
+ }
+diff --git a/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts b/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
+index ac387762..97cb90ea 100644
+--- a/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
++++ b/src/vs/platform/agentHost/common/agentHostStarter.config.contribution.ts
+@@ -308,7 +308,7 @@ configurationRegistry.registerConfiguration({
+ 		[AgentHostClaudeAgentEnabledSettingId]: {
+ 			type: 'boolean',
+ 			description: nls.localize('chat.agentHost.claudeAgent.enabled', "When enabled, the agent host registers the Claude provider, subject to the Claude SDK being reachable. The agent host process must be restarted for changes to take effect."),
+-			default: true,
++			default: false, // Flow: Claude runs through the flow-agent extension (ACP) instead
+ 			tags: ['experimental', 'advanced'],
+ 			// Owns the policy so the account-side preview-features flag can disable Claude across all surfaces.
+ 			policy: {
+@@ -335,7 +335,7 @@ configurationRegistry.registerConfiguration({
+ 		[AgentHostCodexAgentEnabledSettingId]: {
+ 			type: 'boolean',
+ 			description: nls.localize('chat.agentHost.codexAgent.enabled', "When enabled, the agent host registers the Codex provider (subject to the Codex SDK being reachable). Enabling takes effect without restarting the agent host."),
+-			default: product.quality !== 'stable',
++			default: false, // Flow: Codex runs through the flow-agent extension (ACP) instead
+ 			tags: ['experimental'],
+ 			// Allow the default to be overridden by an experiment. Uses `startup`
+ 			// to match the sibling agent-host provider settings.
+diff --git a/src/vs/server/node/webClientServer.ts b/src/vs/server/node/webClientServer.ts
+index ebbfe1c5..ccf841f2 100644
+--- a/src/vs/server/node/webClientServer.ts
++++ b/src/vs/server/node/webClientServer.ts
+@@ -424,7 +424,10 @@ export class WebClientServer {
+ 			folderUri: resolveWorkspaceURI(this._environmentService.args['default-folder']),
+ 			workspaceUri: resolveWorkspaceURI(this._environmentService.args['default-workspace']),
+ 			productConfiguration,
+-			callbackRoute: callbackRoute
++			callbackRoute: callbackRoute,
++			// Flow: serve webview content from this server instead of the public vscode-cdn.net, so webviews
++			// work offline and on locked-down networks.
++			webviewEndpoint: `http://${remoteAuthority}${staticRoute}/out/vs/workbench/contrib/webview/browser/pre`
+ 		};
+ 
+ 		const cookies = cookie.parse(req.headers.cookie || '');
+diff --git a/src/vs/workbench/api/common/extHostLanguageModels.ts b/src/vs/workbench/api/common/extHostLanguageModels.ts
+index b4f2cd68..b6c0af39 100644
+--- a/src/vs/workbench/api/common/extHostLanguageModels.ts
++++ b/src/vs/workbench/api/common/extHostLanguageModels.ts
+@@ -463,10 +463,20 @@ export class ExtHostLanguageModels implements ExtHostLanguageModelsShape {
+ 			return model;
+ 		}
+ 		const model = await this.getDefaultLanguageModel(extension);
+-		if (!model) {
+-			throw new Error('Language model unavailable');
++		if (model) {
++			return model;
++		}
++		// Flow: a chat session type that brings its own agent registers only its own models; without a
++		// Copilot default, fall back to a model the requesting extension provides itself.
++		for (const [identifier, data] of this._localModels) {
++			if (ExtensionIdentifier.equals(data.metadata.extension, extension.identifier)) {
++				const own = await this.getLanguageModelByIdentifier(extension, identifier);
++				if (own) {
++					return own;
++				}
++			}
+ 		}
+-		return model;
++		throw new Error('Language model unavailable');
+ 	}
+ 
+ 	private async _createLanguageModelChatApi(extension: IExtensionDescription, modelId: string): Promise<vscode.LanguageModelChat | undefined> {
+diff --git a/src/vs/workbench/browser/media/flow-mark.svg b/src/vs/workbench/browser/media/flow-mark.svg
+new file mode 100644
+index 00000000..7df7e39f
+--- /dev/null
++++ b/src/vs/workbench/browser/media/flow-mark.svg
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120"><g fill="none" stroke="#fff" stroke-opacity=".085" stroke-width="3"><rect x="76" y="20" width="152" height="80" rx="20"/><path d="M46 60h48M136 60h32"/></g><g fill="#fff" fill-opacity=".085"><path d="M14 40l32 20-32 20z"/><path d="M115 39l21 21-21 21-21-21z"/><circle cx="188" cy="60" r="18"/></g></svg>
+diff --git a/src/vs/workbench/browser/media/flow.css b/src/vs/workbench/browser/media/flow.css
+new file mode 100644
+index 00000000..e1c873a8
+--- /dev/null
++++ b/src/vs/workbench/browser/media/flow.css
+@@ -0,0 +1,226 @@
++/*---------------------------------------------------------------------------------------------
++ *  Flow: workbench touches on top of the Modern UI. Colours live in the Flow Dark theme; this
++ *  file only holds what a theme cannot express.
++ *--------------------------------------------------------------------------------------------*/
++
++/* The empty editor shows Flow's mark: an entry point, then a method frame holding what it calls. */
++.monaco-workbench .part.editor > .content .editor-group-container .editor-group-watermark .letterpress {
++	background-image: url('./flow-mark.svg') !important;
++	background-size: contain;
++	aspect-ratio: 2 / 1 !important;
++}
++
++/* The Flow trail (flow-view): each step is a glyph item and a label item; pull them into one unit. */
++.monaco-workbench .part.statusbar .statusbar-item[id*="flow.trail."] > .statusbar-item-label {
++	padding: 0 3px;
++}
++.monaco-workbench .part.statusbar .statusbar-item[id*="flow.trail."] {
++	margin: 0 -1px;
++}
++
++/* ---- Chat: a prompt card, then the agent's work along one wire ----------------------------------
++ * The prompt reads as a note handed to the agent: a full-width card, left aligned. The reply drops
++ * the avatar header and runs along a thin rail, the same wire that joins cards on the Flow canvas;
++ * every tool step is a node on it, lit while it runs. */
++
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-request {
++	align-items: stretch;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-item-container.interactive-request > .value {
++	align-items: stretch !important;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-request > .value > .chat-markdown-part.rendered-markdown {
++	max-width: none;
++	width: 100%;
++	box-sizing: border-box;
++	margin-left: 0;
++	padding: 10px 12px;
++	border: 1px solid var(--vscode-chat-requestBorder);
++	border-radius: 10px;
++	background-color: var(--vscode-chat-requestBubbleBackground);
++	color: var(--vscode-foreground);
++	line-height: 1.5;
++}
++
++/* The reply speaks for itself: no avatar row. The agent's name is on the session and its chip. */
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-response > .header {
++	display: none;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-response > .value {
++	position: relative;
++	padding-left: 20px;
++	line-height: 1.6;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-response > .value::before {
++	content: '';
++	position: absolute;
++	left: 6px;
++	top: 2px;
++	bottom: 6px;
++	width: 1px;
++	background: var(--vscode-chat-requestBorder);
++}
++
++/* Steps on the wire: a hollow node when done, a lit one while it runs. */
++.monaco-workbench.modern-ui .interactive-session .interactive-response > .value > .chat-tool-invocation-part,
++.monaco-workbench.modern-ui .interactive-session .interactive-response > .value > .chat-used-context {
++	position: relative;
++	color: var(--vscode-descriptionForeground);
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-response > .value > .chat-tool-invocation-part::before,
++.monaco-workbench.modern-ui .interactive-session .interactive-response > .value > .chat-used-context::before {
++	content: '';
++	position: absolute;
++	left: -17px;
++	top: 7px;
++	width: 7px;
++	height: 7px;
++	border-radius: 50%;
++	box-sizing: border-box;
++	border: 1.5px solid var(--vscode-descriptionForeground);
++	background: var(--vscode-sideBar-background);
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-response > .value > .chat-tool-invocation-part:has(.codicon-loading)::before {
++	border-color: var(--vscode-progressBar-background);
++	background: var(--vscode-progressBar-background);
++	box-shadow: 0 0 0 3px color-mix(in srgb, var(--vscode-progressBar-background) 25%, transparent);
++}
++
++/* Code in replies sits a step darker than the panel, like the editor it came from. */
++.monaco-workbench.modern-ui .interactive-session .interactive-result-code-block {
++	border: 1px solid var(--vscode-chat-requestBorder);
++	border-radius: 8px;
++	overflow: hidden;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container .value .rendered-markdown p > code {
++	padding: 1px 5px;
++	border-radius: 4px;
++	font-size: 0.92em;
++}
++
++/* Copy and timing only when you look for them; the latest reply keeps them. */
++.monaco-workbench.modern-ui .interactive-session .interactive-response:not(.chat-most-recent-response):not(:hover) > .chat-footer-toolbar {
++	opacity: 0;
++}
++
++/* The input: a raised card that lights up in the signal colour while you type. */
++.monaco-workbench.modern-ui .interactive-session .chat-input-container {
++	--chat-input-radius: 12px;
++	background-color: var(--vscode-chat-requestBubbleBackground);
++	border-color: var(--vscode-chat-requestBorder);
++	transition: border-color .12s, box-shadow .12s;
++}
++.monaco-workbench.modern-ui .interactive-session .chat-input-container.focused {
++	border-color: color-mix(in srgb, var(--vscode-progressBar-background) 60%, transparent);
++	box-shadow: 0 0 0 3px color-mix(in srgb, var(--vscode-progressBar-background) 12%, transparent);
++}
++@media (prefers-reduced-motion: reduce) {
++	.monaco-workbench.modern-ui .interactive-session .chat-input-container { transition: none; }
++}
++
++/* ---- Dock: the activity bar as a column of tiles, each place in its own colour ------------------
++ * VS Code's bar is grey glyphs with a white stripe. Here every place keeps a hue (files blue, search
++ * amber, changes green, run coral, harness teal, flow violet): dimmed at rest, full on its tile when open. */
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has(.codicon-explorer-view-icon) { --dock: #7aa2f7; }
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has(.codicon-search-view-icon) { --dock: #e5b567; }
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has(.codicon-source-control-view-icon) { --dock: #6fcf97; }
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has(.codicon-run-view-icon) { --dock: #f2777a; }
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has(.codicon-extensions-view-icon) { --dock: #9aa4bf; }
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has([class*='view-extension-flowHarness']) { --dock: #4fd1c5; }
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has([class*='view-extension-flow-']) { --dock: #b392f0; }
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has(.codicon-test-view-icon) { --dock: #e0af68; }
++
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item[style] .action-label.codicon,
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item .action-label.codicon {
++	color: color-mix(in srgb, var(--dock, var(--vscode-activityBar-inactiveForeground)) 62%, var(--vscode-activityBar-background)) !important;
++}
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item .action-label.uri-icon {
++	background-color: color-mix(in srgb, var(--dock, var(--vscode-activityBar-inactiveForeground)) 62%, var(--vscode-activityBar-background)) !important;
++}
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:is(.checked, :hover) .action-label.codicon {
++	color: var(--dock, var(--vscode-activityBar-foreground)) !important;
++}
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:is(.checked, :hover) .action-label.uri-icon {
++	background-color: var(--dock, var(--vscode-activityBar-foreground)) !important;
++}
++.monaco-workbench.modern-ui .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item.checked .active-item-indicator {
++	background-color: color-mix(in srgb, var(--dock, #7aa2f7) 16%, transparent) !important;
++	border-radius: 10px;
++	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dock, #7aa2f7) 28%, transparent);
++}
++.monaco-workbench.modern-ui .activitybar > .content:not(.dragged-over) :not(.monaco-menu) > .monaco-action-bar .action-item:not(.checked):hover .active-item-indicator {
++	background-color: color-mix(in srgb, var(--dock, #7aa2f7) 9%, transparent) !important;
++	border-radius: 10px;
++}
++/* Badges take the colour of their place instead of one blue for everything. */
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item .badge .badge-content {
++	background-color: var(--dock, var(--vscode-activityBarBadge-background)) !important;
++	color: #17181d !important;
++	font-weight: 700;
++}
++
++/* The app menu at the top of the dock wears the Flow mark. */
++.monaco-workbench .activitybar .menubar .toolbar-toggle-more::before,
++.monaco-workbench .activitybar .menubar .menubar-menu-title .codicon-menu::before {
++	content: '' !important;
++}
++.monaco-workbench .activitybar .menubar .toolbar-toggle-more,
++.monaco-workbench .activitybar .menubar .menubar-menu-title .codicon-menu {
++	background: linear-gradient(135deg, #7aa2f7, #b392f0) !important;
++	-webkit-mask: url('./flow-mark.svg') center / 22px no-repeat;
++	mask: url('./flow-mark.svg') center / 22px no-repeat;
++	-webkit-mask-size: 24px;
++}
++
++/* ---- Title bar: one command pill in the middle, nothing else asking for attention ------------- */
++.monaco-workbench .part.titlebar .command-center .agent-status-command-center-toolbar,
++.monaco-workbench .part.titlebar .command-center-center {
++	min-width: min(460px, 40vw) !important;
++}
++.monaco-workbench .part.titlebar .command-center .action-item.command-center-center {
++	border-radius: 999px !important;
++	background: var(--vscode-commandCenter-background) !important;
++	border: 1px solid var(--vscode-commandCenter-border) !important;
++	height: 24px;
++}
++.monaco-workbench .part.titlebar .command-center .action-item.command-center-center:hover {
++	border-color: color-mix(in srgb, #7aa2f7 45%, transparent) !important;
++}
++
++/* ---- Side bar: quiet headers, sentence case, a little more air ---------------------------------- */
++.monaco-workbench .part.sidebar > .title > .title-label h2,
++.monaco-workbench .part.auxiliarybar > .title > .title-label h2 {
++	text-transform: none;
++	font-size: 12.5px;
++	font-weight: 600;
++	letter-spacing: 0;
++	color: var(--vscode-foreground);
++}
++.monaco-workbench .pane-header .title {
++	text-transform: none !important;
++	font-weight: 600 !important;
++	font-size: 11.5px !important;
++	letter-spacing: 0 !important;
++}
++.monaco-workbench .monaco-list .monaco-list-row {
++	border-radius: 6px;
++}
++
++/* ---- Pop-ups: rounder, lifted, a soft edge -------------------------------------------------------- */
++.monaco-workbench .quick-input-widget {
++	border-radius: 14px !important;
++	box-shadow: 0 0 0 1px var(--vscode-widget-border), 0 24px 60px -12px rgb(0 0 0 / .65) !important;
++	overflow: hidden;
++}
++.monaco-workbench .notifications-toasts .notification-toast-container > .notification-toast,
++.monaco-workbench .notifications-center {
++	border-radius: 12px !important;
++}
++.monaco-workbench .monaco-menu .monaco-action-bar.vertical {
++	border-radius: 10px;
++}
++
++/* ---- Status bar: no band of colour, items as soft chips ----------------------------------------- */
++.monaco-workbench .part.statusbar > .items-container > .statusbar-item > .statusbar-item-label {
++	border-radius: 6px;
++}
+diff --git a/src/vs/workbench/browser/parts/editor/editorGroupWatermark.ts b/src/vs/workbench/browser/parts/editor/editorGroupWatermark.ts
+index a63f37ce..818ca4a5 100644
+--- a/src/vs/workbench/browser/parts/editor/editorGroupWatermark.ts
++++ b/src/vs/workbench/browser/parts/editor/editorGroupWatermark.ts
+@@ -22,6 +22,8 @@ import { IWorkspaceContextService, WorkbenchState } from '../../../../platform/w
+ 
+ interface WatermarkEntry {
+ 	readonly id: string;
++	/** Contributed by an extension that activates after the watermark renders: keep it, it appears once its keybinding exists. */
++	readonly fromExtension?: boolean;
+ 	readonly text: string;
+ 	readonly when?: {
+ 		native?: ContextKeyExpression;
+@@ -56,7 +58,13 @@ const emptyWindowEntries: WatermarkEntry[] = coalesce([
+ 	isMacintosh && !isWeb ? newUntitledFile : undefined, // fill in one more on macOS to get to 5 entries
+ ]);
+ 
++// Flow: reading code as a flow is the first thing a workspace offers.
++const showFlow: WatermarkEntry = { text: localize('watermark.showFlow', "Show Flow at Cursor"), id: 'flow.showAtCursor', fromExtension: true };
++const traceEndpoint: WatermarkEntry = { text: localize('watermark.traceEndpoint', "Trace an Endpoint"), id: 'flow.pickEndpoint', fromExtension: true };
++
+ const workspaceEntries: WatermarkEntry[] = [
++	showFlow,
++	traceEndpoint,
+ 	...baseEntries,
+ ];
+ 
+@@ -209,8 +217,8 @@ export class EditorGroupWatermark extends Disposable {
+ 				const contextKey = isWeb ? entry.when?.web : entry.when?.native;
+ 				return !contextKey /* works without context */ || this.contextKeyService.contextMatchesRules(contextKey);
+ 			})
+-			.filter(entry => !!CommandsRegistry.getCommand(entry.id))
+-			.filter(entry => !!this.keybindingService.lookupKeybinding(entry.id));
++			.filter(entry => entry.fromExtension || !!CommandsRegistry.getCommand(entry.id))
++			.filter(entry => entry.fromExtension || !!this.keybindingService.lookupKeybinding(entry.id));
+ 
+ 		return filteredEntries;
+ 	}
+diff --git a/src/vs/workbench/browser/style.ts b/src/vs/workbench/browser/style.ts
+index 9250ef3f..8cd2ff42 100644
+--- a/src/vs/workbench/browser/style.ts
++++ b/src/vs/workbench/browser/style.ts
+@@ -4,6 +4,7 @@
+  *--------------------------------------------------------------------------------------------*/
+ 
+ import './media/style.css';
++import './media/flow.css';
+ import { registerThemingParticipant } from '../../platform/theme/common/themeService.js';
+ import { WORKBENCH_BACKGROUND, TITLE_BAR_ACTIVE_BACKGROUND } from '../common/theme.js';
+ import { isWeb, isIOS } from '../../base/common/platform.js';
+diff --git a/src/vs/workbench/contrib/chat/common/constants.ts b/src/vs/workbench/contrib/chat/common/constants.ts
+index 0e725a07..54613889 100644
+--- a/src/vs/workbench/contrib/chat/common/constants.ts
++++ b/src/vs/workbench/contrib/chat/common/constants.ts
+@@ -381,6 +381,11 @@ export function getComputedDefaultSessionType(
+ 		return SessionType.AgentHostCopilot;
+ 	}
+ 
++	// Flow: a new chat starts with Claude Code (flow-agent) when it is installed, not Copilot.
++	if (chatSessionsService.getChatSessionContribution('flow-claude')) {
++		return 'flow-claude';
++	}
++
+ 	if (isEditorLocalAgentEnabled(configurationService, workspace, agentHostEnabled && managedSandboxEnforced)) {
+ 		return localChatSessionType;
+ 	}
+@@ -480,7 +485,10 @@ export function getDefaultNewChatSessionTypeAndReasonFromServices(
+ 	}
+ 
+ 	const preferCopilotHarness = agentHostEnabled && isCopilotHarnessPreferred(configurationService, managedSandboxEnforced);
+-	const remembered = getUsableRememberedSessionType(storageService, configurationService, chatSessionsService, workspace, agentHostEnabled, managedSandboxEnforced);
++	// Flow: the local Copilot harness needs a Copilot sign-in Flow does not have; with Claude Code
++	// installed, a remembered "Local" is not a choice worth restoring.
++	const rememberedRaw = getUsableRememberedSessionType(storageService, configurationService, chatSessionsService, workspace, agentHostEnabled, managedSandboxEnforced);
++	const remembered = rememberedRaw === localChatSessionType && chatSessionsService.getChatSessionContribution('flow-claude') ? undefined : rememberedRaw;
+ 	if (remembered && (remembered !== localChatSessionType || !preferCopilotHarness)) {
+ 		return { sessionType: remembered, selectionReason: 'rememberedSelection' };
+ 	}
+diff --git a/src/vs/workbench/contrib/webview/browser/pre/index.html b/src/vs/workbench/contrib/webview/browser/pre/index.html
+index 42c7c01a..15f71415 100644
+--- a/src/vs/workbench/contrib/webview/browser/pre/index.html
++++ b/src/vs/workbench/contrib/webview/browser/pre/index.html
+@@ -5,7 +5,7 @@
+ 	<meta charset="UTF-8">
+ 
+ 	<meta http-equiv="Content-Security-Policy"
+-		content="default-src 'none'; script-src 'sha256-FFQoOVVa2tOE3uqUvirwaMNT20TZmrHcL2aaOjJ8BUo=' 'self'; frame-src 'self'; style-src 'unsafe-inline';">
++		content="default-src 'none'; script-src 'sha256-78oEfMNAkBzir8O4xjBSDc3liILj8cO6mxZercz7Vqo=' 'self'; frame-src 'self'; style-src 'unsafe-inline';">
+ 
+ 	<!-- Disable pinch zooming -->
+ 	<meta name="viewport"
+@@ -249,7 +249,9 @@
+ 			}
+ 
+ 			if (!areServiceWorkersEnabled()) {
+-				return reject(new Error('Service Workers are not enabled. Webviews will not work. Try disabling private/incognito mode.'));
++				// Flow: some embedders (e.g. WKWebView) have no service workers; show inline-only content anyway.
++				console.warn('Service Workers are not enabled; webview resources will not load, inline content still works.');
++				return resolve();
+ 			}
+ 
+ 			const swPath = encodeURI(`service-worker.js?v=${expectedWorkerVersion}&vscode-resource-base-authority=${searchParams.get('vscode-resource-base-authority')}&remoteAuthority=${searchParams.get('remoteAuthority') ?? ''}&platform=${searchParams.get('platform')}`);
+@@ -278,10 +280,9 @@
+ 
+ 					return resolve();
+ 				}).catch(error => {
+-					if (!onElectron && error instanceof Error && error.message.includes('user denied permission')) {
+-						return reject(new Error(`Could not register service worker. Please make sure third party cookies are enabled: ${error}`));
+-					}
+-					return reject(new Error(`Could not register service worker: ${error}.`));
++					// Flow: degrade instead of failing — inline-only webviews (no vscode-resource URLs) still render.
++					console.warn(`Could not register service worker, continuing without it: ${error}`);
++					return resolve();
+ 				});
+ 		});
+ 
+@@ -358,6 +359,11 @@
+ 					return start(parentOrigin);
+ 				}
+ 
++				// Flow: webviews served by the local server itself (no CDN) share the workbench origin.
++				if (parentOrigin && new URL(parentOrigin).origin === location.origin) {
++					return start(parentOrigin);
++				}
++
+ 				throw new Error(`Expected '${parentOriginHash}' as hostname or subdomain!`);
+ 			}
+ 		}();

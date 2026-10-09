@@ -1,0 +1,58 @@
+{
+  "name": "flow-theme",
+  "displayName": "Flow Theme",
+  "description": "Flow's calm dark look and the defaults that go with it.",
+  "version": "0.1.0",
+  "publisher": "flow",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Themes"
+  ],
+  "contributes": {
+    "themes": [
+      {
+        "id": "Flow Dark",
+        "label": "Flow Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/flow-dark.json"
+      }
+    ],
+    "configurationDefaults": {
+      "workbench.colorTheme": "Flow Dark",
+      "workbench.preferredDarkColorTheme": "Flow Dark",
+      "workbench.activityBar.location": "default",
+      "workbench.startupEditor": "none",
+      "workbench.tree.indent": 14,
+      "workbench.tree.renderIndentGuides": "none",
+      "workbench.list.smoothScrolling": true,
+      "workbench.layoutControl.enabled": false,
+      "workbench.editor.tabActionLocation": "right",
+      "window.commandCenter": true,
+      "editor.fontFamily": "ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace",
+      "editor.fontSize": 13,
+      "editor.lineHeight": 20,
+      "editor.minimap.enabled": false,
+      "editor.renderLineHighlight": "all",
+      "editor.cursorBlinking": "smooth",
+      "editor.cursorSmoothCaretAnimation": "on",
+      "editor.smoothScrolling": true,
+      "editor.guides.bracketPairs": false,
+      "editor.scrollbar.verticalScrollbarSize": 8,
+      "editor.stickyScroll.enabled": true,
+      "editor.padding.top": 8,
+      "terminal.integrated.fontSize": 12,
+      "breadcrumbs.enabled": true,
+      "workbench.experimental.modernUI": true,
+      "terminal.integrated.fontFamily": "ui-monospace, 'SF Mono', Menlo, monospace",
+      "workbench.experimental.modernUIEditorTabStyle": "pill",
+      "workbench.sideBar.location": "left",
+      "workbench.editor.showIcons": true,
+      "window.title": "${rootName}${separator}${activeEditorShort}",
+      "chat.editor.fontFamily": "default"
+    }
+  }
+}

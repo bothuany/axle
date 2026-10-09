@@ -1,0 +1,16 @@
+# The VS Code checkout `npm run setup` creates
+/editor/vscode/
+
+node_modules/
+out/
+dist/
+dist-webview/
+bin/
+obj/
+target/
+desktop/src-tauri/gen/
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

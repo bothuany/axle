@@ -1,0 +1,229 @@
+{
+  "name": "flow-agent",
+  "displayName": "Flow Agents",
+  "description": "Claude Code and Codex in the native chat, over the Agent Client Protocol, using each repo's own harness.",
+  "version": "0.1.0",
+  "publisher": "flow",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguageModelChatProvider:flow"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": false
+  },
+  "enabledApiProposals": [
+    "chatSessionsProvider",
+    "chatParticipantAdditions",
+    "chatParticipantPrivate",
+    "defaultChatParticipant",
+    "chatProvider"
+  ],
+  "contributes": {
+    "chatSessions": [
+      {
+        "type": "flow-claude",
+        "name": "claude",
+        "displayName": "Claude",
+        "description": "Claude Code with this repo's CLAUDE.md, hooks and skills",
+        "icon": "$(sparkle)",
+        "welcomeTitle": "Claude Code",
+        "welcomeMessage": "Runs your local Claude Code with this repo's harness: CLAUDE.md, hooks, skills, MCP.",
+        "inputPlaceholder": "Ask Claude\u2026 (# to add context)",
+        "order": 0,
+        "canDelegate": true,
+        "requiresCopilotSignIn": false,
+        "requiresCustomModels": false,
+        "capabilities": {
+          "supportsFileAttachments": true,
+          "supportsSymbolAttachments": true,
+          "supportsImageAttachments": false
+        },
+        "supportsAutoModel": true,
+        "when": "config.flow.agents.showChat"
+      },
+      {
+        "type": "flow-codex",
+        "name": "codex",
+        "displayName": "Codex",
+        "description": "OpenAI Codex CLI with this repo's AGENTS.md",
+        "icon": "$(terminal)",
+        "welcomeTitle": "Codex",
+        "welcomeMessage": "Runs your local Codex CLI with this repo's AGENTS.md. Sign in once with `codex login`.",
+        "inputPlaceholder": "Ask Codex\u2026 (# to add context)",
+        "order": 1,
+        "canDelegate": true,
+        "requiresCopilotSignIn": false,
+        "requiresCustomModels": false,
+        "capabilities": {
+          "supportsFileAttachments": true,
+          "supportsSymbolAttachments": true,
+          "supportsImageAttachments": false
+        },
+        "supportsAutoModel": true,
+        "when": "config.flow.agents.showChat"
+      }
+    ],
+    "languageModelChatProviders": [
+      {
+        "vendor": "flow",
+        "displayName": "Flow Agents"
+      }
+    ],
+    "colors": [
+      {
+        "id": "flowMode.manual",
+        "description": "Manual mode: asks before every change.",
+        "defaults": {
+          "dark": "#7aa2f7",
+          "light": "#3b6fd4"
+        }
+      },
+      {
+        "id": "flowMode.accept",
+        "description": "Accept edits mode.",
+        "defaults": {
+          "dark": "#6fcf97",
+          "light": "#1f8a4c"
+        }
+      },
+      {
+        "id": "flowMode.plan",
+        "description": "Plan mode.",
+        "defaults": {
+          "dark": "#e5b567",
+          "light": "#a36d00"
+        }
+      },
+      {
+        "id": "flowMode.auto",
+        "description": "Auto mode.",
+        "defaults": {
+          "dark": "#b392f0",
+          "light": "#7a4fc7"
+        }
+      },
+      {
+        "id": "flowMode.bypass",
+        "description": "Bypass permissions mode.",
+        "defaults": {
+          "dark": "#f2777a",
+          "light": "#c4383c"
+        }
+      }
+    ],
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "flowAgents",
+          "title": "Agents",
+          "icon": "$(sparkle)"
+        }
+      ]
+    },
+    "views": {
+      "flowAgents": [
+        {
+          "type": "webview",
+          "id": "flow.agents",
+          "name": "Agents",
+          "icon": "$(sparkle)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "flow.agents.newClaude",
+        "title": "New Claude Agent",
+        "category": "Flow",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "flow.agents.newCodex",
+        "title": "New Codex Agent",
+        "category": "Flow",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "flow.agents.new",
+        "title": "Start an Agent\u2026",
+        "category": "Flow",
+        "icon": "$(add)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "flow.agents.newClaude",
+        "key": "cmd+shift+;",
+        "mac": "cmd+shift+;"
+      }
+    ],
+    "configuration": {
+      "title": "Flow Agents",
+      "properties": {
+        "flow.agents.showChat": {
+          "type": "boolean",
+          "default": false,
+          "description": "Also offer Claude and Codex in the chat panel. Off by default: agents run in terminals and the Agents dock shows their status."
+        },
+        "flow.agents.custom": {
+          "type": "array",
+          "default": [],
+          "description": "Your own agent commands, offered in Start an Agent.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "command"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Shown in the Agents list."
+              },
+              "command": {
+                "type": "string",
+                "description": "Run in a new terminal in the workspace folder."
+              }
+            }
+          }
+        }
+      }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "flow.agents.new",
+          "when": "view == flow.agents",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs"
+  },
+  "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "0.88.0",
+    "@agentclientprotocol/codex-acp": "2.1.1",
+    "@agentclientprotocol/sdk": "1.7.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
+  }
+}

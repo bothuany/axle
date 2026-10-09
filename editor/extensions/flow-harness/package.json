@@ -1,0 +1,248 @@
+{
+  "name": "flow-harness",
+  "displayName": "Flow Harness",
+  "description": "Harness engineering in the editor: one map of instructions, rules, skills, hooks, MCP and permissions, with a health score, the context budget, a hook studio and a permission inbox.",
+  "version": "0.1.0",
+  "publisher": "flow",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Hooks are only run when you ask, and only in trusted workspaces."
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "flowHarness",
+          "title": "Harness",
+          "icon": "media/harness.svg"
+        }
+      ]
+    },
+    "views": {
+      "flowHarness": [
+        {
+          "id": "flowHarness.map",
+          "name": "Map",
+          "icon": "media/harness.svg"
+        },
+        {
+          "id": "flowHarness.permissions",
+          "name": "Permission requests",
+          "icon": "media/harness.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "flowHarness.refresh",
+        "title": "Refresh",
+        "category": "Harness",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "flowHarness.addHook",
+        "title": "Add Hook\u2026",
+        "category": "Harness",
+        "icon": "$(add)"
+      },
+      {
+        "command": "flowHarness.testHook",
+        "title": "Run Hook with Sample Input",
+        "category": "Harness",
+        "icon": "$(play)"
+      },
+      {
+        "command": "flowHarness.promote",
+        "title": "Always Allow\u2026",
+        "category": "Harness",
+        "icon": "$(pass)"
+      },
+      {
+        "command": "flowHarness.promoteDeny",
+        "title": "Always Deny\u2026",
+        "category": "Harness",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "flowHarness.showContext",
+        "title": "Show Context Budget",
+        "category": "Harness"
+      },
+      {
+        "command": "flowHarness.reportUsage",
+        "title": "Report Usage",
+        "category": "Harness"
+      },
+      {
+        "command": "flowHarness.recordPermission",
+        "title": "Record Permission",
+        "category": "Harness"
+      },
+      {
+        "command": "flowHarness.health",
+        "title": "Harness Health",
+        "category": "Harness"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "flowHarness.addHook",
+          "when": "view == flowHarness.map",
+          "group": "navigation@1"
+        },
+        {
+          "command": "flowHarness.refresh",
+          "when": "view == flowHarness.map",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "flowHarness.testHook",
+          "when": "view == flowHarness.map && viewItem == hook",
+          "group": "inline"
+        },
+        {
+          "command": "flowHarness.promote",
+          "when": "view == flowHarness.permissions && viewItem == request.promotable",
+          "group": "inline@1"
+        },
+        {
+          "command": "flowHarness.promoteDeny",
+          "when": "view == flowHarness.permissions && viewItem == request.promotable",
+          "group": "inline@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "flowHarness.testHook",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.promote",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.promoteDeny",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.reportUsage",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.recordPermission",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.health",
+          "when": "false"
+        }
+      ]
+    },
+    "colors": [
+      {
+        "id": "flowHarness.instructions",
+        "description": "Instructions in the harness map.",
+        "defaults": {
+          "dark": "#7aa2f7",
+          "light": "#3b6fd4"
+        }
+      },
+      {
+        "id": "flowHarness.rules",
+        "description": "Rules in the harness map.",
+        "defaults": {
+          "dark": "#e5b567",
+          "light": "#a36d00"
+        }
+      },
+      {
+        "id": "flowHarness.skills",
+        "description": "Skills in the harness map.",
+        "defaults": {
+          "dark": "#b392f0",
+          "light": "#7a4fc7"
+        }
+      },
+      {
+        "id": "flowHarness.agents",
+        "description": "Subagents in the harness map.",
+        "defaults": {
+          "dark": "#f0a6ca",
+          "light": "#b4497f"
+        }
+      },
+      {
+        "id": "flowHarness.hooks",
+        "description": "Hooks in the harness map.",
+        "defaults": {
+          "dark": "#4fd1c5",
+          "light": "#0f8a7e"
+        }
+      },
+      {
+        "id": "flowHarness.mcp",
+        "description": "MCP servers in the harness map.",
+        "defaults": {
+          "dark": "#6fcf97",
+          "light": "#1f8a4c"
+        }
+      },
+      {
+        "id": "flowHarness.permissions",
+        "description": "Permission rules in the harness map.",
+        "defaults": {
+          "dark": "#f2a170",
+          "light": "#b85c1f"
+        }
+      },
+      {
+        "id": "flowHarness.allow",
+        "description": "Allowed permissions.",
+        "defaults": {
+          "dark": "#6fcf97",
+          "light": "#1f8a4c"
+        }
+      },
+      {
+        "id": "flowHarness.ask",
+        "description": "Permissions that ask, and a filling context window.",
+        "defaults": {
+          "dark": "#e5b567",
+          "light": "#a36d00"
+        }
+      },
+      {
+        "id": "flowHarness.deny",
+        "description": "Denied permissions, and a nearly full context window.",
+        "defaults": {
+          "dark": "#f2777a",
+          "light": "#c4383c"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
+  }
+}

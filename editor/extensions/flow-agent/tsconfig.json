@@ -1,0 +1,22 @@
+{
+	"extends": "../../vscode/extensions/tsconfig.base.json",
+	"compilerOptions": {
+		"rootDir": "./src",
+		"outDir": "./out",
+		"noEmit": true,
+		"module": "preserve",
+		"moduleResolution": "bundler",
+		"types": ["node"],
+		"typeRoots": ["../../vscode/node_modules/@types"]
+	},
+	"include": [
+		"src/**/*",
+		"../../vscode/src/vscode-dts/vscode.d.ts",
+		"../../vscode/src/vscode-dts/vscode.proposed.chatSessionsProvider.d.ts",
+		"../../vscode/src/vscode-dts/vscode.proposed.chatParticipantAdditions.d.ts",
+		"../../vscode/src/vscode-dts/vscode.proposed.chatParticipantPrivate.d.ts",
+		"../../vscode/src/vscode-dts/vscode.proposed.defaultChatParticipant.d.ts",
+		"../../vscode/src/vscode-dts/vscode.proposed.languageModelThinkingPart.d.ts",
+		"../../vscode/src/vscode-dts/vscode.proposed.chatProvider.d.ts"
+	]
+}

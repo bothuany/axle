@@ -1,0 +1,212 @@
+/* Flow canvas inside VS Code. Neutral surfaces follow the active theme; colour is reserved for meaning:
+   the kind of a method (glyph, wire, port), agent changes, and the one card or wire you are looking at. */
+:root {
+  --fl-canvas: var(--vscode-editor-background, #181818);
+  --fl-card: color-mix(in srgb, var(--fl-canvas), #fff 3.5%);
+  --fl-line: color-mix(in srgb, var(--fl-canvas), #fff 9%);
+  --fl-line-strong: color-mix(in srgb, var(--fl-canvas), #fff 17%);
+  --fl-text: var(--vscode-editor-foreground, #d4d4d4);
+  --fl-muted: var(--vscode-descriptionForeground, #8b8b8b);
+  --fl-faint: color-mix(in srgb, var(--fl-muted) 62%, transparent);
+  --fl-signal: #7aa2f7;
+  --fl-add: #7fd48a;
+  --fl-del: #f07178;
+  --fl-mono: var(--vscode-editor-font-family, 'JetBrains Mono', Menlo, monospace);
+  --fl-ui: var(--vscode-font-family, -apple-system, system-ui, sans-serif);
+  --fl-lift: 0 1px 0 rgb(0 0 0 / .3), 0 14px 34px -10px rgb(0 0 0 / .6);
+  --fl-mask: rgb(0 0 0 / .5);
+  --bg: var(--fl-canvas);
+  --panel: var(--fl-card);
+  --line: var(--fl-line);
+  --text: var(--fl-text);
+  --muted: var(--fl-muted);
+  --mono: var(--fl-mono);
+}
+html, body, #root { background: var(--fl-canvas); color: var(--fl-text); font: 12px/1.4 var(--fl-ui); }
+button { font: inherit; }
+button:focus-visible { outline: 1.5px solid var(--fl-signal); outline-offset: 1px; }
+kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-line-strong); border-bottom-width: 2px; border-radius: 3px; color: var(--fl-text); }
+
+/* ---- bar ----------------------------------------------------------------------------------- */
+.wv { display: flex; flex-direction: column; height: 100%; }
+.wv-bar { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 10px 0 14px; flex: none; border-bottom: 1px solid var(--fl-line); background: var(--vscode-editorGroupHeader-tabsBackground, var(--fl-canvas)); }
+.wv-title { font: 12.5px var(--fl-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; margin-right: 6px; }
+.wv-title .owner, .title .owner { color: var(--fl-muted); }
+.wv-title .member { color: var(--fl-text); font-weight: 600; }
+.wv-spacer { flex: 1; }
+.wv-status { color: var(--fl-muted); font-size: 11.5px; }
+
+.chip { height: 24px; padding: 0 10px; border-radius: 12px; border: 1px solid var(--fl-line-strong); background: transparent; color: var(--fl-muted); cursor: pointer; white-space: nowrap; }
+.chip:hover:not(:disabled) { color: var(--fl-text); }
+.chip[aria-pressed='true'] { background: var(--fl-line); border-color: transparent; color: var(--fl-text); }
+.chip:disabled { cursor: default; }
+.chip.ghosted { border-style: dashed; cursor: default; }
+/* Impact names entry points, so it wears the entry-point colour. */
+.chip.impact.hot { color: #e2c08d; border-color: color-mix(in srgb, #e2c08d 40%, transparent); }
+.chip.impact.hot::before { content: ''; display: inline-block; width: 0; height: 0; margin-right: 6px; border: 4px solid transparent; border-left: 6px solid currentColor; border-right: 0; vertical-align: -1px; }
+.impact-wrap { position: relative; }
+.impact-pop { position: absolute; z-index: 20; top: 30px; left: 0; min-width: 260px; max-width: 420px; padding: 10px 12px; border: 1px solid var(--fl-line-strong); border-radius: 8px; background: var(--vscode-editorHoverWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); }
+.impact-pop p { margin: 0 0 6px; color: var(--fl-muted); }
+.impact-pop ul { margin: 0; padding: 0; list-style: none; max-height: 240px; overflow: auto; }
+.impact-pop li { font: 11.5px/20px var(--fl-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.icon-btn { width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: var(--fl-muted); cursor: pointer; font-size: 14px; }
+.icon-btn:hover { background: var(--fl-line); color: var(--fl-text); }
+.ask { height: 26px; padding: 0 12px; border: 0; border-radius: 6px; background: var(--vscode-button-background, #e5e5e5); color: var(--vscode-button-foreground, #141414); font-weight: 600; cursor: pointer; }
+.ask:hover:not(:disabled) { background: var(--vscode-button-hoverBackground, #fff); }
+.ask:disabled { opacity: .45; cursor: default; }
+
+.btn { height: 22px; padding: 0 9px; border-radius: 5px; border: 1px solid transparent; cursor: pointer; font-size: 11.5px; }
+.btn.solid { background: var(--vscode-button-background, #e5e5e5); color: var(--vscode-button-foreground, #141414); font-weight: 600; }
+.btn.solid:hover:not(:disabled) { background: var(--vscode-button-hoverBackground, #fff); }
+.btn.solid:disabled { opacity: .4; cursor: default; }
+.btn.ghost { background: transparent; color: var(--fl-muted); }
+.btn.ghost:hover { color: var(--fl-text); background: var(--fl-line); }
+
+/* ---- canvas -------------------------------------------------------------------------------- */
+.wv-canvas { flex: 1; min-height: 0; position: relative; }
+.react-flow__background { background: var(--fl-canvas); }
+.react-flow__background circle { fill: var(--fl-line-strong); }
+.wv-empty { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; pointer-events: none; text-align: center; padding: 0 24px; }
+.wv-empty button { pointer-events: auto; }
+.wv-empty-title { margin: 0; font-size: 13px; font-weight: 600; }
+.wv-empty-body { margin: 0; color: var(--fl-muted); max-width: 60ch; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--fl-signal); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }
+
+.react-flow__controls { box-shadow: none; border: 1px solid var(--fl-line); border-radius: 7px; overflow: hidden; }
+.react-flow__controls button { background: var(--fl-card); border-color: var(--fl-line); fill: var(--fl-muted); width: 24px; height: 24px; }
+.react-flow__controls button:hover { background: var(--fl-line); fill: var(--fl-text); }
+.react-flow__minimap { background: var(--fl-card) !important; border: 1px solid var(--fl-line); border-radius: 7px; overflow: hidden; }
+.react-flow__edge-path { stroke-width: 1.4; transition: opacity .12s; }
+.react-flow__edge { transition: opacity .12s; }
+.react-flow__edge-textbg { fill: var(--fl-canvas); }
+
+/* A method frame holds everything it calls: "inside" on the canvas means "called from". */
+.frame { width: 100%; height: 100%; border: 1px solid color-mix(in srgb, var(--k) 20%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--k) 3%, transparent); }
+
+/* ---- card ---------------------------------------------------------------------------------- */
+.card { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; overflow: visible; background: var(--fl-card); border: 1px solid var(--fl-line-strong); border-radius: 8px; box-shadow: var(--fl-lift); transition: box-shadow .12s; }
+.card.selected, .card.editing { box-shadow: 0 0 0 1.5px var(--fl-signal), var(--fl-lift); }
+.card.changed { border-color: color-mix(in srgb, var(--fl-signal) 55%, transparent); }
+
+.card-head { flex: none; display: flex; align-items: center; gap: 9px; padding: 0 6px 0 11px; border-bottom: 1px solid var(--fl-line); background: transparent; cursor: pointer; border-radius: 8px 8px 0 0; }
+.kind-db .card-head, .kind-external .card-head, .kind-ambiguous .card-head { border-bottom: 0; }
+.glyph { flex: none; }
+.titles { flex: 1; min-width: 0; }
+.title { font: 12.5px/17px var(--fl-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title .member { color: var(--fl-text); font-weight: 600; }
+.sub { font-size: 11px; color: var(--fl-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tools { display: flex; gap: 1px; opacity: 0; transition: opacity .1s; }
+.card:hover .tools, .card.selected .tools, .tools:focus-within { opacity: 1; }
+.tool { min-width: 24px; height: 22px; padding: 0 5px; border: 0; border-radius: 5px; background: transparent; color: var(--fl-muted); cursor: pointer; font: 11.5px var(--fl-mono); }
+.tool:hover { background: var(--fl-line); color: var(--fl-text); }
+
+.code { flex: 1; min-height: 0; font: 12px/18px var(--fl-mono); overflow: hidden; }
+.ln { display: flex; align-items: center; white-space: pre; padding-right: 10px; position: relative; }
+.ln .gutter { width: 44px; flex: none; padding-right: 12px; text-align: right; color: var(--vscode-editorLineNumber-foreground, #4b4b4b); user-select: none; }
+.ln .src { overflow: hidden; flex: 1; min-width: 0; }
+.card.editable .ln:not(.gap):not(.del) { cursor: text; }
+.card.editable .ln:not(.gap):not(.del):hover { background: var(--vscode-editor-lineHighlightBackground, #ffffff08); }
+.ln.call { background: color-mix(in srgb, var(--c) 6%, transparent); }
+
+/* The port: the end of a call line, where its wire leaves the card. Click it to show or hide the callee. */
+.port { position: absolute; right: 6px; top: 2px; height: 14px; max-width: 45%; padding: 0 6px; display: flex; align-items: center; gap: 4px; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); background: var(--fl-card); color: var(--c); font: 10.5px/12px var(--fl-mono); cursor: pointer; overflow: hidden; text-overflow: ellipsis; box-shadow: -14px 0 10px -2px var(--fl-card); }
+.port:hover { background: color-mix(in srgb, var(--c) 14%, var(--fl-card)); }
+.port.folded { border-style: dashed; color: color-mix(in srgb, var(--c) 75%, var(--fl-muted)); }
+.port.folded::before { content: '+'; font-weight: 700; }
+.port-more { color: var(--fl-muted); }
+
+.ln.gap { cursor: pointer; color: var(--fl-faint); font-style: italic; background: none; }
+.ln.gap:hover { color: var(--fl-text); }
+.ln.add { background: color-mix(in srgb, var(--fl-add) 10%, transparent); box-shadow: inset 2px 0 0 var(--fl-add); }
+.ln.del { background: color-mix(in srgb, var(--fl-del) 9%, transparent); box-shadow: inset 2px 0 0 var(--fl-del); color: var(--fl-muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--fl-del) 45%, transparent); }
+
+.review { flex: none; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 11px; border-top: 1px solid color-mix(in srgb, var(--fl-signal) 30%, transparent); background: color-mix(in srgb, var(--fl-signal) 7%, var(--fl-card)); border-radius: 0 0 8px 8px; }
+.review-what { color: var(--fl-signal); font-weight: 600; }
+.review-what::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
+.review-stat { display: flex; gap: 6px; font: 600 11px var(--fl-mono); }
+.review-stat .plus { color: var(--fl-add); }
+.review-stat .minus { color: var(--fl-del); }
+.review-space { flex: 1; }
+
+/* Sockets: a bar where calls arrive, a ringed dot where each call leaves. */
+.react-flow__handle { min-width: 0; min-height: 0; border: 0; }
+.react-flow__handle-left { width: 3px; height: 16px; left: -2px; border-radius: 2px; background: var(--k); }
+.react-flow__handle-right { width: 8px; height: 8px; right: -4.5px; border-radius: 50%; background: var(--c, var(--k)); box-shadow: 0 0 0 2px var(--fl-card); }
+
+.card-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.card-editor-host { flex: 1; min-height: 0; }
+.card-editor-bar { flex: none; height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 11px; border-top: 1px solid var(--fl-line); border-radius: 0 0 8px 8px; }
+.card-editor-msg { margin-right: auto; color: var(--fl-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-editor-msg kbd { margin-left: 4px; }
+.card-editor-msg kbd:first-child { margin-left: 0; }
+.card-editor-msg.err { color: var(--fl-del); }
+.card-editor-msg.warn { color: #e2c08d; }
+.card-editor .monaco-editor, .card-editor .monaco-editor .margin, .card-editor .monaco-editor-background { background: var(--fl-card) !important; }
+.ask, .chip, .wv-status { white-space: nowrap; flex: none; }
+.wv-status { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 720px) {
+  .react-flow__minimap { display: none; }
+}
+.card.zoomable .ln:not(.gap):not(.del) { cursor: zoom-in; }
+
+/* ---- agent edits: prompt timeline and review tour ------------------------------------------- */
+.chip.agent { color: var(--fl-signal); border-color: color-mix(in srgb, var(--fl-signal) 40%, transparent); }
+.tl { position: absolute; z-index: 20; top: 30px; left: 0; width: 360px; max-width: calc(100vw - 24px); padding: 10px 8px 8px; border: 1px solid var(--fl-line-strong); border-radius: 10px; background: var(--vscode-editorHoverWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); }
+.tl-lead { margin: 0 6px 8px; color: var(--fl-muted); }
+.tl-list { margin: 0; padding: 0; list-style: none; max-height: 360px; overflow: auto; }
+/* A real sequence: a rail joins the prompts in the order they ran. */
+.tl-turn { position: relative; display: flex; align-items: flex-start; gap: 4px; padding-left: 16px; }
+.tl-turn::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 1px; background: var(--fl-line-strong); }
+.tl-turn:first-child::before { top: 14px; }
+.tl-turn:last-child::before { bottom: calc(100% - 14px); }
+.tl-turn::after { content: ''; position: absolute; left: 3px; top: 11px; width: 7px; height: 7px; border-radius: 50%; background: var(--fl-card); box-shadow: inset 0 0 0 1.5px var(--fl-muted); }
+.tl-turn.on::after { background: var(--fl-signal); box-shadow: none; }
+.tl-pick { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--fl-text); text-align: left; cursor: pointer; }
+.tl-pick:hover, .tl-turn.on .tl-pick { background: var(--fl-line); }
+.tl-meta { display: flex; gap: 8px; color: var(--fl-faint); font-size: 11px; }
+.tl-step { color: var(--fl-muted); font-weight: 600; }
+.tl-prompt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
+.tl-files { color: var(--fl-muted); font-size: 11px; }
+.tl-files .plus { color: var(--fl-add); font-weight: 600; }
+.tl-files .minus { color: var(--fl-del); font-weight: 600; }
+.tl-undo { margin-top: 6px; flex: none; }
+.tl-all { margin: 6px 0 0 16px; }
+
+.tour { position: absolute; z-index: 15; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; max-width: calc(100% - 24px); padding: 5px 6px 5px 6px; border: 1px solid var(--fl-line-strong); border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); }
+.tour-pos { font: 600 11.5px var(--fl-mono); color: var(--fl-muted); min-width: 36px; text-align: center; }
+.tour-label { font: 12px var(--fl-mono); color: var(--fl-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; margin: 0 6px; }
+.icon-btn:disabled { opacity: .35; cursor: default; }
+/* Narrow canvases: the bar wraps instead of pushing chips off the edge. */
+.wv-bar { flex-wrap: wrap; height: auto; min-height: 40px; padding-top: 6px; padding-bottom: 6px; row-gap: 6px; }
+
+/* ---- an agent asks to edit: the cards it would touch are outlined until the user answers ---- */
+.proposal { position: absolute; z-index: 15; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; max-width: calc(100% - 24px); padding: 6px 12px; border: 1px solid color-mix(in srgb, var(--fl-signal) 45%, transparent); border-radius: 8px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); color: var(--fl-text); }
+.proposal-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--fl-signal); flex: none; animation: pulse 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .proposal-dot { animation: none; } }
+.review-hooks { color: var(--fl-muted); font-size: 11px; cursor: help; text-decoration: underline dotted; text-underline-offset: 2px; }
+/* Popovers from the bar stay inside the canvas, wherever their chip ended up after wrapping. */
+.tl { position: fixed; top: 48px; left: auto; right: 12px; width: min(360px, calc(100vw - 24px)); }
+.impact-pop { position: fixed; top: 48px; left: 12px; max-width: calc(100vw - 24px); }
+.proposal { width: max-content; }
+
+/* ---- Database cards: the table a query touches -------------------------------------------------- */
+.kind-db .card-head { border-bottom: 1px solid var(--fl-line); }
+.kind-db .title .member { font-weight: 600; letter-spacing: .01em; }
+.schema { font: 11.5px/1 var(--fl-mono); padding-bottom: 6px; }
+.schema-ops { display: flex; align-items: center; gap: 8px; padding: 0 10px 0 11px; border-bottom: 1px solid var(--fl-line); background: color-mix(in srgb, var(--k) 5%, transparent); }
+.schema-verb { flex: none; padding: 2px 6px; border-radius: 4px; font: 600 10px var(--fl-ui); }
+.schema-verb.read { color: #59c2a8; background: color-mix(in srgb, #59c2a8 14%, transparent); }
+.schema-verb.write { color: #f07178; background: color-mix(in srgb, #f07178 14%, transparent); }
+.schema-chain { color: var(--fl-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.schema-col { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 0 10px 0 8px; }
+.schema-col:nth-child(even) { background: color-mix(in srgb, var(--fl-text) 2.5%, transparent); }
+.schema-mark { font: 700 9px var(--fl-ui); color: #e2c08d; text-align: center; }
+.schema-name { color: var(--fl-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.schema-col.key .schema-name { color: #e2c08d; }
+.schema-type { color: var(--fl-muted); white-space: nowrap; }
+.schema-more { display: flex; align-items: center; padding: 0 10px 0 40px; color: var(--fl-faint); font-style: italic; }
+.schema-rel { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 10px 0 40px; color: var(--fl-muted); font: 11px var(--fl-ui); white-space: nowrap; overflow: hidden; max-height: 18px; }
+.schema-rel i { font-style: normal; color: var(--k); margin-right: 3px; font-family: var(--fl-mono); }

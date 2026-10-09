@@ -1,0 +1,287 @@
+{
+  "name": "flow-view",
+  "displayName": "Flow View",
+  "description": "See code as a flow: callers on the left, the method in the middle, everything it calls on the right.",
+  "version": "0.1.0",
+  "publisher": "flow",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "flow.showAtCursor",
+        "title": "Show Flow at Cursor",
+        "category": "Flow",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "flow.pickEndpoint",
+        "title": "Open Endpoint Flow…",
+        "category": "Flow"
+      },
+      {
+        "command": "flow.pickSolution",
+        "title": "Choose Solution…",
+        "category": "Flow",
+        "icon": "$(folder-library)"
+      },
+      {
+        "command": "flow.showTarget",
+        "title": "Show Flow",
+        "category": "Flow"
+      },
+      {
+        "command": "flow.agentWillEdit",
+        "title": "Agent Will Edit",
+        "category": "Flow"
+      },
+      {
+        "command": "flow.agentDidEdit",
+        "title": "Agent Did Edit",
+        "category": "Flow"
+      },
+      {
+        "command": "flow.askAgent",
+        "title": "Ask Agent About This Flow",
+        "category": "Flow"
+      },
+      {
+        "command": "flow.agentTurn",
+        "title": "Agent Turn",
+        "category": "Flow"
+      },
+      {
+        "command": "flow.agentProposes",
+        "title": "Agent Proposes Edit",
+        "category": "Flow"
+      },
+      {
+        "command": "flow.agentProposalDone",
+        "title": "Agent Proposal Done",
+        "category": "Flow"
+      },
+      {
+        "command": "flow.home",
+        "title": "Home",
+        "category": "Flow",
+        "icon": "$(home)"
+      },
+      {
+        "command": "flow.ide.accept",
+        "title": "Accept Claude's Change",
+        "category": "Flow",
+        "icon": "$(check)"
+      },
+      {
+        "command": "flow.ide.reject",
+        "title": "Reject Claude's Change",
+        "category": "Flow",
+        "icon": "$(close)"
+      },
+      {
+        "command": "flow.ide.mention",
+        "title": "Mention Selection in Claude Code",
+        "category": "Flow"
+      },
+      {
+        "command": "flow.ide.howTo",
+        "title": "Connect Claude Code",
+        "category": "Flow"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "flow.showAtCursor",
+        "key": "ctrl+alt+f",
+        "mac": "cmd+alt+f",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "flow.pickEndpoint",
+        "key": "ctrl+alt+e",
+        "mac": "cmd+alt+e"
+      },
+      {
+        "command": "flow.ide.mention",
+        "key": "ctrl+alt+k",
+        "mac": "cmd+alt+k",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "flow.showAtCursor",
+          "when": "editorTextFocus || editorFocus",
+          "group": "navigation"
+        },
+        {
+          "command": "flow.ide.accept",
+          "when": "resourceScheme == flow-proposed",
+          "group": "navigation@1"
+        },
+        {
+          "command": "flow.ide.reject",
+          "when": "resourceScheme == flow-proposed",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "flow.showAtCursor",
+          "when": "editorTextFocus || editorFocus",
+          "group": "navigation@0"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "flow.showTarget",
+          "when": "false"
+        },
+        {
+          "command": "flow.agentWillEdit",
+          "when": "false"
+        },
+        {
+          "command": "flow.agentDidEdit",
+          "when": "false"
+        },
+        {
+          "command": "flow.askAgent",
+          "when": "false"
+        },
+        {
+          "command": "flow.agentTurn",
+          "when": "false"
+        },
+        {
+          "command": "flow.agentProposes",
+          "when": "false"
+        },
+        {
+          "command": "flow.agentProposalDone",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "flow.pickSolution",
+          "when": "view == flow.endpoints",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Flow",
+      "properties": {
+        "flow.codeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a \"Flow\" link above every C# method."
+        },
+        "flow.showTests": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show test code (test projects, *Tests files, *.spec/*.test files) among callers and callees in a flow."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "flow",
+          "title": "Flow",
+          "icon": "media/flow.svg"
+        }
+      ]
+    },
+    "views": {
+      "flow": [
+        {
+          "type": "webview",
+          "id": "flow.endpoints",
+          "name": "Endpoints",
+          "icon": "media/flow.svg"
+        }
+      ]
+    },
+    "colors": [
+      {
+        "id": "flowView.entry",
+        "description": "Entry points.",
+        "defaults": {
+          "dark": "#e2c08d",
+          "light": "#9a6b1f"
+        }
+      },
+      {
+        "id": "flowView.get",
+        "description": "GET endpoints.",
+        "defaults": {
+          "dark": "#6fcf97",
+          "light": "#1f8a4c"
+        }
+      },
+      {
+        "id": "flowView.post",
+        "description": "POST endpoints.",
+        "defaults": {
+          "dark": "#e5b567",
+          "light": "#a36d00"
+        }
+      },
+      {
+        "id": "flowView.put",
+        "description": "PUT endpoints.",
+        "defaults": {
+          "dark": "#7aa2f7",
+          "light": "#3b6fd4"
+        }
+      },
+      {
+        "id": "flowView.patch",
+        "description": "PATCH endpoints.",
+        "defaults": {
+          "dark": "#b392f0",
+          "light": "#7a4fc7"
+        }
+      },
+      {
+        "id": "flowView.delete",
+        "description": "DELETE endpoints.",
+        "defaults": {
+          "dark": "#f2777a",
+          "light": "#c4383c"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs"
+  },
+  "dependencies": {
+    "@vscode/tree-sitter-wasm": "0.3.1",
+    "diff": "8.0.4",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2",
+    "esbuild": "0.28.1"
+  }
+}
