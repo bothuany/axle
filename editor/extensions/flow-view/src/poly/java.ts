@@ -1,9 +1,9 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow polyglot index: Java. Classes, fields, methods, annotations and the calls inside each
+ *  Axle polyglot index: Java. Classes, fields, methods, annotations and the calls inside each
  *  method, with the declared types of locals and parameters so calls can be resolved by type.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Ann, CallFact, FieldFact, FileFacts, FuncFact, TypeFact } from './model';
+import type { Ann, CallFact, FieldFact, FileFacts, FuncFact, ParamFact, TypeFact } from './model';
 import { endLine, line, receiverText, same, splitType, stringValue, walk, type TsNode } from './ts';
 
 function annotations(mods: TsNode | null | undefined): Ann[] {
@@ -56,6 +56,44 @@ function typeOf(n: TsNode | null | undefined) {
 	return n ? splitType(n.text) : { base: '', args: [] };
 }
 
+/** A type exactly as written, on one line. */
+const rawType = (n: TsNode | null | undefined) => n?.text.replace(/\s+/g, ' ').trim();
+
+/** UML visibility from the modifier keywords (annotations skipped); `fallback` is what the language implies when none is written. */
+function visibilityOf(mods: TsNode | null | undefined, fallback: '+' | '-' | '#' | '~'): '+' | '-' | '#' | '~' {
+	for (const c of mods?.children ?? []) {
+		if (c.type === 'public') {
+			return '+';
+		}
+		if (c.type === 'private') {
+			return '-';
+		}
+		if (c.type === 'protected') {
+			return '#';
+		}
+	}
+	return fallback;
+}
+
+const hasModifier = (mods: TsNode | null | undefined, word: string) => !!mods?.children.some(c => c.type === word);
+
+/** `<T extends Foo, U>` → ['T', 'U']. */
+function typeParams(n: TsNode): string[] | undefined {
+	const list = n.namedChildren.find(c => c.type === 'type_parameters');
+	const names = (list?.namedChildren ?? []).filter(c => c.type === 'type_parameter').map(c => c.namedChildren.find(x => x.type === 'type_identifier')?.text ?? '').filter(Boolean);
+	return names.length ? names : undefined;
+}
+
+/** Simple name of the type declaration around a nested one. */
+function outerOf(n: TsNode): string | undefined {
+	for (let p = n.parent; p; p = p.parent) {
+		if (p.type === 'class_declaration' || p.type === 'interface_declaration' || p.type === 'enum_declaration' || p.type === 'record_declaration') {
+			return p.childForFieldName('name')?.text;
+		}
+	}
+	return undefined;
+}
+
 export function extractJava(root: TsNode, file: string, mtime: number): FileFacts {
 	const facts: FileFacts = { file, lang: 'java', mtime, imports: {}, types: [], funcs: [], routes: [], prefixes: {}, globals: {} };
 	for (const c of root.namedChildren) {
@@ -65,6 +103,8 @@ export function extractJava(root: TsNode, file: string, mtime: number): FileFact
 			const name = c.namedChildren.find(x => x.type === 'scoped_identifier' || x.type === 'identifier')?.text;
 			if (name && !c.text.includes('*')) {
 				facts.imports[name.split('.').pop()!] = name;
+			} else if (name && !/^import\s+staticb/.test(c.text)) {
+				(facts.starImports ??= []).push(name);
 			}
 		}
 	}
@@ -84,6 +124,8 @@ function typeDecl(n: TsNode, facts: FileFacts) {
 		kind: n.type === 'interface_declaration' ? 'interface' : n.type === 'enum_declaration' ? 'enum' : 'class',
 		isAbstract: !!mods?.text.match(/\babstract\b/),
 		supers: [], superArgs: {}, annotations: annotations(mods), fields: [], methods: [],
+		declKind: n.type === 'record_declaration' ? 'record' : undefined,
+		outer: outerOf(n), typeParams: typeParams(n), visibility: visibilityOf(mods, '~'),
 	};
 	const addSuper = (typeNode: TsNode) => {
 		const { base, args } = typeOf(typeNode);
@@ -109,18 +151,31 @@ function typeDecl(n: TsNode, facts: FileFacts) {
 	// Record components act as fields.
 	for (const p of n.childForFieldName('parameters')?.namedChildren ?? []) {
 		const ty = typeOf(p.childForFieldName('type'));
-		t.fields.push({ name: p.childForFieldName('name')?.text ?? '', type: ty.base, typeArgs: ty.args, annotations: annotations(modifiers(p)), line: line(p) });
+		t.fields.push({ name: p.childForFieldName('name')?.text ?? '', type: ty.base, typeArgs: ty.args, annotations: annotations(modifiers(p)), line: line(p), typeText: rawType(p.childForFieldName('type')), visibility: '-', isFinal: true });
 	}
+	if (t.kind === 'enum') {
+		for (const c of body?.namedChildren ?? []) {
+			if (c.type === 'enum_constant') {
+				(t.enumConstants ??= []).push(c.childForFieldName('name')?.text ?? '');
+			}
+		}
+	}
+	const inInterface = n.type === 'interface_declaration';
 	for (const m of body?.namedChildren ?? []) {
 		if (m.type === 'field_declaration' || m.type === 'constant_declaration') {
 			const ty = typeOf(m.childForFieldName('type'));
 			const anns = annotations(modifiers(m));
+			const fmods = modifiers(m);
 			for (const d of m.childrenForFieldName('declarator')) {
-				const f: FieldFact = { name: d.childForFieldName('name')?.text ?? '', type: ty.base, typeArgs: ty.args, annotations: anns, line: line(m), init: d.childForFieldName('value')?.text };
+				const f: FieldFact = {
+					name: d.childForFieldName('name')?.text ?? '', type: ty.base, typeArgs: ty.args, annotations: anns, line: line(m), init: d.childForFieldName('value')?.text,
+					typeText: rawType(m.childForFieldName('type')), visibility: visibilityOf(fmods, inInterface ? '+' : '~'),
+					isStatic: inInterface || hasModifier(fmods, 'static'), isFinal: inInterface || hasModifier(fmods, 'final'),
+				};
 				t.fields.push(f);
 			}
 		} else if (m.type === 'method_declaration' || m.type === 'constructor_declaration') {
-			const fn = method(m, t, facts.file, n.type === 'interface_declaration');
+			const fn = method(m, t, facts.file, inInterface);
 			t.methods.push(fn.name);
 			facts.funcs.push(fn);
 		}
@@ -139,15 +194,23 @@ function method(m: TsNode, owner: TypeFact, file: string, inInterface: boolean):
 		isPublic: /\bpublic\b/.test(modText) || inInterface,
 		isStatic: /\bstatic\b/.test(modText),
 		returns: m.childForFieldName('type')?.text,
+		visibility: visibilityOf(mods, inInterface ? '+' : '~'),
+		isAbstract: /\babstract\b/.test(modText) || (inInterface && !m.childForFieldName('body') && !/\b(default|static|private)\b/.test(modText)) || undefined,
+		typeParams: typeParams(m),
 	};
+	const info: ParamFact[] = [];
 	for (const p of m.childForFieldName('parameters')?.namedChildren ?? []) {
 		if (p.type === 'formal_parameter' || p.type === 'spread_parameter') {
 			const pname = p.childForFieldName('name')?.text ?? p.namedChildren.at(-1)?.text;
 			const ptype = p.childForFieldName('type') ?? p.namedChildren.find(x => /type|identifier/.test(x.type));
 			if (pname && ptype) {
 				fn.params[pname] = typeOf(ptype).base;
+				info.push({ name: pname, typeText: (rawType(ptype) ?? '') + (p.type === 'spread_parameter' ? '[]' : ''), anns: annotations(modifiers(p)).map(x => x.name) });
 			}
 		}
+	}
+	if (info.length) {
+		fn.paramInfo = info;
 	}
 	const body = m.childForFieldName('body');
 	if (body) {

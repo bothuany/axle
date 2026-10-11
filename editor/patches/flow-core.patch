@@ -1,16 +1,65 @@
 diff --git a/product.json b/product.json
-index 64e1c4d2..13ff6435 100644
+index 64e1c4d2..0f46665c 100644
 --- a/product.json
 +++ b/product.json
-@@ -1,6 +1,6 @@
+@@ -1,30 +1,30 @@
  {
 -	"nameShort": "Code - OSS",
 -	"nameLong": "Code - OSS",
-+	"nameShort": "Flow",
-+	"nameLong": "Flow",
- 	"applicationName": "code-oss",
- 	"dataFolderName": ".vscode-oss",
+-	"applicationName": "code-oss",
+-	"dataFolderName": ".vscode-oss",
++	"nameShort": "Axle",
++	"nameLong": "Axle",
++	"applicationName": "axle",
++	"dataFolderName": ".axle",
  	"sharedDataFolderName": ".vscode-oss-shared",
+-	"win32MutexName": "vscodeoss",
++	"win32MutexName": "axle",
+ 	"licenseName": "MIT",
+ 	"licenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
+ 	"serverLicenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
+ 	"serverGreeting": [],
+ 	"serverLicense": [],
+ 	"serverLicensePrompt": "",
+-	"serverApplicationName": "code-server-oss",
++	"serverApplicationName": "axle-server",
+ 	"serverDataFolderName": ".vscode-server-oss",
+-	"tunnelApplicationName": "code-tunnel-oss",
+-	"win32DirName": "Microsoft Code OSS",
+-	"win32NameVersion": "Microsoft Code OSS",
+-	"win32RegValueName": "CodeOSS",
+-	"win32x64AppId": "{{D77B7E06-80BA-4137-BCF4-654B95CCEBC5}",
+-	"win32arm64AppId": "{{D1ACE434-89C5-48D1-88D3-E2991DF85475}",
+-	"win32x64UserAppId": "{{CC6B787D-37A0-49E8-AE24-8559A032BE0C}",
+-	"win32arm64UserAppId": "{{3AEBF0C8-F733-4AD4-BADE-FDB816D53D7B}",
+-	"win32AppUserModelId": "Microsoft.CodeOSS",
+-	"win32ShellNameShort": "C&ode - OSS",
+-	"win32TunnelServiceMutex": "vscodeoss-tunnelservice",
+-	"win32TunnelMutex": "vscodeoss-tunnel",
++	"tunnelApplicationName": "axle-tunnel",
++	"win32DirName": "Axle",
++	"win32NameVersion": "Axle",
++	"win32RegValueName": "Axle",
++	"win32x64AppId": "{{787DE9F7-839A-43FD-9F19-6D8D03BE6F8A}",
++	"win32arm64AppId": "{{055A015C-53A9-4803-A324-8A0AB372F588}",
++	"win32x64UserAppId": "{{9AC14A02-7196-4110-BF80-CFF0243083BC}",
++	"win32arm64UserAppId": "{{1F17C996-DD58-42BA-9B07-7FFCCC9AA8CE}",
++	"win32AppUserModelId": "Axle.Axle",
++	"win32ShellNameShort": "A&xle",
++	"win32TunnelServiceMutex": "axle-tunnelservice",
++	"win32TunnelMutex": "axle-tunnel",
+ 	"darwinBundleIdentifier": "com.visualstudio.code.oss",
+ 	"darwinProfileUUID": "47827DD9-4734-49A0-AF80-7E19B11495CC",
+ 	"darwinProfilePayloadUUID": "CF808BE7-53F3-46C6-A7E2-7EDB98A5E959",
+@@ -34,7 +34,7 @@
+ 	"reportIssueUrl": "https://github.com/microsoft/vscode/issues/new",
+ 	"nodejsArtifactFeed": "",
+ 	"electronArtifactFeed": "",
+-	"urlProtocol": "code-oss",
++	"urlProtocol": "axle",
+ 	"agentsTelemetryAppName": "agents",
+ 	"webviewContentExternalBaseUrlTemplate": "https://{{uuid}}.vscode-cdn.net/insider/ef65ac1ba57f57f2a3961bfe94aa20481caca4c6/out/vs/workbench/contrib/webview/browser/pre/",
+ 	"builtInExtensions": [
 @@ -246,5 +246,12 @@
  		"GitHub.copilot-chat"
  	],
@@ -91,245 +140,6 @@ index b4f2cd68..b6c0af39 100644
  	}
  
  	private async _createLanguageModelChatApi(extension: IExtensionDescription, modelId: string): Promise<vscode.LanguageModelChat | undefined> {
-diff --git a/src/vs/workbench/browser/media/flow-mark.svg b/src/vs/workbench/browser/media/flow-mark.svg
-new file mode 100644
-index 00000000..7df7e39f
---- /dev/null
-+++ b/src/vs/workbench/browser/media/flow-mark.svg
-@@ -0,0 +1 @@
-+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120"><g fill="none" stroke="#fff" stroke-opacity=".085" stroke-width="3"><rect x="76" y="20" width="152" height="80" rx="20"/><path d="M46 60h48M136 60h32"/></g><g fill="#fff" fill-opacity=".085"><path d="M14 40l32 20-32 20z"/><path d="M115 39l21 21-21 21-21-21z"/><circle cx="188" cy="60" r="18"/></g></svg>
-diff --git a/src/vs/workbench/browser/media/flow.css b/src/vs/workbench/browser/media/flow.css
-new file mode 100644
-index 00000000..e1c873a8
---- /dev/null
-+++ b/src/vs/workbench/browser/media/flow.css
-@@ -0,0 +1,226 @@
-+/*---------------------------------------------------------------------------------------------
-+ *  Flow: workbench touches on top of the Modern UI. Colours live in the Flow Dark theme; this
-+ *  file only holds what a theme cannot express.
-+ *--------------------------------------------------------------------------------------------*/
-+
-+/* The empty editor shows Flow's mark: an entry point, then a method frame holding what it calls. */
-+.monaco-workbench .part.editor > .content .editor-group-container .editor-group-watermark .letterpress {
-+	background-image: url('./flow-mark.svg') !important;
-+	background-size: contain;
-+	aspect-ratio: 2 / 1 !important;
-+}
-+
-+/* The Flow trail (flow-view): each step is a glyph item and a label item; pull them into one unit. */
-+.monaco-workbench .part.statusbar .statusbar-item[id*="flow.trail."] > .statusbar-item-label {
-+	padding: 0 3px;
-+}
-+.monaco-workbench .part.statusbar .statusbar-item[id*="flow.trail."] {
-+	margin: 0 -1px;
-+}
-+
-+/* ---- Chat: a prompt card, then the agent's work along one wire ----------------------------------
-+ * The prompt reads as a note handed to the agent: a full-width card, left aligned. The reply drops
-+ * the avatar header and runs along a thin rail, the same wire that joins cards on the Flow canvas;
-+ * every tool step is a node on it, lit while it runs. */
-+
-+.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-request {
-+	align-items: stretch;
-+}
-+.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-item-container.interactive-request > .value {
-+	align-items: stretch !important;
-+}
-+.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-request > .value > .chat-markdown-part.rendered-markdown {
-+	max-width: none;
-+	width: 100%;
-+	box-sizing: border-box;
-+	margin-left: 0;
-+	padding: 10px 12px;
-+	border: 1px solid var(--vscode-chat-requestBorder);
-+	border-radius: 10px;
-+	background-color: var(--vscode-chat-requestBubbleBackground);
-+	color: var(--vscode-foreground);
-+	line-height: 1.5;
-+}
-+
-+/* The reply speaks for itself: no avatar row. The agent's name is on the session and its chip. */
-+.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-response > .header {
-+	display: none;
-+}
-+.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-response > .value {
-+	position: relative;
-+	padding-left: 20px;
-+	line-height: 1.6;
-+}
-+.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-response > .value::before {
-+	content: '';
-+	position: absolute;
-+	left: 6px;
-+	top: 2px;
-+	bottom: 6px;
-+	width: 1px;
-+	background: var(--vscode-chat-requestBorder);
-+}
-+
-+/* Steps on the wire: a hollow node when done, a lit one while it runs. */
-+.monaco-workbench.modern-ui .interactive-session .interactive-response > .value > .chat-tool-invocation-part,
-+.monaco-workbench.modern-ui .interactive-session .interactive-response > .value > .chat-used-context {
-+	position: relative;
-+	color: var(--vscode-descriptionForeground);
-+}
-+.monaco-workbench.modern-ui .interactive-session .interactive-response > .value > .chat-tool-invocation-part::before,
-+.monaco-workbench.modern-ui .interactive-session .interactive-response > .value > .chat-used-context::before {
-+	content: '';
-+	position: absolute;
-+	left: -17px;
-+	top: 7px;
-+	width: 7px;
-+	height: 7px;
-+	border-radius: 50%;
-+	box-sizing: border-box;
-+	border: 1.5px solid var(--vscode-descriptionForeground);
-+	background: var(--vscode-sideBar-background);
-+}
-+.monaco-workbench.modern-ui .interactive-session .interactive-response > .value > .chat-tool-invocation-part:has(.codicon-loading)::before {
-+	border-color: var(--vscode-progressBar-background);
-+	background: var(--vscode-progressBar-background);
-+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--vscode-progressBar-background) 25%, transparent);
-+}
-+
-+/* Code in replies sits a step darker than the panel, like the editor it came from. */
-+.monaco-workbench.modern-ui .interactive-session .interactive-result-code-block {
-+	border: 1px solid var(--vscode-chat-requestBorder);
-+	border-radius: 8px;
-+	overflow: hidden;
-+}
-+.monaco-workbench.modern-ui .interactive-session .interactive-item-container .value .rendered-markdown p > code {
-+	padding: 1px 5px;
-+	border-radius: 4px;
-+	font-size: 0.92em;
-+}
-+
-+/* Copy and timing only when you look for them; the latest reply keeps them. */
-+.monaco-workbench.modern-ui .interactive-session .interactive-response:not(.chat-most-recent-response):not(:hover) > .chat-footer-toolbar {
-+	opacity: 0;
-+}
-+
-+/* The input: a raised card that lights up in the signal colour while you type. */
-+.monaco-workbench.modern-ui .interactive-session .chat-input-container {
-+	--chat-input-radius: 12px;
-+	background-color: var(--vscode-chat-requestBubbleBackground);
-+	border-color: var(--vscode-chat-requestBorder);
-+	transition: border-color .12s, box-shadow .12s;
-+}
-+.monaco-workbench.modern-ui .interactive-session .chat-input-container.focused {
-+	border-color: color-mix(in srgb, var(--vscode-progressBar-background) 60%, transparent);
-+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--vscode-progressBar-background) 12%, transparent);
-+}
-+@media (prefers-reduced-motion: reduce) {
-+	.monaco-workbench.modern-ui .interactive-session .chat-input-container { transition: none; }
-+}
-+
-+/* ---- Dock: the activity bar as a column of tiles, each place in its own colour ------------------
-+ * VS Code's bar is grey glyphs with a white stripe. Here every place keeps a hue (files blue, search
-+ * amber, changes green, run coral, harness teal, flow violet): dimmed at rest, full on its tile when open. */
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has(.codicon-explorer-view-icon) { --dock: #7aa2f7; }
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has(.codicon-search-view-icon) { --dock: #e5b567; }
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has(.codicon-source-control-view-icon) { --dock: #6fcf97; }
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has(.codicon-run-view-icon) { --dock: #f2777a; }
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has(.codicon-extensions-view-icon) { --dock: #9aa4bf; }
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has([class*='view-extension-flowHarness']) { --dock: #4fd1c5; }
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has([class*='view-extension-flow-']) { --dock: #b392f0; }
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:has(.codicon-test-view-icon) { --dock: #e0af68; }
-+
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item[style] .action-label.codicon,
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item .action-label.codicon {
-+	color: color-mix(in srgb, var(--dock, var(--vscode-activityBar-inactiveForeground)) 62%, var(--vscode-activityBar-background)) !important;
-+}
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item .action-label.uri-icon {
-+	background-color: color-mix(in srgb, var(--dock, var(--vscode-activityBar-inactiveForeground)) 62%, var(--vscode-activityBar-background)) !important;
-+}
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:is(.checked, :hover) .action-label.codicon {
-+	color: var(--dock, var(--vscode-activityBar-foreground)) !important;
-+}
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:is(.checked, :hover) .action-label.uri-icon {
-+	background-color: var(--dock, var(--vscode-activityBar-foreground)) !important;
-+}
-+.monaco-workbench.modern-ui .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item.checked .active-item-indicator {
-+	background-color: color-mix(in srgb, var(--dock, #7aa2f7) 16%, transparent) !important;
-+	border-radius: 10px;
-+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dock, #7aa2f7) 28%, transparent);
-+}
-+.monaco-workbench.modern-ui .activitybar > .content:not(.dragged-over) :not(.monaco-menu) > .monaco-action-bar .action-item:not(.checked):hover .active-item-indicator {
-+	background-color: color-mix(in srgb, var(--dock, #7aa2f7) 9%, transparent) !important;
-+	border-radius: 10px;
-+}
-+/* Badges take the colour of their place instead of one blue for everything. */
-+.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item .badge .badge-content {
-+	background-color: var(--dock, var(--vscode-activityBarBadge-background)) !important;
-+	color: #17181d !important;
-+	font-weight: 700;
-+}
-+
-+/* The app menu at the top of the dock wears the Flow mark. */
-+.monaco-workbench .activitybar .menubar .toolbar-toggle-more::before,
-+.monaco-workbench .activitybar .menubar .menubar-menu-title .codicon-menu::before {
-+	content: '' !important;
-+}
-+.monaco-workbench .activitybar .menubar .toolbar-toggle-more,
-+.monaco-workbench .activitybar .menubar .menubar-menu-title .codicon-menu {
-+	background: linear-gradient(135deg, #7aa2f7, #b392f0) !important;
-+	-webkit-mask: url('./flow-mark.svg') center / 22px no-repeat;
-+	mask: url('./flow-mark.svg') center / 22px no-repeat;
-+	-webkit-mask-size: 24px;
-+}
-+
-+/* ---- Title bar: one command pill in the middle, nothing else asking for attention ------------- */
-+.monaco-workbench .part.titlebar .command-center .agent-status-command-center-toolbar,
-+.monaco-workbench .part.titlebar .command-center-center {
-+	min-width: min(460px, 40vw) !important;
-+}
-+.monaco-workbench .part.titlebar .command-center .action-item.command-center-center {
-+	border-radius: 999px !important;
-+	background: var(--vscode-commandCenter-background) !important;
-+	border: 1px solid var(--vscode-commandCenter-border) !important;
-+	height: 24px;
-+}
-+.monaco-workbench .part.titlebar .command-center .action-item.command-center-center:hover {
-+	border-color: color-mix(in srgb, #7aa2f7 45%, transparent) !important;
-+}
-+
-+/* ---- Side bar: quiet headers, sentence case, a little more air ---------------------------------- */
-+.monaco-workbench .part.sidebar > .title > .title-label h2,
-+.monaco-workbench .part.auxiliarybar > .title > .title-label h2 {
-+	text-transform: none;
-+	font-size: 12.5px;
-+	font-weight: 600;
-+	letter-spacing: 0;
-+	color: var(--vscode-foreground);
-+}
-+.monaco-workbench .pane-header .title {
-+	text-transform: none !important;
-+	font-weight: 600 !important;
-+	font-size: 11.5px !important;
-+	letter-spacing: 0 !important;
-+}
-+.monaco-workbench .monaco-list .monaco-list-row {
-+	border-radius: 6px;
-+}
-+
-+/* ---- Pop-ups: rounder, lifted, a soft edge -------------------------------------------------------- */
-+.monaco-workbench .quick-input-widget {
-+	border-radius: 14px !important;
-+	box-shadow: 0 0 0 1px var(--vscode-widget-border), 0 24px 60px -12px rgb(0 0 0 / .65) !important;
-+	overflow: hidden;
-+}
-+.monaco-workbench .notifications-toasts .notification-toast-container > .notification-toast,
-+.monaco-workbench .notifications-center {
-+	border-radius: 12px !important;
-+}
-+.monaco-workbench .monaco-menu .monaco-action-bar.vertical {
-+	border-radius: 10px;
-+}
-+
-+/* ---- Status bar: no band of colour, items as soft chips ----------------------------------------- */
-+.monaco-workbench .part.statusbar > .items-container > .statusbar-item > .statusbar-item-label {
-+	border-radius: 6px;
-+}
 diff --git a/src/vs/workbench/browser/parts/editor/editorGroupWatermark.ts b/src/vs/workbench/browser/parts/editor/editorGroupWatermark.ts
 index a63f37ce..818ca4a5 100644
 --- a/src/vs/workbench/browser/parts/editor/editorGroupWatermark.ts
@@ -458,3 +268,542 @@ index 42c7c01a..15f71415 100644
  				throw new Error(`Expected '${parentOriginHash}' as hostname or subdomain!`);
  			}
  		}();
+diff --git a/src/vs/workbench/browser/media/code-icon.svg b/src/vs/workbench/browser/media/code-icon.svg
+index cc61f81e..4785a27f 100644
+--- a/src/vs/workbench/browser/media/code-icon.svg
++++ b/src/vs/workbench/browser/media/code-icon.svg
+@@ -1 +1 @@
+-<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><style>.st0{fill:#f6f6f6;fill-opacity:0}.st1{fill:#fff}.st2{fill:#167abf}</style><path class="st0" d="M1024 1024H0V0h1024v1024z"/><path class="st1" d="M1024 85.333v853.333H0V85.333h1024z"/><path class="st2" d="M0 85.333h298.667v853.333H0V85.333zm1024 0v853.333H384V85.333h640zm-554.667 160h341.333v-64H469.333v64zm341.334 533.334H469.333v64h341.333l.001-64zm128-149.334H597.333v64h341.333l.001-64zm0-149.333H597.333v64h341.333l.001-64zm0-149.333H597.333v64h341.333l.001-64z"/></svg>
+\ No newline at end of file
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22283e"/><stop offset="1" stop-color="#0e111d"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="url(#g)"/><g fill="none" stroke="#7aa2f7" stroke-width="4" stroke-linecap="round"><circle cx="32" cy="34" r="6"/><path d="M32 28V16M26.8 37l-10.4 6M37.2 37l10.4 6"/></g><g fill="#7aa2f7"><path d="M32 8l7 12H25z"/><path d="M13 40l8 4-8 4-8-4z" transform="translate(1 -1)"/><circle cx="50" cy="44" r="6"/></g></svg>
+diff --git a/src/vs/workbench/browser/media/flow-mark.svg b/src/vs/workbench/browser/media/flow-mark.svg
+new file mode 100644
+index 00000000..0fed3ee2
+--- /dev/null
++++ b/src/vs/workbench/browser/media/flow-mark.svg
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120"><g fill="none" stroke="#8ea6ff" stroke-opacity=".16" stroke-width="3"><rect x="76" y="20" width="152" height="80" rx="20"/><path d="M46 60h48M136 60h32"/></g><g fill="#8ea6ff" fill-opacity=".16"><path d="M14 40l32 20-32 20z"/><path d="M115 39l21 21-21 21-21-21z"/><circle cx="188" cy="60" r="18"/></g></svg>
+diff --git a/src/vs/workbench/browser/media/flow.css b/src/vs/workbench/browser/media/flow.css
+new file mode 100644
+index 00000000..867bc7df
+--- /dev/null
++++ b/src/vs/workbench/browser/media/flow.css
+@@ -0,0 +1,518 @@
++/*---------------------------------------------------------------------------------------------
++ *  Flow: workbench touches on top of the Modern UI. Colours live in the Axle Dark theme; this
++ *  file only holds what a theme cannot express.
++ *--------------------------------------------------------------------------------------------*/
++
++/* The empty editor shows Axle's mark: an entry point, then a method frame holding what it calls. */
++.monaco-workbench .part.editor > .content .editor-group-container .editor-group-watermark .letterpress {
++	background-image: url('./flow-mark.svg') !important;
++	background-size: contain;
++	aspect-ratio: 2 / 1 !important;
++}
++
++/* The Flow trail (flow-view): each step is a glyph item and a label item; pull them into one unit. */
++.monaco-workbench .part.statusbar .statusbar-item[id*="flow.trail."] > .statusbar-item-label {
++	padding: 0 3px;
++}
++.monaco-workbench .part.statusbar .statusbar-item[id*="flow.trail."] {
++	margin: 0 -1px;
++}
++
++/* ---- Chat: a prompt card, then the agent's work along one wire ----------------------------------
++ * The prompt reads as a note handed to the agent: a full-width card, left aligned. The reply drops
++ * the avatar header and runs along a thin rail, the same wire that joins cards on the Flow canvas;
++ * every tool step is a node on it, lit while it runs. */
++
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-request {
++	align-items: stretch;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-item-container.interactive-request > .value {
++	align-items: stretch !important;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-request > .value > .chat-markdown-part.rendered-markdown {
++	max-width: none;
++	width: 100%;
++	box-sizing: border-box;
++	margin-left: 0;
++	padding: 10px 12px;
++	border: 1px solid var(--vscode-chat-requestBorder);
++	border-radius: 10px;
++	background-color: var(--vscode-chat-requestBubbleBackground);
++	color: var(--vscode-foreground);
++	line-height: 1.5;
++}
++
++/* The reply speaks for itself: no avatar row. The agent's name is on the session and its chip. */
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-response > .header {
++	display: none;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-response > .value {
++	position: relative;
++	padding-left: 0;
++	line-height: 1.6;
++}
++/* Code in replies gets a hairline border and rounded corners, like a card in the canvas. */
++.monaco-workbench.modern-ui .interactive-session .interactive-result-code-block {
++	border: 1px solid var(--vscode-chat-requestBorder);
++	border-radius: 8px;
++	overflow: hidden;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container .value .rendered-markdown p > code {
++	padding: 1px 5px;
++	border-radius: 4px;
++	font-size: 0.92em;
++}
++
++/* Copy and timing only when you look for them; the latest reply keeps them. */
++.monaco-workbench.modern-ui .interactive-session .interactive-response:not(.chat-most-recent-response):not(:hover) > .chat-footer-toolbar {
++	opacity: 0;
++}
++
++/* ---- Dock: the activity bar as a column of tiles, in one neutral tone ---------------------------
++ * Grey glyphs at rest, full foreground on a soft tile when open or hovered. No per-place colours. */
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item .action-label.codicon {
++	color: var(--vscode-activityBar-inactiveForeground) !important;
++}
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item .action-label.uri-icon {
++	background-color: var(--vscode-activityBar-inactiveForeground) !important;
++}
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:is(.checked, :hover) .action-label.codicon {
++	color: var(--vscode-activityBar-foreground) !important;
++}
++.monaco-workbench .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item:is(.checked, :hover) .action-label.uri-icon {
++	background-color: var(--vscode-activityBar-foreground) !important;
++}
++.monaco-workbench.modern-ui .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item.checked .active-item-indicator {
++	background-color: color-mix(in srgb, var(--vscode-activityBar-foreground) 12%, transparent) !important;
++	border-radius: 10px;
++	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vscode-activityBar-foreground) 18%, transparent);
++}
++.monaco-workbench.modern-ui .activitybar > .content:not(.dragged-over) :not(.monaco-menu) > .monaco-action-bar .action-item:not(.checked):hover .active-item-indicator {
++	background-color: color-mix(in srgb, var(--vscode-activityBar-foreground) 7%, transparent) !important;
++	border-radius: 10px;
++}
++
++/* ---- Title bar: one command pill in the middle, nothing else asking for attention ------------- */
++.monaco-workbench .part.titlebar .command-center .agent-status-command-center-toolbar,
++.monaco-workbench .part.titlebar .command-center-center {
++	min-width: min(460px, 40vw) !important;
++}
++.monaco-workbench .part.titlebar .command-center .action-item.command-center-center {
++	border-radius: 999px !important;
++	background: var(--vscode-commandCenter-background) !important;
++	border: 1px solid var(--vscode-commandCenter-border) !important;
++	height: 24px;
++}
++.monaco-workbench .part.titlebar .command-center .action-item.command-center-center:hover {
++	border-color: color-mix(in srgb, #6f86ff 55%, transparent) !important;
++}
++
++/* ---- Side bar: quiet headers, sentence case, a little more air ---------------------------------- */
++.monaco-workbench .part.sidebar > .title > .title-label h2,
++.monaco-workbench .part.auxiliarybar > .title > .title-label h2 {
++	text-transform: none;
++	font-size: 12.5px;
++	font-weight: 600;
++	letter-spacing: 0;
++	color: var(--vscode-foreground);
++}
++.monaco-workbench .pane-header .title {
++	text-transform: none !important;
++	font-weight: 600 !important;
++	font-size: 11.5px !important;
++	letter-spacing: 0 !important;
++}
++.monaco-workbench .monaco-list .monaco-list-row {
++	border-radius: 6px;
++}
++
++/* ---- Pop-ups: rounder, lifted, a soft edge -------------------------------------------------------- */
++.monaco-workbench .quick-input-widget {
++	border-radius: 14px !important;
++	box-shadow: 0 0 0 1px var(--vscode-widget-border), 0 24px 60px -12px rgb(0 0 0 / .65) !important;
++	overflow: hidden;
++}
++.monaco-workbench .notifications-toasts .notification-toast-container > .notification-toast,
++.monaco-workbench .notifications-center {
++	border-radius: 12px !important;
++}
++.monaco-workbench .monaco-menu .monaco-action-bar.vertical {
++	border-radius: 10px;
++}
++
++/* ---- Status bar: no band of colour, items as soft chips ----------------------------------------- */
++.monaco-workbench .part.statusbar > .items-container > .statusbar-item > .statusbar-item-label {
++	border-radius: 6px;
++}
++
++/* ==== Ink: the second pass ======================================================================
++ * One idea carries the look: the signal wire. A thin line of signal colour marks where you are, in
++ * the dock, the tree, the tabs and the chat; everything else stays quiet, flat and high contrast. */
++
++.monaco-workbench.modern-ui {
++	--flow-signal: var(--vscode-progressBar-background, #6f86ff);
++	--flow-glow: color-mix(in srgb, var(--flow-signal) 55%, transparent);
++	--flow-ui: 'Segoe UI Variable Text', 'Segoe UI Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
++	--flow-label: var(--flow-ui);
++	--vscode-cornerRadius-small: 6px;
++	--vscode-cornerRadius-medium: 8px;
++	--vscode-cornerRadius-large: 10px;
++	--vscode-cornerRadius-xLarge: 14px;
++}
++
++/* ---- Type: Segoe UI Variable throughout ------------------------------------------------------------ */
++.monaco-workbench.modern-ui:is(.windows, .mac, .linux) {
++	font-family: var(--flow-ui);
++	font-feature-settings: 'cv11', 'ss01';
++}
++.monaco-workbench.modern-ui .part.sidebar > .title > .title-label h2,
++.monaco-workbench.modern-ui .part.auxiliarybar > .title > .title-label h2,
++.monaco-workbench.modern-ui .pane-header .title,
++.monaco-workbench.modern-ui .part.panel > .title .panel-switcher-container .action-label,
++.monaco-workbench.modern-ui .part.editor .tabs-container .tab .tab-label,
++.monaco-workbench.modern-ui .part.statusbar .statusbar-item-label,
++.monaco-workbench.modern-ui .part.titlebar .command-center .action-item.command-center-center .search-label {
++	font-family: var(--flow-label);
++}
++.monaco-workbench.modern-ui .part.sidebar > .title > .title-label h2,
++.monaco-workbench.modern-ui .part.auxiliarybar > .title > .title-label h2 {
++	font-size: 12.5px;
++	font-weight: 600;
++}
++.monaco-workbench.modern-ui .part.editor .tabs-container .tab .tab-label {
++	font-size: 12.5px;
++}
++.monaco-workbench.modern-ui .part.statusbar .statusbar-item-label {
++	font-size: 12px;
++}
++
++/* ---- The wire: where you are, in signal ---------------------------------------------------------- */
++.monaco-workbench.modern-ui .monaco-list .monaco-list-row.selected::before,
++.monaco-workbench.modern-ui .monaco-list .monaco-list-row.focused.selected::before {
++	content: '';
++	position: absolute;
++	left: 1px;
++	top: 5px;
++	bottom: 5px;
++	width: 2px;
++	border-radius: 2px;
++	background: color-mix(in srgb, var(--flow-signal) 75%, transparent);
++	pointer-events: none;
++}
++.monaco-workbench.modern-ui .monaco-list.focused .monaco-list-row.selected::before {
++	background: var(--flow-signal);
++	box-shadow: 0 0 8px var(--flow-glow);
++}
++
++/* The dock: the open place carries the wire on the rail's inner edge. */
++.monaco-workbench.modern-ui .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item.checked .active-item-indicator {
++	background-color: color-mix(in srgb, var(--flow-signal) 14%, transparent) !important;
++	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--flow-signal) 28%, transparent) !important;
++}
++.monaco-workbench.modern-ui .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item.checked::before {
++	content: '';
++	position: absolute;
++	left: -4px;
++	top: 9px;
++	bottom: 9px;
++	width: 3px;
++	border-radius: 0 3px 3px 0;
++	background: var(--flow-signal);
++	box-shadow: 0 0 10px var(--flow-glow);
++}
++.monaco-workbench.modern-ui .activitybar > .content :not(.monaco-menu) > .monaco-action-bar .action-item.checked .action-label.codicon {
++	color: var(--vscode-activityBar-foreground) !important;
++}
++
++/* Editor tabs: soft pills; the open one carries a short wire beneath it. */
++.monaco-workbench.modern-ui .part.editor .tabs-container .tab.active::after {
++	content: '';
++	position: absolute;
++	left: 50%;
++	bottom: 0;
++	width: 18px;
++	height: 2px;
++	transform: translateX(-50%);
++	border-radius: 2px;
++	background: var(--flow-signal);
++	box-shadow: 0 0 8px var(--flow-glow);
++	pointer-events: none;
++}
++.monaco-workbench.modern-ui .part.editor .tabs-container .tab.dirty .tab-actions .codicon {
++	color: var(--flow-signal);
++}
++
++/* Anything in progress runs on the wire. */
++.monaco-workbench.modern-ui .monaco-progress-container .progress-bit {
++	background-color: var(--flow-signal);
++	box-shadow: 0 0 10px var(--flow-glow);
++}
++
++/* Focus is a glow, not a box. */
++.monaco-workbench.modern-ui .monaco-inputbox.synthetic-focus,
++.monaco-workbench.modern-ui .monaco-findInput.synthetic-focus {
++	box-shadow: 0 0 0 3px color-mix(in srgb, var(--flow-signal) 16%, transparent);
++}
++
++/* ---- Buttons: signal fill, no outline ----------------------------------------------------------------- */
++.monaco-workbench.modern-ui .monaco-button:not(.secondary):not(.disabled) {
++	box-shadow: 0 1px 0 rgb(255 255 255 / .18) inset, 0 6px 14px -8px var(--flow-glow);
++}
++
++/* ---- Title bar: the pill says where you are; keep it centred and quiet -------------------------------- */
++.monaco-workbench.modern-ui .part.titlebar .command-center .action-item.command-center-center {
++	background: color-mix(in srgb, var(--vscode-commandCenter-background) 80%, transparent) !important;
++}
++.monaco-workbench.modern-ui .part.titlebar .command-center .action-item.command-center-center:hover {
++	border-color: var(--flow-glow) !important;
++	box-shadow: 0 0 0 3px color-mix(in srgb, var(--flow-signal) 10%, transparent);
++}
++
++/* ---- Scrollbars: slim, only on hover ------------------------------------------------------------------- */
++.monaco-workbench.modern-ui .monaco-scrollable-element > .scrollbar > .slider {
++	border-radius: 6px;
++}
++
++/* ---- Status bar: the left edge speaks; numbers set in the label face ---------------------------------- */
++.monaco-workbench.modern-ui .part.statusbar .statusbar-item.has-background-color,
++.monaco-workbench.modern-ui .part.statusbar .statusbar-item.remote-kind {
++	border-radius: 6px;
++}
++
++/* ==== Layout pass: top dock, one title line ======================================================
++ * The dock lives in the side bar's header (workbench.activityBar.location: top). The open place is
++ * marked by the wire under its icon, the same line as under the open tab. */
++.monaco-workbench.modern-ui .part.sidebar .composite-bar .action-item {
++	position: relative;
++}
++.monaco-workbench.modern-ui .part.sidebar .composite-bar .action-item.checked::before {
++	content: '' !important;
++	position: absolute !important;
++	left: 7px !important;
++	right: 7px !important;
++	top: auto !important;
++	bottom: 0 !important;
++	width: auto !important;
++	height: 2px !important;
++	border-radius: 2px !important;
++	background: var(--flow-signal) !important;
++	box-shadow: 0 0 8px var(--flow-glow);
++	pointer-events: none;
++}
++.monaco-workbench.modern-ui .part.sidebar .composite-bar .action-item:not(.checked) .action-label {
++	color: var(--vscode-activityBar-inactiveForeground) !important;
++}
++.monaco-workbench.modern-ui .part.sidebar .composite-bar .action-item.checked .action-label {
++	color: var(--vscode-activityBar-foreground) !important;
++}
++
++/* The title bar is one line: the command pill, wide and tall, is the only thing in it. */
++.monaco-workbench.modern-ui .part.titlebar .agent-status-pill {
++	min-width: min(620px, 46vw);
++	height: 28px;
++	border-radius: 999px;
++	background: color-mix(in srgb, var(--vscode-commandCenter-background) 80%, transparent);
++	border: 1px solid var(--vscode-commandCenter-border);
++	font-size: 12.5px;
++}
++.monaco-workbench.modern-ui .part.titlebar .agent-status-pill:hover {
++	border-color: var(--flow-glow);
++	box-shadow: 0 0 0 3px color-mix(in srgb, var(--flow-signal) 10%, transparent);
++}
++
++/* ---- Chat as a flow: one reading column, however wide the panel ----------------------------------
++ * Open the panel wide (or maximise it) and the conversation stays a column; the prompt card sits
++ * under it at the same width. Replies are set larger, with more air between turns. */
++.monaco-workbench.modern-ui .interactive-session .interactive-list .interactive-item-container {
++	max-width: 780px;
++	margin-inline: auto;
++	padding-block: 16px 8px;
++	box-sizing: border-box;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-input-part {
++	width: min(820px, calc(100% - 24px));
++	margin-inline: auto;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-response .rendered-markdown {
++	font-size: 13.5px;
++}
++.monaco-workbench.modern-ui .interactive-session .chat-welcome-view-container {
++	max-width: 780px;
++	margin-inline: auto;
++}
++
++/* ==== Chat, rebuilt: quiet, plain, one composer ====================================================
++ * Nothing on screen but the conversation and the box you type in. The reply is plain text; what the
++ * agent did is a muted line you can open; the prompt is a card; the send button is a white disc. */
++
++/* Empty chat: no logo, no disclaimer. */
++.monaco-workbench.modern-ui .interactive-session .chat-welcome-view > :is(.chat-welcome-view-icon, .chat-welcome-view-title, .chat-welcome-view-message, .chat-welcome-view-disclaimer, .chat-welcome-view-tips) {
++	display: none !important;
++}
++.monaco-workbench.modern-ui .interactive-session .chat-welcome-view::before {
++	content: 'Plan, search or build anything';
++	color: var(--vscode-descriptionForeground);
++	font-size: 13px;
++	letter-spacing: .01em;
++}
++/* The panel header carries the dock and the actions; its title only repeats them. */
++.monaco-workbench.modern-ui .part.auxiliarybar > .composite.title > .title-label,
++.monaco-workbench.modern-ui .part.auxiliarybar .title-label h2 {
++	display: none;
++}
++
++/* Your prompt: a card. */
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container.interactive-request > .value > .chat-markdown-part.rendered-markdown {
++	padding: 9px 12px;
++	border-radius: 10px;
++	font-size: 13px;
++	line-height: 1.5;
++	background-color: var(--vscode-chat-requestBubbleBackground);
++}
++
++/* The reply: plain, a size smaller, easy to skim. */
++.monaco-workbench.modern-ui .interactive-session .interactive-response .rendered-markdown {
++	font-size: 13px;
++	line-height: 1.6;
++	color: color-mix(in srgb, var(--vscode-foreground) 88%, transparent);
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-response .rendered-markdown :is(h1, h2, h3, h4) {
++	margin: 16px 0 6px;
++	font-size: 13.5px;
++	font-weight: 600;
++	color: var(--vscode-foreground);
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-response .rendered-markdown :is(ul, ol) {
++	padding-left: 18px;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-response .rendered-markdown :is(ul, ol) > li {
++	margin: 2px 0;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-item-container .value .rendered-markdown p > code {
++	border: 1px solid var(--vscode-widget-border);
++	background: color-mix(in srgb, var(--vscode-foreground) 6%, transparent);
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-result-code-block {
++	border-color: var(--vscode-widget-border);
++	border-radius: 8px;
++	background: var(--vscode-editor-background);
++}
++
++/* What the agent did: muted one-liners that brighten on hover. */
++.monaco-workbench.modern-ui .interactive-session .interactive-response > .value > :is(.chat-tool-invocation-part, .chat-used-context, .chat-thinking-box, .chat-collapsible-list) {
++	font-size: 12px;
++	color: var(--vscode-descriptionForeground);
++	opacity: .85;
++}
++.monaco-workbench.modern-ui .interactive-session .interactive-response > .value > :is(.chat-tool-invocation-part, .chat-used-context, .chat-thinking-box):hover {
++	opacity: 1;
++}
++
++/* The composer: one rounded box. Context chips on top, the text, then mode and model on the left and
++ * the white send disc on the right. What the agent may do (where it runs, what it may touch) is a
++ * single quiet line under the box. */
++.monaco-workbench.modern-ui .interactive-session .chat-input-container {
++	--chat-input-radius: 16px;
++	--chat-input-control-height: 28px;
++	display: flex;
++	flex-direction: column;
++	gap: 6px;
++	padding: 10px 10px 8px 12px;
++	border-radius: 16px;
++	border: 1px solid color-mix(in srgb, var(--vscode-foreground) 14%, transparent);
++	background-color: color-mix(in srgb, var(--vscode-foreground) 4.5%, var(--vscode-sideBar-background));
++	box-shadow: 0 10px 30px -14px rgb(0 0 0 / .7);
++	transition: border-color .12s;
++}
++.monaco-workbench.modern-ui .interactive-session .chat-input-container:hover {
++	border-color: color-mix(in srgb, var(--vscode-foreground) 22%, transparent);
++}
++.monaco-workbench.modern-ui .interactive-session .chat-input-container.focused {
++	border-color: color-mix(in srgb, var(--vscode-foreground) 38%, transparent);
++	box-shadow: 0 10px 30px -14px rgb(0 0 0 / .7);
++}
++
++/* Context chips: small pills above the text. */
++.monaco-workbench.modern-ui .interactive-session .chat-input-container .chat-attachments-container {
++	padding: 0;
++}
++.monaco-workbench.modern-ui .interactive-session .chat-input-container .chat-attached-context .chat-attached-context-attachment {
++	height: 22px;
++	padding: 0 8px;
++	border: 0;
++	border-radius: 6px;
++	font-size: 11.5px;
++	background: color-mix(in srgb, var(--vscode-foreground) 9%, transparent);
++	color: var(--vscode-foreground);
++}
++
++/* The text. */
++.monaco-workbench.modern-ui .interactive-session .chat-input-container .chat-editor-container {
++	min-height: 40px;
++}
++.monaco-workbench.modern-ui .interactive-session .chat-input-container .interactive-input-editor .monaco-editor {
++	font-size: 13.5px;
++}
++
++.monaco-workbench.modern-ui .interactive-session .chat-input-container :is(.chat-editor-container, .interactive-input-editor) :is(.monaco-editor, .monaco-editor-background, .margin, .monaco-editor .inputarea) {
++	background-color: transparent !important;
++}
++
++/* The row under the text: ghost buttons, no outlines. */
++.monaco-workbench.modern-ui .interactive-session .chat-input-container .chat-input-toolbars {
++	align-items: center;
++	gap: 4px;
++	padding: 0;
++}
++.monaco-workbench.modern-ui .interactive-session .chat-input-toolbars .monaco-action-bar .action-item .action-label,
++.monaco-workbench.modern-ui .interactive-session .chat-input-toolbars .chat-input-picker-item .action-label {
++	height: 24px;
++	padding: 0 8px;
++	border: 0;
++	border-radius: 7px;
++	font-size: 12px;
++	color: var(--vscode-descriptionForeground);
++	background: transparent;
++}
++.monaco-workbench.modern-ui .interactive-session .chat-input-toolbars .monaco-action-bar .action-item:not(.chat-submit-button) .action-label:hover {
++	background: color-mix(in srgb, var(--vscode-foreground) 9%, transparent);
++	color: var(--vscode-foreground);
++}
++
++/* Send: a disc, dim until there is something to send, then white. */
++.monaco-workbench.modern-ui .interactive-session .chat-input-toolbars > .chat-execute-toolbar .monaco-action-bar .action-item.chat-submit-button > .action-label {
++	width: 28px;
++	height: 28px;
++	padding: 0;
++	border-radius: 50%;
++	background-color: color-mix(in srgb, var(--vscode-foreground) 12%, transparent) !important;
++	color: var(--vscode-descriptionForeground) !important;
++}
++.monaco-workbench.modern-ui .interactive-session .chat-input-toolbars > .chat-execute-toolbar .monaco-action-bar .action-item.chat-submit-button:not(.disabled) > .action-label {
++	background-color: var(--vscode-foreground) !important;
++	color: var(--vscode-editor-background) !important;
++}
++
++/* Where it runs and what it may touch: one quiet line, outside the box. */
++.monaco-workbench.modern-ui .interactive-session .chat-secondary-toolbar {
++	padding: 6px 6px 0;
++	opacity: .65;
++	transition: opacity .12s;
++}
++.monaco-workbench.modern-ui .interactive-session .chat-secondary-toolbar:hover,
++.monaco-workbench.modern-ui .interactive-session .chat-secondary-toolbar:focus-within {
++	opacity: 1;
++}
++.monaco-workbench.modern-ui .interactive-session .chat-secondary-toolbar .action-label {
++	font-size: 11.5px;
++	color: var(--vscode-descriptionForeground);
++}
++
++/* Changes the agent made: a card that sits on top of the box. */
++.monaco-workbench.modern-ui .interactive-session .chat-editing-session {
++	margin-inline: 8px;
++}
++@media (prefers-reduced-motion: reduce) {
++	.monaco-workbench.modern-ui .interactive-session .chat-input-container,
++	.monaco-workbench.modern-ui .interactive-session .chat-secondary-toolbar { transition: none; }
++}

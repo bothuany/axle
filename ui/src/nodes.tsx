@@ -2,6 +2,8 @@ import { memo, useContext, useEffect, useRef, useState, createContext, type CSSP
 import { Handle, Position, useStore, type NodeProps, type Node } from '@xyflow/react'
 import * as monaco from 'monaco-editor'
 import { CODE_PAD, HEADER_H, KIND_COLOR, LINE_H, SCHEMA_MAX, SCHEMA_OPS_H, SCHEMA_ROW, type CardData, type FrameData } from './layout'
+import { chipList, linkOf, ROW_H, STRIP_H, type CardChips, type ChipRow, type TypeLink } from './chips'
+import { bindEditor, hoverCode, leaveCode, wordAtPoint } from './ide'
 import type { DbSchema, Kind } from './types'
 
 /** Where a click on a card's code landed, in file coordinates (1-based), so editing starts right there. */
@@ -17,7 +19,8 @@ export interface CanvasActions {
   toggleFull: (nodeKey: string) => void
   /** Inline editing on the card (VS Code webview). Absent in hosts that edit elsewhere. */
   edit?: (nodeKey: string, caret?: Caret) => void
-  save?: (nodeKey: string, code: string) => Promise<string | undefined>
+  /** `session`: the editor that holds `code`, so the host can use the text it already showed the language servers. */
+  save?: (nodeKey: string, code: string, session?: string) => Promise<string | undefined>
   cancelEdit?: () => void
   /** Show the method in the editor without leaving the canvas. */
   reveal?: (nodeKey: string) => void
@@ -31,12 +34,20 @@ export interface CanvasActions {
   editHooks?: string[]
   /** Put this method into the prompt of a connected Claude Code terminal. */
   mention?: (nodeKey: string) => void
+  /** Ctrl/Cmd+click on a symbol of a card that is only read: go to where it is defined (file position, 1-based). */
+  definition?: (nodeKey: string, at: Caret) => void
+  /** Type chips: open or close the fields under a chip (`path` names the chip in its card, see chips.ts). */
+  chipToggle?: (nodeKey: string, path: string, typeId: string) => void
+  /** Go to where a type is declared (file position, 1-based). */
+  openType?: (file: string, line: number) => void
+  /** Show a type in the DTO diagram. Absent when the editor has no such diagram. */
+  typeDiagram?: (typeId: string) => void
   /** Where editing should put the cursor (set by `edit`). */
   caret?: Caret
 }
 export const ActionsCtx = createContext<CanvasActions>({ toggle() {}, toggleAll() {}, open() {}, toggleFull() {} })
 
-const LANG_BY_EXT: Record<string, string> = {
+export const LANG_BY_EXT: Record<string, string> = {
   cs: 'csharp', ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript', mjs: 'javascript',
   java: 'java', kt: 'kotlin', py: 'python', go: 'go', rs: 'rust', rb: 'ruby', php: 'php', swift: 'swift', cpp: 'cpp', c: 'c',
 }
@@ -85,21 +96,32 @@ function splitLabel(label: string) {
 }
 
 /** Monaco on the card. Lives in a fixed-zoom canvas (see webview) so clicks land where they look. */
-function CardEditor({ code, file, startLine, caret, onSave, onCancel }: { code: string; file: string | null; startLine: number; caret?: Caret; onSave: (text: string) => Promise<string | undefined>; onCancel: () => void }) {
+function CardEditor({ nodeKey, code, file, startLine, endLine, caret, onSave, onCancel }: { nodeKey: string; code: string; file: string | null; startLine: number; endLine: number; caret?: Caret; onSave: (text: string, session: string) => Promise<string | undefined>; onCancel: () => void }) {
   const host = useRef<HTMLDivElement>(null)
   const editor = useRef<monaco.editor.IStandaloneCodeEditor>(undefined)
   const [error, setError] = useState<string>()
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const inFlight = useRef(false)
+  // One id per opening of this editor: the host shows the card's text to the language servers under it, and puts the file back when it closes.
+  const session = useRef(globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).current
   const save = async () => {
     const ed = editor.current
-    if (!ed) return
+    // One save at a time: a second Ctrl+S while the first is in flight would send the same original and fail.
+    if (!ed || inFlight.current) return
     if (ed.getValue() === code) return onCancel()
+    inFlight.current = true
     setSaving(true)
-    const err = await onSave(ed.getValue())
-    setSaving(false)
-    setError(err)
+    try {
+      setError(await onSave(ed.getValue(), session))
+    } catch (e) {
+      // The host rejected the request (a failed write): say so instead of leaving "Saving…" on the button.
+      setError(String((e as Error).message ?? e))
+    } finally {
+      inFlight.current = false
+      setSaving(false)
+    }
   }
   const saveRef = useRef(save)
   saveRef.current = save
@@ -107,6 +129,10 @@ function CardEditor({ code, file, startLine, caret, onSave, onCancel }: { code: 
   confirmRef.current = confirmDiscard
 
   useEffect(() => {
+    // Suggestion, hover and parameter popups live outside the card: it is inside a transformed canvas, where fixed positions would be off.
+    const overflow = document.createElement('div')
+    overflow.className = `monaco-editor flow-overflow ${window.__FLOW__.dark ? 'vs-dark' : 'vs'}`
+    document.body.appendChild(overflow)
     const ed = (editor.current = monaco.editor.create(host.current!, {
       value: code,
       language: langOf(file),
@@ -124,17 +150,39 @@ function CardEditor({ code, file, startLine, caret, onSave, onCancel }: { code: 
       overviewRulerLanes: 0,
       scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
       padding: { top: CODE_PAD },
+      // The host's answers (see ide.ts) with the words of the card under them: words are shown (showWords), and ide.ts merges them in
+      // itself, because Monaco's own word provider only answers when nothing else does.
+      quickSuggestions: { other: true, comments: false, strings: true },
+      suggestOnTriggerCharacters: true,
+      parameterHints: { enabled: true, cycle: true },
+      acceptSuggestionOnEnter: 'smart',
+      acceptSuggestionOnCommitCharacter: true,
+      wordBasedSuggestions: 'currentDocument',
+      snippetSuggestions: 'inline',
+      suggest: { showIcons: true, showWords: true, preview: true },
+      autoClosingBrackets: 'languageDefined',
+      autoClosingQuotes: 'languageDefined',
+      autoSurround: 'languageDefined',
+      autoIndent: 'full',
+      formatOnType: false,
+      formatOnPaste: false,
+      multiCursorModifier: 'alt',
+      hover: { enabled: 'on' },
+      fixedOverflowWidgets: true,
+      overflowWidgetsDomNode: overflow,
     }))
+    const unbind = bindEditor(ed, { session, key: nodeKey, file: file!, startLine, endLine, original: code })
     ed.onDidChangeModelContent(() => {
       setDirty(ed.getValue() !== code)
       setConfirmDiscard(false)
     })
     ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveRef.current())
     // Esc leaves at once when nothing changed; with changes it asks once, so a stray Esc never loses work.
+    // Not while a suggest or find widget is open: Esc closes that widget first.
     ed.addCommand(monaco.KeyCode.Escape, () => {
       if (ed.getValue() === code || confirmRef.current) onCancel()
       else setConfirmDiscard(true)
-    })
+    }, '!suggestWidgetVisible && !findWidgetVisible')
     if (caret) {
       const pos = { lineNumber: Math.max(1, caret.line - startLine + 1), column: caret.column }
       ed.setPosition(pos)
@@ -145,7 +193,9 @@ function CardEditor({ code, file, startLine, caret, onSave, onCancel }: { code: 
     const timers = [setTimeout(() => ed.focus(), 30), setTimeout(() => ed.focus(), 260)]
     return () => {
       timers.forEach(clearTimeout)
+      unbind()
       ed.dispose()
+      overflow.remove()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -159,7 +209,7 @@ function CardEditor({ code, file, startLine, caret, onSave, onCancel }: { code: 
           <span className="card-editor-msg warn">Unsaved changes. Press Esc again to discard them.</span>
         ) : (
           <span className="card-editor-msg">
-            <kbd>⌘S</kbd> save <kbd>Esc</kbd> {dirty ? 'discard' : 'close'}
+            <kbd>{/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘S' : 'Ctrl+S'}</kbd> save <kbd>Esc</kbd> {dirty ? 'discard' : 'close'}
           </span>
         )}
         <button className="btn ghost" onClick={onCancel}>{dirty ? 'Discard' : 'Close'}</button>
@@ -233,17 +283,147 @@ function clickOffset(src: HTMLElement, e: MouseEvent) {
   const doc = document as Document & { caretRangeFromPoint?(x: number, y: number): Range | null }
   const range = doc.caretRangeFromPoint?.(e.clientX, e.clientY)
   if (!range || !src.contains(range.startContainer)) return src.textContent?.length ?? 0
+  return offsetIn(src, range.startContainer, range.startOffset)
+}
+
+/** The DOM's Node (`Node` here is the canvas library's). */
+type DomNode = InstanceType<typeof globalThis.Node>
+
+/** Offset of a point (a text node and a position in it) counted over all the text in `src`. */
+function offsetIn(src: HTMLElement, container: DomNode, at: number) {
   let offset = 0
   const walker = document.createTreeWalker(src, NodeFilter.SHOW_TEXT)
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-    if (n === range.startContainer) return offset + range.startOffset
+    if (n === container) return offset + at
     offset += n.textContent?.length ?? 0
   }
   return offset
 }
 
+/** A column (0-based) in a line whose tabs were shown as four spaces, as a column in the line as it is in the file (1-based). */
+function fileColumn(original: string, shown: number) {
+  let seen = 0
+  let i = 0
+  for (; i < original.length && seen < shown; i++) seen += original[i] === '\t' ? 4 : 1
+  return i + 1
+}
+
+const MARK = { one: '', many: '[]', optional: '?' }
+const typeClass = (t: TypeLink) => (t.kind === 'enum' || t.role === 'enum' ? 'enum' : t.role === 'entity' ? 'entity' : t.role === 'dto' ? 'dto' : 'other')
+
+/** A type of the workspace: click to open its fields under the card, Ctrl/Cmd+click (or ↗) to go to it, ◫ to see it in the DTO diagram. */
+function TypeChip({ type, mark = '', title, open, expandable, still, onToggle }: { type: TypeLink; mark?: string; title: string; open: boolean; expandable: boolean; still: (e: MouseEvent) => boolean; onToggle: () => void }) {
+  const actions = useContext(ActionsCtx)
+  const go = (e: MouseEvent) => {
+    e.stopPropagation()
+    if (still(e)) actions.openType?.(type.file, type.line)
+  }
+  return (
+    <span className={`tc tc-${typeClass(type)}${open ? ' open' : ''}`}>
+      <button
+        className="tc-main nodrag"
+        aria-expanded={expandable ? open : undefined}
+        title={title}
+        onClick={e => {
+          e.stopPropagation()
+          if (!still(e)) return
+          if (e.ctrlKey || e.metaKey || !expandable) actions.openType?.(type.file, type.line)
+          else onToggle()
+        }}
+      >
+        {expandable && <i className="tc-caret">{open ? '▾' : '▸'}</i>}
+        <span className="tc-name">{type.name}</span>
+        {mark && <span className="tc-mark">{mark}</span>}
+      </button>
+      <span className="tc-acts nodrag">
+        <button className="tc-act" title={`Go to ${type.name}`} onClick={go}>↗</button>
+        {actions.typeDiagram && (
+          <button className="tc-act" title={`Show ${type.name} in the diagram`} onClick={e => { e.stopPropagation(); actions.typeDiagram!(type.id) }}>◫</button>
+        )}
+      </span>
+    </span>
+  )
+}
+
+/** The workspace types of a method's signature under the card's header, and the fields of the ones that are opened. Below the zoom where text can be read it only keeps its room. */
+function TypeChips({ nodeKey, chips, rows, open, height, zoomedOut, still }: { nodeKey: string; chips: CardChips; rows: ChipRow[]; open: ReadonlySet<string>; height: number; zoomedOut: boolean; still: (e: MouseEvent) => boolean }) {
+  const actions = useContext(ActionsCtx)
+  const toggle = (path: string, id: string) => actions.chipToggle?.(nodeKey, path, id)
+  const hint = (name: string, ref: string) => `${name ? `${name}: ` : 'returns '}${ref}`
+  return (
+    <div className={`tc-block nodrag${rows.length ? ' with-rows' : ''}`} style={{ height }}>
+      {!zoomedOut && (
+        <>
+          <div className="tc-strip" style={{ height: STRIP_H }}>
+            {chipList(chips).map(({ path, item }) => (
+              <span key={path} className="tc-slot">
+                {path === 'r' && <span className="tc-arrow" aria-label="returns">→</span>}
+                <TypeChip
+                  type={linkOf(item)}
+                  mark={MARK[item.collection]}
+                  title={`${hint(item.name, item.ref)} (click to open its fields, Ctrl+click to go to it)`}
+                  open={open.has(path)}
+                  expandable
+                  still={still}
+                  onToggle={() => toggle(path, item.typeId)}
+                />
+              </span>
+            ))}
+          </div>
+          {rows.map((r, i) => {
+            if (r.kind === 'head')
+              return (
+                <div key={`h${r.path}`} className="tc-row tc-head" style={{ height: ROW_H }}>
+                  <span className={`tc-dot tc-${typeClass(r.type)}`} />
+                  <span className="tc-headname">{r.type.name}</span>
+                  <span className="tc-faint">{r.type.role === r.type.kind ? r.type.kind : `${r.type.role} · ${r.type.kind}`}</span>
+                  <span className="tc-space" />
+                  <button className="tc-act on" title={`Go to ${r.type.name}`} onClick={e => { e.stopPropagation(); if (still(e)) actions.openType?.(r.type.file, r.type.line) }}>↗</button>
+                  {actions.typeDiagram && <button className="tc-act on" title={`Show ${r.type.name} in the diagram`} onClick={e => { e.stopPropagation(); actions.typeDiagram!(r.type.id) }}>◫</button>}
+                </div>
+              )
+            const pad = { height: ROW_H, paddingLeft: 12 + r.level * 12 }
+            if (r.kind === 'const')
+              return <div key={`c${i}`} className="tc-row" style={pad}><span className="tc-const">{r.name}</span></div>
+            if (r.kind === 'note')
+              return <div key={`n${i}`} className="tc-row tc-faint" style={pad}>{r.text}</div>
+            if (r.kind === 'more')
+              return (
+                <div key={`m${i}`} className="tc-row" style={pad}>
+                  <button className="tc-more" title={`Go to ${r.type.name}`} onClick={e => { e.stopPropagation(); if (still(e)) actions.openType?.(r.type.file, r.type.line) }}>+{r.count} more</button>
+                </div>
+              )
+            const f = r.field
+            return (
+              <div key={r.path} className="tc-row" style={pad}>
+                <span className="tc-fname">{f.name}</span>
+                {f.ref ? (
+                  <>
+                    <TypeChip
+                      type={f.ref}
+                      mark={MARK[f.card]}
+                      title={`${f.name}: ${f.type}${r.cycle ? ' (already open above: click to go to it)' : r.limit ? ' (click to go to it)' : ' (click to open its fields, Ctrl+click to go to it)'}`}
+                      open={r.open}
+                      expandable={!r.cycle && !r.limit}
+                      still={still}
+                      onToggle={() => toggle(r.path, f.ref!.id)}
+                    />
+                    {r.cycle && <span className="tc-faint" title="This type is already open above">↻</span>}
+                  </>
+                ) : (
+                  <span className="tc-ftype" title={f.type}>{f.type}</span>
+                )}
+              </div>
+            )
+          })}
+        </>
+      )}
+    </div>
+  )
+}
+
 export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
-  const { node, lines, rows, full, compactable, calls, selected, touched, editing } = data
+  const { node, lines, rows, full, compactable, calls, selected, touched, editing, chips, chipRows, chipsOpen, chipsH } = data
   const actions = useContext(ActionsCtx)
   const color = KIND_COLOR[node.kind]
   const html = useColorized(lines.map(l => l.text).join('\n'), langOf(node.file))
@@ -265,13 +445,32 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
   const onDown = (e: PointerEvent) => (press.current = { x: e.clientX, y: e.clientY })
   const still = (e: MouseEvent) => !press.current || Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) < 4
 
+  const fileLines = node.code?.replace(/\r/g, '').split('\n') ?? []
+  const srcOf = (e: MouseEvent) => (e.currentTarget as HTMLElement).querySelector('.src') as HTMLElement | null
+  /** Characters the card's dedenting took off this line (as shown: tabs are four spaces). */
+  const indentOf = (no: number) => (rawLines[no - node.startLine]?.length ?? 0) - (lines[no - node.startLine]?.text.length ?? 0)
+  const canGo = !!(node.file && node.code && actions.definition)
+
+  // Ctrl/Cmd held: not editing but going to the definition of the identifier under the pointer.
+  const definitionAt = (e: MouseEvent, no: number) => {
+    const src = srcOf(e)
+    const hit = src && wordAtPoint(src, e.clientX, e.clientY)
+    if (!src || !hit) return
+    const shown = indentOf(no) + offsetIn(src, hit.node, hit.start)
+    actions.definition!(node.key, { line: no, column: fileColumn(fileLines[no - node.startLine] ?? '', shown) })
+  }
+
   const editAt = (e: MouseEvent, no: number) => {
+    if ((e.ctrlKey || e.metaKey) && canGo) {
+      e.stopPropagation()
+      if (still(e)) definitionAt(e, no)
+      return
+    }
     if (!editable || !still(e)) return
     if (zoomedOut && actions.focusLine) return actions.focusLine(node.key, no)
-    const src = (e.currentTarget as HTMLElement).querySelector('.src') as HTMLElement | null
-    const indent = (rawLines[no - node.startLine]?.length ?? 0) - (lines[no - node.startLine]?.text.length ?? 0)
+    const src = srcOf(e)
     const col = src ? clickOffset(src, e) : 0
-    actions.edit!(node.key, { line: no, column: indent + col + 1 })
+    actions.edit!(node.key, { line: no, column: fileColumn(fileLines[no - node.startLine] ?? '', indentOf(no) + col) })
   }
 
   return (
@@ -320,9 +519,10 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
         </div>
       </div>
 
+      {chips && chipRows && chipsOpen && !editing && <TypeChips nodeKey={node.key} chips={chips} rows={chipRows} open={chipsOpen} height={chipsH ?? 0} zoomedOut={zoomedOut} still={still} />}
       {schema && <SchemaBody schema={schema} />}
       {editing && node.code && actions.save && (
-        <CardEditor code={node.code} file={node.file} startLine={node.startLine} caret={actions.caret} onSave={t => actions.save!(node.key, t)} onCancel={() => actions.cancelEdit?.()} />
+        <CardEditor nodeKey={node.key} code={node.code} file={node.file} startLine={node.startLine} endLine={node.endLine} caret={actions.caret} onSave={(t, session) => actions.save!(node.key, t, session)} onCancel={() => actions.cancelEdit?.()} />
       )}
 
       {!editing && rows.length > 0 && (
@@ -353,7 +553,11 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
                 style={{ height: LINE_H, ...(callee ? ({ '--c': KIND_COLOR[callee.kind] } as CSSProperties) : {}) }}
                 onClick={e => editAt(e, l.no)}
                 onMouseEnter={callee ? () => actions.trace?.(node.key, callee.key) : undefined}
-                onMouseLeave={callee ? () => actions.trace?.(null) : undefined}
+                onMouseMove={canGo ? e => hoverCode(srcOf(e), e) : undefined}
+                onMouseLeave={() => {
+                  leaveCode()
+                  if (callee) actions.trace?.(null)
+                }}
               >
                 <span className="gutter">{l.no}</span>
                 {html ? <span className="src" dangerouslySetInnerHTML={{ __html: html[i] ?? '' }} /> : <span className="src">{l.text}</span>}

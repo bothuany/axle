@@ -1,0 +1,11 @@
+# VS Code's packager (gulp vscode-win32-x64-min) lists this extension through this file. Its code is bundled by esbuild
+# into out/; the agent adapters in node_modules are NOT listed here: `npm run installer` installs just the production
+# dependencies of this extension into the packaged app itself.
+node_modules/**
+src/**
+**/*.map
+**/*.ts
+tsconfig*.json
+esbuild.mjs
+package-lock.json
+.vscodeignore

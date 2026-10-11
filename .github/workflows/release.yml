@@ -1,0 +1,75 @@
+# Builds the Windows installer (npm run installer) when a version tag is pushed, and attaches it to the GitHub release.
+# It needs the full `npm run setup` (a VS Code checkout, `npm ci`, native modules) and VS Code's production build, so it is slow:
+# plan for 60 to 90 minutes on windows-latest. Written but not run yet: the first tag is the test.
+#   git tag v0.1.0 && git push origin v0.1.0
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    name: Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # VS Code's native modules are built with the "MSVC Spectre-mitigated libs", which the runner's Visual Studio may not carry.
+      - name: Spectre-mitigated MSVC libraries
+        shell: pwsh
+        run: |
+          $vsInstaller = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+          $vs = & "$vsInstaller\vswhere.exe" -latest -products * -property installationPath
+          Start-Process -Wait -FilePath "$vsInstaller\vs_installer.exe" -ArgumentList 'modify', '--installPath', "`"$vs`"", '--add', 'Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre', '--quiet', '--norestart', '--nocache'
+
+      - name: The tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${version}: the installer would be named for ${version}."
+            exit 1
+          fi
+
+      - name: Set up Axle
+        run: npm run setup
+
+      - name: Build the installer
+        run: npm run installer
+
+      - name: Attach it to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --title "Axle ${GITHUB_REF_NAME#v}" --generate-notes
+          gh release upload "${GITHUB_REF_NAME}" dist/Axle-Setup-*.exe --clobber
+
+      # A manual run (no tag) keeps the installer as a build artifact instead.
+      - uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        with:
+          name: axle-installer
+          path: dist/Axle-Setup-*.exe
+          retention-days: 7

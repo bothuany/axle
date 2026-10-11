@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow: binds one ACP agent (Claude / Codex) to a native chat session type.
+ *  Axle: binds one ACP agent (Claude / Codex) to a native chat session type.
  *  Sessions, history and settings come from the agent itself (session/list, session/load,
  *  configOptions), so whatever the user does in the CLI shows up here and vice versa.
  *--------------------------------------------------------------------------------------------*/
@@ -92,7 +92,7 @@ export class AgentSessionType implements vscode.Disposable {
 	private readonly configs = new Map<string, SessionConfigOption[]>();
 	/**
 	 * The permission mode the user picked (bypassPermissions, acceptEdits, …). The agent itself always runs
-	 * in `default` (or `plan`) so every write asks first; Flow answers automatically per this mode, but only
+	 * in `default` (or `plan`) so every write asks first; Axle answers automatically per this mode, but only
 	 * after snapshotting the files, which is what makes Keep/Undo work for every edit.
 	 */
 	private readonly approval = new Map<string, string>();
@@ -102,14 +102,23 @@ export class AgentSessionType implements vscode.Disposable {
 	private readonly states = new Set<vscode.ChatSessionInputState>();
 	/** A fresh session created only to learn the config options; handed to the next new chat. */
 	private spare: { id: string; config: SessionConfigOption[] } | undefined;
+	/** The spare being created right now, so concurrent pickers share it instead of each making one. */
+	private sparePending: Promise<{ id: string; config: SessionConfigOption[] }> | undefined;
 
 	constructor(private readonly kind: AgentKind, private readonly host: AgentHost, private readonly log: vscode.LogOutputChannel) {
 		this.type = `flow-${kind}`;
 		this.ctrl = vscode.chat.createChatSessionItemController(this.type, () => this.refresh());
-		this.ctrl.newChatSessionItemHandler = (ctx, token) => this.newSession(ctx, token);
-		this.ctrl.getChatSessionInputState = (resource, ctx, token) => this.inputState(resource, ctx, token);
+		this.ctrl.newChatSessionItemHandler = ctx => this.newSession(ctx);
+		this.ctrl.getChatSessionInputState = resource => this.inputState(resource);
 
 		this.disposables.push(vscode.commands.registerCommand(`flow-agent.pickSkill.${kind}`, () => this.pickSkill()));
+		// A new adapter process knows none of the sessions the old one had: forget them so they are loaded again.
+		this.disposables.push(this.host.onDidExit(() => {
+			this.live.clear();
+			this.configs.clear();
+			this.spare = undefined;
+			this.sparePending = undefined;
+		}));
 		this.disposables.push(this.host.onAnyUpdate(n => {
 			const u = n.update as { sessionUpdate: string; availableCommands?: { name: string; description: string }[] };
 			if (u.sessionUpdate === 'available_commands_update' && u.availableCommands) {
@@ -150,8 +159,18 @@ export class AgentSessionType implements vscode.Disposable {
 	private async refresh() {
 		try {
 			const conn = await this.host.connection();
-			const res = await conn.listSessions({ cwd: this.cwd });
-			this.ctrl.items.replace(res.sessions.map(s => {
+			// The list comes in pages: follow them (bounded) so older sessions are not silently missing.
+			const sessions: Awaited<ReturnType<ClientSideConnection['listSessions']>>['sessions'] = [];
+			let cursor: string | undefined;
+			for (let page = 0; page < 20; page++) {
+				const res = await conn.listSessions({ cwd: this.cwd, cursor });
+				sessions.push(...res.sessions);
+				cursor = res.nextCursor ?? undefined;
+				if (!cursor) {
+					break;
+				}
+			}
+			this.ctrl.items.replace(sessions.map(s => {
 				const item = this.ctrl.createChatSessionItem(this.uri(s.sessionId), s.title || LABEL[this.kind]);
 				const updated = s.updatedAt ? Date.parse(s.updatedAt) : undefined;
 				if (updated) {
@@ -165,7 +184,7 @@ export class AgentSessionType implements vscode.Disposable {
 		}
 	}
 
-	private async newSession(ctx: vscode.ChatSessionItemControllerNewItemHandlerContext, _token: vscode.CancellationToken) {
+	private async newSession(ctx: vscode.ChatSessionItemControllerNewItemHandlerContext) {
 		const conn = await this.host.connection();
 		let id: string;
 		if (this.spare) {
@@ -193,15 +212,22 @@ export class AgentSessionType implements vscode.Disposable {
 		if (sessionId && this.configs.has(sessionId)) {
 			return this.configs.get(sessionId)!;
 		}
-		if (!this.spare) {
-			const conn = await this.host.connection();
-			const s = await conn.newSession({ cwd: this.cwd, mcpServers: [] });
-			this.spare = { id: s.sessionId, config: (s.configOptions ?? []) as SessionConfigOption[] };
+		if (this.spare) {
+			return this.spare.config;
 		}
-		return this.spare.config;
+		this.sparePending ??= this.createSpare().finally(() => this.sparePending = undefined);
+		return (await this.sparePending).config;
 	}
 
-	private async inputState(resource: vscode.Uri | undefined, _ctx: unknown, _token: vscode.CancellationToken) {
+	private async createSpare() {
+		const conn = await this.host.connection();
+		const s = await conn.newSession({ cwd: this.cwd, mcpServers: [] });
+		const spare = { id: s.sessionId, config: (s.configOptions ?? []) as SessionConfigOption[] };
+		this.spare = spare;
+		return spare;
+	}
+
+	private async inputState(resource: vscode.Uri | undefined) {
 		let config: SessionConfigOption[] = [];
 		try {
 			config = await this.configFor(resource && this.sessionIdOf(resource));
@@ -338,11 +364,27 @@ export class AgentSessionType implements vscode.Disposable {
 		return { history, requestHandler: undefined, options };
 	}
 
-	/** Makes the session live in this adapter process; returns its replayed history as chat turns. */
+	private readonly loading = new Map<string, Promise<Array<vscode.ChatRequestTurn | vscode.ChatResponseTurn2>>>();
+
+	/**
+	 * Makes the session live in this adapter process; returns its replayed history as chat turns.
+	 * Callers that arrive while it loads share that one load (one sink per session, one `loadSession`).
+	 */
 	private async ensureLoaded(id: string, wantHistory: boolean): Promise<Array<vscode.ChatRequestTurn | vscode.ChatResponseTurn2>> {
-		if (this.live.has(id) && !wantHistory) {
+		if (this.live.has(id)) {
+			// Already live in this process: we can't replay without reloading; show nothing rather than duplicating.
 			return [];
 		}
+		let load = this.loading.get(id);
+		if (!load) {
+			load = this.replay(id).finally(() => this.loading.delete(id));
+			this.loading.set(id, load);
+		}
+		const turns = await load;
+		return wantHistory ? turns : [];
+	}
+
+	private async replay(id: string): Promise<Array<vscode.ChatRequestTurn | vscode.ChatResponseTurn2>> {
 		const turns: Array<vscode.ChatRequestTurn | vscode.ChatResponseTurn2> = [];
 		let prompt = '';
 		let parts: Array<vscode.ChatResponseMarkdownPart | vscode.ChatToolInvocationPart> = [];
@@ -363,10 +405,6 @@ export class AgentSessionType implements vscode.Disposable {
 			parts = [];
 		};
 
-		if (this.live.has(id)) {
-			// Already live in this process: we can't replay without reloading; show nothing rather than duplicating.
-			return [];
-		}
 		const conn = await this.host.connection();
 		this.host.setSink(id, {
 			onUpdate: ({ update: u }) => {
@@ -418,7 +456,7 @@ export class AgentSessionType implements vscode.Disposable {
 			this.host.setSink(id, undefined);
 		}
 		flushTurn();
-		return wantHistory ? turns : [];
+		return turns;
 	}
 
 	// ---- a turn --------------------------------------------------------------------------------
@@ -441,7 +479,7 @@ export class AgentSessionType implements vscode.Disposable {
 			return { errorDetails: { message: explain(this.kind, e) } };
 		}
 
-		// Flow's timeline: every prompt is one step, so its edits can be shown and undone on their own.
+		// Axle's timeline: every prompt is one step, so its edits can be shown and undone on their own.
 		await Promise.resolve(vscode.commands.executeCommand('flow.agentTurn', req.prompt, LABEL[this.kind])).catch(() => undefined);
 		const edits = new EditTracker();
 		const tools = new Map<string, { part: vscode.ChatToolInvocationPart; kind?: string; files: string[] }>();
@@ -514,9 +552,9 @@ export class AgentSessionType implements vscode.Disposable {
 
 		this.host.setSink(id, {
 			onUpdate: n => onUpdate(n.update),
-			onPermission: r => this.askPermission(r, edits, stream),
+			onPermission: r => this.askPermission(r, edits, stream, token),
 		});
-		const cancel = token.onCancellationRequested(() => void conn.cancel({ sessionId: id }));
+		const cancel = token.onCancellationRequested(() => void conn.cancel({ sessionId: id }).catch(() => undefined));
 		try {
 			const r = await conn.prompt({ sessionId: id, prompt: this.promptBlocks(req) });
 			if (r.stopReason !== 'end_turn' && r.stopReason !== 'cancelled') {
@@ -557,35 +595,45 @@ export class AgentSessionType implements vscode.Disposable {
 
 	/**
 	 * Every write asks first (the agent runs in `default`). Snapshot the files it will touch, then either
-	 * answer for the user (their mode says so) or ask them.
+	 * answer for the user (their mode says so) or ask them. Only bypassPermissions answers everything;
+	 * acceptEdits and auto answer edits and still ask for the rest (commands, MCP tools, …).
 	 */
-	private async askPermission(r: RequestPermissionRequest, edits: EditTracker, stream: vscode.ChatResponseStream): Promise<RequestPermissionResponse> {
+	private async askPermission(r: RequestPermissionRequest, edits: EditTracker, stream: vscode.ChatResponseStream, token: vscode.CancellationToken): Promise<RequestPermissionResponse> {
 		const files = (r.toolCall.locations ?? []).map(l => l.path);
 		const isEdit = r.toolCall.kind === 'edit';
 		const mode = this.approval.get(r.sessionId) ?? this.harnessMode ?? 'default';
-		const auto = mode === 'bypassPermissions' || mode === 'auto' || (mode === 'acceptEdits' && isEdit);
+		const auto = mode === 'bypassPermissions' || ((mode === 'acceptEdits' || mode === 'auto') && isEdit);
 
 		let option = auto ? r.options.find(o => o.kind === 'allow_once') ?? r.options.find(o => o.kind.startsWith('allow')) : undefined;
 		if (!option) {
 			const title = r.toolCall.title ?? 'Tool';
-			// Flow's canvas marks the methods this edit would touch while the user decides.
+			// Axle's canvas marks the methods this edit would touch while the user decides.
 			const diffs = ((r.toolCall.content ?? []) as Array<{ type: string; path?: string; oldText?: string | null; newText?: string }>)
 				.filter(c => c.type === 'diff' && c.path)
 				.map(c => ({ path: c.path!, oldText: c.oldText ?? null, newText: c.newText ?? '' }));
 			if (isEdit) {
 				await Promise.resolve(vscode.commands.executeCommand('flow.agentProposes', { agent: LABEL[this.kind], title, files, diffs })).catch(() => undefined);
 			}
-			const pick = await vscode.window.showInformationMessage(
-				`${LABEL[this.kind]}: ${title}`,
-				{ modal: true, detail: files.map(f => vscode.workspace.asRelativePath(f)).join('\n') || undefined },
-				...r.options.map(o => o.name),
-			);
+			// A cancelled turn must not wait for an answer nobody will read. The modal itself cannot be closed
+			// from here; whatever is picked in it afterwards is ignored.
+			const pick = await new Promise<string | undefined>(resolve => {
+				const sub = token.onCancellationRequested(() => resolve(undefined));
+				if (token.isCancellationRequested) {
+					sub.dispose();
+					return resolve(undefined);
+				}
+				Promise.resolve(vscode.window.showInformationMessage(
+					`${LABEL[this.kind]}: ${title}`,
+					{ modal: true, detail: files.map(f => vscode.workspace.asRelativePath(f)).join('\n') || undefined },
+					...r.options.map(o => o.name),
+				)).then(resolve, () => resolve(undefined)).finally(() => sub.dispose());
+			});
 			option = r.options.find(o => o.name === pick);
 			if (isEdit) {
 				void Promise.resolve(vscode.commands.executeCommand('flow.agentProposalDone')).catch(() => undefined);
 			}
 		}
-		// Flow Harness keeps every question and its answer, so one can be turned into a standing rule.
+		// Axle Harness keeps every question and its answer, so one can be turned into a standing rule.
 		void Promise.resolve(vscode.commands.executeCommand('flowHarness.recordPermission', {
 			at: Date.now(),
 			agent: LABEL[this.kind],
@@ -599,7 +647,7 @@ export class AgentSessionType implements vscode.Disposable {
 			return { outcome: { outcome: 'cancelled' } };
 		}
 		if (option.kind.startsWith('allow') && isEdit) {
-			// Flow's canvas keeps the pre-edit text so cards can show this change (and undo it per method).
+			// Axle's canvas keeps the pre-edit text so cards can show this change (and undo it per method).
 			await Promise.resolve(vscode.commands.executeCommand('flow.agentWillEdit', files)).catch(() => undefined);
 			await edits.track(r.toolCall.toolCallId, files, stream);
 		}

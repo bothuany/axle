@@ -1,0 +1,26 @@
+flowchart TB
+  subgraph g0["java-shop"]
+    subgraph g1["Controllers"]
+      n6["OrderController<br/>controller · com.acme.shop.web"]
+    end
+    subgraph g2["Services"]
+      n3["OrderService<br/>service · com.acme.shop.service"]
+      n4["PricingService<br/>service · com.acme.shop.service"]
+    end
+    subgraph g3["Repositories"]
+      n2[("OrderRepository<br/>repository · com.acme.shop.repo")]
+    end
+    subgraph g4["Entities"]
+      n0[("OrderEntity<br/>entity · com.acme.shop.model")]
+      n1[("OrderLineEntity<br/>entity · com.acme.shop.model")]
+    end
+    subgraph g5["Classes"]
+      n5["StringUtils<br/>class · com.acme.shop.util"]
+    end
+  end
+  n0 -.->|"lines"| n1
+  n1 -.->|"order"| n0
+  n2 -.-> n0
+  n3 -.->|"repo"| n2
+  n3 -.->|"pricing"| n4
+  n6 -.->|"orders"| n3

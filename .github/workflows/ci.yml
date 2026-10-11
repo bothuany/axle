@@ -1,0 +1,71 @@
+# What can be checked without the VS Code checkout. The extensions' type checks (`npm run typecheck`) extend
+# editor/vscode's tsconfig and typings, so they need `npm run setup` (a 10-20 minute job) and stay a local check.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: |
+            ui/package-lock.json
+            editor/extensions/*/package-lock.json
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Scripts parse
+        run: for f in scripts/*.mjs; do node --check "$f"; done
+
+      - name: Analyzer
+        run: dotnet build analyzer -nologo -v q
+
+      - name: Canvas
+        working-directory: ui
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run build
+
+      - name: flow-view (build and tests)
+        working-directory: editor/extensions/flow-view
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+
+      - name: flow-agent (build)
+        working-directory: editor/extensions/flow-agent
+        run: |
+          npm ci --no-audit --no-fund
+          node esbuild.mjs
+
+      - name: flow-harness (build)
+        working-directory: editor/extensions/flow-harness
+        run: |
+          npm ci --no-audit --no-fund
+          node esbuild.mjs

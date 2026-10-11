@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FlowAnalyzer;
 using Microsoft.CodeAnalysis.MSBuild;
 
@@ -6,16 +5,48 @@ await Cli.RunAsync(args);
 
 static class Cli
 {
-    static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = false };
+    const string Usage = "usage: FlowAnalyzer serve <sln> [port] [parent-pid] --token <hex> | dump <sln> <controller.action|docId> [depth] | callers <sln> <file> <method> [depth] | list <sln>";
 
-    public static async Task RunAsync(string[] args)
+    static int Fail(string message)
     {
-        if (args.Length < 2)
+        Console.Error.WriteLine(message);
+        Environment.ExitCode = 2;
+        return 2;
+    }
+
+    public static async Task RunAsync(string[] rawArgs)
+    {
+        // --token <hex> may sit anywhere; the rest stays positional.
+        string? token = null;
+        var args = new List<string>();
+        for (var i = 0; i < rawArgs.Length; i++)
         {
-            Console.Error.WriteLine("usage: FlowAnalyzer serve <sln> [port] | dump <sln> <controller.action|docId> [depth] | list <sln>");
-            return;
+            if (rawArgs[i] == "--token" && i + 1 < rawArgs.Length) token = rawArgs[++i];
+            else if (rawArgs[i].StartsWith("--token=")) token = rawArgs[i]["--token=".Length..];
+            else args.Add(rawArgs[i]);
         }
+
+        // Say what is wrong before spending seconds loading a solution.
+        var needed = args.FirstOrDefault() switch { "list" or "serve" => 2, "dump" => 3, "callers" => 4, _ => int.MaxValue };
+        if (args.Count < needed) { Fail(Usage); return; }
+
+        var port = 5199;
+        var parentPid = 0;
+        switch (args[0])
+        {
+            case "serve":
+                if (string.IsNullOrEmpty(token)) { Fail("serve needs --token <hex>: every request must carry it in the x-flow-token header.\n" + Usage); return; }
+                if (args.Count > 2 && (!int.TryParse(args[2], out port) || port is < 0 or > 65535)) { Fail($"Invalid port: {args[2]}"); return; }
+                if (args.Count > 3 && !int.TryParse(args[3], out parentPid)) { Fail($"Invalid parent pid: {args[3]}"); return; }
+                break;
+            case "dump" when args.Count > 3 && !int.TryParse(args[3], out _):
+                Fail($"Invalid depth: {args[3]}"); return;
+            case "callers" when args.Count > 4 && !int.TryParse(args[4], out _):
+                Fail($"Invalid depth: {args[4]}"); return;
+        }
+
         var graph = await LoadAsync(args[1]);
+        if (graph == null) return;
 
         switch (args[0])
         {
@@ -25,38 +56,42 @@ static class Cli
                 break;
             case "dump":
                 var id = args[2].StartsWith("M:") ? args[2]
-                    : (await graph.EntryPointsAsync()).First(e => $"{e.Controller}.{e.Action}" == args[2]).Id;
-                var node = await graph.BuildAsync(id, args.Length > 3 ? int.Parse(args[3]) : 4);
-                Print(node!, 0);
+                    : (await graph.EntryPointsAsync()).FirstOrDefault(e => $"{e.Controller}.{e.Action}" == args[2])?.Id;
+                var node = id == null ? null : await graph.BuildAsync(id, args.Count > 3 ? int.Parse(args[3]) : 4);
+                if (node == null) { Console.Error.WriteLine($"No such entry point or method: {args[2]}"); Environment.ExitCode = 1; break; }
+                Print(node, 0);
                 break;
             case "callers":
-                var m = (await graph.MethodsAsync(Path.GetFullPath(args[2]))).First(x => x.Name.EndsWith("." + args[3]));
-                Print((await graph.CallersAsync(m.Id, args.Length > 4 ? int.Parse(args[4]) : 3))!, 0);
+                var m = (await graph.MethodsAsync(Path.GetFullPath(args[2]))).FirstOrDefault(x => x.Name.EndsWith("." + args[3]));
+                var callers = m == null ? null : await graph.CallersAsync(m.Id, args.Count > 4 ? int.Parse(args[4]) : 3);
+                if (callers == null) { Console.Error.WriteLine($"No such method: {args[3]} in {args[2]}"); Environment.ExitCode = 1; break; }
+                Print(callers, 0);
                 break;
             case "serve":
-                if (args.Length > 3) WatchParent(int.Parse(args[3]));
-                await Server.RunAsync(graph, args.Length > 2 ? int.Parse(args[2]) : 5199, SourceRoot(graph));
+                if (parentPid > 0) WatchParent(parentPid);
+                await Server.RunAsync(graph, port, token!, SourceDirs(graph));
                 break;
         }
     }
 
-    /// <summary>Common ancestor of all project folders — shared projects often live outside the .sln folder.</summary>
-    static string SourceRoot(FlowGraph graph)
+    /// <summary>Every project folder (shared projects often live outside the .sln folder), without folders nested in another one.</summary>
+    static List<string> SourceDirs(FlowGraph graph)
     {
-        var dirs = graph.Solution.Projects.Select(p => Path.GetDirectoryName(p.FilePath)!).Distinct().ToList();
-        var root = dirs[0];
-        while (!dirs.All(d => (d + "/").StartsWith(root + "/"))) root = Path.GetDirectoryName(root)!;
-        Console.Error.WriteLine($"[watch] {root}");
-        return root;
+        var dirs = graph.Solution.Projects.Select(p => Path.GetDirectoryName(p.FilePath)).OfType<string>().Distinct().ToList();
+        return dirs.Where(d => !dirs.Any(o => o != d && Server.IsBelow(d, o))).ToList();
     }
 
-    /// <summary>Exit when the desktop app that spawned us is gone, even if it was killed without cleanup.</summary>
+    /// <summary>Exit when the editor that spawned us is gone, even if it was killed without cleanup.</summary>
     static void WatchParent(int pid) => _ = Task.Run(async () =>
     {
         while (true)
         {
             await Task.Delay(2000);
-            try { if (System.Diagnostics.Process.GetProcessById(pid).HasExited) Environment.Exit(0); }
+            try
+            {
+                using var parent = System.Diagnostics.Process.GetProcessById(pid);
+                if (parent.HasExited) Environment.Exit(0);
+            }
             catch (ArgumentException) { Environment.Exit(0); }
         }
     });
@@ -67,15 +102,23 @@ static class Cli
         foreach (var c in n.Children) Print(c.Node, indent + 1, $"{c.EdgeKind}@{c.CallLine} → ");
     }
 
-    static async Task<FlowGraph> LoadAsync(string sln)
+    static async Task<FlowGraph?> LoadAsync(string sln)
     {
+        var path = Path.GetFullPath(sln);
+        if (!File.Exists(path)) { Fail($"Solution not found: {path}"); return null; }
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var ws = MSBuildWorkspace.Create();
         ws.RegisterWorkspaceFailedHandler(e => Console.Error.WriteLine($"[workspace] {e.Diagnostic.Kind}: {e.Diagnostic.Message}"));
-        var solution = await ws.OpenSolutionAsync(Path.GetFullPath(sln));
-        Console.Error.WriteLine($"[load] {solution.Projects.Count()} proje, {sw.Elapsed.TotalSeconds:F1}s");
-        return new FlowGraph(solution);
+        try
+        {
+            var solution = await ws.OpenSolutionAsync(path);
+            Console.Error.WriteLine($"[load] {solution.Projects.Count()} project(s), {sw.Elapsed.TotalSeconds:F1}s");
+            return new FlowGraph(solution);
+        }
+        catch (Exception e)
+        {
+            Fail($"Cannot open solution {path}: {e.Message}");
+            return null;
+        }
     }
-
-    public static JsonSerializerOptions JsonOptions => Json;
 }

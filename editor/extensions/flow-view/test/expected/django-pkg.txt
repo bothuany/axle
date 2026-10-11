@@ -1,0 +1,4 @@
+* /items          handlers.list_items
+  call: load_items [method]
+* /orders         views.list_orders
+  call: build_orders [method]

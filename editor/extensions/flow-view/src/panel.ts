@@ -1,20 +1,25 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow: the canvas (custom-ide/ui, webview build) in one reusable editor tab. The webview never
+ *  Axle: the canvas (custom-ide/ui, webview build) in one reusable editor tab. The webview never
  *  talks to a backend itself: it asks this host, which routes to the provider for the target.
  *--------------------------------------------------------------------------------------------*/
 
+import { randomBytes } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { AgentChanges } from './agentDiff';
+import { Command } from './commands';
 import { agentContext } from './harness';
+import { CardLanguage, cardQuery } from './language';
+import { CardOverlays } from './overlay';
 import type { FlowNode, FlowProvider, FlowTarget } from './providers';
 import { flowRoot } from './root';
+import { TypeService } from './types/typeService';
 
 interface Request {
 	type: 'request';
 	id: number;
-	op: 'graph' | 'callers' | 'save' | 'keep' | 'undo' | 'impact' | 'context' | 'timeline' | 'undoFrom' | 'editHooks';
+	op: 'graph' | 'callers' | 'save' | 'keep' | 'undo' | 'impact' | 'context' | 'timeline' | 'undoFrom' | 'editHooks' | 'complete' | 'signature' | 'hover' | 'definition' | 'endEdit' | 'typeChips' | 'typeDetail';
 	turn?: number;
 	target?: FlowTarget;
 	file?: string;
@@ -22,14 +27,36 @@ interface Request {
 	endLine?: number;
 	original?: string;
 	code?: string;
+	/** An open card editor (one id per opening): the document shows its text for the language servers, and gets the original back when it closes. */
+	session?: string;
+	trigger?: string;
+	/** typeChips: the cards to find the types of, by the key the canvas gave each (`line` is where the method starts). */
+	nodes?: { key: string; file: string; line: number; endLine?: number }[];
+	/** typeDetail: a type id or a name as written in `fromFile`, and how many levels of the types its fields refer to to include. */
+	ref?: string;
+	fromFile?: string;
+	depth?: number;
 }
+
+/** Registered by the type diagrams (typeviews.ts): the canvas offers "show in the diagram" only when it exists. */
+const FOCUS_TYPE = 'flow.types.focusType';
 
 const normalize = (s: string) => s.replace(/\r\n/g, '\n');
 
 /** Test code: a test project folder (Foo.Tests, Foo.Test.Unit, tests/, __tests__/) or a test file name. */
 const TEST_DIR = /[\\/](?:[^\\/]*[.-]tests?(?:[.-][^\\/]*)?|tests?|__tests__|spec)[\\/]/i;
 const TEST_FILE = /(?:[a-z0-9_]Tests?|[.-](?:test|spec))\.\w+$/;
-const isTest = (file: string) => TEST_DIR.test(file) || TEST_FILE.test(file);
+/** Judged by the path inside the workspace: a checkout that itself lives under `tests/` is not all test code. */
+const isTest = (file: string) => TEST_DIR.test('/' + vscode.workspace.asRelativePath(file, false).replace(/\\/g, '/')) || TEST_FILE.test(file);
+
+/** A file the canvas may ask about: inside a workspace folder, spelled the way VS Code spells it. */
+function workspaceFile(file: unknown): string | undefined {
+	if (typeof file !== 'string' || !file) {
+		return undefined;
+	}
+	const uri = vscode.Uri.file(file);
+	return vscode.workspace.getWorkspaceFolder(uri) ? uri.fsPath : undefined;
+}
 
 /**
  * A flow shows how the application runs; tests calling into it are noise there. Callers and callees in
@@ -46,28 +73,63 @@ function withoutTests<T extends FlowNode | null>(node: T): T {
 export class FlowPanel implements vscode.Disposable {
 	private panel: vscode.WebviewPanel | undefined;
 	private readonly dist: string;
+	/** The card being edited, shown to the language servers (see overlay.ts). */
+	private readonly overlays = new CardOverlays();
+	private readonly language = new CardLanguage(this.overlays);
 	private refreshTimer: NodeJS.Timeout | undefined;
 
 	constructor(context: vscode.ExtensionContext, private readonly providerFor: (t: FlowTarget) => FlowProvider, private readonly changes: AgentChanges) {
 		this.dist = path.join(flowRoot(context.extensionPath), 'ui', 'dist-webview');
 	}
 
+	/** The tab being created: a second `show` waits for it instead of posting to a webview that is not listening yet. */
+	private opening: Promise<void> | undefined;
+	/** The webview has sent its first message, so it is listening. */
+	private webviewReady = false;
+
 	async show(target: FlowTarget, label: string) {
+		if (this.opening) {
+			await this.opening;
+		}
 		if (this.panel) {
 			this.panel.title = `Flow: ${label}`;
 			this.panel.reveal(undefined, true);
 			await this.panel.webview.postMessage({ type: 'show', target, label });
 			return;
 		}
-		const panel = this.panel = vscode.window.createWebviewPanel('flow.canvas', `Flow: ${label}`, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, {
+		this.opening = this.open(target, label).finally(() => { this.opening = undefined; });
+		await this.opening;
+	}
+
+	private async open(target: FlowTarget, label: string) {
+		const panel = vscode.window.createWebviewPanel('flow.canvas', `Flow: ${label}`, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, {
 			enableScripts: true,
 			retainContextWhenHidden: true,
 		});
+		try {
+			panel.webview.html = await this.html(panel.webview, target, label);
+		} catch (e) {
+			// The canvas build is missing: no blank tab left behind, and the next `show` starts over.
+			panel.dispose();
+			throw new Error(`The canvas is not built (${(e as Error).message}). Run \`npm run setup\`.`);
+		}
 		panel.iconPath = new vscode.ThemeIcon('type-hierarchy-sub');
-		panel.onDidDispose(() => this.panel = undefined);
-		panel.webview.onDidReceiveMessage(m => this.onMessage(m));
-		panel.webview.html = await this.html(panel.webview, target, label);
-		setTimeout(() => this.waiting && void this.panel?.webview.postMessage({ type: 'proposal', proposal: this.waiting }), 1500);
+		this.webviewReady = false;
+		panel.onDidDispose(() => {
+			this.webviewReady = false;
+			this.panel = undefined;
+			// A card still being edited goes back to the file as it was: the canvas that would have saved it is gone.
+			void this.overlays.closeAll();
+		});
+		panel.webview.onDidReceiveMessage(m => {
+			// The canvas asks for its graph as soon as it runs: its first message means it listens, so a waiting proposal can go now.
+			if (!this.webviewReady) {
+				this.webviewReady = true;
+				this.postWaiting();
+			}
+			this.onMessage(m).catch(e => vscode.window.showErrorMessage(`Axle: ${(e as Error).message ?? e}`));
+		});
+		this.panel = panel;
 	}
 
 	/** Disk changed (user save, agent edit, git): providers re-read it; ask the canvas to re-fetch. */
@@ -108,20 +170,30 @@ export class FlowPanel implements vscode.Disposable {
 
 	/** A proposal from the Claude Code CLI: exact spans, and the canvas offers Accept / Reject for it. */
 	proposeSpans(p: { id: string; agent: string; title: string; files: string[]; spans: { file: string; start: number; end: number }[] }) {
-		this.waiting = { ...p, answerable: true };
-		void this.panel?.webview.postMessage({ type: 'proposal', proposal: this.waiting });
+		this.waiting.set(p.id, { ...p, answerable: true });
+		this.postWaiting();
 	}
 
-	/** A CLI proposal still waiting for an answer: a canvas opened later shows it too. */
-	private waiting: object | null = null;
+	/** CLI proposals still waiting for an answer, by id: a canvas opened later shows them too. */
+	private readonly waiting = new Map<string, object>();
+
+	/** The canvas shows one proposal at a time: the newest one still waiting, or none. */
+	private postWaiting() {
+		if (this.webviewReady) {
+			void this.panel?.webview.postMessage({ type: 'proposal', proposal: [...this.waiting.values()].at(-1) ?? null });
+		}
+	}
 
 	/** Set by the extension: the canvas answered a CLI proposal, or asked to @-mention a card in the CLI. */
 	onAnswer: ((id: string, accept: boolean) => void) | undefined;
 	onMention: ((file: string, start: number, end: number) => void) | undefined;
 
-	proposalDone() {
-		this.waiting = null;
-		void this.panel?.webview.postMessage({ type: 'proposal', proposal: null });
+	/** `id`: a CLI proposal that was answered; without it (flow-agent's own proposal) only the marks are cleared. */
+	proposalDone(id?: string) {
+		if (id !== undefined) {
+			this.waiting.delete(id);
+		}
+		this.postWaiting();
 	}
 
 	/** Editor → canvas: the canvas highlights the card holding this line. */
@@ -129,25 +201,39 @@ export class FlowPanel implements vscode.Disposable {
 		void this.panel?.webview.postMessage({ type: 'cursor', file, line });
 	}
 
-	private async onMessage(m: Request | { type: 'open' | 'reveal'; file: string; line: number } | { type: 'ask'; label: string; context: string } | { type: 'answer' | 'mention' }) {
+	private async onMessage(m: Request | { type: 'open' | 'reveal'; file: string; line: number } | { type: 'ask'; label: string; context: string } | { type: 'answer'; id: string; accept: boolean } | { type: 'mention'; file: string; start: number; end: number } | { type: 'typeDiagram'; id: string }) {
 		if (m.type === 'open' || m.type === 'reveal') {
 			// open: jump there and type; reveal: show the line but keep the canvas focused.
-			const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(m.file));
-			const start = new vscode.Position(Math.max(0, m.line - 1), 0);
+			const file = workspaceFile(m.file);
+			if (!file) {
+				return;
+			}
+			const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+			const start = new vscode.Position(Math.max(0, Number(m.line) - 1 || 0), 0);
 			await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.One, selection: new vscode.Range(start, start), preview: true, preserveFocus: m.type === 'reveal' });
 			return;
 		}
 		if (m.type === 'answer') {
-			this.onAnswer?.((m as unknown as { id: string }).id, (m as unknown as { accept: boolean }).accept);
+			if (typeof m.id === 'string') {
+				this.onAnswer?.(m.id, m.accept === true);
+			}
 			return;
 		}
 		if (m.type === 'mention') {
-			const x = m as unknown as { file: string; start: number; end: number };
-			this.onMention?.(x.file, x.start, x.end);
+			const file = workspaceFile(m.file);
+			if (file) {
+				this.onMention?.(file, Number(m.start) || 0, Number(m.end) || 0);
+			}
+			return;
+		}
+		if (m.type === 'typeDiagram') {
+			if (typeof m.id === 'string' && m.id.length < 400 && await this.diagramAvailable()) {
+				await vscode.commands.executeCommand(FOCUS_TYPE, m.id);
+			}
 			return;
 		}
 		if (m.type === 'ask') {
-			await vscode.commands.executeCommand('flow.askAgent', m.label, m.context);
+			await vscode.commands.executeCommand(Command.askAgent, m.label, m.context);
 			return;
 		}
 		if (m.type !== 'request') {
@@ -156,6 +242,13 @@ export class FlowPanel implements vscode.Disposable {
 		let data: unknown;
 		let error: string | undefined;
 		try {
+			if (m.file !== undefined) {
+				const file = workspaceFile(m.file);
+				if (!file) {
+					throw new Error('That file is not in this workspace.');
+				}
+				m.file = file;
+			}
 			switch (m.op) {
 				case 'graph': {
 					const g = withoutTests(await this.providerFor(m.target!).graph(m.target!));
@@ -172,10 +265,23 @@ export class FlowPanel implements vscode.Disposable {
 				case 'impact': data = await this.providerFor(m.target!).impact(m.target!); break;
 				case 'timeline': data = await this.changes.timeline(); break;
 				case 'editHooks': data = (await agentContext(m.file!)).items.filter(i => i.group === 'hooks' && i.detail.startsWith('After')).map(i => i.title); break;
-				case 'undoFrom': data = await this.changes.undoFrom(m.turn!); break;
+				case 'undoFrom': data = await this.whileCardEdited() ?? await this.changes.undoFrom(m.turn!); break;
 				case 'save': data = await this.save(m); break;
 				case 'keep': this.changes.keep(m.file!); data = { ok: true }; break;
-				case 'undo': data = await this.changes.undo(m.file!, m.startLine!, m.endLine!); break;
+				case 'undo': data = await this.whileCardEdited(m.file) ?? await this.changes.undo(m.file!, m.startLine!, m.endLine!); break;
+				case 'complete': data = await this.language.complete(cardQuery({ ...m }), triggerOf(m.trigger)); break;
+				case 'signature': data = await this.language.signature(cardQuery({ ...m }), triggerOf(m.trigger)); break;
+				case 'hover': data = await this.language.hover(cardQuery({ ...m })); break;
+				case 'definition': data = await this.language.definition({ ...m }); break;
+				case 'typeChips': data = await this.typeChips(m); break;
+				case 'typeDetail': data = await this.typeDetail(m); break;
+				case 'endEdit':
+					if (typeof m.session === 'string') {
+						const session = m.session;
+						await this.overlays.run(() => this.overlays.close(session));
+					}
+					data = { ok: true };
+					break;
 			}
 		} catch (e) {
 			error = (e as Error)?.message ?? String(e);
@@ -183,11 +289,68 @@ export class FlowPanel implements vscode.Disposable {
 		await this.panel?.webview.postMessage({ type: 'response', id: m.id, data, error });
 	}
 
+	private typeChanges: vscode.Disposable | undefined;
+
+	private diagramAvailable() {
+		return Promise.resolve(vscode.commands.getCommands(true)).then(all => all.includes(FOCUS_TYPE), () => false);
+	}
+
+	/**
+	 * The type chips of the cards, from the type graph (built on the first ask, not before: the canvas draws without it). A graph that
+	 * was not complete (the code index still building, C# not loaded yet) says `ready: false`; the canvas asks again when this
+	 * panel tells it the types changed.
+	 */
+	private async typeChips(m: Request) {
+		const types = TypeService.get();
+		this.typeChanges ??= types.onDidChange(() => void this.panel?.webview.postMessage({ type: 'typesChanged' }));
+		const nodes = (Array.isArray(m.nodes) ? m.nodes : []).slice(0, 3000).flatMap(n => {
+			const file = workspaceFile(n?.file);
+			const line = Number(n?.line);
+			const endLine = Number(n?.endLine);
+			return file && typeof n.key === 'string' && Number.isInteger(line) && line > 0 ? [{ key: n.key, file, line, endLine: Number.isInteger(endLine) && endLine > 0 ? endLine : undefined }] : [];
+		});
+		const [found, diagramAvailable] = await Promise.all([types.chips(nodes), this.diagramAvailable()]);
+		return { ...found, diagramAvailable };
+	}
+
+	/** The fields of one type, for a chip that was opened. */
+	private async typeDetail(m: Request) {
+		if (typeof m.ref !== 'string' || !m.ref || m.ref.length > 400) {
+			return undefined;
+		}
+		const depth = Math.max(0, Math.min(3, Math.floor(Number(m.depth)) || 0));
+		return TypeService.get().tree(m.ref, workspaceFile(m.fromFile), depth);
+	}
+
+	/**
+	 * Undo works from the document and saves it: while a card's unsaved text is in it, that would write the text to the file.
+	 * `file`: only that file matters (undo of one card); without it any edited card does (undo of a whole prompt).
+	 */
+	private async whileCardEdited(file?: string): Promise<{ ok: false; message: string } | undefined> {
+		const open = await this.overlays.run(async () => this.overlays.activeUri());
+		if (open && (!file || open.fsPath === vscode.Uri.file(file).fsPath)) {
+			return { ok: false, message: 'Save or discard the card you are editing first.' };
+		}
+		return undefined;
+	}
+
 	/**
 	 * Applies a card edit to the real document (not the file): editor buffers, undo and the agent's
 	 * Keep/Undo snapshots all stay consistent. Refuses if the method changed since the card was drawn.
 	 */
 	private async save(m: Request): Promise<{ ok: boolean; message?: string }> {
+		// A card that was shown to the language servers is already in the document: its lines are replaced where they are now.
+		const session = m.session;
+		if (typeof session === 'string') {
+			const done = await this.overlays.run(() => this.overlays.commit(session, m.code!));
+			if (done) {
+				return done;
+			}
+		}
+		return this.overlays.run(() => this.saveInDocument(m));
+	}
+
+	private async saveInDocument(m: Request): Promise<{ ok: boolean; message?: string }> {
 		const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(m.file!));
 		const last = m.endLine! - 1;
 		if (last >= doc.lineCount) {
@@ -209,7 +372,7 @@ export class FlowPanel implements vscode.Disposable {
 	}
 
 	/**
-	 * Everything inline: in the Flow shell (WKWebView) webviews run without a service worker, so they
+	 * Everything inline: in the Axle shell (WKWebView) webviews run without a service worker, so they
 	 * cannot load side files. The canvas is built as one JS + one CSS file for exactly this.
 	 */
 	private async html(webview: vscode.Webview, target: FlowTarget, label: string) {
@@ -219,23 +382,36 @@ export class FlowPanel implements vscode.Disposable {
 		]);
 		const kind = vscode.window.activeColorTheme.kind;
 		const dark = kind !== vscode.ColorThemeKind.Light && kind !== vscode.ColorThemeKind.HighContrastLight;
+		const nonce = randomBytes(16).toString('base64');
 		const csp = [
 			`default-src 'none'`,
-			`script-src 'unsafe-inline'`,
+			`script-src 'nonce-${nonce}'`,
 			`style-src 'unsafe-inline'`,
 			`font-src ${webview.cspSource} data:`,
 			`img-src ${webview.cspSource} data:`,
 			`worker-src blob:`,
 		].join('; ');
-		const safe = (text: string, tag: string) => text.replace(new RegExp(`</${tag}`, 'gi'), `<\\/${tag}`);
+		// `</script` ends the element early and `<!--` can start the parser's "double escaped" state: neither may appear in inline code.
+		const safe = (text: string, tag: string) => text.replace(new RegExp(`</${tag}`, 'gi'), `<\\/${tag}`).replace(/<!--/g, '\\x3C!--');
 		return `<!doctype html><html><head><meta charset="utf-8">` +
 			`<meta http-equiv="Content-Security-Policy" content="${csp}">` +
 			`<style>${safe(css, 'style')}</style>` +
-			`<script>window.__FLOW__=${JSON.stringify({ target, label, dark })}</script>` +
-			`</head><body><div id="root"></div><script>${safe(js, 'script')}</script></body></html>`;
+			`<script nonce="${nonce}">window.__FLOW__=${inertJson({ target, label, dark })}</script>` +
+			`</head><body><div id="root"></div><script nonce="${nonce}">${safe(js, 'script')}</script></body></html>`;
 	}
 
 	dispose() {
+		clearTimeout(this.refreshTimer);
+		this.typeChanges?.dispose();
 		this.panel?.dispose();
+		this.overlays.dispose();
 	}
+}
+
+/** The one character that opened a completion or signature popup, if the canvas says so. */
+const triggerOf = (t: unknown) => (typeof t === 'string' && t.length === 1 ? t : undefined);
+
+/** JSON for an inline <script>: `</script>`, `<!--` and the JS line separators cannot end or alter the script. */
+function inertJson(value: unknown) {
+	return JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }

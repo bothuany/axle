@@ -1,0 +1,9 @@
+GET /health       HealthController.show
+  call: UserService.all [method]
+    call: UserRepo.fetch [method]
+GET /hello        routes./hello
+  call: greet [method]
+    call: audit [method]
+GET /users        UsersController.index
+  call: UserService.all [method]
+    call: UserRepo.fetch [method]

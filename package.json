@@ -2,16 +2,18 @@
   "name": "harness-flow",
   "version": "0.1.0",
   "private": true,
-  "description": "Flow: a harness-first code editor. Call-flow canvas, terminal agents with live status, and tools for Claude Code harness engineering.",
+  "description": "Axle: a harness-first code editor. Call-flow canvas, terminal agents with live status, and tools for Claude Code harness engineering.",
   "license": "MIT",
   "repository": "https://github.com/bothuany/harness-flow",
   "engines": {
-    "node": ">=22"
+    "node": ">=24.18 <25"
   },
   "scripts": {
     "setup": "node scripts/setup.mjs",
     "start": "node scripts/start.mjs",
     "web": "node scripts/start.mjs --web",
+    "shortcut": "node scripts/install-shortcut.mjs",
+    "installer": "node scripts/installer.mjs",
     "build:extensions": "node scripts/build-extensions.mjs",
     "build:canvas": "npm --prefix ui run build"
   }

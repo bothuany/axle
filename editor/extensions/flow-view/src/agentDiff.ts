@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow: what an agent changed, per card. flow-agent calls `flow.agentWillEdit` right before a
+ *  Axle: what an agent changed, per card. flow-agent calls `flow.agentWillEdit` right before a
  *  write is allowed; we keep the file as it was ("baseline") until the user keeps or undoes it.
  *--------------------------------------------------------------------------------------------*/
 
@@ -26,12 +26,34 @@ interface Hunk {
 	lines: string[];
 }
 
+/** A file as VS Code spells it: agents say `C:\x`, documents and the canvas say `c:\x`; everything here is keyed by this. */
+const fileKey = (f: string) => vscode.Uri.file(f).fsPath;
+
 async function currentText(file: string): Promise<string> {
-	const open = vscode.workspace.textDocuments.find(d => d.uri.scheme === 'file' && d.uri.fsPath === file);
-	return open ? open.getText() : fs.readFile(file, 'utf8');
+	const key = fileKey(file);
+	const open = vscode.workspace.textDocuments.find(d => d.uri.scheme === 'file' && d.uri.fsPath === key);
+	return open ? open.getText() : fs.readFile(key, 'utf8');
+}
+
+/** The file as it is now, and whether it does not exist yet (a file the agent is about to create). */
+async function snapshot(file: string): Promise<{ text: string; created: boolean } | undefined> {
+	try {
+		return { text: norm(await currentText(file)), created: false };
+	} catch (e) {
+		// Only "not there" means a new file; a file that is merely locked or unreadable must not be recorded as empty.
+		return (e as NodeJS.ErrnoException).code === 'ENOENT' ? { text: '', created: true } : undefined;
+	}
 }
 
 const norm = (s: string) => s.replace(/\r\n/g, '\n');
+
+/** Files that hold secrets: tracked in memory for Keep/Undo, but never copied into the timeline file on disk. */
+const SECRET = /(?:^|[\\/])(?:\.env(?:\..*)?|id_(?:rsa|dsa|ecdsa|ed25519)[^\\/]*|[^\\/]*\.(?:pem|key|p12|pfx|jks|keystore))$/i;
+/** What the timeline file may hold per text, and in all: it is rewritten on every change. */
+const MAX_SAVED_TEXT = 1_000_000;
+const MAX_SAVED_TOTAL = 20_000_000;
+/** More baselines than this are an agent that changed hundreds of files: the oldest are forgotten. */
+const MAX_BASELINES = 300;
 
 /** One prompt to an agent, and each file as it was right before that prompt first changed it. */
 interface Turn {
@@ -42,15 +64,19 @@ interface Turn {
 	before: Map<string, string>;
 	/** Each file right after the agent's last write in this prompt: anything else later is someone else's edit. */
 	after: Map<string, string>;
+	/** Files this prompt created: undoing it deletes them instead of leaving them empty. */
+	created: Set<string>;
 	/** Started by a real prompt (chat or a terminal hook): it lasts until the next prompt, however long. */
 	prompted?: boolean;
+	/** The agent's last write or start of this prompt: edits that trail it by minutes belong to a new step. */
+	lastActivity: number;
 }
 
 /** On disk between sessions, so the timeline and Keep/Undo survive a restart. */
 interface Saved {
 	nextTurn: number;
 	baselines: [string, string][];
-	turns: { id: number; prompt: string; agent: string; at: number; before: [string, string][]; after: [string, string][] }[];
+	turns: { id: number; prompt: string; agent: string; at: number; before: [string, string][]; after: [string, string][]; created?: string[] }[];
 }
 
 /** Older prompts are dropped first; a timeline is for the work in progress, not history. */
@@ -72,19 +98,32 @@ export class AgentChanges implements vscode.Disposable {
 	private readonly changed = new vscode.EventEmitter<void>();
 	readonly onDidChange = this.changed.event;
 	private saveTimer: NodeJS.Timeout | undefined;
+	/** Settles when `load` is done: nothing is written before the stored timeline has been read. */
+	private loading: Promise<void> = Promise.resolve();
 
 	/** `storeFile`: where to keep the timeline for this workspace (none without a workspace). */
 	constructor(private readonly storeFile?: string) { }
 
-	async load() {
+	load(): Promise<void> {
+		this.loading = this.read();
+		return this.loading;
+	}
+
+	private async read() {
 		if (!this.storeFile) {
 			return;
 		}
 		try {
 			const saved = JSON.parse(await fs.readFile(this.storeFile, 'utf8')) as Saved;
-			this.nextTurn = saved.nextTurn;
-			saved.baselines.forEach(([f, t]) => this.baselines.set(f, t));
-			this.turns.push(...saved.turns.map(t => ({ ...t, before: new Map(t.before), after: new Map(t.after) })));
+			// Turns started before this load finished got ids that the stored ones may use too: number them after the stored ones.
+			const early = this.turns.splice(0);
+			early.forEach((t, i) => t.id = saved.nextTurn + i);
+			this.nextTurn = saved.nextTurn + early.length;
+			// Stored paths may be spelled `C:\x`; this window keys files by `c:\x`.
+			const keyed = (list: [string, string][]) => new Map(list.map(([f, t]) => [fileKey(f), t] as const));
+			keyed(saved.baselines).forEach((t, f) => this.baselines.set(f, t));
+			this.turns.push(...saved.turns.map(t => ({ ...t, before: keyed(t.before), after: keyed(t.after), created: new Set((t.created ?? []).map(fileKey)), lastActivity: t.at })), ...early);
+			this.turns.splice(0, Math.max(0, this.turns.length - MAX_TURNS));
 			this.changed.fire();
 		} catch {
 			// first run, or an unreadable file: start empty
@@ -96,16 +135,57 @@ export class AgentChanges implements vscode.Disposable {
 			return;
 		}
 		clearTimeout(this.saveTimer);
-		this.saveTimer = setTimeout(() => {
-			const saved: Saved = {
-				nextTurn: this.nextTurn,
-				baselines: [...this.baselines],
-				turns: this.turns.map(t => ({ id: t.id, prompt: t.prompt, agent: t.agent, at: t.at, before: [...t.before], after: [...t.after] })),
-			};
-			void fs.mkdir(path.dirname(this.storeFile!), { recursive: true })
-				.then(() => fs.writeFile(this.storeFile!, JSON.stringify(saved)))
-				.catch(() => undefined);
-		}, 500);
+		this.saveTimer = setTimeout(() => void this.flush(), 500);
+	}
+
+	/** One write at a time, to a temp file renamed over the real one: a crash or a second save cannot leave half a file. */
+	private writing: Promise<void> = Promise.resolve();
+
+	/** The state as it goes to disk: without secret files, and without texts too big to be worth copying again on every change. */
+	private snapshotForDisk(): Saved {
+		let total = 0;
+		const keep = (list: Iterable<[string, string]>): [string, string][] => {
+			const out: [string, string][] = [];
+			for (const [f, text] of list) {
+				if (SECRET.test(f) || text.length > MAX_SAVED_TEXT || total + text.length > MAX_SAVED_TOTAL) {
+					continue;
+				}
+				total += text.length;
+				out.push([f, text]);
+			}
+			return out;
+		};
+		return {
+			nextTurn: this.nextTurn,
+			baselines: keep(this.baselines),
+			turns: this.turns.map(t => ({ id: t.id, prompt: t.prompt, agent: t.agent, at: t.at, before: keep(t.before), after: keep(t.after), created: [...t.created].filter(f => !SECRET.test(f)) })),
+		};
+	}
+
+	private flush() {
+		if (!this.storeFile) {
+			return Promise.resolve();
+		}
+		const file = this.storeFile;
+		this.writing = this.writing.then(async () => {
+			await this.loading; // a save that beat the load must not replace the stored timeline with a nearly empty one
+			const saved = this.snapshotForDisk();
+			const tmp = `${file}.${process.pid}.tmp`;
+			await fs.mkdir(path.dirname(file), { recursive: true });
+			await fs.writeFile(tmp, JSON.stringify(saved));
+			await fs.rename(tmp, file);
+		}).catch(() => undefined);
+		return this.writing;
+	}
+
+	/** Writes what is waiting for its delay now, and resolves when it is on disk: Keep/Undo state must survive a quit. */
+	flushNow(): Promise<void> {
+		if (!this.saveTimer) {
+			return this.writing;
+		}
+		clearTimeout(this.saveTimer);
+		this.saveTimer = undefined;
+		return this.flush();
 	}
 
 	/** A new prompt went to an agent: its edits form one step of the timeline. */
@@ -114,29 +194,33 @@ export class AgentChanges implements vscode.Disposable {
 		if (last && !last.before.size) {
 			this.turns.pop(); // the previous prompt changed nothing
 		}
-		this.turns.push({ id: this.nextTurn++, prompt, agent, at: Date.now(), before: new Map(), after: new Map(), prompted });
+		const now = Date.now();
+		this.turns.push({ id: this.nextTurn++, prompt, agent, at: now, before: new Map(), after: new Map(), created: new Set(), prompted, lastActivity: now });
 		this.turns.splice(0, Math.max(0, this.turns.length - MAX_TURNS));
 		this.save();
 	}
 
-	/** Edits from a CLI Flow did not start come without prompts: group those arriving close together into one step. */
+	/** Edits from a CLI Axle did not start come without prompts: group those arriving close together into one step. */
 	ensureTurn(label: string, agent: string) {
 		const last = this.turns.at(-1);
-		if (!last || last.agent !== agent || (!last.prompted && Date.now() - last.at > 3 * 60_000)) {
+		if (!last || last.agent !== agent || (!last.prompted && Date.now() - last.lastActivity > 3 * 60_000)) {
 			this.startTurn(label, agent, false);
 		}
 	}
 
 	/** Called after an agent write finished: this is what the file should look like if nobody else touches it. */
 	async didEdit(files: string[]) {
+		await this.loading;
 		const turn = this.turns.at(-1);
 		if (!turn) {
 			return;
 		}
-		for (const f of files) {
+		for (const file of files) {
+			const f = fileKey(file);
 			if (turn.before.has(f)) {
 				// The agent writes to disk; an open editor may not have reloaded yet, so read the file itself.
 				turn.after.set(f, norm(await fs.readFile(f, 'utf8').catch(() => '')));
+				turn.lastActivity = Date.now();
 			}
 		}
 		this.save();
@@ -144,16 +228,27 @@ export class AgentChanges implements vscode.Disposable {
 
 	/** Called before the agent writes: remember the file as it is now (first write of a change wins). */
 	async willEdit(files: string[]) {
+		await this.loading;
 		const turn = this.turns.at(-1);
-		for (const f of files) {
+		for (const file of files) {
+			const f = fileKey(file);
+			const now = await snapshot(f);
+			if (!now) {
+				continue; // unreadable right now: record nothing rather than an empty file that Undo would then write back
+			}
 			if (turn && !turn.before.has(f)) {
-				turn.before.set(f, norm(await currentText(f).catch(() => '')));
+				turn.before.set(f, now.text);
+				if (now.created) {
+					turn.created.add(f);
+				}
+			}
+			if (turn) {
+				turn.lastActivity = Date.now();
 			}
 			if (!this.baselines.has(f)) {
-				try {
-					this.baselines.set(f, norm(await currentText(f)));
-				} catch {
-					this.baselines.set(f, ''); // new file
+				this.baselines.set(f, now.text); // '' for a new file
+				while (this.baselines.size > MAX_BASELINES) {
+					this.baselines.delete(this.baselines.keys().next().value!);
 				}
 			}
 		}
@@ -256,7 +351,22 @@ export class AgentChanges implements vscode.Disposable {
 		const edit = new vscode.WorkspaceEdit();
 		const docs: vscode.TextDocument[] = [];
 		for (const [f, text] of restore) {
-			const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(f));
+			const uri = vscode.Uri.file(f);
+			// A file the agent created goes away again; the first prompt in the range that touched it says whether it did.
+			if (this.turns.slice(i).find(t => t.before.has(f))?.created.has(f)) {
+				edit.deleteFile(uri, { ignoreIfNotExists: true });
+				continue;
+			}
+			let doc: vscode.TextDocument;
+			try {
+				doc = await vscode.workspace.openTextDocument(uri);
+			} catch {
+				// The agent deleted it (or it was moved): write it back as it was.
+				const setting = vscode.workspace.getConfiguration('files', uri).get<string>('eol');
+				const eol = setting === '\r\n' || setting === '\n' ? setting : process.platform === 'win32' ? '\r\n' : '\n';
+				edit.createFile(uri, { overwrite: true, contents: Buffer.from(text.replace(/\n/g, eol), 'utf8') });
+				continue;
+			}
 			const eol = doc.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
 			edit.replace(doc.uri, new vscode.Range(0, 0, doc.lineCount, 0), text.replace(/\n/g, eol));
 			docs.push(doc);
@@ -265,6 +375,11 @@ export class AgentChanges implements vscode.Disposable {
 			return { ok: false, message: 'Could not undo the changes.' };
 		}
 		await Promise.all(docs.map(d => d.save()));
+		// Restored in the editor but not on disk: keep the history, so the prompt can still be undone or inspected.
+		const unsaved = docs.filter(d => d.isDirty);
+		if (unsaved.length) {
+			return { ok: false, message: `The changes were undone in the editor but could not be saved: ${unsaved.map(d => rel(d.uri.fsPath)).join(', ')}. Save them to finish.` };
+		}
 		this.turns.splice(i);
 		for (const f of restore.keys()) {
 			if (this.baselines.get(f) === restore.get(f)) {
@@ -284,11 +399,13 @@ export class AgentChanges implements vscode.Disposable {
 		const tracked = (f: string) => turnId === undefined ? this.baselines.has(f) : !!this.turns.find(t => t.id === turnId)?.before.has(f);
 		const cache = new Map<string, Hunk[]>();
 		const visit = async (n: FlowNode) => {
-			if (n.file && tracked(n.file)) {
-				if (!cache.has(n.file)) {
-					cache.set(n.file, turnId === undefined ? await this.hunks(n.file) : await this.turnHunks(turnId, n.file));
+			// Cards carry the path as their backend spells it; the tracker keys files as VS Code spells them.
+			const file = n.file ? fileKey(n.file) : undefined;
+			if (file && tracked(file)) {
+				if (!cache.has(file)) {
+					cache.set(file, turnId === undefined ? await this.hunks(file) : await this.turnHunks(turnId, file));
 				}
-				const d = this.cardDiff(cache.get(n.file)!, n.startLine, n.endLine);
+				const d = this.cardDiff(cache.get(file)!, n.startLine, n.endLine);
 				if (d) {
 					(n as FlowNode & { diff?: CardDiff }).diff = d;
 				}
@@ -336,13 +453,14 @@ export class AgentChanges implements vscode.Disposable {
 
 	/** Keep: the card's file no longer shows as an agent change. */
 	keep(file: string) {
-		this.baselines.delete(file);
+		this.baselines.delete(fileKey(file));
 		this.save();
 		this.changed.fire();
 	}
 
 	/** Undo the agent's changes inside one card (method), leaving the rest of the file alone. */
 	async undo(file: string, start: number, end: number): Promise<{ ok: boolean; message?: string }> {
+		file = fileKey(file);
 		const hunks = (await this.hunks(file)).filter(h => {
 			const from = h.newLines ? h.newStart : h.newStart + 1;
 			const to = h.newLines ? h.newStart + h.newLines - 1 : h.newStart;
@@ -376,7 +494,8 @@ export class AgentChanges implements vscode.Disposable {
 	}
 
 	dispose() {
-		clearTimeout(this.saveTimer);
+		// A write still waiting for its delay is the user's Keep/Undo state: write it now.
+		void this.flushNow();
 		this.changed.dispose();
 	}
 }

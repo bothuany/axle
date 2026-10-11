@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow Harness: harness engineering inside the editor. A merged map with a health score,
+ *  Axle Harness: harness engineering inside the editor. A merged map with a health score,
  *  the context budget, a hook studio and a permission inbox that turns answers into rules.
  *--------------------------------------------------------------------------------------------*/
 
@@ -20,10 +20,11 @@ export function activate(context: vscode.ExtensionContext) {
 	const inbox = new PermissionInbox(() => harness?.root, () => void refresh());
 	const inboxView = vscode.window.createTreeView('flowHarness.permissions', { treeDataProvider: inbox });
 	const diagnostics = vscode.languages.createDiagnosticCollection('harness');
-	const changed = new vscode.EventEmitter<void>();
 
 	let running: Promise<void> | undefined;
-	const refresh = () => running ??= (async () => {
+	let dirty = false;
+	let lastScan = 0;
+	const rescan = async () => {
 		try {
 			harness = await scan();
 			tree.set(harness);
@@ -43,31 +44,57 @@ export function activate(context: vscode.ExtensionContext) {
 					for (const issue of i.issues.filter(x => x.line !== undefined)) {
 						const d = new vscode.Diagnostic(new vscode.Range(issue.line!, 0, issue.line!, 999), issue.message,
 							issue.severity === 'error' ? vscode.DiagnosticSeverity.Error : issue.severity === 'warning' ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Information);
-						d.source = 'Flow harness';
+						d.source = 'Axle harness';
 						byFile.set(i.file, [...(byFile.get(i.file) ?? []), d]);
 					}
 				}
 				byFile.forEach((d, f) => diagnostics.set(vscode.Uri.file(f), d));
 			}
-			changed.fire();
-		} finally {
-			running = undefined;
+		} catch (e) {
+			// A file that cannot be scanned must say so, not leave a stale map behind without a word.
+			view.message = `The harness scan failed: ${(e as Error).message ?? e}`;
+			console.error('flow-harness: scan failed', e);
 		}
-	})();
+		lastScan = Date.now();
+	};
+	/** One scan at a time; a request that arrives while one runs (a file saved meanwhile) makes it run once more, so the map never ends up older than the last change. */
+	const refresh = () => {
+		if (running) {
+			dirty = true;
+			return running;
+		}
+		return running = (async () => {
+			try {
+				do {
+					dirty = false;
+					await rescan();
+				} while (dirty);
+			} finally {
+				running = undefined;
+			}
+		})();
+	};
 
-	// Any harness file changing (in the repo) means a fresh look; home-folder files refresh on focus.
-	const watcher = vscode.workspace.createFileSystemWatcher('**/{CLAUDE.md,CLAUDE.local.md,AGENTS.md,.mcp.json,.claude/**,.cursor/rules/**,.agents/**}');
+	// Only files that shape an agent (not .claude/worktrees or session logs) mean a fresh look; home-folder files refresh on focus.
+	const watcher = vscode.workspace.createFileSystemWatcher('**/{CLAUDE.md,CLAUDE.local.md,AGENTS.md,.mcp.json,.claude/{settings*.json,rules/**,skills/**,agents/**,hooks/**,commands/**},.cursor/rules/**,.agents/skills/**}');
+	const ignored = /[\\/](?:\.claude[\\/]worktrees|node_modules|\.git)[\\/]/;
 	let timer: NodeJS.Timeout | undefined;
-	const soon = () => {
+	const soon = (uri?: vscode.Uri) => {
+		if (uri && ignored.test(uri.fsPath)) {
+			return;
+		}
 		clearTimeout(timer);
 		timer = setTimeout(() => void refresh(), 600);
 	};
+	// Coming back to the window or the view: only worth a scan when the last one is a while old.
+	const ifStale = () => Date.now() - lastScan > 30_000 && soon();
 
 	context.subscriptions.push(
-		view, inboxView, budget, studio, diagnostics, changed, watcher, registerPreviewProvider(),
+		view, inboxView, budget, studio, diagnostics, watcher, registerPreviewProvider(),
 		watcher.onDidChange(soon), watcher.onDidCreate(soon), watcher.onDidDelete(soon),
-		vscode.window.onDidChangeWindowState(s => s.focused && soon()),
-		view.onDidChangeVisibility(v => v.visible && soon()),
+		{ dispose: () => clearTimeout(timer) },
+		vscode.window.onDidChangeWindowState(s => s.focused && ifStale()),
+		view.onDidChangeVisibility(v => v.visible && ifStale()),
 		vscode.commands.registerCommand('flowHarness.refresh', () => refresh()),
 		vscode.commands.registerCommand('flowHarness.testHook', (arg: unknown) => {
 			const item = itemOf(arg);
@@ -83,7 +110,7 @@ export function activate(context: vscode.ExtensionContext) {
 		// Called by flow-agent: usage after each update, and every permission question with its answer.
 		vscode.commands.registerCommand('flowHarness.reportUsage', (u: { agent: string; used: number; size: number }) => budget.report(u)),
 		vscode.commands.registerCommand('flowHarness.recordPermission', (r: PermissionRequest) => inbox.record(r)),
-		// For Flow Home: the health summary in one call.
+		// For Axle Home: the health summary in one call.
 		vscode.commands.registerCommand('flowHarness.health', async () => {
 			if (!harness) {
 				await refresh();

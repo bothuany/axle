@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow: where a flow comes from. One provider per kind of target; the canvas only sees FlowNode.
+ *  Axle: where a flow comes from. One provider per kind of target; the canvas only sees FlowNode.
  *--------------------------------------------------------------------------------------------*/
 
 import type { Analyzer } from './analyzer';
@@ -16,6 +16,8 @@ export interface FlowNode {
 	endLine: number;
 	code: string | null;
 	children: { callLine: number; edgeKind: 'call' | 'mediator' | 'impl' | 'db'; guess?: boolean; node: FlowNode }[];
+	/** Calls the static index could not resolve: the host asks the language server, then drops this field. */
+	pending?: { line: number; name: string }[];
 }
 
 /** Opaque to the webview; each provider defines its own fields. */

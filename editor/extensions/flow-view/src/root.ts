@@ -1,12 +1,16 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow: where the rest of the repository is. The Flow extensions are linked into the VS Code
- *  checkout (editor/vscode/extensions); the analyzer and the canvas build live at the repo root.
+ *  Axle: where the analyzer and the canvas build are. In the repository the Axle extensions are linked
+ *  into the VS Code checkout (editor/vscode) and both live at the repo root; in an installed Axle they
+ *  are inside the extension folder (analyzer/, ui/dist-webview/), put there by `npm run installer`.
  *--------------------------------------------------------------------------------------------*/
 
 import * as fs from 'fs';
 import * as path from 'path';
 
-/** The repository root: FLOW_ROOT, or the first folder above this extension that holds analyzer/. */
+/** analyzer/FlowAnalyzer.csproj in the repository, the published analyzer/FlowAnalyzer.dll in an installed Axle. */
+const hasAnalyzer = (dir: string) => ['FlowAnalyzer.csproj', 'FlowAnalyzer.dll'].some(f => fs.existsSync(path.join(dir, 'analyzer', f)));
+
+/** FLOW_ROOT, or the first folder from this extension upwards that holds analyzer/: the extension itself when installed, the repository root otherwise. */
 export function flowRoot(extensionPath: string): string {
 	if (process.env.FLOW_ROOT) {
 		return process.env.FLOW_ROOT;
@@ -18,7 +22,7 @@ export function flowRoot(extensionPath: string): string {
 		// keep the path as given
 	}
 	for (let i = 0; i < 6; i++) {
-		if (fs.existsSync(path.join(dir, 'analyzer', 'FlowAnalyzer.csproj'))) {
+		if (hasAnalyzer(dir)) {
 			return dir;
 		}
 		dir = path.dirname(dir);

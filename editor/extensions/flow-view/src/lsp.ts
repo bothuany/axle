@@ -1,9 +1,10 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow: any language with a language server, through VS Code's call hierarchy API
+ *  Axle: any language with a language server, through VS Code's call hierarchy API
  *  (TypeScript/JavaScript built in; Java, Python, Go, … once their language extension is installed).
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { POLY_LANGUAGES } from './poly/client';
 import type { FlowNode, FlowProvider, FlowTarget } from './providers';
 
 const MAX_CHILDREN = 15;
@@ -24,9 +25,19 @@ async function prepare(uri: vscode.Uri, pos: vscode.Position): Promise<vscode.Ca
 	return undefined;
 }
 
-export class LspProvider implements FlowProvider {
-	private counter = 0;
+/** Where a call happens (0-based line): a server may report a call without ranges. */
+const callLine = (c: { fromRanges: vscode.Range[] }) => c.fromRanges?.[0]?.start.line ?? 0;
 
+/** A flow is cut off after this many cards: call hierarchies of a big codebase fan out fast. */
+const MAX_NODES = 250;
+
+/** Keys for the cards of one `graph`/`callers` call: local to the call, so concurrent calls never share a counter. */
+const keys = (prefix: string) => {
+	let n = 0;
+	return () => `${prefix}${n++}`;
+};
+
+export class LspProvider implements FlowProvider {
 	private async root(t: FlowTarget) {
 		if (t.kind !== 'lsp') {
 			throw new Error('not an LSP target');
@@ -40,20 +51,25 @@ export class LspProvider implements FlowProvider {
 	}
 
 	/** Card for one function: its full lines of source, located like the Roslyn nodes. */
-	private async card(item: vscode.CallHierarchyItem, kind: FlowNode['kind']): Promise<FlowNode> {
+	private async card(item: vscode.CallHierarchyItem, kind: FlowNode['kind'], nextKey: () => string): Promise<FlowNode> {
 		const local = inWorkspace(item.uri);
 		let code: string | null = null;
 		let start = item.range.start.line + 1;
 		let end = item.range.end.line + 1;
 		if (local) {
 			const doc = await vscode.workspace.openTextDocument(item.uri);
-			const full = new vscode.Range(item.range.start.line, 0, item.range.end.line, doc.lineAt(item.range.end.line).text.length);
-			code = doc.getText(full);
+			// The server's range may be stale or past the end of the file: stay inside the document.
+			const last = Math.max(0, doc.lineCount - 1);
+			const from = Math.min(item.range.start.line, last);
+			const to = Math.min(Math.max(item.range.end.line, from), last);
+			code = doc.getText(new vscode.Range(from, 0, to, doc.lineAt(to).text.length));
+			start = from + 1;
+			end = to + 1;
 		} else {
 			start = end = 0;
 		}
 		return {
-			key: `l${this.counter++}`,
+			key: nextKey(),
 			symbolId: `${item.uri.toString()}#${item.range.start.line}`,
 			label: item.detail ? `${item.detail.split(/[\\/]/).pop()}.${item.name}`.replace(/^\./, '') : item.name,
 			sub: local ? vscode.workspace.asRelativePath(item.uri) : item.uri.fsPath.split(/[\\/]/).slice(-2).join('/'),
@@ -71,24 +87,25 @@ export class LspProvider implements FlowProvider {
 	}
 
 	async graph(t: FlowTarget): Promise<FlowNode> {
-		this.counter = 0;
+		const nextKey = keys('l');
+		let count = 0;
 		const root = await this.root(t);
 		const walk = async (item: vscode.CallHierarchyItem, depth: number, path: Set<string>): Promise<FlowNode> => {
-			const node = await this.card(item, path.size === 0 ? 'controller' : 'method');
-			if (depth <= 0 || node.kind === 'external' || path.has(this.id(item))) {
+			const node = await this.card(item, path.size === 0 ? 'controller' : 'method', nextKey);
+			if (depth <= 0 || node.kind === 'external' || path.has(this.id(item)) || ++count > MAX_NODES) {
 				return node;
 			}
 			path.add(this.id(item));
 			const calls = await vscode.commands.executeCommand<vscode.CallHierarchyOutgoingCall[]>('vscode.provideOutgoingCalls', item) ?? [];
 			const seen = new Set<string>();
-			for (const call of calls.sort((a, b) => a.fromRanges[0].start.line - b.fromRanges[0].start.line).slice(0, MAX_CHILDREN)) {
+			for (const call of calls.sort((a, b) => callLine(a) - callLine(b)).slice(0, MAX_CHILDREN)) {
 				if (seen.has(this.id(call.to))) {
 					continue;
 				}
 				seen.add(this.id(call.to));
 				// Library calls become leaves; only follow into our own code.
-				const child = inWorkspace(call.to.uri) ? await walk(call.to, depth - 1, path) : await this.card(call.to, 'external');
-				node.children.push({ callLine: call.fromRanges[0].start.line + 1, edgeKind: 'call', node: child });
+				const child = inWorkspace(call.to.uri) ? await walk(call.to, depth - 1, path) : await this.card(call.to, 'external', nextKey);
+				node.children.push({ callLine: callLine(call) + 1, edgeKind: 'call', node: child });
 			}
 			path.delete(this.id(item));
 			return node;
@@ -121,18 +138,19 @@ export class LspProvider implements FlowProvider {
 	}
 
 	async callers(t: FlowTarget): Promise<FlowNode | null> {
-		this.counter = 1000;
+		const nextKey = keys('c');
+		let count = 0;
 		const root = await this.root(t);
 		const walk = async (item: vscode.CallHierarchyItem, depth: number, path: Set<string>): Promise<FlowNode> => {
-			const node = await this.card(item, 'method');
-			if (depth <= 0 || path.has(this.id(item))) {
+			const node = await this.card(item, 'method', nextKey);
+			if (depth <= 0 || path.has(this.id(item)) || ++count > MAX_NODES) {
 				return node;
 			}
 			path.add(this.id(item));
 			const calls = await vscode.commands.executeCommand<vscode.CallHierarchyIncomingCall[]>('vscode.provideIncomingCalls', item) ?? [];
 			for (const call of calls.filter(c => inWorkspace(c.from.uri)).slice(0, 12)) {
 				const caller = await walk(call.from, depth - 1, path);
-				node.children.push({ callLine: call.fromRanges[0].start.line + 1, edgeKind: 'call', node: caller });
+				node.children.push({ callLine: callLine(call) + 1, edgeKind: 'call', node: caller });
 			}
 			path.delete(this.id(item));
 			return node;
@@ -145,18 +163,27 @@ export class LspProvider implements FlowProvider {
 /** "◆ Flow" above every function/method the language server reports, for non-Roslyn languages. */
 export class LspLenses implements vscode.CodeLensProvider {
 	async provideCodeLenses(doc: vscode.TextDocument): Promise<vscode.CodeLens[]> {
-		if (doc.languageId === 'csharp' || !vscode.workspace.getConfiguration('flow').get<boolean>('codeLens', true)) {
+		if (doc.languageId === 'csharp' || POLY_LANGUAGES.has(doc.languageId) || !vscode.workspace.getConfiguration('flow').get<boolean>('codeLens', true)) {
 			return [];
 		}
-		const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>('vscode.executeDocumentSymbolProvider', doc.uri) ?? [];
+		// Servers answer with DocumentSymbol (nested, with a selection range) or the older flat SymbolInformation.
+		let symbols: (vscode.DocumentSymbol | vscode.SymbolInformation)[];
+		try {
+			symbols = await vscode.commands.executeCommand<(vscode.DocumentSymbol | vscode.SymbolInformation)[]>('vscode.executeDocumentSymbolProvider', doc.uri) ?? [];
+		} catch {
+			return [];
+		}
 		const lenses: vscode.CodeLens[] = [];
-		const visit = (list: vscode.DocumentSymbol[], parent?: string) => {
+		const visit = (list: (vscode.DocumentSymbol | vscode.SymbolInformation)[], parent?: string) => {
 			for (const s of list) {
+				const range = 'range' in s ? s.range : s.location.range;
+				const selection = 'selectionRange' in s ? s.selectionRange : range;
+				const name = 'containerName' in s && s.containerName && !parent ? `${s.containerName}.${s.name}` : parent ? `${parent}.${s.name}` : s.name;
 				if (s.kind === vscode.SymbolKind.Function || s.kind === vscode.SymbolKind.Method || s.kind === vscode.SymbolKind.Constructor) {
-					const target: FlowTarget = { kind: 'lsp', uri: doc.uri.toString(), line: s.selectionRange.start.line, character: s.selectionRange.start.character };
-					lenses.push(new vscode.CodeLens(new vscode.Range(s.range.start, s.range.start), { title: '◆ Flow', command: 'flow.showTarget', arguments: [target, parent ? `${parent}.${s.name}` : s.name] }));
+					const target: FlowTarget = { kind: 'lsp', uri: doc.uri.toString(), line: selection.start.line, character: selection.start.character };
+					lenses.push(new vscode.CodeLens(new vscode.Range(range.start, range.start), { title: '◆ Flow', command: 'flow.showTarget', arguments: [target, name] }));
 				}
-				if (s.children?.length) {
+				if ('children' in s && s.children?.length) {
 					visit(s.children, s.name);
 				}
 			}

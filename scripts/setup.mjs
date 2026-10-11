@@ -1,63 +1,108 @@
 #!/usr/bin/env node
-// Sets up Flow on macOS, Linux or Windows:
-//   1. clones VS Code at the version Flow is built on (editor/vscode),
-//   2. applies Flow's core patches,
-//   3. links the Flow extensions into it,
-//   4. installs and builds everything (editor, extensions, canvas, analyzer, desktop shell).
-// Safe to run again: finished steps are skipped. `npm run setup -- --skip-editor-install` skips step 4's slow part.
+// Sets up Axle on macOS, Linux or Windows:
+//   1. clones VS Code at the version Axle is built on (editor/vscode),
+//   2. applies Axle's core patches,
+//   3. links the Axle extensions into it,
+//   4. installs and builds everything (editor, extensions, canvas, analyzer).
+// Safe to run again: the clone, the patches and the links are skipped when done, and so is the editor's `npm ci`
+// when its dependencies have not changed (`--force-install` runs it anyway, `--skip-editor-install` never runs it).
 
-import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, lstatSync, readdirSync, rmSync, symlinkSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { copyFileSync, cpSync, existsSync, lstatSync, readdirSync, rmSync, statSync, symlinkSync } from 'node:fs'
+import { join } from 'node:path'
+import { EXTENSIONS, ROOT, VSCODE, buildableExtensions, isWin, launchSync } from './lib.mjs'
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const VSCODE_TAG = '1.141.0'
-const VSCODE = join(ROOT, 'editor', 'vscode')
-const EXTENSIONS = join(ROOT, 'editor', 'extensions')
+/** What editor/vscode/.nvmrc asks for at VS Code 1.141: the same major, at least this minor. */
+const NODE = { major: 24, minor: 18 }
 const PATCHES = join(ROOT, 'editor', 'patches')
-const isWin = process.platform === 'win32'
 const args = new Set(process.argv.slice(2))
 
 function step(title) {
 	console.log(`\n\x1b[1m▸ ${title}\x1b[0m`)
 }
 
-function run(cmd, cmdArgs, cwd = ROOT, { optional = false } = {}) {
+/** Optional steps that failed, and what that costs: said again at the end, where a warning from the middle of the log is long gone. */
+const skipped = []
+
+function run(cmd, cmdArgs, cwd = ROOT, { optional = false, consequence = '', hint = '' } = {}) {
 	console.log(`  $ ${cmd} ${cmdArgs.join(' ')}${cwd !== ROOT ? `   (in ${cwd.replace(ROOT, '.')})` : ''}`)
-	// npm/npx are .cmd shims on Windows and need a shell.
-	const r = spawnSync(cmd, cmdArgs, { cwd, stdio: 'inherit', shell: isWin })
+	const r = launchSync(cmd, cmdArgs, { cwd, stdio: 'inherit' })
 	if (r.status !== 0) {
 		if (optional) {
 			console.warn(`  ! ${cmd} failed; continuing without it.`)
+			skipped.push(`${cmd} ${cmdArgs.join(' ')}${consequence ? `: ${consequence}` : ''}`)
 			return false
 		}
 		console.error(`\n✗ ${cmd} ${cmdArgs.join(' ')} failed.`)
+		if (hint) {
+			console.error(hint)
+		}
 		process.exit(r.status ?? 1)
 	}
 	return true
 }
 
 function has(cmd, versionArg = '--version') {
-	return spawnSync(cmd, [versionArg], { stdio: 'ignore', shell: isWin }).status === 0
+	return launchSync(cmd, [versionArg], { stdio: 'ignore' }).status === 0
+}
+
+/** `npm ci` where there is a lockfile (what the lockfile says, nothing newer), `npm install` where there is not. */
+function installDependencies(dir) {
+	const locked = existsSync(join(dir, 'package-lock.json'))
+	run('npm', [locked ? 'ci' : 'install', '--no-audit', '--no-fund'], dir)
+}
+
+/** The editor's dependencies are in place when npm's own record of them is newer than the lockfile. */
+function editorInstalled() {
+	try {
+		return statSync(join(VSCODE, 'node_modules', '.package-lock.json')).mtimeMs >= statSync(join(VSCODE, 'package-lock.json')).mtimeMs
+	} catch {
+		return false
+	}
+}
+
+function isLink(p) {
+	try {
+		return lstatSync(p).isSymbolicLink()
+	} catch {
+		return false
+	}
+}
+
+/** Copies editor/branding/* over VS Code's icons and, on Windows, stamps the icon into the dev Electron binary. */
+function applyBranding() {
+	const brand = join(ROOT, 'editor', 'branding')
+	const copies = [['icon.ico', 'win32/code.ico'], ['icon.icns', 'darwin/code.icns'], ['icon.png', 'linux/code.png']]
+	for (const [from, to] of copies) {
+		if (existsSync(join(brand, from))) {
+			copyFileSync(join(brand, from), join(VSCODE, 'resources', to))
+		}
+	}
+	if (isWin) {
+		const exe = join(VSCODE, '.build', 'electron', 'Axle.exe')
+		const rcedit = join(VSCODE, 'node_modules', 'rcedit', 'bin', 'rcedit.exe')
+		if (existsSync(exe) && existsSync(rcedit)) {
+			run(rcedit, [exe, '--set-icon', join(brand, 'icon.ico')], ROOT, { optional: true, consequence: 'the dev window keeps the stock VS Code icon' })
+		}
+	}
 }
 
 // ── prerequisites ────────────────────────────────────────────────────────────
 step('Checking tools')
-const major = Number(process.versions.node.split('.')[0])
-if (major < 22) {
-	console.error(`Node ${process.versions.node} is too old: VS Code ${VSCODE_TAG} needs Node 22 or newer (24 recommended).`)
+const [major, minor] = process.versions.node.split('.').map(Number)
+if (major !== NODE.major || minor < NODE.minor) {
+	console.error(`Node ${process.versions.node} will not do: VS Code ${VSCODE_TAG} needs Node ${NODE.major}.${NODE.minor} or a newer ${NODE.major}.x.`)
 	process.exit(1)
 }
 if (!has('git')) {
 	console.error('git is required.')
 	process.exit(1)
 }
-const dotnet = has('dotnet')
-const cargo = has('cargo')
-console.log(`  node ${process.versions.node} · git ✓ · dotnet ${dotnet ? '✓' : '✗ (C# flows disabled)'} · cargo ${cargo ? '✓' : '✗ (desktop shell disabled; use `npm run web`)'}`)
+const sdks = launchSync('dotnet', ['--list-sdks'], { encoding: 'utf8' }).stdout ?? ''
+const dotnet = sdks.split(/\r?\n/).some(line => Number.parseInt(line, 10) >= 10)
+console.log(`  node ${process.versions.node} · git ✓ · dotnet ${dotnet ? '✓' : '✗ (C# flows disabled: install the .NET 10 SDK)'}`)
 if (isWin) {
-	console.log('  Windows: VS Code\'s native modules need Python 3 and the "Desktop development with C++" workload of Visual Studio Build Tools.')
+	console.log('  Windows: VS Code\'s native modules need Python 3 and the "Desktop development with C++" workload of Visual Studio Build Tools, with its "MSVC Spectre-mitigated libs".')
 }
 
 // ── 1. VS Code ───────────────────────────────────────────────────────────────
@@ -65,27 +110,44 @@ step(`VS Code ${VSCODE_TAG}`)
 if (!existsSync(join(VSCODE, 'package.json'))) {
 	run('git', ['clone', '--depth', '1', '--branch', VSCODE_TAG, 'https://github.com/microsoft/vscode.git', VSCODE])
 } else {
-	console.log('  already cloned')
+	// A checkout of another version would take the patches wrongly or not at all: say so instead of building on it.
+	const described = launchSync('git', ['describe', '--tags'], { cwd: VSCODE, encoding: 'utf8' })
+	const have = described.status === 0 ? described.stdout.trim() : 'an unknown version'
+	if (have !== VSCODE_TAG) {
+		console.error(`editor/vscode is at ${have}, but Axle is built on VS Code ${VSCODE_TAG}.`)
+		console.error('Delete editor/vscode (after saving any changes you made there) and run setup again to clone the right version.')
+		process.exit(1)
+	}
+	console.log(`  already cloned (${have})`)
 }
 
 // ── 2. patches ───────────────────────────────────────────────────────────────
-step('Applying Flow patches')
+step('Applying Axle patches')
 for (const patch of readdirSync(PATCHES).filter(f => f.endsWith('.patch')).sort()) {
 	const file = join(PATCHES, patch)
-	const applied = spawnSync('git', ['apply', '--reverse', '--check', file], { cwd: VSCODE, stdio: 'ignore' }).status === 0
+	const applied = launchSync('git', ['apply', '--reverse', '--check', file], { cwd: VSCODE, stdio: 'ignore' }).status === 0
 	if (applied) {
 		console.log(`  ${patch}: already applied`)
 	} else {
-		run('git', ['apply', '--whitespace=nowarn', file], VSCODE)
+		run('git', ['apply', '--whitespace=nowarn', file], VSCODE, {
+			hint: `${patch} does not apply to editor/vscode: it was probably changed by hand, or an earlier setup stopped half way. Delete editor/vscode and run setup again for a clean checkout.`,
+		})
 	}
 }
 
 // ── 3. extensions ────────────────────────────────────────────────────────────
-step('Linking Flow extensions')
+step('Linking Axle extensions')
 for (const name of readdirSync(EXTENSIONS).filter(n => n.startsWith('flow-'))) {
 	const target = join(VSCODE, 'extensions', name)
-	if (existsSync(target) || isLink(target)) {
+	if (isLink(target)) {
 		console.log(`  ${name}: linked`)
+		continue
+	}
+	if (existsSync(target)) {
+		// What an earlier run copied when linking was not possible: it does not follow edits, so it is refreshed.
+		rmSync(target, { recursive: true, force: true })
+		cpSync(join(EXTENSIONS, name), target, { recursive: true })
+		console.log(`  ${name}: copy refreshed (a copy, not a link: run setup again after editing it)`)
 		continue
 	}
 	try {
@@ -98,44 +160,43 @@ for (const name of readdirSync(EXTENSIONS).filter(n => n.startsWith('flow-'))) {
 	}
 }
 
-function isLink(p) {
-	try {
-		return lstatSync(p).isSymbolicLink()
-	} catch {
-		return false
-	}
-}
-
 // ── 4. install and build ─────────────────────────────────────────────────────
-if (!args.has('--skip-editor-install')) {
+if (args.has('--skip-editor-install')) {
+	console.log('\nSkipping the editor install (--skip-editor-install)')
+} else if (editorInstalled() && !args.has('--force-install')) {
+	console.log('\nThe editor\'s dependencies are up to date (--force-install installs them again)')
+} else {
 	step('Installing the editor (first time: 10–20 minutes)')
 	run('npm', ['ci'], VSCODE)
 }
 step('Compiling the editor')
 run('npm', ['run', 'transpile-client'], VSCODE)
-// Built-in extensions and Node for the server, the same way scripts/code-server.sh prepares them.
-run('node', ['build/lib/preLaunch.ts'], VSCODE, { optional: true })
-run('npm', ['run', 'gulp', 'node'], VSCODE, { optional: true })
+// The icon font (without it every UI icon renders as an empty box) and the built-in extensions (git, emmet, the
+// language features: without them the editor logs activation errors). `gulp copy-codicons` is part of this task.
+run('npm', ['run', 'build-fast-extensions'], VSCODE)
+// Electron and the server's Node, the same way scripts/code-server.sh prepares them.
+run('node', ['build/lib/preLaunch.ts'], VSCODE, { optional: true, consequence: 'npm start fetches Electron on its first launch instead' })
+run('npm', ['run', 'gulp', 'node'], VSCODE, { optional: true, consequence: 'npm run web falls back to the Node that runs it' })
 
-step('Building the Flow extensions')
-for (const name of ['flow-view', 'flow-agent', 'flow-harness']) {
+step('Applying the Axle app icon')
+applyBranding()
+
+step('Building the Axle extensions')
+for (const name of buildableExtensions()) {
 	const dir = join(EXTENSIONS, name)
-	run('npm', ['install', '--no-audit', '--no-fund'], dir)
+	installDependencies(dir)
 	run('node', ['esbuild.mjs'], dir)
 }
 
 step('Building the canvas')
-run('npm', ['install', '--no-audit', '--no-fund'], join(ROOT, 'ui'))
+installDependencies(join(ROOT, 'ui'))
 run('npm', ['run', 'build'], join(ROOT, 'ui'))
 
 if (dotnet) {
 	step('Building the C# analyzer')
-	run('dotnet', ['build', join(ROOT, 'analyzer'), '-nologo', '-v', 'q'], ROOT, { optional: true })
-}
-
-if (cargo) {
-	step('Installing the desktop shell')
-	run('npm', ['install', '--no-audit', '--no-fund'], join(ROOT, 'desktop'))
+	run('dotnet', ['build', join(ROOT, 'analyzer'), '-nologo', '-v', 'q'], ROOT, { optional: true, consequence: 'C# flows are unavailable' })
+} else {
+	skipped.push('the C# analyzer was not built, so C# flows are unavailable (install the .NET 10 SDK and run setup again)')
 }
 
 // Old builds of a removed extension would linger in the editor: drop dangling links.
@@ -145,4 +206,12 @@ for (const name of readdirSync(join(VSCODE, 'extensions')).filter(n => n.startsW
 	}
 }
 
-console.log(`\n\x1b[32m✓ Flow is ready.\x1b[0m  Start it with \x1b[1mnpm start\x1b[0m${cargo ? '' : ' (or `npm run web` for the browser)'}.`)
+if (skipped.length) {
+	console.log(`\n\x1b[33m! Axle is built, but ${skipped.length} optional ${skipped.length === 1 ? 'step' : 'steps'} did not run:\x1b[0m`)
+	for (const what of skipped) {
+		console.log(`  - ${what}`)
+	}
+	console.log('  Start it with \x1b[1mnpm start\x1b[0m.')
+} else {
+	console.log(`\n\x1b[32m✓ Axle is ready.\x1b[0m  Start it with \x1b[1mnpm start\x1b[0m.`)
+}

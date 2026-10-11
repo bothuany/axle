@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow Harness: one merged picture of everything that shapes an agent in this workspace —
+ *  Axle Harness: one merged picture of everything that shapes an agent in this workspace —
  *  instructions, rules, skills, subagents, hooks, MCP servers and permission rules — with the
  *  scope each comes from, what it costs in context, and what looks broken.
  *--------------------------------------------------------------------------------------------*/
@@ -54,15 +54,35 @@ const show = (root: string, p: string) => p.startsWith(root + path.sep) ? path.r
 function frontMatter(text: string): Record<string, string> {
 	const m = /^---\r?\n(?<body>[\s\S]*?)\r?\n---/.exec(text);
 	const out: Record<string, string> = {};
+	const lines = m?.groups?.body.split(/\r?\n/) ?? [];
 	let key = '';
-	for (const line of m?.groups?.body.split(/\r?\n/) ?? []) {
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
 		const kv = /^(?<k>[\w-]+):\s*(?<v>.*)$/.exec(line);
-		if (kv?.groups) {
-			key = kv.groups.k;
-			out[key] = kv.groups.v.replace(/^["']|["']$/g, '');
-		} else if (key && /^\s*-\s+/.test(line)) {
-			out[key] = [out[key], line.replace(/^\s*-\s+/, '')].filter(Boolean).join(',');
+		if (!kv?.groups) {
+			if (key && /^\s*-\s+/.test(line)) {
+				out[key] = [out[key], line.replace(/^\s*-\s+/, '')].filter(Boolean).join(',');
+			}
+			continue;
 		}
+		key = kv.groups.k;
+		const inline = kv.groups.v.trim();
+		const next = () => lines[i + 1] ?? '';
+		// `description: >` and `description: |`: the text is the indented lines below, shown as one line.
+		if (/^[>|][+-]?\d*$/.test(inline)) {
+			const parts: string[] = [];
+			while (i + 1 < lines.length && (!next().trim() || /^\s/.test(next()))) {
+				parts.push(lines[++i].trim());
+			}
+			out[key] = parts.join(' ').replace(/\s+/g, ' ').trim();
+			continue;
+		}
+		// A value that goes on over indented lines (or starts on the next one); list items and nested keys are not part of it.
+		const parts = inline ? [inline] : [];
+		while (/^\s+\S/.test(next()) && !/^\s*-\s+/.test(next()) && (parts.length || !/^\s+[\w-]+:(\s|$)/.test(next()))) {
+			parts.push(lines[++i].trim());
+		}
+		out[key] = parts.join(' ').replace(/^(["'])(.*)\1$/, '$2');
 	}
 	return out;
 }
@@ -76,10 +96,15 @@ async function listDir(dir: string): Promise<string[]> {
  * broken when nothing in the workspace ends with it.
  */
 const somewhere = new Map<string, Promise<boolean>>();
+/** Every distinct path costs a workspace search: past this many in one scan, the rest are given the benefit of the doubt. */
+const MAX_LOOKUPS = 25;
 function existsSomewhere(ref: string): Promise<boolean> {
 	const clean = ref.replace(/^\.\//, '');
 	if (!somewhere.has(clean)) {
-		somewhere.set(clean, Promise.resolve(vscode.workspace.findFiles(`**/${clean}`, '{**/node_modules/**,**/.git/**}', 1)).then(r => r.length > 0, () => true));
+		if (somewhere.size >= MAX_LOOKUPS) {
+			return Promise.resolve(true);
+		}
+		somewhere.set(clean,Promise.resolve(vscode.workspace.findFiles(`**/${clean}`, '{**/node_modules/**,**/.git/**}', 1)).then(r => r.length > 0, () => true));
 	}
 	return somewhere.get(clean)!;
 }
@@ -141,6 +166,29 @@ interface Settings {
 	mcpServers?: Record<string, unknown>;
 }
 
+const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+
+/** Valid JSON of the wrong shape (`"allow": "Bash"`, `"hooks": []`) must not break the scan of every other file. */
+function settingsShape(raw: unknown): Settings {
+	if (!isObject(raw)) {
+		return {};
+	}
+	const hooks: Record<string, HookEntry[]> = {};
+	for (const [event, entries] of Object.entries(isObject(raw.hooks) ? raw.hooks : {})) {
+		hooks[event] = (Array.isArray(entries) ? entries : []).filter(isObject).map(e => ({
+			matcher: typeof e.matcher === 'string' ? e.matcher : undefined,
+			hooks: (Array.isArray(e.hooks) ? e.hooks : []).filter(isObject).map(h => ({ type: typeof h.type === 'string' ? h.type : undefined, command: typeof h.command === 'string' ? h.command : undefined })),
+		}));
+	}
+	const perms = isObject(raw.permissions) ? raw.permissions : {};
+	return {
+		hooks,
+		permissions: { allow: strings(perms.allow), ask: strings(perms.ask), deny: strings(perms.deny), defaultMode: typeof perms.defaultMode === 'string' ? perms.defaultMode : undefined },
+		mcpServers: isObject(raw.mcpServers) ? raw.mcpServers : {},
+	};
+}
+
 async function settingsFile(items: HarnessItem[], root: string, file: string, scope: Scope) {
 	const text = await read(file);
 	if (text === undefined) {
@@ -148,7 +196,7 @@ async function settingsFile(items: HarnessItem[], root: string, file: string, sc
 	}
 	let s: Settings;
 	try {
-		s = JSON.parse(text);
+		s = settingsShape(JSON.parse(text));
 	} catch (e) {
 		items.push({ kind: 'hooks', scope, label: show(root, file), detail: 'Not valid JSON: the agent ignores this file', file, issues: [{ severity: 'error', message: `Invalid JSON: ${(e as Error).message}` }], agents: ['Claude'] });
 		return;
@@ -165,8 +213,12 @@ async function settingsFile(items: HarnessItem[], root: string, file: string, sc
 				const script = /(?:bash|sh|node|python3?)\s+["']?(?<p>[^\s"']+\.(?:sh|js|mjs|py))/.exec(h.command)?.groups?.p
 					?? /^["']?(?<p>[^\s"']+\.(?:sh|js|mjs|py))/.exec(h.command.trim())?.groups?.p;
 				if (script) {
-					const resolved = script.replace(/\$\{CLAUDE_PROJECT_DIR(?::-\.)?\}|\$CLAUDE_PROJECT_DIR/g, root).replace(/^~/, home);
-					if (!await exists(path.resolve(root, resolved))) {
+					const resolved = script
+						.replace(/\$\{CLAUDE_PROJECT_DIR(?::-[^}]*)?\}|\$CLAUDE_PROJECT_DIR\b|%CLAUDE_PROJECT_DIR%/gi, () => root)
+						.replace(/\$\{HOME\}|\$HOME\b|%USERPROFILE%/gi, () => home)
+						.replace(/^~(?=[\\/]|$)/, () => home);
+					// Whatever is still a variable (${CLAUDE_PLUGIN_ROOT}, say) is only known to Claude Code: no verdict, no penalty.
+					if (!/[$%]/.test(resolved) && !await exists(path.resolve(root, resolved))) {
 						issues.push({ severity: 'error', message: `Script ${script} does not exist`, line: lineOf(script) });
 					}
 				}

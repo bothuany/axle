@@ -12,7 +12,7 @@ export interface FlowNode {
   endLine: number
   code: string | null
   children: FlowEdge[]
-  /** Agent change inside this method (current-file line numbers), when Flow is tracking one. */
+  /** Agent change inside this method (current-file line numbers), when Axle is tracking one. */
   diff?: { added: number[]; removed: { after: number; lines: string[] }[]; plus: number; minus: number }
   /** Database cards: the table an EF query touches, read from the entity and its EF configuration. */
   schema?: DbSchema

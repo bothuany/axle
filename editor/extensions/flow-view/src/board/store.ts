@@ -1,0 +1,140 @@
+/*---------------------------------------------------------------------------------------------
+ *  Axle boards held by one window: what an agent drew (or what a plan turned into), latest first.
+ *  The store knows nothing about how a board is shown: a BoardHost does (today a Markdown preview with
+ *  a mermaid diagram, later the canvas). Pure: no `vscode`, so it is unit-tested directly.
+ *--------------------------------------------------------------------------------------------*/
+
+import { createHash } from 'crypto';
+import type { BoardNode, BoardSpec, NodeStatus } from './spec';
+
+/** Whatever shows boards. `show` opens (or reveals) a board; `update` redraws one that is already shown. */
+export interface BoardHost {
+	show(id: string, spec: BoardSpec): void | Promise<void>;
+	update(id: string, spec: BoardSpec): void | Promise<void>;
+}
+
+export interface StoredBoard {
+	id: string;
+	spec: BoardSpec;
+	createdAt: number;
+	updatedAt: number;
+	/** agent: drawn by a tool call · plan: parsed from a plan an agent proposed. */
+	origin: 'agent' | 'plan';
+	/** The Axle agent session a plan board belongs to (editing a file linked from one of its nodes moves that node). */
+	session?: string;
+	planFile?: string;
+}
+
+export interface BoardChange { type: 'set' | 'node' | 'delete'; id: string }
+
+export const MAX_BOARDS = 30;
+
+/** A minimal event: the store is used outside VS Code too. */
+class Emitter<T> {
+	private readonly listeners = new Set<(e: T) => void>();
+	readonly event = (listener: (e: T) => void) => {
+		this.listeners.add(listener);
+		return { dispose: () => void this.listeners.delete(listener) };
+	};
+	fire(e: T) {
+		[...this.listeners].forEach(l => {
+			try {
+				l(e);
+			} catch {
+				// one bad listener must not stop the others
+			}
+		});
+	}
+}
+
+/** An id an agent chose, cleaned: letters, digits and `-_.:` only, so it can never be a path. */
+export function cleanBoardId(raw: unknown): string | undefined {
+	if (typeof raw !== 'string') {
+		return undefined;
+	}
+	const id = raw.trim().replace(/[^A-Za-z0-9._:-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').slice(0, 64);
+	return id || undefined;
+}
+
+/** A file name for a board id: readable, and unique even when two ids clean to the same words. */
+export function boardFileName(id: string): string {
+	const slug = id.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'board';
+	return `${slug}-${createHash('sha1').update(id).digest('hex').slice(0, 8)}.md`;
+}
+
+export class BoardStore {
+	private readonly boards = new Map<string, StoredBoard>();
+	private readonly changed = new Emitter<BoardChange>();
+	readonly onDidChange = this.changed.event;
+	private host: BoardHost | undefined;
+	private seq = 0;
+
+	setHost(host: BoardHost | undefined) {
+		this.host = host;
+	}
+
+	/** Adds a board, or replaces the one with the same id; returns its id. Shown when `present` is not false. */
+	async set(spec: BoardSpec, opts: { id?: string; origin?: StoredBoard['origin']; session?: string; planFile?: string; present?: boolean } = {}): Promise<string> {
+		const id = cleanBoardId(opts.id) ?? this.freshId(spec.title);
+		const old = this.boards.get(id);
+		const now = Date.now();
+		this.boards.set(id, { id, spec, createdAt: old?.createdAt ?? now, updatedAt: now, origin: opts.origin ?? old?.origin ?? 'agent', session: opts.session ?? old?.session, planFile: opts.planFile ?? old?.planFile });
+		while (this.boards.size > MAX_BOARDS) {
+			const oldest = [...this.boards.values()].sort((a, b) => a.updatedAt - b.updatedAt)[0];
+			this.boards.delete(oldest.id);
+			this.changed.fire({ type: 'delete', id: oldest.id });
+		}
+		this.changed.fire({ type: 'set', id });
+		if (opts.present !== false) {
+			await this.host?.show(id, spec); // a replaced board is shown again if its tab was closed
+		}
+		return id;
+	}
+
+	private freshId(title: string) {
+		const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'board';
+		let id: string;
+		do {
+			id = `${slug}-${++this.seq}`;
+		} while (this.boards.has(id));
+		return id;
+	}
+
+	get(id: string) {
+		return this.boards.get(id);
+	}
+
+	/** Latest first. */
+	list(): StoredBoard[] {
+		return [...this.boards.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+	}
+
+	/** Changes one node. Throws a message naming the valid ids, so an agent can correct itself. */
+	async updateNode(id: string, nodeId: string, patch: { status?: NodeStatus; note?: string }): Promise<BoardNode> {
+		const board = this.boards.get(id);
+		if (!board) {
+			throw new Error(`No board "${id}". Boards: ${this.list().map(b => b.id).join(', ') || 'none drawn yet'}.`);
+		}
+		const node = board.spec.nodes.find(n => n.id === nodeId);
+		if (!node) {
+			throw new Error(`Board "${id}" has no node "${nodeId}". Nodes: ${board.spec.nodes.slice(0, 40).map(n => n.id).join(', ')}.`);
+		}
+		const next: BoardNode = { ...node, ...(patch.status ? { status: patch.status } : {}), ...(patch.note !== undefined ? { note: patch.note.slice(0, 600) } : {}) };
+		const spec = { ...board.spec, nodes: board.spec.nodes.map(n => n === node ? next : n) };
+		this.boards.set(id, { ...board, spec, updatedAt: Date.now() });
+		this.changed.fire({ type: 'node', id });
+		await this.host?.update(id, spec);
+		return next;
+	}
+
+	/** Plan boards of one agent session, newest first. */
+	forSession(session: string) {
+		return this.list().filter(b => b.origin === 'plan' && b.session === session);
+	}
+
+	delete(id: string) {
+		if (this.boards.delete(id)) {
+			this.changed.fire({ type: 'delete', id });
+		}
+	}
+}

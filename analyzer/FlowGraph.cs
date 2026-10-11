@@ -49,6 +49,9 @@ public sealed class FlowGraph
 
     public Solution Solution => _solution;
 
+    /// <summary>Counts the refreshes that changed the solution: a cache of something derived from the snapshot is valid while it is the same.</summary>
+    public int Version { get; private set; }
+
     private async Task<IReadOnlyList<Compilation>> CompilationsAsync()
     {
         foreach (var p in _solution.Projects)
@@ -57,7 +60,7 @@ public sealed class FlowGraph
         return _solution.Projects.Select(p => _compilations[p.Id]).ToList();
     }
 
-    private async Task<List<INamedTypeSymbol>> SourceTypesAsync()
+    internal async Task<List<INamedTypeSymbol>> SourceTypesAsync()
     {
         if (_sourceTypes != null) return _sourceTypes;
         var seen = new HashSet<string>();
@@ -84,9 +87,12 @@ public sealed class FlowGraph
             foreach (var x in WithNested(n)) yield return x;
     }
 
-    public async Task<List<EntryPoint>> EntryPointsAsync()
+    public async Task<List<EntryPoint>> EntryPointsAsync() => (await EntrySymbolsAsync()).Select(e => e.Entry).ToList();
+
+    /// <summary>The entry points with the methods they are, for the type model (parameter and return types).</summary>
+    internal async Task<List<(EntryPoint Entry, IMethodSymbol Method)>> EntrySymbolsAsync()
     {
-        var result = new List<EntryPoint>();
+        var result = new List<(EntryPoint Entry, IMethodSymbol Method)>();
         foreach (var t in await SourceTypesAsync())
         {
             if (t.IsAbstract || !InheritsFrom(t, "ControllerBase")) continue;
@@ -97,13 +103,13 @@ public sealed class FlowGraph
                     .FirstOrDefault(n => n.StartsWith("Http") && n.EndsWith("Attribute"));
                 if (http == null) continue;
                 var loc = m.Locations.First(l => l.IsInSource);
-                result.Add(new EntryPoint(
+                result.Add((new EntryPoint(
                     DocumentationCommentId.CreateDeclarationId(m)!,
                     t.Name, m.Name, http[4..^9].ToUpperInvariant(),
-                    loc.SourceTree!.FilePath, loc.GetLineSpan().StartLinePosition.Line + 1));
+                    loc.SourceTree!.FilePath, loc.GetLineSpan().StartLinePosition.Line + 1), m));
             }
         }
-        return result.OrderBy(e => e.Controller).ThenBy(e => e.Line).ToList();
+        return result.OrderBy(e => e.Entry.Controller).ThenBy(e => e.Entry.Line).ToList();
     }
 
     public async Task<IMethodSymbol?> ResolveAsync(string id)
@@ -114,16 +120,17 @@ public sealed class FlowGraph
         return null;
     }
 
-    public async Task<FlowNode?> BuildAsync(string id, int maxDepth)
+    public async Task<FlowNode?> BuildAsync(string id, int maxDepth, CancellationToken ct = default)
     {
         var root = await ResolveAsync(id);
         if (root == null) return null;
         var counter = 0;
-        return await NodeAsync(root, null, maxDepth, new HashSet<string>(), () => $"n{counter++}");
+        return await NodeAsync(root, null, maxDepth, new HashSet<string>(), () => $"n{counter++}", ct);
     }
 
-    private async Task<FlowNode> NodeAsync(IMethodSymbol method, string? labelOverride, int depth, HashSet<string> path, Func<string> nextKey)
+    private async Task<FlowNode> NodeAsync(IMethodSymbol method, string? labelOverride, int depth, HashSet<string> path, Func<string> nextKey, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested(); // a dropped request must not keep walking (and holding the gate)
         method = method.OriginalDefinition;
         var symbolId = DocumentationCommentId.CreateDeclarationId(method);
         var syntaxRef = method.DeclaringSyntaxReferences.FirstOrDefault();
@@ -172,7 +179,7 @@ public sealed class FlowGraph
                     {
                         foreach (var handle in await HandlersForAsync(reqType))
                             node.Children.Add(new FlowEdge(callLine, "mediator",
-                                await NodeAsync(handle, $"{reqType.Name} ▸ Handler", depth - 1, path, nextKey)));
+                                await NodeAsync(handle, $"{reqType.Name} ▸ Handler", depth - 1, path, nextKey, ct)));
                     }
                     continue;
                 }
@@ -196,22 +203,22 @@ public sealed class FlowGraph
 
                 if (def.ContainingType.TypeKind == TypeKind.Interface || def.IsAbstract)
                 {
-                    var impls = (await SymbolFinder.FindImplementationsAsync(def, _solution))
-                        .Concat(def.IsAbstract ? await SymbolFinder.FindOverridesAsync(def, _solution) : [])
+                    var impls = (await SymbolFinder.FindImplementationsAsync(def, _solution, cancellationToken: ct))
+                        .Concat(def.IsAbstract ? await SymbolFinder.FindOverridesAsync(def, _solution, cancellationToken: ct) : [])
                         .OfType<IMethodSymbol>().Where(m => m.Locations.Any(l => l.IsInSource))
                         .GroupBy(m => DocumentationCommentId.CreateDeclarationId(m.OriginalDefinition)).Select(g => g.First())
                         .ToList();
                     if (impls.Count == 1)
                     {
                         node.Children.Add(new FlowEdge(callLine, "impl",
-                            await NodeAsync(impls[0], null, depth - 1, path, nextKey)));
+                            await NodeAsync(impls[0], null, depth - 1, path, nextKey, ct)));
                     }
                     else if (impls.Count > 1)
                     {
                         var amb = new FlowNode(nextKey(), defId, $"{def.ContainingType.Name}.{def.Name}",
-                            $"{impls.Count} implementasyon", "ambiguous", null, 0, 0, null, new());
+                            $"{impls.Count} implementations", "ambiguous", null, 0, 0, null, new());
                         foreach (var impl in impls)
-                            amb.Children.Add(new FlowEdge(0, "impl", await NodeAsync(impl, null, depth - 1, path, nextKey)));
+                            amb.Children.Add(new FlowEdge(0, "impl", await NodeAsync(impl, null, depth - 1, path, nextKey, ct)));
                         node.Children.Add(new FlowEdge(callLine, "impl", amb));
                     }
                     else
@@ -222,7 +229,7 @@ public sealed class FlowGraph
                     continue;
                 }
 
-                node.Children.Add(new FlowEdge(callLine, "call", await NodeAsync(def, null, depth - 1, path, nextKey)));
+                node.Children.Add(new FlowEdge(callLine, "call", await NodeAsync(def, null, depth - 1, path, nextKey, ct)));
             }
         }
         finally
@@ -259,31 +266,31 @@ public sealed class FlowGraph
     /// Reverse flow: who calls this method, recursively. Follows interface/override declarations and
     /// MediatR (a handler's callers are the methods that create its request).
     /// </summary>
-    public async Task<FlowNode?> CallersAsync(string id, int maxDepth)
+    public async Task<FlowNode?> CallersAsync(string id, int maxDepth, CancellationToken ct = default)
     {
         var root = await ResolveAsync(id);
         if (root == null) return null;
         var counter = 0;
         Func<string> nextKey = () => $"c{counter++}";
-        return await CallerNodeAsync(root, maxDepth, new HashSet<string>(), nextKey);
+        return await CallerNodeAsync(root, maxDepth, new HashSet<string>(), nextKey, ct);
     }
 
-    private async Task<FlowNode> CallerNodeAsync(IMethodSymbol method, int depth, HashSet<string> path, Func<string> nextKey)
+    private async Task<FlowNode> CallerNodeAsync(IMethodSymbol method, int depth, HashSet<string> path, Func<string> nextKey, CancellationToken ct)
     {
-        var node = await NodeAsync(method, null, 0, new HashSet<string>(), nextKey);
+        var node = await NodeAsync(method, null, 0, new HashSet<string>(), nextKey, ct);
         var id = DocumentationCommentId.CreateDeclarationId(method.OriginalDefinition);
         if (depth <= 0 || id == null || !path.Add(id)) return node;
         try
         {
-            foreach (var (caller, line, kind) in (await CallSitesAsync(method.OriginalDefinition)).Take(12))
-                node.Children.Add(new FlowEdge(line, kind, await CallerNodeAsync(caller, depth - 1, path, nextKey)));
+            foreach (var (caller, line, kind) in (await CallSitesAsync(method.OriginalDefinition, ct)).Take(12))
+                node.Children.Add(new FlowEdge(line, kind, await CallerNodeAsync(caller, depth - 1, path, nextKey, ct)));
         }
         finally { path.Remove(id); }
         return node;
     }
 
     /// <summary>Endpoints (controller actions) that can reach this method, walking callers breadth-first.</summary>
-    public async Task<List<string>> ImpactAsync(string id, int maxDepth = 8)
+    public async Task<List<string>> ImpactAsync(string id, int maxDepth = 8, CancellationToken ct = default)
     {
         var start = await ResolveAsync(id);
         if (start == null) return new();
@@ -295,6 +302,7 @@ public sealed class FlowGraph
             var next = new List<IMethodSymbol>();
             foreach (var m in frontier)
             {
+                ct.ThrowIfCancellationRequested();
                 var mid = DocumentationCommentId.CreateDeclarationId(m);
                 if (mid == null || !seen.Add(mid)) continue;
                 if (InheritsFrom(m.ContainingType, "ControllerBase") && m.GetAttributes().Any(a => a.AttributeClass?.Name.StartsWith("Http") == true))
@@ -302,14 +310,14 @@ public sealed class FlowGraph
                     endpoints.Add($"{m.ContainingType.Name.Replace("Controller", "")}.{m.Name}");
                     continue;
                 }
-                foreach (var (caller, _, _) in await CallSitesAsync(m)) next.Add(caller);
+                foreach (var (caller, _, _) in await CallSitesAsync(m, ct)) next.Add(caller);
             }
             frontier = next;
         }
         return endpoints.ToList();
     }
 
-    private async Task<List<(IMethodSymbol caller, int line, string kind)>> CallSitesAsync(IMethodSymbol method)
+    private async Task<List<(IMethodSymbol caller, int line, string kind)>> CallSitesAsync(IMethodSymbol method, CancellationToken ct)
     {
         var sites = new List<(IMethodSymbol, int, string)>();
         var seen = new HashSet<string>();
@@ -331,7 +339,7 @@ public sealed class FlowGraph
         for (var o = method.OverriddenMethod; o != null; o = o.OverriddenMethod) targets.Add((o, "impl"));
 
         foreach (var (target, kind) in targets)
-            foreach (var c in await SymbolFinder.FindCallersAsync(target, _solution))
+            foreach (var c in await SymbolFinder.FindCallersAsync(target, _solution, ct))
                 foreach (var loc in c.Locations)
                     Add(await EnclosingMethodAsync(loc) ?? c.CallingSymbol as IMethodSymbol, loc, kind);
 
@@ -342,7 +350,7 @@ public sealed class FlowGraph
         if (handlerOf != null)
         {
             var requestType = handlerOf.TypeArguments[0];
-            foreach (var r in await SymbolFinder.FindReferencesAsync(requestType, _solution))
+            foreach (var r in await SymbolFinder.FindReferencesAsync(requestType, _solution, ct))
                 foreach (var loc in r.Locations)
                 {
                     var tree = loc.Location.SourceTree;
@@ -386,13 +394,14 @@ public sealed class FlowGraph
                 i.Name is "IRequestHandler" or "INotificationHandler" &&
                 SameType(i.TypeArguments[0], requestType));
             if (iface == null) continue;
-            var handle = t.GetMembers("Handle").OfType<IMethodSymbol>().FirstOrDefault(m => m.Locations.Any(l => l.IsInSource));
+            // A class can handle several requests: take the Handle overload of this request, not the first one declared.
+            var handles = t.GetMembers("Handle").OfType<IMethodSymbol>().Where(m => m.Locations.Any(l => l.IsInSource)).ToList();
+            var handle = handles.FirstOrDefault(m => m.Parameters.Length > 0 && SameType(m.Parameters[0].Type, requestType)) ?? handles.FirstOrDefault();
             if (handle != null) result.Add(handle);
         }
         return result;
     }
 
-    /// <summary>Returns "DbContext.DbSet" when an external call chain hangs off an EF DbContext.</summary>
     /// <summary>
     /// An EF call: the DbContext it goes through, the DbSet member (or Set&lt;T&gt;), and the operators on
     /// the way, in the order they run (Where, Select, FirstOrDefaultAsync…).
@@ -443,14 +452,25 @@ public sealed class FlowGraph
         return false;
     }
 
-    /// <summary>Re-reads files changed outside Flow (agent, Rider, git) so cards and saves see current disk text.</summary>
+    /// <summary>
+    /// Brings the snapshot in line with disk for files changed outside Axle (agent, Rider, git): edits are re-read,
+    /// new .cs files join the project whose folder holds them, deleted ones leave the solution.
+    /// </summary>
     public async Task<int> RefreshAsync(IEnumerable<string> files)
     {
         var count = 0;
         foreach (var file in files.Distinct())
         {
             var ids = _solution.GetDocumentIdsWithFilePath(file);
-            if (ids.IsEmpty || !File.Exists(file)) continue;
+            if (!File.Exists(file))
+            {
+                foreach (var id in ids)
+                {
+                    _solution = _solution.RemoveDocument(id);
+                    count++;
+                }
+                continue;
+            }
             SourceText disk;
             try
             {
@@ -458,40 +478,51 @@ public sealed class FlowGraph
                 disk = SourceText.From(stream);
             }
             catch (IOException) { continue; } // mid-write; the next event will catch it
+
+            if (ids.IsEmpty)
+            {
+                var project = OwningProject(file);
+                if (project == null) continue;
+                _solution = project.AddDocument(Path.GetFileName(file), disk, filePath: file).Project.Solution;
+                count++;
+                continue;
+            }
             foreach (var id in ids)
+            {
+                var current = await _solution.GetDocument(id)!.GetTextAsync();
+                if (current.ContentEquals(disk)) continue; // a resync after a watcher overflow re-reads everything: skip what did not change
                 _solution = _solution.WithDocumentText(id, disk);
-            count++;
+                count++;
+            }
         }
         if (count > 0)
         {
             _compilations.Clear();
+            _schema.Clear(); // a changed entity or configuration changes its table
             _sourceTypes = null;
+            Version++;
         }
         return count;
     }
 
-    /// <summary>
-    /// Replaces lines [startLine, endLine] of a file. Reads the file fresh from disk so edits made in
-    /// another editor survive; refuses (returns false) when those lines no longer match what the UI showed.
-    /// </summary>
-    public async Task<bool> SaveAsync(string file, int startLine, int endLine, string original, string newCode)
+    /// <summary>The project whose folder is the closest ancestor of the file (SDK-style projects own their folder).</summary>
+    private Project? OwningProject(string file)
     {
-        var docIds = _solution.GetDocumentIdsWithFilePath(file);
-        if (docIds.IsEmpty) throw new InvalidOperationException("File is not part of the solution: " + file);
-
-        SourceText disk;
-        await using (var stream = File.OpenRead(file))
-            disk = SourceText.From(stream);
-        if (endLine > disk.Lines.Count) return false;
-        var span = TextSpan.FromBounds(disk.Lines[startLine - 1].Start, disk.Lines[endLine - 1].End);
-        if (disk.ToString(span) != original) return false;
-
-        var updated = disk.WithChanges(new TextChange(span, newCode));
-        await File.WriteAllTextAsync(file, updated.ToString(), disk.Encoding ?? new System.Text.UTF8Encoding(false));
-        foreach (var id in docIds)
-            _solution = _solution.WithDocumentText(id, updated);
-        _compilations.Clear();
-        _sourceTypes = null;
-        return true;
+        Project? best = null;
+        var bestLength = -1;
+        foreach (var p in _solution.Projects)
+        {
+            var dir = Path.GetDirectoryName(p.FilePath);
+            if (dir == null || dir.Length <= bestLength) continue;
+            var relative = Path.GetRelativePath(dir, file);
+            if (relative.StartsWith("..") || Path.IsPathRooted(relative)) continue;
+            best = p;
+            bestLength = dir.Length;
+        }
+        return best;
     }
+
+    /// <summary>Every file the snapshot knows, for a resync after the watcher lost events.</summary>
+    public List<string> DocumentFiles() =>
+        _solution.Projects.SelectMany(p => p.Documents).Select(d => d.FilePath).OfType<string>().Distinct().ToList();
 }

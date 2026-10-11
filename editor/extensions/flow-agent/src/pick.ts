@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow: choosing which agent to start. Claude Code and Codex, any agent CLI found on PATH, and
+ *  Axle: choosing which agent to start. Claude Code and Codex, any agent CLI found on PATH, and
  *  commands you saved yourself; a custom agent is just a command run in its own terminal.
  *--------------------------------------------------------------------------------------------*/
 
@@ -21,13 +21,23 @@ const KNOWN: CustomAgent[] = [
 	{ name: 'Copilot CLI', command: 'copilot' },
 ];
 
+/** Names a command can have on disk: on Windows `aider` is `aider.exe`, `aider.cmd` and so on (PATHEXT). */
+function candidates(bin: string) {
+	if (process.platform !== 'win32') {
+		return [bin];
+	}
+	return [bin, ...(process.env.PATHEXT ?? '.EXE;.CMD;.BAT;.COM').split(';').filter(Boolean).map(ext => bin + ext.toLowerCase())];
+}
+
 async function onPath(bin: string) {
 	for (const dir of (process.env.PATH ?? '').split(path.delimiter).filter(Boolean)) {
-		try {
-			await fs.access(path.join(dir, bin), fs.constants.X_OK);
-			return true;
-		} catch {
-			// not here
+		for (const name of candidates(bin)) {
+			try {
+				await fs.access(path.join(dir, name), fs.constants.X_OK);
+				return true;
+			} catch {
+				// not here
+			}
 		}
 	}
 	return false;
@@ -43,7 +53,7 @@ export async function pickAgent(agents: Agents) {
 	const saved = savedAgents();
 	const found = (await Promise.all(KNOWN.filter(k => !saved.some(s => s.command.split(/\s+/)[0] === k.command)).map(async k => (await onPath(k.command) ? k : undefined)))).filter((k): k is CustomAgent => !!k);
 	const items: Item[] = [
-		{ label: '$(sparkle) Claude Code', detail: 'Status, permissions, diffs and context show up in Flow', run: () => agents.spawn('claude') },
+		{ label: '$(sparkle) Claude Code', detail: 'Status, permissions, diffs and context show up in Axle', run: () => agents.spawn('claude') },
 		{ label: '$(hubot) Codex', detail: 'Listed here; runs as a plain terminal', run: () => agents.spawn('codex') },
 	];
 	if (saved.length) {

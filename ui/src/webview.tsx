@@ -1,4 +1,4 @@
-// Flow canvas as a VS Code webview: callers on the left, the method in the middle, callees on the right.
+// Axle canvas as a VS Code webview: callers on the left, the method in the middle, callees on the right.
 // All data comes through the extension host (which picks Roslyn, LSP, … per language); edits are applied
 // by the host to the real document, so undo and the agent's Keep/Undo stay consistent.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -9,8 +9,10 @@ import editorWorker from 'monaco-editor/editor/editor.worker?worker&inline'
 import '@xyflow/react/dist/style.css'
 import './styles.css'
 import './webview.css'
+import { placeOf, type CardChips, type ChipsView, type Detail, type TypeTree } from './chips'
 import { HEADER_H, initialHidden, layout, layoutCallers, setEditMaxWidth, type EditTarget } from './layout'
-import { ActionsCtx, nodeTypes, type CanvasActions, type Caret } from './nodes'
+import { definitionInFile, notify, registerIde } from './ide'
+import { ActionsCtx, LANG_BY_EXT, nodeTypes, type CanvasActions, type Caret } from './nodes'
 import type { FlowNode } from './types'
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void }
@@ -26,13 +28,30 @@ self.MonacoEnvironment = { getWorker: () => new editorWorker() }
 monaco.editor.setTheme(window.__FLOW__.dark ? 'vs-dark' : 'vs')
 const vscode = acquireVsCodeApi()
 
+/** Paths from a backend (`C:\x\a.cs`) and from the editor (`c:\x\a.cs`, `c:/x/a.cs`) name the same file: compare them by this. */
+const samePath = (a: string, b: string) => {
+  const key = (p: string) => p.replace(/\\/g, '/').replace(/^[A-Za-z]:/, d => d.toLowerCase())
+  return key(a) === key(b)
+}
+
 // ---- request/response over postMessage ------------------------------------------------------
 let seq = 0
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
+/** A host that never answers (a crashed analyzer, a dropped message) must not leave a spinner or a pending Map entry forever. */
+const REQUEST_TIMEOUT_MS = 120_000
 function request<T>(op: string, payload: Record<string, unknown>): Promise<T> {
   const id = ++seq
-  vscode.postMessage({ type: 'request', id, op, ...payload })
-  return new Promise<T>((resolve, reject) => pending.set(id, { resolve: v => resolve(v as T), reject }))
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.delete(id)
+      reject(new Error(`The editor did not answer "${op}" in time.`))
+    }, REQUEST_TIMEOUT_MS)
+    pending.set(id, {
+      resolve: v => { clearTimeout(timer); resolve(v as T) },
+      reject: e => { clearTimeout(timer); reject(e) },
+    })
+    vscode.postMessage({ type: 'request', id, op, ...payload })
+  })
 }
 window.addEventListener('message', e => {
   const m = e.data
@@ -42,6 +61,9 @@ window.addEventListener('message', e => {
   if (m.error) p?.reject(new Error(m.error))
   else p?.resolve(m.data)
 })
+
+// Completion, hover, signature help and go-to-definition in the card editor come from the editor host's language servers.
+registerIde(Object.values(LANG_BY_EXT), { request })
 
 function find(n: FlowNode | null, key: string): FlowNode | null {
   if (!n) return null
@@ -128,9 +150,31 @@ function Flow() {
   const editingRef = useRef(editing)
   editingRef.current = editing
 
+  // Short notes from the editor help (no definition found, completion paused): shown on the bar for a few seconds.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    notify.show = message => {
+      setStatus(message)
+      clearTimeout(timer)
+      timer = setTimeout(() => setStatus(now => (now === message ? '' : now)), 4000)
+    }
+    return () => {
+      clearTimeout(timer)
+      notify.show = () => {}
+    }
+  }, [])
+
+  /** Counts loads: an answer that arrives after a newer load started (another target, a refresh) is dropped. */
+  const loads = useRef(0)
   const load = useCallback(async (t: Target, keepFolds: boolean) => {
+    const mine = ++loads.current
     try {
-      const [d, u] = await Promise.all([request<FlowNode>('graph', { target: t, turn: turnRef.current }), request<FlowNode | null>('callers', { target: t, turn: turnRef.current })])
+      // The callees are the flow; callers are an addition: when only they fail, the flow still draws.
+      const [graph, callers] = await Promise.allSettled([request<FlowNode>('graph', { target: t, turn: turnRef.current }), request<FlowNode | null>('callers', { target: t, turn: turnRef.current })])
+      if (mine !== loads.current) return
+      if (graph.status === 'rejected') throw graph.reason
+      const d = graph.value
+      const u = callers.status === 'fulfilled' ? callers.value : null
       request<TurnSummary[]>('timeline', {}).then(setTurns, () => setTurns([]))
       if (d.file) request<string[]>('editHooks', { file: d.file }).then(setEditHooks, () => setEditHooks([]))
       setDown(d)
@@ -139,6 +183,7 @@ function Flow() {
         // Callees two levels deep, callers one level: enough to read, not enough to drown.
         setHidden(new Set([...initialHidden(d, 2), ...(u ? initialHidden(u, 1) : [])]))
         setFull(new Set())
+        setChipOpen({})
         setEditing(null)
       }
       setStatus('')
@@ -147,7 +192,7 @@ function Flow() {
       if (!keepFolds) setImpact(null)
       request<{ label: string; items: string[] }>('impact', { target: t }).then(setImpact, () => setImpact(null))
     } catch (e) {
-      setError(String((e as Error).message ?? e))
+      if (mine === loads.current) setError(String((e as Error).message ?? e))
     }
   }, [])
 
@@ -175,8 +220,11 @@ function Flow() {
       const m = e.data
       if (m?.type === 'show') setTarget({ target: m.target, label: m.label })
       if (m?.type === 'refresh' && !editingRef.current) load(target.target, true)
-      if (m?.type === 'cursor') followCursor(m.file, m.line)
+      // Mid-edit the editor's own cursor moves (the card's text is shown to the language servers): the canvas stays put.
+      if (m?.type === 'cursor' && !editingRef.current) followCursor(m.file, m.line)
       if (m?.type === 'proposal') setProposal(m.proposal)
+      // The type graph was rebuilt (the code index finished, an edit): chips that were missing may exist now.
+      if (m?.type === 'typesChanged') refreshTypes.current()
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
@@ -189,7 +237,7 @@ function Flow() {
     let best: FlowNode | null = null
     const visit = (n: FlowNode | null) => {
       if (!n) return
-      if (n.file === file && n.startLine <= line && line <= n.endLine && (!best || n.endLine - n.startLine < best.endLine - best.startLine)) best = n
+      if (n.file && samePath(n.file, file) && n.startLine <= line && line <= n.endLine && (!best || n.endLine - n.startLine < best.endLine - best.startLine)) best = n
       n.children.forEach(c => visit(c.node))
     }
     visit(treesRef.current.down)
@@ -237,15 +285,73 @@ function Flow() {
     return () => ro.disconnect()
   }, [])
 
+  // Type chips (see chips.ts): the workspace types in each card's signature. Asked from the host once the flow is drawn, so the first paint never waits for the type graph.
+  const [typeChips, setTypeChips] = useState<Record<string, CardChips>>({})
+  const [chipOpen, setChipOpen] = useState<Record<string, string[]>>({})
+  const [details, setDetails] = useState<Map<string, Detail>>(new Map())
+  const [diagramOk, setDiagramOk] = useState(false)
+  const detailsRef = useRef(details)
+  const chipLoads = useRef(0)
+
+  const fetchChips = useCallback(() => {
+    const keyOf = new Map<string, string>()
+    const nodes: { key: string; file: string; line: number; endLine: number }[] = []
+    const visit = (n: FlowNode | null) => {
+      if (!n) return
+      if (n.file && n.code && !n.schema && !keyOf.has(placeOf(n))) {
+        keyOf.set(placeOf(n), n.key)
+        nodes.push({ key: n.key, file: n.file, line: n.startLine, endLine: n.endLine })
+      }
+      n.children.forEach(c => visit(c.node))
+    }
+    visit(treesRef.current.down)
+    visit(treesRef.current.up)
+    if (!nodes.length) return
+    const mine = ++chipLoads.current
+    request<{ chips: Record<string, CardChips>; ready: boolean; diagramAvailable?: boolean }>('typeChips', { nodes }).then(
+      res => {
+        if (mine !== chipLoads.current || !res) return
+        setDiagramOk(!!res.diagramAvailable)
+        const byPlace: Record<string, CardChips> = {}
+        for (const [place, key] of keyOf) if (res.chips?.[key]) byPlace[place] = res.chips[key]
+        // A type graph still being built has no chips yet: what is shown stays until the host says the types changed.
+        if (res.ready || Object.keys(byPlace).length) setTypeChips(byPlace)
+      },
+      () => {},
+    )
+  }, [])
+  useEffect(() => {
+    if (down) fetchChips()
+  }, [down, up, fetchChips])
+
+  const loadDetail = useCallback((id: string, refresh = false) => {
+    if (!refresh && detailsRef.current.has(id)) return
+    const put = (d: Detail) => {
+      detailsRef.current = new Map(detailsRef.current).set(id, d)
+      setDetails(detailsRef.current)
+    }
+    if (!refresh) put('loading')
+    request<TypeTree | undefined>('typeDetail', { ref: id, depth: 0 }).then(
+      tree => put(tree ?? 'missing'),
+      () => put('missing'),
+    )
+  }, [])
+  const refreshTypes = useRef(() => {})
+  refreshTypes.current = () => {
+    fetchChips()
+    for (const id of detailsRef.current.keys()) loadDetail(id, true)
+  }
+  const chipsView = useMemo<ChipsView>(() => ({ byPlace: typeChips, open: chipOpen, details }), [typeChips, chipOpen, details])
+
   const { nodes, edges } = useMemo(() => {
     if (!down) return { nodes: [], edges: [] }
     setEditMaxWidth(canvasW - 48)
-    const d = layout(down, hidden, full, selected, new Set(), editing)
+    const d = layout(down, hidden, full, selected, new Set(), editing, chipsView)
     if (!showUp || !up) return d
     const rootCard = d.nodes.find(n => n.id === down.key)
-    const u = layoutCallers(up, down.key, rootCard?.position.y ?? 0, hidden, full, selected, new Set(), editing)
+    const u = layoutCallers(up, down.key, rootCard?.position.y ?? 0, hidden, full, selected, new Set(), editing, chipsView)
     return { nodes: [...d.nodes, ...u.nodes], edges: [...d.edges, ...u.edges] }
-  }, [down, up, hidden, full, showUp, editing, selected, canvasW])
+  }, [down, up, hidden, full, showUp, editing, selected, canvasW, chipsView])
 
   // Fit the whole flow when it is still readable; otherwise open on the method you asked about,
   // at a zoom where its code can be read, with its callers' edge peeking in from the left.
@@ -306,7 +412,7 @@ function Flow() {
         setCaret(at)
         setSelected(key)
         setTrace(null)
-        setEditing({ file: n.file, startLine: n.startLine })
+        setEditing({ key, file: n.file, startLine: n.startLine })
         // Monaco needs an untransformed canvas: put the card in view at 100% and keep it there while editing.
         // Keep the clicked line where it was on screen, so the jump to 100% feels like a zoom, not a move.
         setTimeout(() => {
@@ -319,6 +425,10 @@ function Flow() {
           setCenter(card.position.x + w / 2, card.position.y + Math.min(lineY, el.clientHeight / 2 - 40), { zoom: 1, duration: 220 })
         }, 30)
       },
+      definition: (key, at) => {
+        const n = find(down, key) ?? find(up, key)
+        if (n?.file) void definitionInFile(n.file, at.line, at.column)
+      },
       focusLine: (key, line) => {
         const n = find(down, key) ?? find(up, key)
         const card = getNode(key)
@@ -326,8 +436,21 @@ function Flow() {
         setSelected(key)
         const el = document.querySelector('.wv-canvas') as HTMLElement
         const w = Number(card.style?.width) || 400
-        setCenter(card.position.x + Math.min(w / 2, el.clientWidth / 2 - 24), card.position.y + HEADER_H + (line - n.startLine) * 18, { zoom: 1, duration: 260 })
+        const chipsH = (card.data as { chipsH?: number }).chipsH ?? 0
+        setCenter(card.position.x + Math.min(w / 2, el.clientWidth / 2 - 24), card.position.y + HEADER_H + chipsH + (line - n.startLine) * 18, { zoom: 1, duration: 260 })
       },
+      chipToggle: (key, path, typeId) => {
+        setChipOpen(o => {
+          const cur = new Set(o[key] ?? [])
+          // Closing a chip closes what was opened under it.
+          if (cur.has(path)) [...cur].forEach(p => (p === path || p.startsWith(`${path}/`)) && cur.delete(p))
+          else cur.add(path)
+          return { ...o, [key]: [...cur] }
+        })
+        loadDetail(typeId)
+      },
+      openType: (file, line) => vscode.postMessage({ type: 'open', file, line }),
+      typeDiagram: diagramOk ? id => vscode.postMessage({ type: 'typeDiagram', id }) : undefined,
       mention: key => {
         const n = find(down, key) ?? find(up, key)
         if (n?.file) vscode.postMessage({ type: 'mention', file: n.file, start: n.startLine - 1, end: n.endLine - 1 })
@@ -338,27 +461,39 @@ function Flow() {
       keep: async key => {
         const n = find(down, key) ?? find(up, key)
         if (!n?.file) return
-        await request('keep', { file: n.file })
+        try {
+          await request('keep', { file: n.file })
+        } catch (e) {
+          setStatus(String((e as Error).message ?? e))
+          return
+        }
         await load(target.target, true)
       },
       undo: async key => {
         const n = find(down, key) ?? find(up, key)
         if (!n?.file) return
-        const res = await request<{ ok: boolean; message?: string }>('undo', { file: n.file, startLine: n.startLine, endLine: n.endLine })
-        if (!res.ok) setStatus(res.message ?? 'Could not undo the change.')
+        let res: { ok: boolean; message?: string }
+        try {
+          res = await request<{ ok: boolean; message?: string }>('undo', { file: n.file, startLine: n.startLine, endLine: n.endLine })
+        } catch (e) {
+          setStatus(String((e as Error).message ?? e))
+          return
+        }
         await load(target.target, true)
+        // After the load: a successful load clears the status line, and the reason must stay readable.
+        if (!res.ok) setStatus(res.message ?? 'Could not undo the change.')
       },
-      save: async (key, code) => {
+      save: async (key, code, session) => {
         const n = find(down, key) ?? find(up, key)
         if (!n?.file || n.code == null) return 'This card is gone. Refresh the flow and try again.'
-        const res = await request<{ ok: boolean; message?: string }>('save', { file: n.file, startLine: n.startLine, endLine: n.endLine, original: n.code, code })
+        const res = await request<{ ok: boolean; message?: string }>('save', { file: n.file, startLine: n.startLine, endLine: n.endLine, original: n.code, code, session })
         if (!res.ok) return res.message ?? 'Could not save.'
         setEditing(null)
         await load(target.target, true)
         return undefined
       },
     }),
-    [down, up, getNode, setCenter, load, target, caret],
+    [down, up, getNode, setCenter, load, target, caret, loadDetail, diagramOk],
   )
 
   // Changed cards in call order: the outermost caller first, then down the flow as it runs.
@@ -428,7 +563,7 @@ function Flow() {
     const hits: FlowNode[] = []
     const visit = (n: FlowNode | null) => {
       if (!n) return
-      if (n.file && (proposal.files.includes(n.file) || proposal.spans.some(sp => sp.file === n.file && sp.start <= n.endLine && sp.end >= n.startLine)) && drawn.has(n.key)) hits.push(n)
+      if (n.file && (proposal.files.some(f => samePath(f, n.file!)) || proposal.spans.some(sp => samePath(sp.file, n.file!) && sp.start <= n.endLine && sp.end >= n.startLine)) && drawn.has(n.key)) hits.push(n)
       n.children.forEach(c => visit(c.node))
     }
     visit(down)

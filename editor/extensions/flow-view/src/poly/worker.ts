@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow polyglot index: the worker. Walks the workspace, parses Java, Python and JS/TS with
+ *  Axle polyglot index: the worker. Walks the workspace, parses Java, Python and JS/TS with
  *  tree-sitter, keeps per-file facts (cached on disk by mtime) and answers the extension host.
  *  Runs off the extension host's thread: a first index of a large repo takes seconds.
  *--------------------------------------------------------------------------------------------*/
@@ -11,7 +11,8 @@ import { parsePrisma } from './db';
 import { Project, type Axis2Service } from './graph';
 import { extractJava } from './java';
 import { extractJs } from './js';
-import { EXCLUDED_DIRS, langOf, type FileFacts } from './model';
+import { isExcludedDir, langOf, type FileFacts } from './model';
+import { extractGo, extractPhp, extractRuby, extractRust } from './others';
 import { extractPython } from './python';
 import type { TsNode } from './ts';
 
@@ -21,7 +22,15 @@ interface Init {
 	cacheFile: string;
 }
 
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 5;
+/** The cache holds facts the extractors made: a rebuilt worker (changed extractors) must not reuse them. */
+const BUILD = (() => {
+	try {
+		return fs.statSync(__filename).mtimeMs;
+	} catch {
+		return 0;
+	}
+})();
 const MAX_BYTES = 600_000;
 
 const { roots, wasmDir, cacheFile } = workerData as Init;
@@ -37,7 +46,7 @@ async function initParsers() {
 		p.setLanguage(await TreeSitter.Language.load(path.join(wasmDir, `tree-sitter-${grammar}.wasm`)));
 		return p;
 	};
-	parsers = { java: await make('java'), python: await make('python'), js: await make('javascript'), ts: await make('typescript'), tsx: await make('tsx') };
+	parsers = { java: await make('java'), python: await make('python'), js: await make('javascript'), ts: await make('typescript'), tsx: await make('tsx'), go: await make('go'), php: await make('php'), ruby: await make('ruby'), rust: await make('rust') };
 }
 
 interface Found {
@@ -60,13 +69,14 @@ function walkDir(dir: string, out: Found, depth = 0) {
 	} catch {
 		return;
 	}
+	const names = entries.map(e => e.name);
 	for (const e of entries) {
 		if (e.name.startsWith('.') && e.name !== '.') {
 			continue;
 		}
 		const full = path.join(dir, e.name);
 		if (e.isDirectory()) {
-			if (!EXCLUDED_DIRS.has(e.name)) {
+			if (!isExcludedDir(e.name, full, () => names)) {
 				walkDir(full, out, depth + 1);
 			}
 		} else if (e.isFile()) {
@@ -111,23 +121,30 @@ function parseFile(file: string, mtime: number): FileFacts | undefined {
 	if (lang === 'js' && (firstBreak > 2000 || (firstBreak < 0 && text.length > 2000))) {
 		return undefined;
 	}
-	const parser = parsers[lang];
-	const tree = parser.parse(text);
+	let tree: ReturnType<(typeof parsers)[string]['parse']> | null = null;
 	try {
-		if (lang === 'java') {
-			return extractJava(tree.rootNode, file, mtime);
-		}
-		if (lang === 'python') {
-			return extractPython(tree.rootNode, file, mtime, pyModule(file));
-		}
-		return extractJs(tree.rootNode, file, mtime);
+		tree = parsers[lang].parse(text);
+		return tree ? EXTRACTORS[lang](tree.rootNode, file, mtime) : undefined;
 	} catch (e) {
 		post({ type: 'log', message: `parse failed ${file}: ${(e as Error).message}` });
 		return undefined;
 	} finally {
-		tree.delete();
+		tree?.delete();
 	}
 }
+
+/** One extractor per parser key (`langOf`): a new language is a grammar, an extractor and a line here. */
+const EXTRACTORS: Record<NonNullable<ReturnType<typeof langOf>>, (root: TsNode, file: string, mtime: number) => FileFacts> = {
+	java: extractJava,
+	python: (root, file, mtime) => extractPython(root, file, mtime, pyModule(file)),
+	js: extractJs,
+	ts: extractJs,
+	tsx: extractJs,
+	go: extractGo,
+	php: extractPhp,
+	ruby: extractRuby,
+	rust: extractRust,
+};
 
 /** Axis2: <service name="X"><parameter name="ServiceClass">com.x.Impl</parameter><operation name="op"/> */
 function parseServices(file: string): Axis2Service[] {
@@ -196,7 +213,7 @@ async function index() {
 	let cache: Record<string, FileFacts> = {};
 	try {
 		const c = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
-		if (c.version === CACHE_VERSION && JSON.stringify(c.roots) === JSON.stringify(roots)) {
+		if (c.version === CACHE_VERSION && c.build === BUILD && JSON.stringify(c.roots) === JSON.stringify(roots)) {
 			cache = c.files;
 		}
 	} catch {
@@ -255,7 +272,7 @@ function saveSoon() {
 			for (const [k, v] of project.files) {
 				files[k] = v;
 			}
-			fs.writeFileSync(cacheFile, JSON.stringify({ version: CACHE_VERSION, roots, files }));
+			fs.writeFileSync(cacheFile, JSON.stringify({ version: CACHE_VERSION, build: BUILD, roots, files }));
 		} catch (e) {
 			post({ type: 'log', message: `cache write failed: ${(e as Error).message}` });
 		}
@@ -270,12 +287,16 @@ parentPort!.on('message', async (m: { id: number; op: string; args: unknown[] })
 		let result: unknown;
 		switch (m.op) {
 			case 'entries': result = project.entryPoints(); break;
-			case 'graph': result = project.graph(m.args[0] as string); break;
+			case 'graph': result = project.graph(m.args[0] as string, (m.args[1] as number | undefined) ?? 5); break;
 			case 'callers': result = project.callers(m.args[0] as string); break;
 			case 'impact': result = project.impact(m.args[0] as string); break;
 			case 'functionAt': result = project.functionAt(m.args[0] as string, m.args[1] as number); break;
 			case 'methods': result = project.methodsIn(m.args[0] as string); break;
 			case 'stats': result = project.stats(); break;
+			case 'typeFacts': result = project.typeFacts(); break;
+			case 'complete': result = project.completeAt(m.args[0] as Parameters<Project['completeAt']>[0]); break;
+			case 'signature': result = project.signatureAt(m.args[0] as Parameters<Project['signatureAt']>[0]); break;
+			case 'definition': result = project.definitionAt(m.args[0] as Parameters<Project['definitionAt']>[0]); break;
 			case 'changed': {
 				for (const file of m.args as string[]) {
 					if (file.endsWith('services.xml')) {

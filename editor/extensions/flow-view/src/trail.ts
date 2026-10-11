@@ -1,18 +1,18 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow: the trail in the status bar. Wherever the cursor is in C#, it shows the call path that
+ *  Axle: the trail in the status bar. Wherever the cursor is in C#, it shows the call path that
  *  leads there from an entry point (▶ endpoint › ◆ handler › ● method), in the canvas' colours.
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import type { Analyzer, MethodInfo } from './analyzer';
+import { innermost, type Analyzer, type MethodInfo } from './analyzer';
 import type { FlowNode } from './providers';
 
 const KIND: Record<FlowNode['kind'], { glyph: string; color: string }> = {
-	controller: { glyph: '▶', color: '#e2c08d' },
-	handler: { glyph: '◆', color: '#c792ea' },
-	method: { glyph: '●', color: '#7aa2f7' },
-	db: { glyph: '●', color: '#59c2a8' },
-	ambiguous: { glyph: '◇', color: '#f07178' },
+	controller: { glyph: '▶', color: '#ffb454' },
+	handler: { glyph: '◆', color: '#b88cff' },
+	method: { glyph: '●', color: '#6f86ff' },
+	db: { glyph: '●', color: '#4fd6d0' },
+	ambiguous: { glyph: '◇', color: '#ff6b7d' },
 	external: { glyph: '○', color: '#8e8e96' },
 };
 
@@ -42,6 +42,15 @@ function pathToEntry(root: FlowNode): FlowNode[] {
 	return best.reverse();
 }
 
+/** The trail walks around a codebase for hours: what it remembers is bounded, oldest first out. */
+const MAX_FILES = 100;
+const MAX_CHAINS = 300;
+function capped(map: Map<string, unknown>, max: number) {
+	while (map.size > max) {
+		map.delete(map.keys().next().value!);
+	}
+}
+
 export class FlowTrail implements vscode.Disposable {
 	/** glyph + label per step; at most four steps (entry, …, parent, here). */
 	private readonly items: vscode.StatusBarItem[] = [];
@@ -49,7 +58,8 @@ export class FlowTrail implements vscode.Disposable {
 	private current: string | undefined;
 	private seq = 0;
 	private readonly chains = new Map<string, Promise<Step[]>>();
-	private readonly methodCache = new Map<string, { version: number; methods: Promise<MethodInfo[]> }>();
+	/** Per file, until it is saved: the analyzer reads the disk, so a keystroke gives it nothing new to say. */
+	private readonly methodCache = new Map<string, Promise<MethodInfo[]>>();
 	private readonly disposables: vscode.Disposable[] = [];
 
 	constructor(private readonly analyzer: Analyzer) {
@@ -66,6 +76,7 @@ export class FlowTrail implements vscode.Disposable {
 			// A save can change who calls what.
 			vscode.workspace.onDidSaveTextDocument(d => {
 				if (d.languageId === 'csharp') {
+					this.methodCache.delete(d.uri.fsPath);
 					this.chains.clear();
 					this.current = undefined;
 					this.schedule(vscode.window.activeTextEditor);
@@ -80,7 +91,7 @@ export class FlowTrail implements vscode.Disposable {
 
 	/**
 	 * The analyzer answers one request at a time, so the trail never queues more than one: a cursor
-	 * that keeps moving while it works gets a single fresh look afterwards (⌥⌘F must not wait behind us).
+	 * that keeps moving while it works gets a single fresh look afterwards ("Show flow at cursor" must not wait behind us).
 	 */
 	private schedule(_editor?: vscode.TextEditor) {
 		clearTimeout(this.timer);
@@ -107,11 +118,18 @@ export class FlowTrail implements vscode.Disposable {
 	private methods(doc: vscode.TextDocument) {
 		const key = doc.uri.fsPath;
 		const hit = this.methodCache.get(key);
-		if (hit && hit.version === doc.version) {
-			return hit.methods;
+		if (hit) {
+			return hit;
 		}
 		const methods = this.analyzer.methods(key);
-		this.methodCache.set(key, { version: doc.version, methods });
+		this.methodCache.set(key, methods);
+		capped(this.methodCache, MAX_FILES);
+		// A failed look (the analyzer is restarting) is not remembered: the next move of the cursor asks again.
+		methods.catch(() => {
+			if (this.methodCache.get(key) === methods) {
+				this.methodCache.delete(key);
+			}
+		});
 		return methods;
 	}
 
@@ -123,7 +141,7 @@ export class FlowTrail implements vscode.Disposable {
 		const seq = ++this.seq;
 		const line = editor.selection.active.line + 1;
 		const methods = await this.methods(editor.document);
-		const hit = methods.filter(m => m.startLine <= line && line <= m.endLine).sort((a, b) => (a.endLine - a.startLine) - (b.endLine - b.startLine))[0];
+		const hit = innermost(methods, line);
 		if (!hit) {
 			return this.hide();
 		}
@@ -136,6 +154,7 @@ export class FlowTrail implements vscode.Disposable {
 			// A failed look (analyzer restarting) must not stick: the next visit asks again.
 			chain.catch(() => this.chains.delete(hit.id));
 			this.chains.set(hit.id, chain);
+			capped(this.chains, MAX_CHAINS);
 		}
 		const steps = await this.chains.get(hit.id)!;
 		if (seq !== this.seq) {

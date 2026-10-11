@@ -1,0 +1,49 @@
+@startuml
+title Architecture
+hide empty members
+skinparam packageStyle rectangle
+left to right direction
+package "java-shop" {
+  package "Controllers" {
+    class "OrderController" as n6 <<controller>> {
+      +create(CreateOrderRequest request): ResponseEntity<OrderDto>
+      +list(): List<OrderDto>
+      +summary(): OrderSummary
+    }
+  }
+  package "Services" {
+    class "OrderService" as n3 <<service>> {
+      +place(CreateOrderRequest request): OrderDto
+      +all(): List<OrderDto>
+    }
+    class "PricingService" as n4 <<service>> {
+      +price(String sku, int quantity): Money
+    }
+  }
+  package "Repositories" {
+    class "OrderRepository" as n2 <<repository>>
+  }
+  package "Entities" {
+    class "OrderEntity" as n0 <<entity>> {
+      -id: Long
+      -lines: List<OrderLineEntity>
+    }
+    class "OrderLineEntity" as n1 <<entity>> {
+      -sku: String
+      -order: OrderEntity
+    }
+  }
+  package "Classes" {
+    class "StringUtils" as n5 {
+      +clean(String s): String
+      +blank(String s): boolean
+    }
+  }
+}
+n0 ..> n1 : lines
+n1 ..> n0 : order
+n2 ..> n0
+n3 ..> n2 : repo
+n3 ..> n4 : pricing
+n6 ..> n3 : orders
+@enduml

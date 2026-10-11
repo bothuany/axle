@@ -1,0 +1,3 @@
+GET /api/users    route.GET
+  (guess) call: listUsers [method]
+POST /api/users   route.POST

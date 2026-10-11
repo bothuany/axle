@@ -1,18 +1,22 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow Home: the first thing a window shows. One question in the middle — what should we do —
+ *  Axle Home: the first thing a window shows. One question in the middle — what should we do —
  *  and around it only what helps answer it: where you were, the flows you opened, the endpoints,
  *  and whether the agent's harness is in good shape.
  *--------------------------------------------------------------------------------------------*/
 
 import * as path from 'path';
 import * as vscode from 'vscode';
-import type { Analyzer } from './analyzer';
+import { Command } from './commands';
+import { entryName, type Endpoints, type Source } from './backends';
+
+/** The commands the shortcut row of the Home page can run. */
+const HOME_COMMANDS = new Set(['flow.showAtCursor', 'flow.pickEndpoint', 'workbench.action.quickOpen', 'workbench.view.extension.flowHarness']);
 
 const RECENT_FILES = 'flow.home.recentFiles';
 const RECENT_FLOWS = 'flow.home.recentFlows';
 
 interface Recent { path: string; at: number }
-interface RecentFlow { id: string; label: string; at: number }
+interface RecentFlow { id: string; label: string; source?: Source; at: number }
 interface Health {
 	score: number;
 	counts: { error: number; warning: number; info: number };
@@ -21,11 +25,20 @@ interface Health {
 	issues: { severity: string; message: string; label: string; file: string; line?: number }[];
 }
 
+/** a1 b1 a2 b2 …: with two backends neither pushes the other off a short list. */
+function interleave<T>(a: T[], b: T[]): T[] {
+	const out: T[] = [];
+	for (let i = 0; i < Math.max(a.length, b.length); i++) {
+		out.push(...[a[i], b[i]].filter((x): x is T => x !== undefined));
+	}
+	return out;
+}
+
 export class FlowHome implements vscode.Disposable {
 	private panel: vscode.WebviewPanel | undefined;
 	private readonly disposables: vscode.Disposable[] = [];
 
-	constructor(private readonly context: vscode.ExtensionContext, private readonly analyzer: Analyzer) {
+	constructor(private readonly context: vscode.ExtensionContext, private readonly endpoints: Endpoints) {
 		// Remember where you were: the files you open and the flows you draw.
 		this.disposables.push(vscode.window.onDidChangeActiveTextEditor(e => {
 			if (e?.document.uri.scheme === 'file') {
@@ -35,9 +48,9 @@ export class FlowHome implements vscode.Disposable {
 		}));
 	}
 
-	rememberFlow(id: string, label: string) {
+	rememberFlow(id: string, label: string, source?: Source) {
 		const list = this.context.workspaceState.get<RecentFlow[]>(RECENT_FLOWS, []).filter(r => r.id !== id);
-		void this.context.workspaceState.update(RECENT_FLOWS, [{ id, label, at: Date.now() }, ...list].slice(0, 8));
+		void this.context.workspaceState.update(RECENT_FLOWS, [{ id, label, source, at: Date.now() }, ...list].slice(0, 8));
 	}
 
 	async show() {
@@ -49,19 +62,20 @@ export class FlowHome implements vscode.Disposable {
 		const panel = this.panel = vscode.window.createWebviewPanel('flow.home', 'Home', vscode.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: false });
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'flow.svg');
 		panel.onDidDispose(() => this.panel = undefined);
-		panel.webview.onDidReceiveMessage(m => this.onMessage(m));
+		panel.webview.onDidReceiveMessage(m => this.onMessage(m).catch(e => vscode.window.showErrorMessage(`Axle: ${(e as Error).message ?? e}`)));
 		panel.webview.html = this.html();
 		panel.onDidChangeViewState(e => e.webviewPanel.visible && void this.post());
 	}
 
-	private async onMessage(m: { type: string; text?: string; path?: string; id?: string; label?: string; command?: string; line?: number }) {
+	private async onMessage(m: { type: string; text?: string; path?: string; id?: string; label?: string; source?: Source; command?: string; line?: number }) {
 		switch (m.type) {
 			case 'ready': return this.post();
 			case 'ask': return vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: false });
 			case 'draft': return vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: true });
 			case 'open': return vscode.window.showTextDocument(vscode.Uri.file(m.path!), { selection: m.line !== undefined ? new vscode.Range(m.line, 0, m.line, 0) : undefined });
-			case 'flow': return vscode.commands.executeCommand('flow.showMethod', m.id, m.label);
-			case 'run': return vscode.commands.executeCommand(m.command!);
+			case 'flow': return vscode.commands.executeCommand(Command.showEntry, m.id, m.label, m.source);
+			// Only the shortcuts this page shows: a message is not a licence to run any command.
+			case 'run': return HOME_COMMANDS.has(m.command ?? '') ? vscode.commands.executeCommand(m.command!) : undefined;
 			default: return undefined;
 		}
 	}
@@ -83,14 +97,15 @@ export class FlowHome implements vscode.Disposable {
 		const files = this.context.workspaceState.get<Recent[]>(RECENT_FILES, []).slice(0, 7)
 			.map(r => ({ path: r.path, name: path.basename(r.path), dir: path.relative(root, path.dirname(r.path)), at: r.at }));
 		const flows = this.context.workspaceState.get<RecentFlow[]>(RECENT_FLOWS, []).slice(0, 7);
-		const endpoints = this.analyzer.cachedEntryPoints().slice(0, 7).map(e => ({ id: e.id, label: `${e.controller.replace(/Controller$/, '')}.${e.action}`, http: e.http.split(/\s/)[0] }));
+		const all = this.endpoints.cached();
+		const endpoints = interleave(all.filter(e => e.source === 'roslyn'), all.filter(e => e.source === 'poly')).slice(0, 7).map(e => ({ id: e.id, source: e.source, label: entryName(e), http: e.http.split(/\s/)[0] }));
 		await this.panel?.webview.postMessage({
 			type: 'data',
 			repo: folder?.name ?? 'No folder open',
 			branch: await this.branch(),
 			hour: new Date().getHours(),
 			files, flows, endpoints, health,
-			total: this.analyzer.cachedEntryPoints().length,
+			total: all.length,
 		});
 	}
 
@@ -101,7 +116,7 @@ export class FlowHome implements vscode.Disposable {
 :root {
 	--bg: var(--vscode-editor-background); --text: var(--vscode-foreground); --muted: var(--vscode-descriptionForeground);
 	--line: var(--vscode-widget-border, #30323c); --raised: var(--vscode-chat-requestBubbleBackground, #262832);
-	--signal: #7aa2f7; --plan: #e5b567; --ok: #6fcf97; --bad: #f2777a; --violet: #b392f0; --teal: #4fd1c5; --gold: #e2c08d;
+	--signal: #6f86ff; --plan: #ffb454; --ok: #5fe0a1; --bad: #ff6b7d; --violet: #b88cff; --teal: #4fd6d0; --gold: #ffb454;
 	--mono: var(--vscode-editor-font-family, ui-monospace, Menlo, monospace);
 }
 * { box-sizing: border-box; }
@@ -130,6 +145,15 @@ h1 { margin: 18px 0 18px; font-size: clamp(26px, 3.2vw, 34px); line-height: 1.15
 .send:disabled { opacity: .3; cursor: default; }
 .hint { margin: 10px 4px 0; color: var(--muted); font-size: 12px; }
 kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; color: var(--text); }
+
+/* Where you left off: the last flow you opened, one click back onto its canvas. */
+.resume { display: flex; align-items: center; gap: 14px; width: 100%; margin-top: 28px; padding: 14px 18px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--signal) 7%, var(--bg)); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.resume:hover { border-color: color-mix(in srgb, var(--signal) 55%, transparent); }
+.resume:focus-visible { outline: 1.5px solid var(--signal); outline-offset: 2px; }
+.resume svg { flex: none; color: var(--signal); }
+.resume b { display: block; font-family: var(--mono); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.resume span { display: block; color: var(--muted); font-size: 12px; }
+.resume .go { margin-left: auto; color: var(--signal); font-weight: 600; flex: none; }
 
 /* Below the question: three lists side by side, separated by hairlines, no boxes. */
 .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 56px; }
@@ -165,7 +189,7 @@ kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); bor
 @media (prefers-reduced-motion: reduce) { .ask { transition: none; } }
 </style></head><body><main>
 	<div class="where">
-		<svg width="22" height="12" viewBox="0 0 240 120" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="10"><rect x="76" y="20" width="152" height="80" rx="22"/><path d="M46 60h48M136 60h32"/></g><path d="M14 36l36 24-36 24z" fill="#e2c08d"/><path d="M115 37l23 23-23 23-23-23z" fill="#c792ea"/><circle cx="188" cy="60" r="18" fill="#7aa2f7"/></svg>
+		<svg width="22" height="12" viewBox="0 0 240 120" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="10"><rect x="76" y="20" width="152" height="80" rx="22"/><path d="M46 60h48M136 60h32"/></g><path d="M14 36l36 24-36 24z" fill="#ffb454"/><path d="M115 37l23 23-23 23-23-23z" fill="#b88cff"/><circle cx="188" cy="60" r="18" fill="#6f86ff"/></svg>
 		<b id="repo">…</b><span id="branch"></span>
 	</div>
 	<h1 id="greet">What should we work on?</h1>
@@ -181,6 +205,8 @@ kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); bor
 	</form>
 	<p class="hint"><kbd>Enter</kbd> sends to chat, <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</p>
 
+	<div id="resume"></div>
+
 	<section class="cols">
 		<div class="col"><h2>Where you were</h2><div id="files"></div></div>
 		<div class="col"><h2 id="flowsTitle">Flows</h2><div id="flows"></div></div>
@@ -188,15 +214,24 @@ kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); bor
 	</section>
 
 	<nav class="keys" aria-label="Shortcuts">
-		<button data-run="flow.showAtCursor"><kbd>⌥⌘F</kbd> Show flow at cursor</button>
-		<button data-run="flow.pickEndpoint"><kbd>⌥⌘E</kbd> Trace an endpoint</button>
-		<button data-run="workbench.action.quickOpen"><kbd>⌘P</kbd> Go to file</button>
+		<button data-run="flow.showAtCursor"><kbd data-k="mod+alt+F"></kbd> Show flow at cursor</button>
+		<button data-run="flow.pickEndpoint"><kbd data-k="mod+alt+E"></kbd> Trace an endpoint</button>
+		<button data-run="workbench.action.quickOpen"><kbd data-k="mod+P"></kbd> Go to file</button>
 		<button data-run="workbench.view.extension.flowHarness"><kbd>Harness</kbd> Open the map</button>
 	</nav>
 </main>
 <script>
 const vscode = acquireVsCodeApi();
 const $ = id => document.getElementById(id);
+// Shortcut labels follow the OS: ⌥⌘F on a Mac, Ctrl+Alt+F elsewhere (the same chord the keybindings register).
+const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
+const MODS = { ctrl: ['⌃', 'Ctrl'], alt: ['⌥', 'Alt'], shift: ['⇧', 'Shift'], mod: ['⌘', 'Ctrl'] };
+const keyLabel = k => { const parts = k.split('+'); const key = parts.filter(p => !MODS[p]);
+	// Apple order is ⌃⌥⇧⌘; Windows and Linux read Ctrl+Alt+Shift+key.
+	const order = MAC ? ['ctrl', 'alt', 'shift', 'mod'] : ['mod', 'ctrl', 'alt', 'shift'];
+	const mods = order.filter(m => parts.includes(m)).map(m => MODS[m][MAC ? 0 : 1]);
+	return MAC ? mods.concat(key).join('') : [...new Set(mods)].concat(key).join('+'); };
+const applyKeys = () => document.querySelectorAll('kbd[data-k]').forEach(el => { el.textContent = keyLabel(el.dataset.k); });
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'now' : m < 60 ? m + ' min' : m < 1440 ? Math.round(m / 60) + ' h' : Math.round(m / 1440) + ' d'; };
 const q = $('q');
@@ -216,11 +251,14 @@ window.addEventListener('message', e => {
 	$('greet').textContent = part + ' in ' + d.repo + '. What should we work on?';
 	$('files').innerHTML = d.files.length ? d.files.map(f => '<button class="row" data-path="' + esc(f.path) + '"><span class="name">' + esc(f.name) + '</span><span class="sub">' + esc(f.dir || ago(f.at)) + '</span></button>').join('') : '<p class="empty">Files you open show up here.</p>';
 	if (d.flows.length) {
+		const f = d.flows[0];
+		$('resume').innerHTML = '<button class="resume" id="resumeBtn"><svg width="26" height="14" viewBox="0 0 240 120" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="10"><rect x="76" y="20" width="152" height="80" rx="22"/><path d="M46 60h48M136 60h32"/></g><g fill="currentColor"><path d="M14 40l32 20-32 20z"/><path d="M115 39l21 21-21 21-21-21z"/><circle cx="188" cy="60" r="18"/></g></svg><div><b>' + esc(f.label) + '</b><span>Last flow you opened, ' + ago(f.at) + ' ago</span></div><span class="go">Open canvas</span></button>';
+		$('resumeBtn').onclick = () => vscode.postMessage({ type: 'flow', id: f.id, label: f.label, source: f.source || '' });
 		$('flowsTitle').innerHTML = 'Flows you opened';
-		$('flows').innerHTML = d.flows.map(f => '<button class="row" data-id="' + esc(f.id) + '" data-label="' + esc(f.label) + '"><svg class="glyph" viewBox="0 0 10 10"><path d="M5 0l5 5-5 5-5-5z" fill="#c792ea"/></svg><span class="name">' + esc(f.label) + '</span><span class="sub">' + ago(f.at) + '</span></button>').join('');
+		$('flows').innerHTML = d.flows.map(f => '<button class="row" data-id="' + esc(f.id) + '" data-source="' + esc(f.source || '') + '" data-label="' + esc(f.label) + '"><svg class="glyph" viewBox="0 0 10 10"><path d="M5 0l5 5-5 5-5-5z" fill="#b88cff"/></svg><span class="name">' + esc(f.label) + '</span><span class="sub">' + ago(f.at) + '</span></button>').join('');
 	} else {
 		$('flowsTitle').innerHTML = 'Endpoints <span>' + (d.total || '') + '</span>';
-		$('flows').innerHTML = d.endpoints.length ? d.endpoints.map(e => '<button class="row" data-id="' + esc(e.id) + '" data-label="' + esc(e.label) + '"><span class="verb v-' + esc(e.http) + '">' + esc(e.http) + '</span><span class="name">' + esc(e.label) + '</span></button>').join('') : '<p class="empty">Open a C# file and press <kbd>⌥⌘F</kbd> to draw its flow.</p>';
+		$('flows').innerHTML = d.endpoints.length ? d.endpoints.map(e => '<button class="row" data-id="' + esc(e.id) + '" data-source="' + esc(e.source) + '" data-label="' + esc(e.label) + '"><span class="verb v-' + esc(e.http) + '">' + esc(e.http) + '</span><span class="name">' + esc(e.label) + '</span></button>').join('') : '<p class="empty">Open a source file and press <kbd data-k="mod+alt+F"></kbd> to draw its flow.</p>';
 	}
 	const h = d.health;
 	if (h) {
@@ -233,8 +271,10 @@ window.addEventListener('message', e => {
 		$('health').innerHTML = '<p class="empty">Open a folder to check its harness.</p>';
 	}
 	document.querySelectorAll('.row[data-path]').forEach(b => b.onclick = () => vscode.postMessage({ type: 'open', path: b.dataset.path, line: b.dataset.line ? Number(b.dataset.line) : undefined }));
-	document.querySelectorAll('.row[data-id]').forEach(b => b.onclick = () => vscode.postMessage({ type: 'flow', id: b.dataset.id, label: b.dataset.label }));
+	applyKeys();
+	document.querySelectorAll('.row[data-id]').forEach(b => b.onclick = () => vscode.postMessage({ type: 'flow', id: b.dataset.id, label: b.dataset.label, source: b.dataset.source }));
 });
+applyKeys();
 vscode.postMessage({ type: 'ready' });
 q.focus();
 </script></body></html>`;

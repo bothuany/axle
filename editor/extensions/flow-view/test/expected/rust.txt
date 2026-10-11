@@ -1,0 +1,10 @@
+GET /actix        main.actix_handler
+  call: helper [method]
+    call: audit [method]
+GET /h            main./h
+GET /users        main.list_users
+  call: all [method]
+    call: audit [method]
+POST /users       db.create_user
+  call: all [method]
+    call: audit [method]

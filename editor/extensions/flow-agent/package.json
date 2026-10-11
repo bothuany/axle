@@ -1,6 +1,6 @@
 {
   "name": "flow-agent",
-  "displayName": "Flow Agents",
+  "displayName": "Axle Agents",
   "description": "Claude Code and Codex in the native chat, over the Agent Client Protocol, using each repo's own harness.",
   "version": "0.1.0",
   "publisher": "flow",
@@ -15,15 +15,15 @@
   ],
   "main": "./out/extension.js",
   "activationEvents": [
-    "onStartupFinished",
-    "onLanguageModelChatProvider:flow"
+    "onStartupFinished"
   ],
   "extensionKind": [
     "workspace"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
-      "supported": true
+      "supported": "limited",
+      "description": "Agents run commands in your workspace, so none can be started until you trust this folder."
     },
     "virtualWorkspaces": false
   },
@@ -44,7 +44,7 @@
         "icon": "$(sparkle)",
         "welcomeTitle": "Claude Code",
         "welcomeMessage": "Runs your local Claude Code with this repo's harness: CLAUDE.md, hooks, skills, MCP.",
-        "inputPlaceholder": "Ask Claude\u2026 (# to add context)",
+        "inputPlaceholder": "Ask Claude… (# to add context)",
         "order": 0,
         "canDelegate": true,
         "requiresCopilotSignIn": false,
@@ -65,7 +65,7 @@
         "icon": "$(terminal)",
         "welcomeTitle": "Codex",
         "welcomeMessage": "Runs your local Codex CLI with this repo's AGENTS.md. Sign in once with `codex login`.",
-        "inputPlaceholder": "Ask Codex\u2026 (# to add context)",
+        "inputPlaceholder": "Ask Codex… (# to add context)",
         "order": 1,
         "canDelegate": true,
         "requiresCopilotSignIn": false,
@@ -82,7 +82,7 @@
     "languageModelChatProviders": [
       {
         "vendor": "flow",
-        "displayName": "Flow Agents"
+        "displayName": "Axle Agents"
       }
     ],
     "colors": [
@@ -90,7 +90,7 @@
         "id": "flowMode.manual",
         "description": "Manual mode: asks before every change.",
         "defaults": {
-          "dark": "#7aa2f7",
+          "dark": "#6f86ff",
           "light": "#3b6fd4"
         }
       },
@@ -98,7 +98,7 @@
         "id": "flowMode.accept",
         "description": "Accept edits mode.",
         "defaults": {
-          "dark": "#6fcf97",
+          "dark": "#5fe0a1",
           "light": "#1f8a4c"
         }
       },
@@ -106,7 +106,7 @@
         "id": "flowMode.plan",
         "description": "Plan mode.",
         "defaults": {
-          "dark": "#e5b567",
+          "dark": "#ffb454",
           "light": "#a36d00"
         }
       },
@@ -114,7 +114,7 @@
         "id": "flowMode.auto",
         "description": "Auto mode.",
         "defaults": {
-          "dark": "#b392f0",
+          "dark": "#b88cff",
           "light": "#7a4fc7"
         }
       },
@@ -122,7 +122,7 @@
         "id": "flowMode.bypass",
         "description": "Bypass permissions mode.",
         "defaults": {
-          "dark": "#f2777a",
+          "dark": "#ff6b7d",
           "light": "#c4383c"
         }
       }
@@ -150,31 +150,31 @@
       {
         "command": "flow.agents.newClaude",
         "title": "New Claude Agent",
-        "category": "Flow",
+        "category": "Axle",
         "icon": "$(sparkle)"
       },
       {
         "command": "flow.agents.newCodex",
         "title": "New Codex Agent",
-        "category": "Flow",
+        "category": "Axle",
         "icon": "$(terminal)"
       },
       {
         "command": "flow.agents.new",
-        "title": "Start an Agent\u2026",
-        "category": "Flow",
+        "title": "Start an Agent…",
+        "category": "Axle",
         "icon": "$(add)"
       }
     ],
     "keybindings": [
       {
         "command": "flow.agents.newClaude",
-        "key": "cmd+shift+;",
+        "key": "ctrl+shift+;",
         "mac": "cmd+shift+;"
       }
     ],
     "configuration": {
-      "title": "Flow Agents",
+      "title": "Axle Agents",
       "properties": {
         "flow.agents.showChat": {
           "type": "boolean",
@@ -184,7 +184,8 @@
         "flow.agents.custom": {
           "type": "array",
           "default": [],
-          "description": "Your own agent commands, offered in Start an Agent.",
+          "scope": "application",
+          "description": "Your own agent commands, offered in Start an Agent. User settings only: a repository's .vscode/settings.json cannot add commands that run in your terminal.",
           "items": {
             "type": "object",
             "required": [
@@ -202,6 +203,21 @@
               }
             }
           }
+        },
+        "flow.agents.mcp": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Give agents started from Axle the `axle` tools (open files and flows in the editor, find entry points, read a flow as text, draw diagrams and plans). They are added to the agent with `--mcp-config`, next to your own MCP servers; they cannot write files or run commands. Takes effect for agents started afterwards."
+        },
+        "flow.agents.planBoard": {
+          "type": "boolean",
+          "default": true,
+          "description": "When an agent proposes a plan (leaves plan mode), draw it as a board in Axle and tick its steps as the agent edits the files they point at."
+        },
+        "flow.agents.turnImpact": {
+          "type": "boolean",
+          "default": true,
+          "description": "When an agent finishes a turn, show on its row which flows (endpoints) the files it edited may affect."
         }
       }
     },

@@ -1,4 +1,5 @@
 import type { Edge, Node } from '@xyflow/react'
+import { chipsFor, NO_CHIPS, type CardChips, type ChipRow, type ChipsView } from './chips'
 import type { FlowEdge, FlowNode, Kind } from './types'
 
 export const LINE_H = 18
@@ -10,11 +11,11 @@ const GAP = 90
 const VGAP = 18
 
 export const KIND_COLOR: Record<Kind, string> = {
-  controller: '#e2c08d',
-  handler: '#c792ea',
+  controller: '#ffb454',
+  handler: '#b88cff',
   method: '#8b93a1',
-  db: '#59c2a8',
-  ambiguous: '#f07178',
+  db: '#4fd6d0',
+  ambiguous: '#ff6b7d',
   external: '#5c6370',
 }
 
@@ -38,6 +39,11 @@ export interface CardData extends Record<string, unknown> {
   /** Reverse view: how many callers this card has, and how many are folded away. */
   callers?: number
   callersHidden?: number
+  /** Type chips under the header (see chips.ts): the chips, the rows of what is opened under them, which chips are opened, and the height all of it takes. */
+  chips?: CardChips
+  chipRows?: ChipRow[]
+  chipsOpen?: ReadonlySet<string>
+  chipsH?: number
 }
 
 export interface FrameData extends Record<string, unknown> {
@@ -111,25 +117,30 @@ function schemaSize(node: FlowNode) {
   return { w: 360, h: HEADER_H + SCHEMA_OPS_H + cols * SCHEMA_ROW + (s.relations.length ? 26 : 0) + 8 }
 }
 
-function cardSize(lines: CodeLine[], rows: Row[], editing = false, review = false, node?: FlowNode) {
+function cardSize(lines: CodeLine[], rows: Row[], editing = false, review = false, node?: FlowNode, chipsH = 0) {
   if (node?.schema) return schemaSize(node)
   if (!lines.length) return { w: 260, h: HEADER_H }
   const longest = Math.max(...lines.map(l => l.text.length))
   return {
     w: editing ? Math.min(editMaxW, Math.max(560, longest * CHAR_W + 70)) : Math.min(720, Math.max(320, longest * CHAR_W + 70)),
-    h: HEADER_H + (editing ? lines.length : rows.length) * LINE_H + CODE_PAD * 2 + (editing ? EDIT_EXTRA : review ? REVIEW_H : 0),
+    h: HEADER_H + chipsH + (editing ? lines.length : rows.length) * LINE_H + CODE_PAD * 2 + (editing ? EDIT_EXTRA : review ? REVIEW_H : 0),
   }
 }
 
-/** Which card is in edit mode. Keyed by file + start line because node keys change on every refresh. */
-export type EditTarget = { file: string; startLine: number } | null
-const isEditing = (n: FlowNode, e: EditTarget) => !!e && n.file === e.file && n.startLine === e.startLine
+/** Which card is in edit mode: the one that was clicked, not every instance of the same method. Keys are renumbered on a reload, so file and start line guard against a reused key. */
+export type EditTarget = { key: string; file: string; startLine: number } | null
+const isEditing = (n: FlowNode, e: EditTarget) => !!e && n.key === e.key && n.file === e.file && n.startLine === e.startLine
 
-/** Y offset (within the card) of the row that makes a call. Ambiguous/leaf parents use the header. */
-export function callY(rows: Row[], callLine: number) {
+/** Y offset (within the card) of the row that makes a call. Ambiguous/leaf parents use the header. `chipsH`: the type chips between the header and the code. */
+export function callY(rows: Row[], callLine: number, chipsH = 0) {
   const idx = rows.findIndex(r => 'no' in r && (r as CodeLine).no === callLine)
   if (idx < 0) return HEADER_H / 2
-  return HEADER_H + CODE_PAD + idx * LINE_H + LINE_H / 2
+  return HEADER_H + chipsH + CODE_PAD + idx * LINE_H + LINE_H / 2
+}
+
+/** The type chips a card shows: only a card with a method's source, and not while it is being edited (the editor takes the space). */
+function cardChips(node: FlowNode, lines: CodeLine[], editing: boolean, view: ChipsView) {
+  return lines.length && !editing && !node.schema ? chipsFor(node, view) : undefined
 }
 
 /**
@@ -137,7 +148,7 @@ export function callY(rows: Row[], callLine: number) {
  * its callees are laid out (recursively, each in their own frame) to the right,
  * so "what this calls" is literally inside "this".
  */
-export function layout(root: FlowNode, hidden: Set<string>, full: Set<string>, selectedKey: string | null, touched: Set<string> = new Set(), editing: EditTarget = null) {
+export function layout(root: FlowNode, hidden: Set<string>, full: Set<string>, selectedKey: string | null, touched: Set<string> = new Set(), editing: EditTarget = null, chips: ChipsView = NO_CHIPS) {
   const frames: Node[] = []
   const cards: Node[] = []
   const edges: Edge[] = []
@@ -146,7 +157,8 @@ export function layout(root: FlowNode, hidden: Set<string>, full: Set<string>, s
     const lines = toLines(node)
     const ed = isEditing(node, editing)
     const rows = toRows(node, lines, full.has(node.key) || ed)
-    const { w, h } = cardSize(lines, rows, ed, !!node.diff, node)
+    const tc = cardChips(node, lines, ed, chips)
+    const { w, h } = cardSize(lines, rows, ed, !!node.diff, node, tc?.h ?? 0)
     const visible = node.children.filter(c => !hidden.has(c.node.key))
     const hasFrame = visible.length > 0
     const cardX = hasFrame ? x + PAD : x
@@ -167,7 +179,11 @@ export function layout(root: FlowNode, hidden: Set<string>, full: Set<string>, s
         selected: node.key === selectedKey,
         touched: !!node.file && touched.has(node.file),
         editing: ed,
-        calls: node.children.map(edge => ({ edge, hidden: hidden.has(edge.node.key), y: callY(rows, edge.callLine) })),
+        calls: node.children.map(edge => ({ edge, hidden: hidden.has(edge.node.key), y: callY(rows, edge.callLine, tc?.h) })),
+        chips: tc?.chips,
+        chipRows: tc?.rows,
+        chipsOpen: tc?.open,
+        chipsH: tc?.h ?? 0,
       } satisfies CardData,
     })
 
@@ -178,7 +194,7 @@ export function layout(root: FlowNode, hidden: Set<string>, full: Set<string>, s
     const cx = cardX + w + GAP
     for (const edge of visible) {
       // Pull each callee down to roughly the height of the line that calls it, so arrows stay flat.
-      cy = Math.max(cy, cardY + callY(rows, edge.callLine) - HEADER_H / 2 - PAD)
+      cy = Math.max(cy, cardY + callY(rows, edge.callLine, tc?.h) - HEADER_H / 2 - PAD)
       const s = place(edge.node, cx, cy, depth + 1)
       cy += s.h + VGAP
       right = Math.max(right, cx + s.w)
@@ -234,7 +250,7 @@ export function initialHidden(root: FlowNode, openDepth = 2): Set<string> {
  * Reverse flow, drawn to the LEFT of the root card that `layout` placed at (0,0): each method's callers
  * stack in the column before it, with an arrow from the caller's call line into the method it calls.
  */
-export function layoutCallers(up: FlowNode, rootKey: string, rootY: number, hidden: Set<string>, full: Set<string>, selectedKey: string | null, touched: Set<string> = new Set(), editing: EditTarget = null) {
+export function layoutCallers(up: FlowNode, rootKey: string, rootY: number, hidden: Set<string>, full: Set<string>, selectedKey: string | null, touched: Set<string> = new Set(), editing: EditTarget = null, chips: ChipsView = NO_CHIPS) {
   const cards: Node[] = []
   const edges: Edge[] = []
 
@@ -246,7 +262,8 @@ export function layoutCallers(up: FlowNode, rootKey: string, rootY: number, hidd
       const lines = toLines(caller)
       const ed = isEditing(caller, editing)
       const rows = toRows(caller, lines, full.has(caller.key) || ed)
-      const { w, h } = cardSize(lines, rows, ed, !!caller.diff, caller)
+      const tc = cardChips(caller, lines, ed, chips)
+      const { w, h } = cardSize(lines, rows, ed, !!caller.diff, caller, tc?.h ?? 0)
       const x = calleeX - GAP - w
       const visibleCallers = caller.children.filter(c => !hidden.has(c.node.key)).length
       cards.push({
@@ -265,9 +282,13 @@ export function layoutCallers(up: FlowNode, rootKey: string, rootY: number, hidd
           touched: !!caller.file && touched.has(caller.file),
           editing: ed,
           // The only outgoing arrow of a caller card is the call into `callee`.
-          calls: [{ edge: { ...edge, node: { ...callee, key: calleeKey } }, hidden: false, y: callY(rows, edge.callLine) }],
+          calls: [{ edge: { ...edge, node: { ...callee, key: calleeKey } }, hidden: false, y: callY(rows, edge.callLine, tc?.h) }],
           callers: caller.children.length,
           callersHidden: caller.children.length - visibleCallers,
+          chips: tc?.chips,
+          chipRows: tc?.rows,
+          chipsOpen: tc?.open,
+          chipsH: tc?.h ?? 0,
         } satisfies CardData,
       })
       const color = KIND_COLOR[edge.edgeKind === 'mediator' ? 'handler' : caller.kind]

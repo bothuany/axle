@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "vite build -c vite.webview.config.ts",
+    "build": "vite build -c vite.webview.config.ts && vite build -c vite.board.config.ts",
+    "typecheck": "tsc --noEmit",
     "dev": "vite -c vite.webview.config.ts"
   },
   "dependencies": {
@@ -20,5 +21,5 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.4"
   },
-  "description": "The Flow call-flow canvas, built into one script the Flow editor extension inlines."
+  "description": "The Axle call-flow canvas, built into one script the Axle editor extension inlines."
 }

@@ -1,6 +1,6 @@
 {
   "name": "flow-harness",
-  "displayName": "Flow Harness",
+  "displayName": "Axle Harness",
   "description": "Harness engineering in the editor: one map of instructions, rules, skills, hooks, MCP and permissions, with a health score, the context budget, a hook studio and a permission inbox.",
   "version": "0.1.0",
   "publisher": "flow",
@@ -161,7 +161,7 @@
         "id": "flowHarness.instructions",
         "description": "Instructions in the harness map.",
         "defaults": {
-          "dark": "#7aa2f7",
+          "dark": "#6f86ff",
           "light": "#3b6fd4"
         }
       },
@@ -169,7 +169,7 @@
         "id": "flowHarness.rules",
         "description": "Rules in the harness map.",
         "defaults": {
-          "dark": "#e5b567",
+          "dark": "#ffb454",
           "light": "#a36d00"
         }
       },
@@ -177,7 +177,7 @@
         "id": "flowHarness.skills",
         "description": "Skills in the harness map.",
         "defaults": {
-          "dark": "#b392f0",
+          "dark": "#b88cff",
           "light": "#7a4fc7"
         }
       },
@@ -193,7 +193,7 @@
         "id": "flowHarness.hooks",
         "description": "Hooks in the harness map.",
         "defaults": {
-          "dark": "#4fd1c5",
+          "dark": "#4fd6d0",
           "light": "#0f8a7e"
         }
       },
@@ -201,7 +201,7 @@
         "id": "flowHarness.mcp",
         "description": "MCP servers in the harness map.",
         "defaults": {
-          "dark": "#6fcf97",
+          "dark": "#5fe0a1",
           "light": "#1f8a4c"
         }
       },
@@ -217,7 +217,7 @@
         "id": "flowHarness.allow",
         "description": "Allowed permissions.",
         "defaults": {
-          "dark": "#6fcf97",
+          "dark": "#5fe0a1",
           "light": "#1f8a4c"
         }
       },
@@ -225,7 +225,7 @@
         "id": "flowHarness.ask",
         "description": "Permissions that ask, and a filling context window.",
         "defaults": {
-          "dark": "#e5b567",
+          "dark": "#ffb454",
           "light": "#a36d00"
         }
       },
@@ -233,7 +233,7 @@
         "id": "flowHarness.deny",
         "description": "Denied permissions, and a nearly full context window.",
         "defaults": {
-          "dark": "#f2777a",
+          "dark": "#ff6b7d",
           "light": "#c4383c"
         }
       }

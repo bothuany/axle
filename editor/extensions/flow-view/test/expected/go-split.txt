@@ -1,0 +1,5 @@
+GET /orders       orders.listOrders
+  call: OrderHandler.List [method]
+    call: OrderService.All [method]
+  call: cleanup [method]
+  ? AddFunc, Get

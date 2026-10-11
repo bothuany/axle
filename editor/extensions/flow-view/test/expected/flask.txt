@@ -1,0 +1,4 @@
+DELETE /items/<int:i>app.item
+  call: fetch [method]
+GET /items/<int:i>app.item
+  call: fetch [method]

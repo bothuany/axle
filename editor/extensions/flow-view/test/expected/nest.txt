@@ -1,0 +1,4 @@
+GET /cats/:id     CatsController.findOne
+  call: CatsService.find [method]
+POST /cats        CatsController.create
+  call: CatsService.make [method]

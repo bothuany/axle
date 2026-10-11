@@ -1,0 +1,7 @@
+GET /ping         routes./ping
+  call: ping [method]
+GET /sym          UserController.sym
+  call: helper [method]
+    call: audit [method]
+GET /users        UserController.index
+  call: UserService.all [method]

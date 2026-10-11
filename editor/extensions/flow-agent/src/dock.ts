@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow: the Agents dock. One row per agent terminal: a status light (working, waiting for you,
+ *  Axle: the Agents dock. One row per agent terminal: a status light (working, waiting for you,
  *  done), the prompt it is on, what it is doing this second, its to-do progress and its context.
  *  Whatever needs you rises to the top, so you never hunt for the stuck one.
  *--------------------------------------------------------------------------------------------*/
@@ -15,12 +15,18 @@ const ICON = {
 
 const ORDER: Record<AgentSession['state'], number> = { blocked: 0, done: 1, working: 2, starting: 3, idle: 4, unknown: 5, ended: 6 };
 
-export class AgentsDock implements vscode.WebviewViewProvider {
+export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable {
 	private view: vscode.WebviewView | undefined;
 	private timer: NodeJS.Timeout | undefined;
+	private readonly changes: vscode.Disposable;
 
 	constructor(private readonly agents: Agents) {
-		agents.onDidChange(() => this.post());
+		this.changes = agents.onDidChange(() => this.post());
+	}
+
+	dispose() {
+		clearTimeout(this.timer);
+		this.changes.dispose();
 	}
 
 	resolveWebviewView(view: vscode.WebviewView) {
@@ -31,10 +37,17 @@ export class AgentsDock implements vscode.WebviewViewProvider {
 			if (m.type === 'ready') {
 				this.post();
 			} else if (m.type === 'new') {
-				void this.agents.spawn(m.cli);
-			} else if (m.type === 'show') {
+				// The page is not trusted with what to run: only the two built-in agents start from here
+				// (your own commands go through "Start an Agent…", which reads them from your settings).
+				if (m.cli === 'claude' || m.cli === 'codex') {
+					void this.agents.spawn(m.cli);
+				}
+			} else if (m.type === 'show' && typeof m.id === 'string') {
 				this.agents.show(m.id);
-			} else if (m.type === 'forget') {
+			} else if (m.type === 'flow' && typeof m.id === 'string' && Number.isInteger(m.index)) {
+				// An index into the list the host sent: the page never names a flow itself.
+				this.agents.openImpactFlow(m.id, m.index);
+			} else if (m.type === 'forget' && typeof m.id === 'string') {
 				this.agents.forget(m.id);
 			} else if (m.type === 'pick') {
 				void vscode.commands.executeCommand('flow.agents.new');
@@ -43,6 +56,12 @@ export class AgentsDock implements vscode.WebviewViewProvider {
 			}
 		});
 		view.onDidChangeVisibility(() => view.visible && this.post());
+		view.onDidDispose(() => {
+			if (this.view === view) {
+				this.view = undefined;
+				clearTimeout(this.timer);
+			}
+		});
 	}
 
 	/** Coalesces bursts of hook events into one repaint. */
@@ -55,7 +74,7 @@ export class AgentsDock implements vscode.WebviewViewProvider {
 		this.timer = setTimeout(() => {
 			const list = [...this.agents.sessions.values()]
 				.sort((a, b) => ORDER[a.state] - ORDER[b.state] || b.since - a.since)
-				.map(s => ({ ...s, done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text }));
+				.map(s => ({ ...s, done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label })) } }));
 			void this.view?.webview.postMessage({ type: 'data', list, now: Date.now() });
 		}, 60);
 	}
@@ -68,8 +87,8 @@ export class AgentsDock implements vscode.WebviewViewProvider {
 	--text: var(--vscode-foreground); --muted: var(--vscode-descriptionForeground); --line: var(--vscode-widget-border, #30323c);
 	--hover: var(--vscode-list-hoverBackground); --card: color-mix(in srgb, var(--vscode-sideBar-background) 70%, #2a2c36);
 	--mono: var(--vscode-editor-font-family, ui-monospace, Menlo, monospace);
-	--working: #7aa2f7; --blocked: #e5b567; --done: #6fcf97; --idle: #9aa4bf; --ended: #5b5f6e;
-	--claude: #d97757; --codex: #7fd1d1; --custom: #c792ea;
+	--working: #6f86ff; --blocked: #ffb454; --done: #5fe0a1; --idle: #9aa4bf; --ended: #5b5f6e;
+	--claude: #d97757; --codex: #7fd1d1; --custom: #b88cff;
 }
 * { box-sizing: border-box; }
 body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4 var(--vscode-font-family, -apple-system, system-ui); background: transparent; }
@@ -111,10 +130,14 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 .seg { width: 10px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--idle) 30%, transparent); }
 .seg.completed { background: var(--done); } .seg.in_progress { background: var(--working); }
 .todos .now { min-width: 0; color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.impact { margin: 6px 0 0 26px; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
+.impact b { color: var(--text); font-weight: 600; }
+.impact .flow { display: inline-block; margin: 0 4px 2px 0; padding: 0 6px; border-radius: 5px; border: 1px solid var(--line); font: 11px/1.5 var(--mono); color: var(--text); cursor: pointer; }
+.impact .flow:hover { background: var(--hover); }
 .todos .count { flex: none; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .ctx { position: absolute; left: 38px; right: 10px; bottom: 0; height: 2px; border-radius: 2px; background: transparent; overflow: hidden; }
 .ctx i { display: block; height: 100%; background: color-mix(in srgb, var(--working) 55%, transparent); }
-.ctx.warn i { background: var(--blocked); } .ctx.full i { background: #f2777a; }
+.ctx.warn i { background: var(--blocked); } .ctx.full i { background: #ff6b7d; }
 .x { position: absolute; top: 6px; right: 6px; display: none; width: 18px; height: 18px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 18px; }
 .agent.ended:hover .x { display: block; }
 .agent.ended:hover .state { visibility: hidden; }
@@ -154,19 +177,22 @@ function render() {
 	el.innerHTML = data.list.map(s => {
 		const pct = s.usage ? Math.min(100, Math.round(s.usage.used / s.usage.size * 100)) : 0;
 		const state = s.state === 'working' || s.state === 'blocked' ? LABEL[s.state] + ' · ' + ago(s.since, Date.now()) : s.state === 'done' ? 'Done ' + ago(s.since, Date.now()) + ' ago' : LABEL[s.state];
-		const todos = s.todos.length ? '<div class="todos"><span class="segs">' + s.todos.slice(0, 12).map(t => '<span class="seg ' + t.status + '"></span>').join('') + '</span><span class="count">' + s.done + '/' + s.todos.length + '</span>' + (s.current ? '<span class="now">' + esc(s.current) + '</span>' : '') + '</div>' : '';
+		const todos = s.todos.length ? '<div class="todos"><span class="segs">' + s.todos.slice(0, 12).map(t => '<span class="seg ' + esc(t.status) + '"></span>').join('') + '</span><span class="count">' + s.done + '/' + s.todos.length + '</span>' + (s.current ? '<span class="now">' + esc(s.current) + '</span>' : '') + '</div>' : '';
+		const impact = s.impact && s.impact.flows.length ? '<div class="impact"><b>This turn touched ' + (s.impact.flows.length + s.impact.more) + (s.impact.flows.length + s.impact.more === 1 ? ' flow' : ' flows') + ':</b> ' + s.impact.flows.map((f, i) => '<span class="flow" role="button" tabindex="0" data-flow="' + i + '" title="Open this flow">' + esc(f.label) + '</span>').join('') + (s.impact.more ? '<span>+' + s.impact.more + ' more</span>' : '') + '</div>' : '';
 		return '<button class="agent ' + s.state + (s.unread ? ' unread' : '') + '" data-id="' + esc(s.id) + '" title="' + esc(s.name + (s.usage ? ' · context ' + pct + '% full' : '')) + '">'
 			+ '<div class="top"><span class="av">' + icon(s) + '<span class="light"></span></span><span class="name">' + esc(s.name) + '</span><span class="state">' + esc(state) + '</span></div>'
 			+ (s.prompt ? '<div class="prompt">' + esc(s.prompt) + '</div>' : '')
 			+ (s.activity ? '<div class="activity">' + esc(s.activity) + '</div>' : '')
 			+ todos
+			+ impact
 			+ (s.usage ? '<div class="ctx' + (pct >= 90 ? ' full' : pct >= 70 ? ' warn' : '') + '"><i style="width:' + pct + '%"></i></div>' : '')
 			+ (s.state === 'ended' ? '<span class="x" data-forget="' + esc(s.id) + '" title="Remove from list" role="button">×</span>' : '')
 			+ '</button>';
 	}).join('');
 	el.querySelectorAll('.agent').forEach(b => b.onclick = e => {
 		const f = e.target.closest('[data-forget]');
-		vscode.postMessage(f ? { type: 'forget', id: f.dataset.forget } : { type: 'show', id: b.dataset.id });
+		const fl = e.target.closest('[data-flow]');
+		vscode.postMessage(f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : { type: 'show', id: b.dataset.id });
 	});
 }
 document.querySelectorAll('.new button').forEach(b => b.onclick = () => vscode.postMessage(b.dataset.cli === 'pick' ? { type: 'pick' } : { type: 'new', cli: b.dataset.cli }));

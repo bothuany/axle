@@ -1,23 +1,26 @@
 #!/usr/bin/env node
-// Starts Flow. Desktop window (Tauri) by default; `--web` serves it to your browser instead.
-//   npm start [-- <folder>]      desktop window, optionally opening a folder
-//   npm run web [-- <folder>]    http://127.0.0.1:8765 in the browser
+// Starts Axle: the patched VS Code, in its own Electron window.
+//   npm start [-- <folder>]      Axle window, optionally opening a folder
+//   npm run web [-- <folder>]    same editor served at http://127.0.0.1:8765 for a browser
 
-import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { existsSync, readdirSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { VSCODE, isWin, launch } from './lib.mjs'
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const VSCODE = join(ROOT, 'editor', 'vscode')
-const isWin = process.platform === 'win32'
 const argv = process.argv.slice(2)
 const web = argv.includes('--web')
-const folder = argv.find(a => !a.startsWith('--'))
+// `npm start -- dir` runs here from the repo root, but the folder is relative to where the user typed the command.
+const folderArg = argv.find(a => !a.startsWith('--'))
+const folder = folderArg && resolve(process.env.INIT_CWD ?? process.cwd(), folderArg)
 
 if (!existsSync(join(VSCODE, 'scripts', 'code-server.js'))) {
-	console.error('Flow is not set up yet: run `npm run setup` first.')
+	console.error('Axle is not set up yet: run `npm run setup` first.')
+	process.exit(1)
+}
+if (folder && !(existsSync(folder) && statSync(folder).isDirectory())) {
+	console.error(`No such folder: ${folderArg}`)
 	process.exit(1)
 }
 
@@ -25,34 +28,57 @@ if (!existsSync(join(VSCODE, 'scripts', 'code-server.js'))) {
 function serverNode() {
 	const exe = isWin ? 'node.exe' : 'node'
 	const base = join(VSCODE, '.build', 'node')
-	if (existsSync(base)) {
-		for (const v of readdirSync(base)) {
-			for (const plat of readdirSync(join(base, v))) {
-				const p = join(base, v, plat, exe)
-				if (existsSync(p)) {
-					return p
-				}
+	const dirs = dir => {
+		try {
+			return readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name)
+		} catch {
+			return []
+		}
+	}
+	for (const v of dirs(base)) {
+		for (const plat of dirs(join(base, v))) {
+			const p = join(base, v, plat, exe)
+			if (existsSync(p)) {
+				return p
 			}
 		}
 	}
 	return process.execPath
 }
 
+/** Follows a child process: its exit code is ours, and a failure to start it is said out loud. */
+function follow(start, what) {
+	let child
+	try {
+		child = start()
+	} catch (e) {
+		console.error(`Could not start ${what}: ${e.message}`)
+		process.exit(1)
+	}
+	child.on('error', e => {
+		console.error(`Could not start ${what}: ${e.message}`)
+		process.exit(1)
+	})
+	child.on('exit', code => process.exit(code ?? 0))
+}
+
 if (web) {
 	const token = randomBytes(16).toString('hex')
 	const port = process.env.FLOW_PORT ?? '8765'
-	const url = `http://127.0.0.1:${port}/?tkn=${token}${folder ? `&folder=${encodeURIComponent((isWin ? '/' : '') + resolve(folder).replace(/\\/g, '/'))}` : ''}`
-	console.log(`Flow → ${url}`)
-	const child = spawn(serverNode(), [join(VSCODE, 'scripts', 'code-server.js'), '--host', '127.0.0.1', '--port', port, '--connection-token', token, '--accept-server-license-terms', '--reconnection-grace-time', '60'], {
+	const url = `http://127.0.0.1:${port}/?tkn=${token}${folder ? `&folder=${encodeURIComponent((isWin ? '/' : '') + folder.replace(/\\/g, '/'))}` : ''}`
+	console.log(`Axle → ${url}`)
+	// The token goes to the server in a private file, not on its command line, where any local user could read it in the process list.
+	const tokenDir = mkdtempSync(join(tmpdir(), 'flow-'))
+	const tokenFile = join(tokenDir, 'token')
+	writeFileSync(tokenFile, token, { mode: 0o600 })
+	process.on('exit', () => rmSync(tokenDir, { recursive: true, force: true }))
+	follow(() => launch(serverNode(), [join(VSCODE, 'scripts', 'code-server.js'), '--host', '127.0.0.1', '--port', port, '--connection-token-file', tokenFile, '--accept-server-license-terms', '--reconnection-grace-time', '60'], {
 		cwd: VSCODE, stdio: 'inherit', env: { ...process.env, NODE_ENV: 'development', VSCODE_DEV: '1' },
-	})
-	child.on('exit', code => process.exit(code ?? 0))
+	}), 'the editor server')
 } else {
-	if (spawnSync('cargo', ['--version'], { stdio: 'ignore', shell: isWin }).status !== 0) {
-		console.error('The desktop window needs Rust (https://rustup.rs). Without it, use `npm run web`.')
-		process.exit(1)
-	}
-	const env = { ...process.env, FLOW_EDITOR: VSCODE, ...(folder ? { FLOW_FOLDER: resolve(folder) } : {}) }
-	const child = spawn('npm', ['start'], { cwd: join(ROOT, 'desktop'), stdio: 'inherit', env, shell: isWin })
-	child.on('exit', code => process.exit(code ?? 0))
+	// setup already compiled the editor and fetched Electron: skip VS Code's per-launch check when both are there.
+	const ready = existsSync(join(VSCODE, 'out', 'main.js')) && existsSync(join(VSCODE, '.build', 'electron'))
+	const env = { ...process.env, ...(ready ? { VSCODE_SKIP_PRELAUNCH: '1' } : {}) }
+	const script = join(VSCODE, 'scripts', isWin ? 'code.bat' : 'code.sh')
+	follow(() => launch(script, folder ? [folder] : [], { cwd: VSCODE, stdio: 'inherit', env }), 'Axle')
 }

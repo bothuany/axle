@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow polyglot index: databases. Tables read from the code that declares them (JPA entities,
+ *  Axle polyglot index: databases. Tables read from the code that declares them (JPA entities,
  *  SQLAlchemy and Django models, TypeORM entities, Prisma models) and the calls that reach them
  *  (Spring Data repositories, EntityManager, JDBC, SQLAlchemy sessions, Django managers, TypeORM
  *  repositories, Prisma clients, raw SQL).
@@ -25,7 +25,7 @@ export interface PrismaModel {
 
 /** Spring Data base interfaces: a repository extending one of these reaches its entity's table. */
 const SPRING_REPOS = new Set(['JpaRepository', 'CrudRepository', 'PagingAndSortingRepository', 'ListCrudRepository', 'ListPagingAndSortingRepository', 'MongoRepository', 'ReactiveCrudRepository', 'R2dbcRepository', 'JpaSpecificationExecutor', 'QuerydslPredicateExecutor', 'Repository', 'ElasticsearchRepository']);
-const WRITE_OP = /^(save|saveAll|saveAndFlush|delete|deleteAll|deleteBy|deleteById|deleteInBatch|remove|persist|merge|update|insert|create|createMany|upsert|updateMany|deleteMany|add|add_all|bulk_create|bulk_update|get_or_create|update_or_create|executeUpdate|batchUpdate|flush|commit|destroy|increment|decrement|softDelete|restore|insertOne|insertMany|updateOne|deleteOne|findOneAndUpdate|findByIdAndUpdate|findByIdAndDelete)/;
+const WRITE_OP = /^(?!create(Query|NativeQuery|NamedQuery|QueryBuilder|Criteria|Statement|Native))(save|saveAll|saveAndFlush|delete|deleteAll|deleteBy|deleteById|deleteInBatch|remove|persist|merge|update|insert|create|createMany|upsert|updateMany|deleteMany|add|add_all|bulk_create|bulk_update|get_or_create|update_or_create|executeUpdate|batchUpdate|flush|commit|destroy|increment|decrement|softDelete|restore|insertOne|insertMany|updateOne|deleteOne|findOneAndUpdate|findByIdAndUpdate|findByIdAndDelete)/;
 
 /** Tables a SQL or JPQL string touches, in order: FROM/JOIN/INTO/UPDATE/DELETE FROM. */
 export function sqlTables(sql: string): { tables: string[]; writes: boolean; verb: string } {

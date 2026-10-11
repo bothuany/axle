@@ -1,9 +1,12 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow polyglot index: what each source file declares, in one shape for every language. The
+ *  Axle polyglot index: what each source file declares, in one shape for every language. The
  *  extractors (java.ts, python.ts, js.ts) fill it from tree-sitter trees; graph.ts resolves it.
  *--------------------------------------------------------------------------------------------*/
 
-export type Lang = 'java' | 'python' | 'js';
+import * as fs from 'fs';
+import * as path from 'path';
+
+export type Lang = 'java' | 'python' | 'js' | 'go' | 'php' | 'ruby' | 'rust';
 
 /** An annotation or decorator: `@GetMapping("/x")`, `@router.get("/x", ...)`, `@Column({ name })`. */
 export interface Ann {
@@ -41,6 +44,22 @@ export interface FieldFact {
 	line: number;
 	/** Right-hand side as raw text (Python/JS class attributes, Django fields). */
 	init?: string;
+	/** The declared type exactly as written (`Map<String, List<UserDto>>`, `string[]`, `Optional[User]`): typeArgs only keeps the first level. */
+	typeText?: string;
+	/** UML visibility: + public, - private, # protected, ~ package. Absent when the language or the extractor does not say. */
+	visibility?: '+' | '-' | '#' | '~';
+	isStatic?: boolean;
+	isFinal?: boolean;
+	/** Declared optional or nullable in the type syntax itself (TS `x?: T`, `T | null`). */
+	optional?: boolean;
+}
+
+/** A parameter as declared, in order: Record<name, type> on FuncFact loses the order, the generics and the annotations. */
+export interface ParamFact {
+	name: string;
+	typeText: string;
+	/** Annotation or decorator simple names: RequestBody, PathVariable, Valid. */
+	anns: string[];
 }
 
 export interface FuncFact {
@@ -64,6 +83,13 @@ export interface FuncFact {
 	exported?: boolean;
 	/** Express-style inline handler: the route it was registered for. */
 	inlineRoute?: { verb: string; path: string };
+	/** Parameters in declaration order, with their raw types and annotations. */
+	paramInfo?: ParamFact[];
+	visibility?: '+' | '-' | '#' | '~';
+	isAbstract?: boolean;
+	typeParams?: string[];
+	/** getName() { return name; }: set only on the facts the type model receives (the bodies are left out there). */
+	isAccessor?: boolean;
 }
 
 export interface TypeFact {
@@ -80,6 +106,15 @@ export interface TypeFact {
 	annotations: Ann[];
 	fields: FieldFact[];
 	methods: string[];
+	/** Made up from a method's receiver (Go, Rust) because the declaring file was not seen: merged into the real type. */
+	stub?: boolean;
+	/** What `kind` flattens: a Java record, a C#/Rust/Go struct, a TS type alias of an object type. */
+	declKind?: 'class' | 'interface' | 'enum' | 'record' | 'struct' | 'alias';
+	/** Simple name of the enclosing type for a nested one. */
+	outer?: string;
+	typeParams?: string[];
+	enumConstants?: string[];
+	visibility?: '+' | '-' | '#' | '~';
 }
 
 /** A route registered by a call rather than an annotation: `app.get('/x', handler)`, Django `path(...)`. */
@@ -99,6 +134,8 @@ export interface FileFacts {
 	mtime: number;
 	/** Java package or Python/JS module path. */
 	module?: string;
+	/** Java: packages imported with a wildcard (`import com.x.*;` → `com.x`). */
+	starImports?: string[];
 	/** Local name → what it refers to: a class FQN (Java), `./models:User` (JS), `app.models:User` (Python). */
 	imports: Record<string, string>;
 	types: TypeFact[];
@@ -142,13 +179,54 @@ export interface EntryPoint {
 	line: number;
 }
 
+/** Directory names whose files are never indexed (dependencies, caches, editor state), wherever they are. */
 export const EXCLUDED_DIRS = new Set([
-	'node_modules', '.git', 'target', 'build', 'dist', 'out', 'bin', 'obj', '.venv', 'venv', 'env', '__pycache__',
-	'.next', '.nuxt', 'coverage', 'vendor', 'bower_components', 'third_party', 'lib', 'libs', 'assets', 'static',
-	'public', '.idea', '.vscode', '.gradle', '.mvn', '.claude', 'site-packages', '.tox', '.mypy_cache', '.pytest_cache',
+	'node_modules', '.git', 'dist', '.venv', 'venv', '__pycache__',
+	'.next', '.nuxt', 'coverage', 'bower_components', 'third_party',
+	'.idea', '.vscode', '.gradle', '.mvn', '.claude', 'site-packages', '.tox', '.mypy_cache', '.pytest_cache',
 ]);
 
+/**
+ * Names that are build output or vendored code only beside a file of the project that produces it: `com.acme.build`
+ * is a Java package, `target/` next to a pom.xml is not. A `*.ext` entry matches by suffix.
+ */
+const EXCLUDED_BESIDE = new Map<string, string[]>([
+	['build', ['pom.xml', 'build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts', 'Cargo.toml', 'package.json', 'CMakeLists.txt']],
+	['out', ['pom.xml', 'build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts', 'Cargo.toml', 'package.json', '*.iml']],
+	['target', ['pom.xml', 'build.gradle', 'build.gradle.kts', 'Cargo.toml', 'package.json']],
+	['bin', ['*.csproj', '*.fsproj', '*.vbproj', '.classpath']],
+	['obj', ['*.csproj', '*.fsproj', '*.vbproj']],
+	['vendor', ['composer.json', 'go.mod', 'Gemfile', 'Cargo.toml']],
+]);
+
+/**
+ * Whether a directory is skipped. `siblings` are the names next to it, `full` its path: the walk already has the
+ * listing, the watcher and the language server read it (only for the few names that need it).
+ */
+export function isExcludedDir(name: string, full: string, siblings: () => readonly string[]): boolean {
+	if (EXCLUDED_DIRS.has(name)) {
+		return true;
+	}
+	if (name === 'env') {
+		return fs.existsSync(path.join(full, 'pyvenv.cfg')); // a virtualenv says so itself
+	}
+	const markers = EXCLUDED_BESIDE.get(name);
+	return !!markers && siblings().some(s => markers.some(m => m.startsWith('*') ? s.endsWith(m.slice(1)) : s === m));
+}
+
 export function langOf(file: string): Lang | 'ts' | 'tsx' | undefined {
+	if (file.endsWith('.go') && !file.endsWith('_test.go')) {
+		return 'go';
+	}
+	if (file.endsWith('.php')) {
+		return 'php';
+	}
+	if (file.endsWith('.rb')) {
+		return 'ruby';
+	}
+	if (file.endsWith('.rs')) {
+		return 'rust';
+	}
 	if (file.endsWith('.java')) {
 		return 'java';
 	}
@@ -166,3 +244,35 @@ export function langOf(file: string): Lang | 'ts' | 'tsx' | undefined {
 	}
 	return undefined;
 }
+
+/**
+ * Whether a file lies under an excluded directory, judged by the path below its workspace folder only (either path
+ * separator): `/opt/build/app/src/x.py` is not excluded for the folder `/opt/build/app`. The watcher, the walk and the
+ * language server filter agree.
+ */
+export function isExcludedPath(fsPath: string, root: string): boolean {
+	const rel = path.relative(root, fsPath);
+	if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+		return false;
+	}
+	let dir = root;
+	for (const name of rel.split(/[\\/]/).slice(0, -1)) {
+		const parent = dir;
+		dir = path.join(dir, name);
+		if (isExcludedDir(name, dir, () => listing(parent))) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function listing(dir: string): string[] {
+	try {
+		return fs.readdirSync(dir);
+	} catch {
+		return [];
+	}
+}
+
+/** URL paths joined with single slashes and a leading one: `("api/", "/users", "{id}")` → `/api/users/{id}`. */
+export const joinPath = (...parts: (string | undefined)[]) => '/' + parts.filter(x => x !== undefined && x !== '').map(x => x!.replace(/^\/+|\/+$/g, '')).filter(Boolean).join('/');

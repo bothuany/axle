@@ -1,7 +1,7 @@
 {
   "name": "flow-theme",
-  "displayName": "Flow Theme",
-  "description": "Flow's calm dark look and the defaults that go with it.",
+  "displayName": "Axle Theme",
+  "description": "Axle's look, dark and light: flat surfaces, one signal colour and the defaults that go with it.",
   "version": "0.1.0",
   "publisher": "flow",
   "license": "MIT",
@@ -15,16 +15,23 @@
   "contributes": {
     "themes": [
       {
-        "id": "Flow Dark",
-        "label": "Flow Dark",
+        "id": "Axle Dark",
+        "label": "Axle Dark",
         "uiTheme": "vs-dark",
         "path": "./themes/flow-dark.json"
+      },
+      {
+        "id": "Axle Light",
+        "label": "Axle Light",
+        "uiTheme": "vs",
+        "path": "./themes/flow-light.json"
       }
     ],
     "configurationDefaults": {
-      "workbench.colorTheme": "Flow Dark",
-      "workbench.preferredDarkColorTheme": "Flow Dark",
-      "workbench.activityBar.location": "default",
+      "workbench.colorTheme": "Axle Dark",
+      "workbench.preferredDarkColorTheme": "Axle Dark",
+      "workbench.preferredLightColorTheme": "Axle Light",
+      "workbench.activityBar.location": "top",
       "workbench.startupEditor": "none",
       "workbench.tree.indent": 14,
       "workbench.tree.renderIndentGuides": "none",
@@ -32,9 +39,10 @@
       "workbench.layoutControl.enabled": false,
       "workbench.editor.tabActionLocation": "right",
       "window.commandCenter": true,
-      "editor.fontFamily": "ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace",
+      "editor.fontFamily": "'Cascadia Code', 'JetBrains Mono', 'SF Mono', ui-monospace, Consolas, Menlo, monospace",
+      "editor.fontLigatures": true,
       "editor.fontSize": 13,
-      "editor.lineHeight": 20,
+      "editor.lineHeight": 21,
       "editor.minimap.enabled": false,
       "editor.renderLineHighlight": "all",
       "editor.cursorBlinking": "smooth",
@@ -47,10 +55,15 @@
       "terminal.integrated.fontSize": 12,
       "breadcrumbs.enabled": true,
       "workbench.experimental.modernUI": true,
-      "terminal.integrated.fontFamily": "ui-monospace, 'SF Mono', Menlo, monospace",
-      "workbench.experimental.modernUIEditorTabStyle": "pill",
+      "terminal.integrated.fontFamily": "'Cascadia Code', 'JetBrains Mono', 'SF Mono', ui-monospace, Consolas, Menlo, monospace",
+      "workbench.experimental.modernUIEditorTabStyle": "connected",
+      "window.density.layout": "compact",
       "workbench.sideBar.location": "left",
       "workbench.editor.showIcons": true,
+      "workbench.secondarySideBar.defaultVisibility": "visibleInWorkspace",
+      "workbench.editor.wrapTabs": false,
+      "workbench.editor.pinnedTabsOnSeparateRow": false,
+      "workbench.editor.tabSizing": "fit",
       "window.title": "${rootName}${separator}${activeEditorShort}",
       "chat.editor.fontFamily": "default"
     }

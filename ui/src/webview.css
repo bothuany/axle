@@ -1,16 +1,16 @@
-/* Flow canvas inside VS Code. Neutral surfaces follow the active theme; colour is reserved for meaning:
+/* Axle canvas inside VS Code. Neutral surfaces follow the active theme; colour is reserved for meaning:
    the kind of a method (glyph, wire, port), agent changes, and the one card or wire you are looking at. */
 :root {
   --fl-canvas: var(--vscode-editor-background, #181818);
-  --fl-card: color-mix(in srgb, var(--fl-canvas), #fff 3.5%);
-  --fl-line: color-mix(in srgb, var(--fl-canvas), #fff 9%);
-  --fl-line-strong: color-mix(in srgb, var(--fl-canvas), #fff 17%);
+  --fl-card: color-mix(in srgb, var(--fl-canvas), var(--fl-text) 3.5%);
+  --fl-line: color-mix(in srgb, var(--fl-canvas), var(--fl-text) 9%);
+  --fl-line-strong: color-mix(in srgb, var(--fl-canvas), var(--fl-text) 17%);
   --fl-text: var(--vscode-editor-foreground, #d4d4d4);
   --fl-muted: var(--vscode-descriptionForeground, #8b8b8b);
   --fl-faint: color-mix(in srgb, var(--fl-muted) 62%, transparent);
-  --fl-signal: #7aa2f7;
-  --fl-add: #7fd48a;
-  --fl-del: #f07178;
+  --fl-signal: #6f86ff;
+  --fl-add: #5fe0a1;
+  --fl-del: #ff6b7d;
   --fl-mono: var(--vscode-editor-font-family, 'JetBrains Mono', Menlo, monospace);
   --fl-ui: var(--vscode-font-family, -apple-system, system-ui, sans-serif);
   --fl-lift: 0 1px 0 rgb(0 0 0 / .3), 0 14px 34px -10px rgb(0 0 0 / .6);
@@ -42,7 +42,7 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .chip:disabled { cursor: default; }
 .chip.ghosted { border-style: dashed; cursor: default; }
 /* Impact names entry points, so it wears the entry-point colour. */
-.chip.impact.hot { color: #e2c08d; border-color: color-mix(in srgb, #e2c08d 40%, transparent); }
+.chip.impact.hot { color: #ffb454; border-color: color-mix(in srgb, #ffb454 40%, transparent); }
 .chip.impact.hot::before { content: ''; display: inline-block; width: 0; height: 0; margin-right: 6px; border: 4px solid transparent; border-left: 6px solid currentColor; border-right: 0; vertical-align: -1px; }
 .impact-wrap { position: relative; }
 .impact-pop { position: absolute; z-index: 20; top: 30px; left: 0; min-width: 260px; max-width: 420px; padding: 10px 12px; border: 1px solid var(--fl-line-strong); border-radius: 8px; background: var(--vscode-editorHoverWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); }
@@ -143,7 +143,7 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .card-editor-msg kbd { margin-left: 4px; }
 .card-editor-msg kbd:first-child { margin-left: 0; }
 .card-editor-msg.err { color: var(--fl-del); }
-.card-editor-msg.warn { color: #e2c08d; }
+.card-editor-msg.warn { color: #ffb454; }
 .card-editor .monaco-editor, .card-editor .monaco-editor .margin, .card-editor .monaco-editor-background { background: var(--fl-card) !important; }
 .ask, .chip, .wv-status { white-space: nowrap; flex: none; }
 .wv-status { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
@@ -198,15 +198,57 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .schema { font: 11.5px/1 var(--fl-mono); padding-bottom: 6px; }
 .schema-ops { display: flex; align-items: center; gap: 8px; padding: 0 10px 0 11px; border-bottom: 1px solid var(--fl-line); background: color-mix(in srgb, var(--k) 5%, transparent); }
 .schema-verb { flex: none; padding: 2px 6px; border-radius: 4px; font: 600 10px var(--fl-ui); }
-.schema-verb.read { color: #59c2a8; background: color-mix(in srgb, #59c2a8 14%, transparent); }
-.schema-verb.write { color: #f07178; background: color-mix(in srgb, #f07178 14%, transparent); }
+.schema-verb.read { color: #4fd6d0; background: color-mix(in srgb, #4fd6d0 14%, transparent); }
+.schema-verb.write { color: #ff6b7d; background: color-mix(in srgb, #ff6b7d 14%, transparent); }
 .schema-chain { color: var(--fl-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .schema-col { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 0 10px 0 8px; }
 .schema-col:nth-child(even) { background: color-mix(in srgb, var(--fl-text) 2.5%, transparent); }
-.schema-mark { font: 700 9px var(--fl-ui); color: #e2c08d; text-align: center; }
+.schema-mark { font: 700 9px var(--fl-ui); color: #ffb454; text-align: center; }
 .schema-name { color: var(--fl-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.schema-col.key .schema-name { color: #e2c08d; }
+.schema-col.key .schema-name { color: #ffb454; }
 .schema-type { color: var(--fl-muted); white-space: nowrap; }
 .schema-more { display: flex; align-items: center; padding: 0 10px 0 40px; color: var(--fl-faint); font-style: italic; }
 .schema-rel { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 10px 0 40px; color: var(--fl-muted); font: 11px var(--fl-ui); white-space: nowrap; overflow: hidden; max-height: 18px; }
 .schema-rel i { font-style: normal; color: var(--k); margin-right: 3px; font-family: var(--fl-mono); }
+
+/* Ctrl/Cmd held over code: the identifier under the pointer is a link (read cards: CSS highlight; the card editor: a decoration). */
+::highlight(flow-link) { text-decoration: underline; }
+.flow-link { text-decoration: underline; cursor: pointer; }
+/* Popups of the card editor live on the page, above the canvas (see CardEditor). */
+.flow-overflow { position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 10000; }
+
+/* ---- type chips: the workspace types in a method's signature, and the fields under the ones that are opened ---------------- */
+:root { --tc-dto: var(--fl-signal); --tc-entity: #4fd6d0; --tc-enum: #d9a441; --tc-other: var(--fl-muted); }
+.tc-dto { --c: var(--tc-dto); }
+.tc-entity { --c: var(--tc-entity); }
+.tc-enum { --c: var(--tc-enum); }
+.tc-other { --c: var(--tc-other); }
+.tc-block { flex: none; overflow: hidden; border-bottom: 1px solid var(--fl-line); }
+.tc-block.with-rows { background: color-mix(in srgb, var(--fl-text) 2.5%, transparent); }
+.tc-strip { display: flex; align-items: center; gap: 5px; padding: 0 11px; min-width: 0; overflow: hidden; }
+.tc-slot { display: flex; align-items: center; gap: 5px; min-width: 0; flex: 0 1 auto; }
+.tc-arrow { flex: none; color: var(--fl-faint); font: 11px var(--fl-mono); }
+.tc { display: inline-flex; flex: 0 1 auto; min-width: 0; max-width: 100%; height: 18px; border-radius: 9px; border: 1px solid color-mix(in srgb, var(--c) 42%, transparent); background: color-mix(in srgb, var(--c) 9%, var(--fl-card)); color: color-mix(in srgb, var(--c) 78%, var(--fl-text)); }
+.tc.tc-enum { border-style: dashed; }
+.tc.open { background: color-mix(in srgb, var(--c) 20%, var(--fl-card)); }
+.tc:hover { border-color: color-mix(in srgb, var(--c) 70%, transparent); }
+.tc-main { display: flex; align-items: center; gap: 3px; min-width: 0; padding: 0 7px 0 6px; border: 0; border-radius: 9px; background: transparent; color: inherit; font: 11px/16px var(--fl-mono); white-space: nowrap; cursor: pointer; }
+.tc-name { overflow: hidden; text-overflow: ellipsis; }
+.tc-mark { flex: none; opacity: .75; }
+.tc-caret { flex: none; width: 8px; font-style: normal; font-size: 9px; opacity: .7; }
+.tc-acts { flex: none; display: none; align-items: center; padding-right: 2px; }
+.tc:hover .tc-acts, .tc:focus-within .tc-acts { display: flex; }
+.tc-act { width: 16px; height: 16px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--fl-text); font: 11px/16px var(--fl-mono); cursor: pointer; }
+.tc-act:hover { background: var(--fl-line-strong); }
+.tc-row { display: flex; align-items: center; gap: 6px; box-sizing: border-box; padding-right: 10px; font: 11px var(--fl-mono); white-space: nowrap; overflow: hidden; }
+.tc-head { padding-left: 11px; border-top: 1px solid var(--fl-line); }
+.tc-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.tc-headname { font-weight: 600; }
+.tc-space { flex: 1; }
+.tc-faint { color: var(--fl-faint); }
+.tc-fname { flex: none; color: var(--fl-muted); }
+.tc-fname::after { content: ':'; }
+.tc-ftype { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tc-const::before { content: '\2022 '; color: var(--fl-faint); }
+.tc-more { padding: 0; border: 0; background: none; color: var(--fl-muted); font: inherit; font-style: italic; cursor: pointer; }
+.tc-more:hover { color: var(--fl-text); }

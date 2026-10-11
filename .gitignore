@@ -1,5 +1,7 @@
 # The VS Code checkout `npm run setup` creates
 /editor/vscode/
+# What `npm run installer` builds: the packaged app (next to vscode/) and the .exe in dist/
+/editor/VSCode-win32-*/
 
 node_modules/
 out/
@@ -8,9 +10,14 @@ dist-webview/
 bin/
 obj/
 target/
-desktop/src-tauri/gen/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local tooling and generated demos
+brag-output/
+.agents/
+skills-lock.json
+.claude/
 .vscode/
 .idea/

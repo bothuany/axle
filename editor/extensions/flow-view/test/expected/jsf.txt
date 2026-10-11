@@ -1,0 +1,9 @@
+* /legacy         LegacyController.legacy
+JSF #{userBean.remove}UserBean · users.xhtml.remove
+  call: UserService.delete [method]
+    call: UserDao.remove [method]
+      db: EntityManager.remove [db]
+JSF #{userBean.save}UserBean · users.xhtml.save
+  call: UserService.create [method]
+    call: UserDao.insert [method]
+      db: EntityManager.persist [db]

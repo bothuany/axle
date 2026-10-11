@@ -1,0 +1,12 @@
+* /legacy         service.legacy
+  call: notify [method]
+    call: audit [method]
+GET /api/users    UserHandler.List
+  call: UserService.FindAll [method]
+    call: UserRepo.Query [method]
+  ? JSON
+GET /health       main.health
+  ? String
+POST /ping        main./ping
+  call: notify [method]
+    call: audit [method]

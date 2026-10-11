@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow: "what applies here" — for one file, the instructions, rules, hooks and skills an agent
+ *  Axle: "what applies here" — for one file, the instructions, rules, hooks and skills an agent
  *  would pick up when it works on that file, across Claude Code, Codex and Cursor conventions.
  *--------------------------------------------------------------------------------------------*/
 
@@ -30,6 +30,11 @@ const read = (p: string) => fs.readFile(p, 'utf8').catch(() => '');
 
 /** Minimal glob → RegExp: `**`, `*`, `?` and `{a,b}`, matched against a workspace-relative path. */
 function globToRegExp(glob: string): RegExp {
+	return new RegExp(`^${globSource(glob)}$`);
+}
+
+/** The regular expression source of a glob; each `{a,b}` alternative is itself a glob (`{*.ts,*.js}`), so it is converted recursively. */
+function globSource(glob: string): string {
 	let re = '';
 	for (let i = 0; i < glob.length; i++) {
 		const c = glob[i];
@@ -42,15 +47,50 @@ function globToRegExp(glob: string): RegExp {
 			}
 		} else if (c === '?') {
 			re += '[^/]';
-		} else if (c === '{') {
-			const end = glob.indexOf('}', i);
-			re += `(?:${glob.slice(i + 1, end).split(',').map(s => s.replace(/[.+^$()|[\]\\]/g, '\\$&')).join('|')})`;
+		} else if (c === '{' && closingBrace(glob, i) > i) {
+			const end = closingBrace(glob, i);
+			re += `(?:${splitGlobs(glob.slice(i + 1, end)).map(globSource).join('|')})`;
 			i = end;
 		} else {
 			re += c.replace(/[.+^$()|[\]\\]/g, '\\$&');
 		}
 	}
-	return new RegExp(`^${re}$`);
+	return re;
+}
+
+/** The index of the `}` that closes the `{` at `open` (braces nest), or -1. */
+function closingBrace(glob: string, open: number): number {
+	let depth = 0;
+	for (let i = open; i < glob.length; i++) {
+		if (glob[i] === '{') {
+			depth++;
+		} else if (glob[i] === '}' && --depth === 0) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+/** A comma-separated list of globs; commas inside braces belong to the alternatives, so `src/{a,b}, docs` is two globs. */
+function splitGlobs(list: string): string[] {
+	const out: string[] = [];
+	let cur = '';
+	let depth = 0;
+	for (const ch of list) {
+		if (ch === '{') {
+			depth++;
+		} else if (ch === '}') {
+			depth = Math.max(0, depth - 1);
+		}
+		if (ch === ',' && depth === 0) {
+			out.push(cur);
+			cur = '';
+		} else {
+			cur += ch;
+		}
+	}
+	out.push(cur);
+	return out.map(g => g.trim()).filter(Boolean);
 }
 
 /** Front matter as flat key → value (lists joined with commas), enough for rules and skills. */
@@ -113,9 +153,16 @@ async function rules(root: string, relFile: string): Promise<ContextItem[]> {
 	const items: ContextItem[] = [];
 	const check = async (p: string, agents: Agent[], globKey: string, alwaysKey?: string) => {
 		const fm = frontMatter(await read(p));
-		const globs = (fm[globKey] ?? '').split(',').map(g => g.trim()).filter(Boolean);
+		const globs = splitGlobs(fm[globKey] ?? '');
 		const always = alwaysKey ? fm[alwaysKey] === 'true' : !globs.length;
-		const hit = globs.find(g => globToRegExp(g).test(relFile));
+		// One rule file with a glob we cannot read must not hide the others.
+		const hit = globs.find(g => {
+			try {
+				return globToRegExp(g).test(relFile);
+			} catch {
+				return false;
+			}
+		});
 		if (always || hit) {
 			items.push({
 				group: 'rules',
@@ -173,7 +220,8 @@ async function hooks(root: string): Promise<ContextItem[]> {
 			}
 			for (const entry of entries) {
 				let matches = true;
-				if (event !== 'Stop' && entry.matcher) {
+				// `*` and an empty matcher mean "every tool"; anything else is a regular expression over tool names.
+				if (event !== 'Stop' && entry.matcher && entry.matcher !== '*') {
 					try {
 						const re = new RegExp(`^(?:${entry.matcher})$`);
 						matches = edits.some(t => re.test(t));

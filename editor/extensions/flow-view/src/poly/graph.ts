@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow polyglot index: the project. Resolves every call to what it reaches (a method through the
+ *  Axle polyglot index: the project. Resolves every call to what it reaches (a method through the
  *  declared type of its receiver, an interface through its implementations, a table through the
  *  ORM or the SQL it runs), finds the entry points of each framework, and answers the canvas:
  *  the flow from a function, its callers, and the entry points a change would touch.
@@ -8,7 +8,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { isSpringRepo, isWrite, javaSchema, jsSchema, looksLikeSql, opsOf, pythonSchema, sqlTables, unq, type PrismaModel } from './db';
-import type { CallFact, DbSchema, EntryPoint, FileFacts, FuncFact, RouteFact, TypeFact } from './model';
+import { baseType, callBefore, chainBefore, isConstructorName, Kind, paramLabels, recvText, signatureDetail, wordAt, type Place, type Seg, type Suggestion } from './assist';
+import { joinPath, type CallFact, type DbSchema, type EntryPoint, type FileFacts, type FuncFact, type Lang, type RouteFact, type TypeFact } from './model';
 
 /** Same shape as the canvas (custom-ide/ui/src/types.ts); `guess` marks a link made by name alone. */
 export interface FlowNode {
@@ -23,6 +24,8 @@ export interface FlowNode {
 	code: string | null;
 	children: { callLine: number; edgeKind: 'call' | 'mediator' | 'impl' | 'db'; guess?: boolean; node: FlowNode }[];
 	schema?: DbSchema;
+	/** Calls the static index could not resolve: the host asks the language server, then drops this field. */
+	pending?: { line: number; name: string }[];
 }
 
 export interface Axis2Service {
@@ -39,6 +42,28 @@ type Target =
 	| { kind: 'ambiguous'; label: string; options: FuncFact[] }
 	| { kind: 'db'; schema: DbSchema; label: string; file: string | null; line: number };
 
+/** An entry point with the declared types of its parameters and result, for the type chips. */
+export interface TypeEntry {
+	id: string;
+	controller: string;
+	action: string;
+	http: string;
+	file: string;
+	line: number;
+	owner?: string;
+	params: { name: string; typeText: string; anns: string[] }[];
+	returns?: string;
+}
+
+/** Call sites from one class to another, for the architecture view. */
+export interface TypeCall {
+	fromFile: string;
+	fromOwner: string;
+	toFile: string;
+	toOwner: string;
+	count: number;
+}
+
 interface Entry extends EntryPoint {
 	fn: FuncFact;
 }
@@ -49,16 +74,13 @@ const COMMON = new Set(['get', 'set', 'add', 'put', 'map', 'filter', 'find', 'pu
 const HTTP_ANN: Record<string, string> = { GetMapping: 'GET', PostMapping: 'POST', PutMapping: 'PUT', DeleteMapping: 'DELETE', PatchMapping: 'PATCH', GET: 'GET', POST: 'POST', PUT: 'PUT', DELETE: 'DELETE', PATCH: 'PATCH', HEAD: 'HEAD', OPTIONS: 'OPTIONS', Get: 'GET', Post: 'POST', Put: 'PUT', Delete: 'DELETE', Patch: 'PATCH', All: '*', Head: 'HEAD', Options: 'OPTIONS' };
 const PY_VERBS: Record<string, string> = { get: 'GET', post: 'POST', put: 'PUT', delete: 'DELETE', patch: 'PATCH', head: 'HEAD', options: 'OPTIONS', websocket: 'WS' };
 const MAX_NODES = 220;
+/** Languages whose free functions live in a package/module of their own (see pkgFuncs). */
+const PACKAGE_LANGS = new Set(['go', 'php', 'ruby', 'rust']);
 
 /** A record lookup that ignores Object.prototype (an import named `toString` is not a function). */
 function own<T>(rec: Record<string, T> | undefined, key: string): T | undefined {
 	return rec && Object.prototype.hasOwnProperty.call(rec, key) ? rec[key] : undefined;
 }
-
-const joinPath = (...parts: (string | undefined)[]) => {
-	const p = parts.filter(x => x !== undefined && x !== '').map(x => x!.replace(/^\/+|\/+$/g, '')).filter(Boolean).join('/');
-	return '/' + p;
-};
 
 export class Project {
 	readonly files = new Map<string, FileFacts>();
@@ -80,6 +102,16 @@ export class Project {
 	private entries: Entry[] = [];
 	private callersOf: Map<string, { from: string; line: number }[]> | undefined;
 	private resolved = new Map<string, Target[][]>();
+	/** Go/PHP/Ruby/Rust free functions by directory and by module name, built on first use. */
+	private pkgIndex: Map<string, FuncFact[]> | undefined;
+	/** Go/Rust: a type made up from a method receiver → the type declared in another file of the same package. */
+	private readonly canon = new Map<TypeFact, TypeFact>();
+	/** Files some other file `include()`s (Django urls), computed once per build. */
+	private included: Set<string> | undefined;
+	private entryById = new Map<string, Entry>();
+	/** Router prefixes set by another file's include (FastAPI/Flask) and `app.use` (Express), built once per build: first match wins. */
+	private pyIncludes: Map<string, string | undefined> | undefined;
+	private jsMounts: Map<string, string> | undefined;
 	private sources = new Map<string, string[]>();
 
 	constructor(private readonly roots: string[]) { }
@@ -105,6 +137,20 @@ export class Project {
 			return;
 		}
 		this.dirty = false;
+		try {
+			this.rebuild();
+		} catch (e) {
+			// A half-built index must be built again, not trusted.
+			this.dirty = true;
+			throw e;
+		}
+	}
+
+	private rebuild() {
+		this.canon.clear();
+		this.included = undefined;
+		this.pyIncludes = undefined;
+		this.jsMounts = undefined;
 		this.typesByName.clear();
 		this.funcsById.clear();
 		this.methodsByOwner.clear();
@@ -114,7 +160,9 @@ export class Project {
 		this.schemas.clear();
 		this.schemaByTable.clear();
 		this.resolved.clear();
+		this.pkgIndex = undefined;
 		this.callersOf = undefined;
+		this.mergeStubTypes();
 		for (const f of this.files.values()) {
 			if (f.module) {
 				// Java: package → each type's FQN. Python: the dotted module and its suffixes.
@@ -133,13 +181,16 @@ export class Project {
 				}
 			}
 			for (const t of f.types) {
-				this.push(this.typesByName, t.name, t);
+				if (!this.canon.has(t)) {
+					this.push(this.typesByName, t.name, t);
+				}
 			}
 			for (const fn of f.funcs) {
 				this.funcsById.set(fn.id, fn);
 				this.push(this.funcsByName, fn.name, fn);
 				if (fn.owner) {
-					this.push(this.methodsByOwner, `${fn.file}|${fn.owner}`, fn);
+					const declared = this.ownerOf(fn);
+					this.push(this.methodsByOwner, `${declared?.file ?? fn.file}|${fn.owner}`, fn);
 				}
 			}
 		}
@@ -165,6 +216,28 @@ export class Project {
 		}
 		this.buildSchemas();
 		this.buildEntries();
+	}
+
+	/** `func (h *Handler) List()` in routes.go and `type Handler struct{…}` in handler.go are one type. */
+	private mergeStubTypes() {
+		const declared = new Map<string, TypeFact>();
+		const scope = (f: FileFacts, name: string) => `${f.lang}|${path.dirname(f.file)}|${name}`;
+		const files = [...this.files.values()].filter(f => f.lang === 'go' || f.lang === 'rust');
+		for (const f of files) {
+			for (const t of f.types.filter(x => !x.stub)) {
+				declared.set(scope(f, t.name), t);
+			}
+		}
+		for (const f of files) {
+			for (const t of f.types.filter(x => x.stub)) {
+				const real = declared.get(scope(f, t.name));
+				if (real) {
+					this.canon.set(t, real);
+					real.methods.push(...t.methods.filter(m => !real.methods.includes(m)));
+					real.supers.push(...t.supers.filter(x => !real.supers.includes(x)));
+				}
+			}
+		}
 	}
 
 	private push<K, V>(m: Map<K, V[]>, k: K, v: V) {
@@ -286,6 +359,34 @@ export class Project {
 
 	// ── Resolution ──────────────────────────────────────────────────────────────
 
+	/** Free functions of Go/PHP/Ruby/Rust by `dir` (same directory) or `mod` (a directory or file called so). */
+	private pkgFuncs(facts: FileFacts, kind: 'dir' | 'mod', scope: string, name: string): FuncFact[] {
+		if (!PACKAGE_LANGS.has(facts.lang)) {
+			return [];
+		}
+		if (!this.pkgIndex) {
+			const idx = new Map<string, FuncFact[]>();
+			const put = (k: string, fn: FuncFact) => this.push(idx, k, fn);
+			for (const f of this.files.values()) {
+				if (!PACKAGE_LANGS.has(f.lang)) {
+					continue;
+				}
+				const dir = path.dirname(f.file);
+				for (const fn of f.funcs) {
+					if (!fn.owner && !fn.inlineRoute) {
+						put(`${f.lang}|dir|${dir}|${fn.name}`, fn);
+						put(`${f.lang}|mod|${path.basename(dir)}|${fn.name}`, fn);
+						if (f.lang !== 'go') {
+							put(`${f.lang}|mod|${path.basename(f.file, path.extname(f.file))}|${fn.name}`, fn); // a Go package is its directory, not its file
+						}
+					}
+				}
+			}
+			this.pkgIndex = idx;
+		}
+		return [...new Map((this.pkgIndex.get(`${facts.lang}|${kind}|${scope}|${name}`) ?? []).map(x => [x.id, x])).values()];
+	}
+
 	private methods(t: TypeFact, name: string): FuncFact[] {
 		return (this.methodsByOwner.get(`${t.file}|${t.name}`) ?? []).filter(m => m.name === name);
 	}
@@ -325,7 +426,8 @@ export class Project {
 	}
 
 	private ownerOf(fn: FuncFact) {
-		return fn.owner ? this.files.get(fn.file)?.types.find(t => t.name === fn.owner) : undefined;
+		const t = fn.owner ? this.files.get(fn.file)?.types.find(x => x.name === fn.owner) : undefined;
+		return t && (this.canon.get(t) ?? t);
 	}
 
 	/** The declared type of a receiver: local, parameter, field, module global; or the type itself (static call). */
@@ -377,7 +479,7 @@ export class Project {
 		const owner = this.ownerOf(fn);
 		// Bare call: a method of this class (Java/self-less), a function in this module, or an imported one.
 		if (!c.recv || c.recv === 'this' || c.recv === 'self' || c.recv === 'super') {
-			if (owner && (facts.lang === 'java' || c.recv)) {
+			if (owner && (facts.lang === 'java' || facts.lang === 'ruby' || c.recv)) {
 				const start = c.recv === 'super' ? owner.supers.map(s => this.type(s, fn.file)).find(Boolean) : owner;
 				const m = start && this.lookup(start, c.name);
 				if (m) {
@@ -398,13 +500,17 @@ export class Project {
 						return [{ kind: 'fn', fn: target, edge: 'call' }];
 					}
 				}
+				const sibling = this.pkgFuncs(facts, 'dir', path.dirname(facts.file), c.name);
+				if (sibling.length === 1) {
+					return [{ kind: 'fn', fn: sibling[0], edge: 'call' }];
+				}
 			}
 			return this.guess(fn, c);
 		}
 		// Module receiver (Python `import services`, JS `import * as svc`).
 		const imp = own(facts.imports, c.recv);
 		if (imp && (facts.lang !== 'java')) {
-			const file = this.importFile(facts, imp.endsWith(':*') || facts.lang === 'python' ? imp : imp);
+			const file = this.importFile(facts, imp);
 			const target = file && this.files.get(file)?.funcs.find(f => f.name === c.name && (!f.owner || facts.lang === 'js'));
 			if (target) {
 				return [{ kind: 'fn', fn: target, edge: 'call' }];
@@ -416,6 +522,13 @@ export class Project {
 				if (m) {
 					return this.viaType(t, m, c.name);
 				}
+			}
+		}
+		// `db::all()` (Rust), `store.Find()` (Go package): a free function of the module or package named like the receiver.
+		if ((facts.lang === 'rust' || facts.lang === 'go') && /^[a-z_]\w*$/.test(c.recv) && !this.recvType(fn, c.recv)) {
+			const hit = this.pkgFuncs(facts, 'mod', c.recv, c.name);
+			if (hit.length === 1) {
+				return [{ kind: 'fn', fn: hit[0], edge: 'call' }];
 			}
 		}
 		const rt = this.recvType(fn, c.recv);
@@ -623,8 +736,10 @@ export class Project {
 
 	private buildEntries() {
 		const out: Entry[] = [];
+		const added = new Set<string>();
 		const add = (fn: FuncFact, verb: string, route: string, controller?: string) => {
-			out.push({ id: `poly:${fn.id}${out.some(e => e.fn.id === fn.id) ? `|${verb}` : ''}`, controller: controller ?? fn.owner ?? path.basename(fn.file).replace(/\.\w+$/, ''), action: fn.inlineRoute ? route : fn.name, http: `${verb} ${route}`, file: fn.file, line: fn.line, fn });
+			out.push({ id: `poly:${fn.id}${added.has(fn.id) ? `|${verb}` : ''}`, controller: controller ?? fn.owner ?? path.basename(fn.file).replace(/\.\w+$/, ''), action: fn.inlineRoute ? route : fn.name, http: `${verb} ${route}`, file: fn.file, line: fn.line, fn });
+			added.add(fn.id);
 		};
 		// Axis2 services and JSF pages name Spring/JSF beans; each becomes the class behind it.
 		const axis2 = new Map<string, Axis2Service>();
@@ -693,8 +808,6 @@ export class Project {
 							add(m, /Cron|Interval/.test(l.name) ? 'JOB' : 'MSG', l.value ?? l.name);
 						}
 					}
-				} else if (f.lang === 'python') {
-					// Django class-based views are added through urls; DRF ViewSets list their actions.
 				}
 			}
 			if (f.lang === 'python') {
@@ -709,8 +822,6 @@ export class Project {
 							}
 						} else if (/^(shared_task|task|periodic_task|job|scheduled_job)$/.test(a.name)) {
 							add(fn, 'JOB', a.full);
-						} else if (a.name === 'api_view' && !f.routes.length) {
-							// DRF function view: its path comes from urls.py
 						}
 					}
 				}
@@ -733,6 +844,12 @@ export class Project {
 			}
 		}
 		this.entries = out;
+		this.entryById = new Map();
+		for (const e of out) {
+			if (!this.entryById.has(e.fn.id)) {
+				this.entryById.set(e.fn.id, e);
+			}
+		}
 	}
 
 	/** The class behind a bean name: Spring XML, @Service("x") / @Named("x") / @ManagedBean(name = "x"), or the class name. */
@@ -768,24 +885,32 @@ export class Project {
 	/** FastAPI / Flask prefixes: the router's own (`APIRouter(prefix=)`) and where another file includes it. */
 	private pyPrefixes(f: FileFacts, on: string): (string | undefined)[] {
 		const mine = own(f.prefixes, on);
-		for (const g of this.files.values()) {
-			for (const [k, v] of Object.entries(g.prefixes)) {
-				if (!k.startsWith('include:')) {
-					continue;
-				}
-				const ref = k.slice(8);
-				const [head, tail] = ref.includes('.') ? [ref.split('.')[0], ref.split('.').slice(1).join('.')] : [ref, undefined];
-				const imp = own(g.imports, head);
-				if (!imp) {
-					continue;
-				}
-				const file = this.importFile(g, tail ? imp.replace(/:.*$/, '') + (imp.includes(':') ? '.' + imp.split(':')[1] : '') : imp);
-				if (file === f.file && (tail ?? imp.split(':')[1]) === on) {
-					return [v, mine];
+		if (!this.pyIncludes) {
+			// Key: the file the included router lives in + its name there.
+			const map = new Map<string, string | undefined>();
+			for (const g of this.files.values()) {
+				for (const [k, v] of Object.entries(g.prefixes)) {
+					if (!k.startsWith('include:')) {
+						continue;
+					}
+					const ref = k.slice(8);
+					const [head, tail] = ref.includes('.') ? [ref.split('.')[0], ref.split('.').slice(1).join('.')] : [ref, undefined];
+					const imp = own(g.imports, head);
+					if (!imp) {
+						continue;
+					}
+					const file = this.importFile(g, tail ? imp.replace(/:.*$/, '') + (imp.includes(':') ? '.' + imp.split(':')[1] : '') : imp);
+					const name = tail ?? imp.split(':')[1];
+					const key = file && name !== undefined ? `${file}|${name}` : undefined;
+					if (key && !map.has(key)) {
+						map.set(key, v);
+					}
 				}
 			}
+			this.pyIncludes = map;
 		}
-		return [mine];
+		const key = `${f.file}|${on}`;
+		return this.pyIncludes.has(key) ? [this.pyIncludes.get(key), mine] : [mine];
 	}
 
 	private routeEntries(f: FileFacts, r: RouteFact, prefix: string, add: (fn: FuncFact, verb: string, route: string, controller?: string) => void, depth: number) {
@@ -803,7 +928,7 @@ export class Project {
 		if (f.lang === 'python' && depth === 0 && this.isIncluded(f)) {
 			return; // reached through the urls.py that includes it
 		}
-		const route = f.lang === 'js' ? joinPath(this.jsPrefix(f, r.on), r.path) : joinPath(prefix, r.path);
+		const route = f.lang === 'js' || f.lang === 'go' ? joinPath(this.jsPrefix(f, r.on), r.path) : joinPath(prefix, r.path);
 		const inline = this.funcsById.get(r.handler);
 		const fn = inline ? [inline] : this.handlerFn(f, r.handler);
 		if (fn.length === 0) {
@@ -816,12 +941,18 @@ export class Project {
 	}
 
 	private isIncluded(f: FileFacts) {
-		for (const g of this.files.values()) {
-			if (g.routes.some(r => r.verb === 'INCLUDE' && this.fileByModule.get(r.handler) === f.file)) {
-				return true;
+		if (!this.included) {
+			this.included = new Set();
+			for (const g of this.files.values()) {
+				for (const r of g.routes.filter(x => x.verb === 'INCLUDE')) {
+					const file = this.fileByModule.get(r.handler);
+					if (file) {
+						this.included.add(file);
+					}
+				}
 			}
 		}
-		return false;
+		return this.included.has(f.file);
 	}
 
 	private jsPrefix(f: FileFacts, on: string | undefined) {
@@ -832,15 +963,20 @@ export class Project {
 			return own(f.prefixes, on);
 		}
 		// app.use('/api/users', usersRouter) in another file, where usersRouter is this file's export.
-		for (const g of this.files.values()) {
-			for (const [k, v] of Object.entries(g.prefixes)) {
-				const imp = own(g.imports, k);
-				if (imp && this.importFile(g, imp) === f.file) {
-					return v;
+		if (!this.jsMounts) {
+			const map = new Map<string, string>();
+			for (const g of this.files.values()) {
+				for (const [k, v] of Object.entries(g.prefixes)) {
+					const imp = own(g.imports, k);
+					const file = imp && this.importFile(g, imp);
+					if (file && !map.has(file)) {
+						map.set(file, v);
+					}
 				}
 			}
+			this.jsMounts = map;
 		}
-		return '';
+		return this.jsMounts.get(f.file) ?? '';
 	}
 
 	/** A route handler as written: fn, views.fn, ctrl.method, View.as_view(). */
@@ -861,11 +997,23 @@ export class Project {
 			const imp = own(f.imports, name);
 			const file = imp && this.importFile(f, imp);
 			const target = file && this.files.get(file)?.funcs.find(x => !x.owner && (x.name === imp.split(':')[1] || (imp.endsWith(':default') && x.exported)));
-			return target ? [target] : [];
+			if (target) {
+				return [target];
+			}
+			// Go, PHP, Ruby, Rust: a function of the same package (directory), else the only one with that name.
+			const sibling = this.pkgFuncs(f, 'dir', path.dirname(f.file), name);
+			const anywhere = (this.funcsByName.get(name) ?? []).filter(x => !x.owner && !x.inlineRoute);
+			return !PACKAGE_LANGS.has(f.lang) ? [] : sibling.length === 1 ? sibling : anywhere.length === 1 ? anywhere : [];
 		}
 		const head = parts[0];
+		// Controller.action / Type.method: a method of that type, by owner.
+		const ownerType = parts.length === 2 ? this.type(head, f.file) : undefined;
+		const viaOwner = ownerType && this.lookup(ownerType, name);
+		if (viaOwner) {
+			return [viaOwner];
+		}
 		const imp = own(f.imports, head);
-		const file = imp ? this.importFile(f, imp.includes(':') || f.lang !== 'python' ? imp : imp) ?? this.fileByModule.get(imp.replace(':', '.')) : undefined;
+		const file = imp ? this.importFile(f, imp) ?? this.fileByModule.get(imp.replace(':', '.')) : undefined;
 		const g = file ? this.files.get(file) : f;
 		if (!g) {
 			return [];
@@ -935,7 +1083,7 @@ export class Project {
 	}
 
 	private entryOf(fn: FuncFact) {
-		return this.entries.find(e => e.fn.id === fn.id);
+		return this.entryById.get(fn.id);
 	}
 
 	graph(id: string, depth = 5): FlowNode {
@@ -998,6 +1146,10 @@ export class Project {
 						seen.add(t.fn.id);
 						n.children.push({ callLine: c.line, edgeKind: t.edge, ...(t.guess ? { guess: true } : {}), node: node(t.fn, 'method', d + 1, new Set([...trail, t.fn.id])) });
 					}
+				}
+				// Nothing found: library call, or a link only a language server can make.
+				if (all[i].length === 0 && c.name.length >= 3 && !COMMON.has(c.name) && !c.name.startsWith('_') && (n.pending?.length ?? 0) < 40 && !(n.pending ?? []).some(p => p.line === c.line && p.name === c.name)) {
+					(n.pending ??= []).push({ line: c.line, name: c.name });
 				}
 			});
 			return n;
@@ -1094,10 +1246,365 @@ export class Project {
 		return hit && { id: `poly:${hit.id}`, label: hit.inlineRoute ? `${hit.inlineRoute.verb} ${hit.inlineRoute.path}` : hit.owner ? `${hit.owner}.${hit.name}` : hit.name };
 	}
 
+	// ── Editing help: completion and go to definition in a card ─────────────────
+
+	private factsFor(file: string): FileFacts | undefined {
+		const hit = this.files.get(file);
+		if (hit) {
+			return hit;
+		}
+		const key = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+		const want = key(file);
+		for (const f of this.files.values()) {
+			if (key(f.file) === want) {
+				return f;
+			}
+		}
+		return undefined;
+	}
+
+	private funcAround(facts: FileFacts, line: number): FuncFact | undefined {
+		return facts.funcs.filter(fn => fn.line <= line && line <= fn.endLine).sort((a, b) => (a.endLine - a.line) - (b.endLine - b.line))[0];
+	}
+
+	/** The type a class name stands for, from a file. */
+	private typeNamed(name: string | undefined, from: string): TypeFact | undefined {
+		return name ? this.type(name, from) : undefined;
+	}
+
+	/** What a receiver chain stands for: the project's type of the value (or the type itself, for `Foo.bar`). */
+	private chainType(fn: FuncFact, segs: readonly Seg[]): { type: TypeFact; isType: boolean } | undefined {
+		const owner = this.ownerOf(fn);
+		const facts = this.files.get(fn.file)!;
+		const first = segs[0];
+		let cur: { type: TypeFact; isType: boolean } | undefined;
+		if (first.isNew) {
+			const t = this.typeNamed(first.name, fn.file);
+			cur = t && { type: t, isType: false };
+		} else if (first.call) {
+			// `getRepo().` : a method of this class, or a function of this file.
+			const m = (owner && this.lookup(owner, first.name)) ?? facts.funcs.find(f => !f.owner && f.name === first.name);
+			const t = this.typeNamed(baseType(m?.returns), fn.file);
+			cur = t && { type: t, isType: false };
+		} else {
+			const rt = this.recvType(fn, recvText([first]));
+			const t = rt && this.typeNamed(baseType(rt.type), fn.file);
+			cur = t && { type: t, isType: !!rt?.isType };
+		}
+		for (const seg of segs.slice(1)) {
+			if (!cur) {
+				return undefined;
+			}
+			const here: TypeFact = cur.type;
+			if (seg.call) {
+				const t = this.typeNamed(baseType(this.lookup(here, seg.name)?.returns), here.file);
+				cur = t && { type: t, isType: false };
+			} else {
+				const f = this.field(here, seg.name);
+				const t = f && this.typeNamed(baseType(f.type), here.file);
+				cur = t && { type: t, isType: false };
+			}
+		}
+		return cur;
+	}
+
+	/** The type and its superclasses and interfaces, nearest first. */
+	private withSupers(t: TypeFact): TypeFact[] {
+		const out: TypeFact[] = [];
+		const queue = [t];
+		while (queue.length && out.length < 12) {
+			const x = queue.shift()!;
+			if (out.includes(x)) {
+				continue;
+			}
+			out.push(x);
+			for (const s of x.supers) {
+				const st = this.type(s, x.file);
+				if (st) {
+					queue.push(st);
+				}
+			}
+		}
+		return out;
+	}
+
+	/** The members of a type (its own, then its supers'), as completion items. */
+	private memberItems(t: TypeFact, lang: Lang, from: TypeFact | undefined, staticOnly: boolean, ruby: boolean): Suggestion[] {
+		const out: Suggestion[] = [];
+		const seen = new Set<string>();
+		const add = (s: Suggestion) => {
+			if (!seen.has(s.label)) {
+				seen.add(s.label);
+				out.push(s);
+			}
+		};
+		this.withSupers(t).forEach((st, depth) => {
+			const same = !!from && st === from;
+			const rank = depth === 0 ? '1' : '2';
+			for (const f of st.fields) {
+				if (!f.name || (staticOnly && f.isStatic === false && lang !== 'python') || (!same && f.visibility === '-')) {
+					continue;
+				}
+				add({ label: f.name, kind: st.kind === 'enum' ? Kind.Constant : Kind.Field, detail: f.typeText ?? f.type, insertText: f.name, snippet: false, sortText: `${rank}${f.name}` });
+			}
+			for (const m of this.methodsByOwner.get(`${st.file}|${st.name}`) ?? []) {
+				if (isConstructorName(m.name) || m.inlineRoute || (staticOnly && !m.isStatic && lang !== 'python' && lang !== 'go') || (!same && lang === 'java' && !m.isPublic) || (!same && m.visibility === '-')) {
+					continue;
+				}
+				add({ label: m.name, kind: Kind.Method, detail: signatureDetail(m, lang), insertText: ruby ? m.name : `${m.name}($1)`, snippet: !ruby, sortText: `${rank}${m.name}` });
+			}
+		});
+		return out;
+	}
+
+	/**
+	 * What to offer at the cursor of a card: after `recv.` the members of the type the receiver has; otherwise what is in scope
+	 * (parameters, locals, the class's own members where the language allows a bare name, imports, the file's functions and types).
+	 * `startLine`: the card's first line in the file (it finds the function); `before`: the line up to the cursor.
+	 */
+	completeAt(q: { file: string; startLine: number; before: string }): { items: Suggestion[]; why?: string } {
+		this.build();
+		const facts = this.factsFor(q.file);
+		if (!facts) {
+			return { items: [], why: 'this file is not in the index' };
+		}
+		const fn = this.funcAround(facts, q.startLine);
+		const lang = facts.lang;
+		const owner = fn && this.ownerOf(fn);
+		const chain = chainBefore(q.before);
+		if (chain) {
+			if (!fn) {
+				return { items: [], why: 'the cursor is not in an indexed function' };
+			}
+			const hit = this.chainType(fn, chain.segs);
+			if (!hit) {
+				return { items: [], why: `the type of ${recvText(chain.segs)} is not known to the index` };
+			}
+			return { items: this.memberItems(hit.type, lang, owner, hit.isType, lang === 'ruby') };
+		}
+		const out: Suggestion[] = [];
+		const seen = new Set<string>();
+		const add = (s: Suggestion) => {
+			if (!seen.has(s.label)) {
+				seen.add(s.label);
+				out.push(s);
+			}
+		};
+		for (const [name, type] of Object.entries(fn?.locals ?? {})) {
+			add({ label: name, kind: Kind.Variable, detail: type, insertText: name, snippet: false, sortText: `0${name}` });
+		}
+		for (const [name, type] of Object.entries(fn?.params ?? {})) {
+			add({ label: name, kind: Kind.Variable, detail: type, insertText: name, snippet: false, sortText: `0${name}` });
+		}
+		if (owner && (lang === 'java' || lang === 'ruby')) {
+			for (const s of this.memberItems(owner, lang, owner, false, lang === 'ruby')) {
+				add({ ...s, sortText: `1${s.label}` });
+			}
+		}
+		for (const [name, target] of Object.entries(facts.imports)) {
+			add({ label: name, kind: /^[A-Z]/.test(name) ? Kind.Class : Kind.Module, detail: target, insertText: name, snippet: false, sortText: `2${name}` });
+		}
+		for (const [name, type] of Object.entries(facts.globals)) {
+			add({ label: name, kind: Kind.Variable, detail: type, insertText: name, snippet: false, sortText: `2${name}` });
+		}
+		for (const f of facts.funcs) {
+			if (!f.owner && !f.inlineRoute && f.name) {
+				add({ label: f.name, kind: Kind.Function, detail: signatureDetail(f, lang), insertText: `${f.name}($1)`, snippet: true, sortText: `2${f.name}` });
+			}
+		}
+		for (const t of facts.types) {
+			add({ label: t.name, kind: t.kind === 'interface' ? Kind.Interface : t.kind === 'enum' ? Kind.Enum : Kind.Class, insertText: t.name, snippet: false, sortText: `2${t.name}` });
+		}
+		// Other types of the project last (a few hundred at most: the canvas filters as the user types).
+		for (const name of [...this.typesByName.keys()].sort()) {
+			if (out.length >= 600) {
+				break;
+			}
+			const t = this.typesByName.get(name)![0];
+			add({ label: name, kind: t.kind === 'interface' ? Kind.Interface : t.kind === 'enum' ? Kind.Enum : Kind.Class, detail: path.basename(t.file), insertText: name, snippet: false, sortText: `3${name}` });
+		}
+		return { items: out };
+	}
+
+	private placeOfFn(fn: FuncFact): Place {
+		return { file: fn.file, line: fn.line, label: fn.owner ? `${fn.owner}.${fn.name}` : fn.name };
+	}
+
+	private placeOfType(t: TypeFact): Place {
+		return { file: t.file, line: t.line, label: t.name };
+	}
+
+	private placesOf(targets: readonly Target[]): Place[] {
+		const out: Place[] = [];
+		for (const t of targets) {
+			if (t.kind === 'fn') {
+				out.push(this.placeOfFn(t.fn));
+			} else if (t.kind === 'ambiguous') {
+				out.push(...t.options.map(o => this.placeOfFn(o)));
+			} else if (t.file) {
+				out.push({ file: t.file, line: t.line, label: t.label });
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Where the identifier at a column of a card's line is defined: the function a call reaches (an interface call: its
+	 * implementations), a type, a field, or a local or parameter (a place inside the card). `lineText` is the card line as typed now;
+	 * `cardText` the whole card (a local's declaration is found in it); `cardLine` is the line's number in the card (1-based).
+	 */
+	definitionAt(q: { file: string; startLine: number; lineText: string; column: number; cardText: string; cardLine: number }): { places: Place[]; message?: string } {
+		this.build();
+		const facts = this.factsFor(q.file);
+		const hit = wordAt(q.lineText, q.column);
+		if (!facts || !hit) {
+			return { places: [], message: hit ? 'This file is not in the index.' : undefined };
+		}
+		const fn = this.funcAround(facts, q.startLine);
+		const owner = fn && this.ownerOf(fn);
+		const word = hit.word;
+		const chain = chainBefore(q.lineText.slice(0, hit.start));
+		const after = q.lineText.slice(hit.end).trimStart();
+		const isCall = after.startsWith('(');
+		const places: Place[] = [];
+		const push = (p: Place | undefined) => {
+			if (p && !places.some(x => x.file === p.file && x.line === p.line && x.cardLine === p.cardLine)) {
+				places.push(p);
+			}
+		};
+		if (fn && (isCall || chain)) {
+			// A call, or a member: resolved the way the flow resolves it (by the receiver's type).
+			// A receiver that is only names (no calls in it) resolves like the flow's own call facts do.
+			const plain = !chain || chain.segs.every(s => !s.call && !s.isNew);
+			if (isCall && plain) {
+				this.placesOf(this.resolveCall(fn, { name: word, recv: chain ? recvText(chain.segs) : undefined, line: q.startLine + q.cardLine - 1, strings: [] })).forEach(push);
+			}
+			if (!places.length && chain) {
+				const t = this.chainType(fn, chain.segs);
+				if (t) {
+					const m = this.lookup(t.type, word);
+					if (m) {
+						push(this.placeOfFn(m));
+					}
+					const f = !m && this.withSupers(t.type).find(st => st.fields.some(x => x.name === word));
+					if (f) {
+						push({ file: f.file, line: f.fields.find(x => x.name === word)!.line, label: `${f.name}.${word}` });
+					}
+				}
+			}
+			if (places.length) {
+				return { places };
+			}
+		}
+		if (!chain) {
+			// A local or a parameter: its first mention in the card (the declaration), when that is not this very place.
+			if (fn && (word in fn.locals || word in fn.params)) {
+				const lines = q.cardText.replace(/\r\n/g, '\n').split('\n');
+				const mention = new RegExp(`(?<![\\p{L}\\p{N}_$])${word.replace(/\$/g, '\\$')}(?![\\p{L}\\p{N}_$])`, 'u');
+				const at = lines.findIndex(l => mention.test(l));
+				const col = at < 0 ? -1 : lines[at].search(mention);
+				if (at >= 0 && (at + 1 < q.cardLine || (at + 1 === q.cardLine && col < hit.start))) {
+					return { places: [{ file: facts.file, line: q.startLine + at, column: col + 1, cardLine: at + 1, cardColumn: col + 1, label: word }] };
+				}
+			}
+			// A field of this class (or its supers).
+			const field = owner && this.withSupers(owner).find(st => st.fields.some(f => f.name === word));
+			if (field) {
+				push({ file: field.file, line: field.fields.find(f => f.name === word)!.line, label: `${field.name}.${word}` });
+			}
+			// A type, an imported one included.
+			const t = this.typeNamed(word, facts.file);
+			if (t) {
+				push(this.placeOfType(t));
+			}
+			const imp = own(facts.imports, word);
+			if (!places.length && imp) {
+				const file = this.importFile(facts, imp);
+				const target = file && this.files.get(file);
+				const name = imp.split(':')[1] ?? imp.split('.').pop();
+				const ty = target && target.types.find(x => x.name === word || x.name === name);
+				const func = target && target.funcs.find(f => !f.owner && (f.name === word || f.name === name));
+				if (ty) {
+					push(this.placeOfType(ty));
+				} else if (func) {
+					push(this.placeOfFn(func));
+				} else if (file) {
+					push({ file, line: 1, label: word });
+				}
+			}
+			const free = facts.funcs.find(f => !f.owner && f.name === word);
+			if (free) {
+				push(this.placeOfFn(free));
+			}
+		}
+		return places.length ? { places } : { places, message: `No definition of ${word} found in the index.` };
+	}
+
+	/** The function a call at the cursor reaches, for parameter hints: its parameters as written and which one the cursor is in. */
+	signatureAt(q: { file: string; startLine: number; before: string }): { label: string; params: string[]; active: number } | undefined {
+		this.build();
+		const facts = this.factsFor(q.file);
+		const call = callBefore(q.before);
+		const fn = facts && this.funcAround(facts, q.startLine);
+		if (!facts || !call || !fn) {
+			return undefined;
+		}
+		const owner = this.ownerOf(fn);
+		let target: FuncFact | undefined;
+		if (call.segs.length) {
+			const hit = this.chainType(fn, call.segs);
+			target = hit && this.lookup(hit.type, call.name);
+		} else {
+			target = (owner && this.lookup(owner, call.name)) ?? facts.funcs.find(f => !f.owner && f.name === call.name);
+		}
+		if (!target || isConstructorName(target.name)) {
+			return undefined;
+		}
+		return { label: `${target.name}${signatureDetail(target, facts.lang)}`, params: paramLabels(target, facts.lang), active: call.active };
+	}
+
 	/** Functions in a file, for the ◆ Flow lenses. */
 	methodsIn(file: string): { id: string; name: string; line: number; isEntry: boolean }[] {
 		this.build();
-		return (this.files.get(file)?.funcs ?? []).filter(fn => !fn.inlineRoute || true).map(fn => ({ id: `poly:${fn.id}`, name: fn.owner ? `${fn.owner}.${fn.name}` : fn.name, line: fn.line, isEntry: !!this.entryOf(fn) }));
+		return (this.files.get(file)?.funcs ?? []).map(fn => ({ id: `poly:${fn.id}`, name: fn.owner ? `${fn.owner}.${fn.name}` : fn.name, line: fn.line, isEntry: !!this.entryOf(fn) }));
+	}
+
+	/**
+	 * What the type model is built from: every file's facts, and the resolved calls between classes (how many call sites go from one
+	 * class to another, an interface call counted for the implementation it reaches), so the architecture view needs no resolver of its own.
+	 */
+	typeFacts(): { files: FileFacts[]; calls: TypeCall[]; entries: TypeEntry[] } {
+		this.build();
+		const counts = new Map<string, TypeCall>();
+		for (const f of this.files.values()) {
+			for (const fn of f.funcs) {
+				if (!fn.owner || fn.inlineRoute) {
+					continue;
+				}
+				for (const group of this.targets(fn)) {
+					for (const t of group) {
+						if (t.kind !== 'fn' || !t.fn.owner || (t.fn.file === fn.file && t.fn.owner === fn.owner) || t.fn.name === '<init>' || t.guess) {
+							continue;
+						}
+						const key = `${fn.file}|${fn.owner}|${t.fn.file}|${t.fn.owner}`;
+						const hit = counts.get(key);
+						if (hit) {
+							hit.count++;
+						} else {
+							counts.set(key, { fromFile: fn.file, fromOwner: fn.owner, toFile: t.fn.file, toOwner: t.fn.owner, count: 1 });
+						}
+					}
+				}
+			}
+		}
+		// The bodies are not part of the type model: leaving calls, locals and constants out keeps what crosses to the extension host small.
+		const slim = (fn: FuncFact): FuncFact => ({ ...fn, calls: [], locals: {}, consts: {}, isAccessor: this.isAccessor(fn) });
+		const entries = this.entries.map((e): TypeEntry => ({
+			id: e.id, controller: e.controller, action: e.action, http: e.http, file: e.file, line: e.line, owner: e.fn.owner,
+			params: e.fn.paramInfo?.length ? e.fn.paramInfo.map(p => ({ name: p.name, typeText: p.typeText, anns: p.anns })) : Object.entries(e.fn.params).map(([name, typeText]) => ({ name, typeText, anns: [] })),
+			returns: e.fn.returns,
+		}));
+		return { files: [...this.files.values()].map(f => ({ ...f, funcs: f.funcs.map(slim) })), calls: [...counts.values()], entries };
 	}
 
 	stats() {

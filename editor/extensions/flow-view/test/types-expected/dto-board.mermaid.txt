@@ -1,0 +1,52 @@
+erDiagram
+  AddressDto {
+    String street
+    String city
+  }
+  CategoryDto {
+    CategoryDto parent
+    List_CategoryDto children
+    String name
+  }
+  CreateOrderRequest {
+    List_OrderLineDto lines
+    AddressDto shipTo
+  }
+  Discount {
+    int percent
+  }
+  Money {
+    long cents
+    String currency
+  }
+  OrderDto {
+    Long id
+    AddressDto address
+    List_OrderLineDto lines
+    Optional_String note
+    Status status
+  }
+  OrderLineDto {
+    String sku
+    int quantity
+    Money price
+  }
+  OrderSummary {
+    Money total
+    Discount discount
+  }
+  Status {
+    string NEW
+    string PAID
+    string SHIPPED
+  }
+  CategoryDto ||--|| CategoryDto : "parent"
+  CategoryDto ||--o{ CategoryDto : "children"
+  CreateOrderRequest ||--|| AddressDto : "shipTo"
+  CreateOrderRequest ||--o{ OrderLineDto : "lines"
+  OrderDto ||--|| AddressDto : "address"
+  OrderDto ||--o{ OrderLineDto : "lines"
+  OrderDto ||--|| Status : "status"
+  OrderLineDto ||--|| Money : "price"
+  OrderSummary ||--|| Discount : "discount"
+  OrderSummary ||--|| Money : "total"

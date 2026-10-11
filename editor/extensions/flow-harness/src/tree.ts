@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow Harness: the map. One tree, grouped by what each piece does, every row saying where it
+ *  Axle Harness: the map. One tree, grouped by what each piece does, every row saying where it
  *  comes from (user, project, local, folder), what it costs, and whether it looks broken.
  *--------------------------------------------------------------------------------------------*/
 

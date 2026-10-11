@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow polyglot index: tree-sitter helpers shared by the extractors.
+ *  Axle polyglot index: tree-sitter helpers shared by the extractors.
  *--------------------------------------------------------------------------------------------*/
 
 /** The parts of a web-tree-sitter node the extractors use (the runtime ships its own .d.ts). */

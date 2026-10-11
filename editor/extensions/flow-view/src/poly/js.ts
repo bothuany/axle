@@ -1,10 +1,10 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow polyglot index: JavaScript and TypeScript (and TSX). Classes with decorators (Nest,
+ *  Axle polyglot index: JavaScript and TypeScript (and TSX). Classes with decorators (Nest,
  *  TypeORM), constructor-injected fields, functions and arrow functions, imports and require,
  *  calls, and Express-style route registrations with their inline handlers.
  *--------------------------------------------------------------------------------------------*/
 
-import type { Ann, CallFact, FileFacts, FuncFact, TypeFact } from './model';
+import type { Ann, CallFact, FileFacts, FuncFact, ParamFact, TypeFact } from './model';
 import { endLine, line, receiverText, same, splitType, stringValue, walk, type TsNode } from './ts';
 
 const VERBS = new Set(['get', 'post', 'put', 'patch', 'delete', 'all', 'options', 'head']);
@@ -12,6 +12,43 @@ const VERBS = new Set(['get', 'post', 'put', 'patch', 'delete', 'all', 'options'
 function typeText(n: TsNode | null | undefined) {
 	// type_annotation is ": Foo<Bar>"
 	return n ? splitType(n.text.replace(/^:\s*/, '')) : { base: '', args: [] };
+}
+
+/** A type annotation as written without its colon, on one line: `Promise<UserDto[]>`. */
+function rawTypeText(n: TsNode | null | undefined): string | undefined {
+	const t = n?.text.replace(/^:\s*/, '').replace(/\s+/g, ' ').trim();
+	return t || undefined;
+}
+
+/** TS accessibility keyword → UML visibility; public when nothing is written. */
+function visibilityFrom(word: string | undefined): '+' | '-' | '#' {
+	return word === 'private' ? '-' : word === 'protected' ? '#' : '+';
+}
+
+/** `interface Page<T, U>` → ['T', 'U']. */
+function tsTypeParams(n: TsNode): string[] | undefined {
+	const list = n.namedChildren.find(c => c.type === 'type_parameters');
+	const names = (list?.namedChildren ?? []).filter(c => c.type === 'type_parameter').map(c => c.namedChildren.find(x => x.type === 'type_identifier')?.text ?? c.childForFieldName('name')?.text ?? '').filter(Boolean);
+	return names.length ? names : undefined;
+}
+
+/** The members of an interface or an object type: `name?: Type;` as fields. */
+function propertyFields(body: TsNode | null | undefined, t: TypeFact) {
+	for (const m of body?.namedChildren ?? []) {
+		if (m.type === 'property_signature') {
+			const name = m.childForFieldName('name')?.text.replace(/^["']|["']$/g, '') ?? '';
+			const ty = typeText(m.childForFieldName('type'));
+			const raw = rawTypeText(m.childForFieldName('type'));
+			if (name) {
+				t.fields.push({
+					name, type: ty.base, typeArgs: ty.args, annotations: [], line: line(m), typeText: raw, visibility: '+',
+					isFinal: m.children.some(c => c.text === 'readonly') || undefined, optional: m.children.some(c => c.type === '?') || undefined,
+				});
+			}
+		} else if (m.type === 'method_signature') {
+			t.methods.push(m.childForFieldName('name')?.text ?? '?');
+		}
+	}
 }
 
 function decorators(n: TsNode): Ann[] {
@@ -50,21 +87,39 @@ export function extractJs(root: TsNode, file: string, mtime: number): FileFacts 
 			isStatic: /^static\b/.test(n.text),
 			exported,
 		};
+		const access = n.namedChildren.find(c => c.type === 'accessibility_modifier')?.text;
+		fn.visibility = name.startsWith('#') ? '-' : visibilityFrom(access);
+		fn.isAbstract = n.type === 'abstract_method_signature' || undefined;
+		const returnType = rawTypeText(n.childForFieldName('return_type'));
+		if (returnType) {
+			fn.returns = returnType;
+		}
+		const info: ParamFact[] = [];
 		for (const p of n.childForFieldName('parameters')?.namedChildren ?? []) {
 			const pname = (p.childForFieldName('pattern') ?? p).text;
 			const ptype = typeText(p.childForFieldName('type')).base;
 			if (/^\w+$/.test(pname)) {
 				fn.params[pname] = ptype;
+				const raw = rawTypeText(p.childForFieldName('type'));
+				if (raw) {
+					info.push({ name: pname, typeText: p.type === 'optional_parameter' ? `${raw}?` : raw, anns: decorators(p).map(a => a.name) });
+				}
 			}
 			// constructor(private readonly users: UsersService) → field
 			if (owner && name === 'constructor' && p.namedChildren.some(c => c.type === 'accessibility_modifier' || c.text === 'readonly')) {
-				owner.fields.push({ name: pname, type: ptype, typeArgs: typeText(p.childForFieldName('type')).args, annotations: decorators(p), line: line(p) });
+				owner.fields.push({
+					name: pname, type: ptype, typeArgs: typeText(p.childForFieldName('type')).args, annotations: decorators(p), line: line(p), typeText: rawTypeText(p.childForFieldName('type')),
+					visibility: visibilityFrom(p.namedChildren.find(c => c.type === 'accessibility_modifier')?.text), isFinal: p.namedChildren.some(c => c.text === 'readonly') || undefined,
+				});
 			} else if (owner && name === 'constructor') {
 				const anns2 = decorators(p);
 				if (anns2.length) {
-					owner.fields.push({ name: pname, type: ptype, typeArgs: typeText(p.childForFieldName('type')).args, annotations: anns2, line: line(p) });
+					owner.fields.push({ name: pname, type: ptype, typeArgs: typeText(p.childForFieldName('type')).args, annotations: anns2, line: line(p), typeText: rawTypeText(p.childForFieldName('type')) });
 				}
 			}
+		}
+		if (info.length) {
+			fn.paramInfo = info;
 		}
 		const body = n.childForFieldName('body');
 		if (body) {
@@ -80,7 +135,7 @@ export function extractJs(root: TsNode, file: string, mtime: number): FileFacts 
 			const t: TypeFact = {
 				name: n.childForFieldName('name')?.text ?? 'default', file, line: line(n), endLine: endLine(n),
 				kind: 'class', isAbstract: n.type === 'abstract_class_declaration', supers: [], superArgs: {},
-				annotations: decorators(n), fields: [], methods: [],
+				annotations: decorators(n), fields: [], methods: [], typeParams: tsTypeParams(n),
 			};
 			// Decorators can sit on the export statement instead.
 			if (n.parent?.type === 'export_statement') {
@@ -124,26 +179,72 @@ export function extractJs(root: TsNode, file: string, mtime: number): FileFacts 
 						fnFrom(value, name, t, anns, exported);
 					} else {
 						const ty = typeText(m.childForFieldName('type'));
-						t.fields.push({ name, type: ty.base || (value?.type === 'new_expression' ? splitType(value.childForFieldName('constructor')?.text ?? '').base : ''), typeArgs: ty.args, annotations: anns, line: line(m), init: value?.text });
+						t.fields.push({
+							name, type: ty.base || (value?.type === 'new_expression' ? splitType(value.childForFieldName('constructor')?.text ?? '').base : ''), typeArgs: ty.args, annotations: anns, line: line(m), init: value?.text,
+							typeText: rawTypeText(m.childForFieldName('type')), visibility: name.startsWith('#') ? '-' : visibilityFrom(m.namedChildren.find(c => c.type === 'accessibility_modifier')?.text),
+							isStatic: m.children.some(c => c.type === 'static') || undefined, isFinal: m.children.some(c => c.text === 'readonly') || undefined, optional: m.children.some(c => c.type === '?') || undefined,
+						});
 					}
 				}
 			}
 			facts.types.push(t);
 		} else if (n.type === 'interface_declaration') {
 			const t: TypeFact = { name: n.childForFieldName('name')?.text ?? '?', file, line: line(n), endLine: endLine(n), kind: 'interface', isAbstract: true, supers: [], superArgs: {}, annotations: [], fields: [], methods: [] };
-			walk(n.childForFieldName('body') ?? n, x => {
-				if (x.type === 'method_signature') {
-					t.methods.push(x.childForFieldName('name')?.text ?? '?');
+			// `interface A extends B, C`: the type model draws the inheritance (the flow resolver never looked at it).
+			for (const h of n.namedChildren.filter(c => c.type === 'extends_type_clause')) {
+				for (const v of h.namedChildren) {
+					const { base } = splitType(v.text);
+					if (base) {
+						t.supers.push(base);
+					}
 				}
-			});
+			}
+			propertyFields(n.childForFieldName('body'), t);
+			t.typeParams = tsTypeParams(n);
+			facts.types.push(t);
+		} else if (n.type === 'type_alias_declaration' && n.childForFieldName('value')?.type === 'object_type') {
+			// `type UserDto = { id: number; name: string }`: a type of fields, like an interface.
+			const t: TypeFact = {
+				name: n.childForFieldName('name')?.text ?? '?', file, line: line(n), endLine: endLine(n), kind: 'interface', declKind: 'alias', isAbstract: false, supers: [], superArgs: {}, annotations: [], fields: [], methods: [],
+				typeParams: tsTypeParams(n),
+			};
+			propertyFields(n.childForFieldName('value'), t);
+			facts.types.push(t);
+		} else if (n.type === 'enum_declaration') {
+			const t: TypeFact = { name: n.childForFieldName('name')?.text ?? '?', file, line: line(n), endLine: endLine(n), kind: 'enum', isAbstract: false, supers: [], superArgs: {}, annotations: [], fields: [], methods: [], enumConstants: [] };
+			for (const m of n.childForFieldName('body')?.namedChildren ?? []) {
+				const nm = m.type === 'enum_assignment' ? m.childForFieldName('name')?.text : m.type === 'property_identifier' || m.type === 'string' ? m.text : undefined;
+				if (nm) {
+					t.enumConstants!.push(nm.replace(/^["']|["']$/g, ''));
+				}
+			}
 			facts.types.push(t);
 		} else if (n.type === 'function_declaration' || n.type === 'generator_function_declaration') {
 			fnFrom(n, n.childForFieldName('name')?.text ?? 'default', undefined, [], exported);
 		} else if (n.type === 'lexical_declaration' || n.type === 'variable_declaration') {
 			for (const d of n.namedChildren.filter(c => c.type === 'variable_declarator')) {
-				const name = d.childForFieldName('name')?.text ?? '';
+				const nameNode = d.childForFieldName('name');
+				const name = nameNode?.text ?? '';
 				const value = d.childForFieldName('value');
 				if (!value) {
+					continue;
+				}
+				// const { getOrders, save: persist } = require('./orders')
+				if (nameNode?.type === 'object_pattern' && value.type === 'call_expression' && value.childForFieldName('function')?.text === 'require') {
+					const src = stringValue(value.childForFieldName('arguments')?.namedChildren[0]);
+					if (src) {
+						for (const part of nameNode.namedChildren) {
+							if (part.type === 'shorthand_property_identifier_pattern') {
+								facts.imports[part.text] = `${src}:${part.text}`;
+							} else if (part.type === 'pair_pattern') {
+								const key = part.childForFieldName('key')?.text;
+								const local = part.childForFieldName('value')?.text;
+								if (key && local && /^\w+$/.test(local)) {
+									facts.imports[local] = `${src}:${key}`;
+								}
+							}
+						}
+					}
 					continue;
 				}
 				if (value.type === 'arrow_function' || value.type === 'function_expression' || value.type === 'function') {

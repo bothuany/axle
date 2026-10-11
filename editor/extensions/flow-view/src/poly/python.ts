@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow polyglot index: Python. Classes (with class attributes, for SQLAlchemy and Django models),
+ *  Axle polyglot index: Python. Classes (with class attributes, for SQLAlchemy and Django models),
  *  functions with their decorators (FastAPI, Flask, Celery), typed parameters, `self.x` fields,
  *  calls, module-level routers and Django url patterns.
  *--------------------------------------------------------------------------------------------*/
@@ -59,7 +59,7 @@ function statement(c: TsNode, facts: FileFacts, owner: TypeFact | undefined) {
 			}
 		}
 	} else if (c.type === 'import_from_statement') {
-		const mod = resolveRelative(c.childForFieldName('module_name')?.text ?? '', facts.module ?? '');
+		const mod = resolveRelative(c.childForFieldName('module_name')?.text ?? '', facts.module ?? '', /(^|[\\/])__init__\.py$/.test(facts.file));
 		for (const n of c.childrenForFieldName('name')) {
 			const name = n.type === 'aliased_import' ? n.childForFieldName('name')?.text : n.text;
 			const alias = n.type === 'aliased_import' ? n.childForFieldName('alias')?.text : name;
@@ -99,12 +99,14 @@ function statement(c: TsNode, facts: FileFacts, owner: TypeFact | undefined) {
 	}
 }
 
-function resolveRelative(mod: string, current: string) {
+/** `from .x import y` in module `current`: one dot is the package the module sits in, which for an `__init__.py` is the module itself. */
+function resolveRelative(mod: string, current: string, isPackage: boolean) {
 	if (!mod.startsWith('.')) {
 		return mod;
 	}
 	const dots = mod.match(/^\.+/)![0].length;
-	const base = current.split('.').slice(0, -dots);
+	const parts = current.split('.').filter(Boolean);
+	const base = parts.slice(0, Math.max(0, parts.length - (isPackage ? dots - 1 : dots)));
 	const rest = mod.slice(dots);
 	return [...base, ...(rest ? [rest] : [])].join('.');
 }
@@ -183,7 +185,11 @@ function cls(n: TsNode, facts: FileFacts, anns: Ann[]) {
 			const callee = right?.type === 'call' ? right.childForFieldName('function')?.text ?? '' : '';
 			const ty = typeNode ? splitType(typeNode.text.replace(/\[/, '<').replace(/\]$/, '>')) : { base: callee.split('.').pop() ?? '', args: [] };
 			if (/^\w+$/.test(name)) {
-				t.fields.push({ name, type: ty.base, typeArgs: ty.args, annotations: [], line: line(c), init: right?.text });
+				t.fields.push({
+					name, type: ty.base, typeArgs: ty.args, annotations: [], line: line(c), init: right?.text,
+					typeText: typeNode?.text.replace(/\s+/g, ' '), visibility: name.startsWith('_') ? '-' : '+',
+					isStatic: /^ClassVar\b/.test(typeNode?.text ?? '') || undefined,
+				});
 			}
 		} else if (c.type === 'class_definition' && c.childForFieldName('name')?.text === 'Meta') {
 			// Django: class Meta: db_table = "..."
@@ -206,6 +212,12 @@ function cls(n: TsNode, facts: FileFacts, anns: Ann[]) {
 			}
 		}
 	}
+	// class Color(Enum): the class-level assignments are the members.
+	if (t.supers.some(s => /^(Enum|IntEnum|StrEnum|Flag|IntFlag)$/.test(s.split('.').pop() ?? ''))) {
+		t.kind = 'enum';
+		t.enumConstants = t.fields.filter(f => !f.name.startsWith('_')).map(f => f.name);
+		t.fields = [];
+	}
 	facts.types.push(t);
 }
 
@@ -225,8 +237,12 @@ function func(n: TsNode, facts: FileFacts, owner: TypeFact | undefined, anns: An
 		const ptype = p.childForFieldName('type')?.text;
 		if (pname && pname !== 'self' && pname !== 'cls') {
 			fn.params[pname] = pyType(ptype);
+			if (ptype) {
+				(fn.paramInfo ??= []).push({ name: pname, typeText: ptype.replace(/\s+/g, ' '), anns: [] });
+			}
 		}
 	}
+	fn.visibility = name.startsWith('_') && !name.startsWith('__') ? '-' : '+';
 	owner?.methods.push(name);
 	const body = n.childForFieldName('body');
 	if (body) {

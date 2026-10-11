@@ -1,0 +1,5 @@
+GET /users/{id}   main.get_user
+  call: UserService.find [method]
+    call: UserService.load [method]
+POST /users       main.create_user
+  call: UserService.create [method]

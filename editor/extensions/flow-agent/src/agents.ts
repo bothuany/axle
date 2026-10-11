@@ -1,19 +1,20 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow: agents in terminals. Claude Code and Codex run as their real CLIs, each in its own
- *  terminal; Flow only watches. Claude reports through hooks that Flow hands to that one
+ *  Axle: agents in terminals. Claude Code and Codex run as their real CLIs, each in its own
+ *  terminal; Axle only watches. Claude reports through hooks that Axle hands to that one
  *  session with --settings (the user's own settings and hooks are untouched and still run), so
  *  every agent shows whether it is working, waiting for you or done, what it is doing, its to-do
  *  list and how full its context is. The hooks never answer a permission question: the CLI asks.
  *--------------------------------------------------------------------------------------------*/
 
 import { createHash, randomBytes, randomUUID } from 'crypto';
-import { promises as fs, watch, type FSWatcher } from 'fs';
+import { existsSync, promises as fs, readFileSync, watch, writeFileSync, type FSWatcher } from 'fs';
 import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { inheritedAgentEnv } from './env';
 
-/** claude reports through hooks; codex and custom CLIs are plain terminals Flow only lists. */
+/** claude reports through hooks; codex and custom CLIs are plain terminals Axle only lists. */
 export type AgentCli = 'claude' | 'codex' | 'custom';
 /** working: busy · blocked: waiting for you · done: finished a turn · idle: started, no prompt yet · unknown: no reports (Codex) · ended: the CLI exited. */
 export type AgentState = 'starting' | 'working' | 'blocked' | 'done' | 'idle' | 'unknown' | 'ended';
@@ -42,6 +43,16 @@ export interface AgentSession {
 	transcript?: string;
 	/** What a custom agent runs, e.g. `gemini` or `aider --model sonnet`. */
 	command?: string;
+	/** The flows the files edited in the last turn reach, worked out when the turn ended. */
+	impact?: TurnImpact;
+}
+
+/** What flow-view answers to `flow.agent.turnImpact`. */
+export interface TurnImpact {
+	files: number;
+	flows: { id: string; label: string; name: string; source: 'roslyn' | 'poly' }[];
+	more: number;
+	note?: string;
 }
 
 export interface CustomAgent {
@@ -68,7 +79,17 @@ interface HookPayload {
 
 const AGENT = 'Claude Code (terminal)';
 const EDIT_TOOLS = 'Edit|Write|MultiEdit|NotebookEdit';
-const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'Notification', 'Stop', 'SessionEnd'];
+/** PreToolUse also sees the plan an agent proposes when it leaves plan mode (tool_input.plan, injected by Claude Code). */
+const PRE_TOOLS = `${EDIT_TOOLS}|ExitPlanMode`;
+/** The most files of one turn that are checked for the flows they affect. */
+const MAX_TOUCHED = 40;
+/** The turn-end impact may take this long: Roslyn answers one request at a time. */
+const IMPACT_WAIT_MS = 9000;
+const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'Stop', 'SessionEnd'];
+/** Agents that never come back to a reloaded window (their terminal is gone) are dropped after this. */
+const ORPHAN_TTL_MS = 90_000;
+/** The most a hook may wait for Axle to snapshot a file: the edit must not stall on it. */
+const SNAPSHOT_WAIT_MS = 2500;
 
 const KIND: Record<string, string> = { Bash: 'execute', Edit: 'edit', Write: 'edit', MultiEdit: 'edit', NotebookEdit: 'edit', Read: 'read', Grep: 'search', Glob: 'search', WebFetch: 'fetch', WebSearch: 'fetch' };
 
@@ -87,32 +108,55 @@ function filesOf(input: Record<string, unknown> = {}) {
 	return typeof f === 'string' ? [f] : [];
 }
 
-/**
- * When Flow itself was started from inside a Claude Code session, its environment carries that
- * session's variables (child-session flags, host proxy, disabled transcripts). A fresh agent must
- * not inherit them: null removes a variable from the terminal.
- */
-function inheritedAgentEnv() {
-	const env: Record<string, null> = {};
-	const hosted = !!process.env.CLAUDE_CODE_HOST_SESSION_ID || !!process.env.CLAUDECODE;
-	for (const k of Object.keys(process.env)) {
-		if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDE_PID$|CLAUDE_EFFORT$|CLAUDE_PREVIEW_)/.test(k) || (hosted && k === 'ANTHROPIC_BASE_URL')) {
-			env[k] = null;
-		}
-	}
-	return env;
+/** Resolves with undefined once `ms` have passed, whatever `p` is doing. */
+function bounded<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
+	let timer: NodeJS.Timeout | undefined;
+	return Promise.race([p, new Promise<undefined>(r => timer = setTimeout(() => r(undefined), ms))]).finally(() => clearTimeout(timer));
 }
 
-/** Reads the event from stdin and posts it to the Flow window that owns this folder now. Never blocks the agent. */
+/** sessions.json is plain text on disk: take only what has the right shape, so a damaged file cannot throw at startup. */
+function parseSaved(raw: unknown): Saved | undefined {
+	const o = raw as { token?: unknown; sessions?: unknown } | null;
+	if (!o || typeof o !== 'object') {
+		return undefined;
+	}
+	const str = (v: unknown) => typeof v === 'string' ? v : undefined;
+	const sessions: Saved['sessions'] = [];
+	for (const e of Array.isArray(o.sessions) ? o.sessions as Record<string, unknown>[] : []) {
+		if (e && typeof e === 'object' && typeof e.id === 'string' && (e.cli === 'claude' || e.cli === 'codex' || e.cli === 'custom')) {
+			sessions.push({ id: e.id, cli: e.cli, name: str(e.name) ?? e.id, pid: typeof e.pid === 'number' ? e.pid : undefined, prompt: str(e.prompt), transcript: str(e.transcript), command: str(e.command) });
+		}
+	}
+	return { token: str(o.token) ?? '', sessions };
+}
+
+/** The newest /rename in these transcript lines. */
+function lastTitle(lines: string[]): string | undefined {
+	for (let i = lines.length - 1; i >= 0; i--) {
+		if (lines[i].includes('"custom-title"')) {
+			try {
+				const title = (JSON.parse(lines[i]) as { customTitle?: string }).customTitle?.trim();
+				if (title) {
+					return title;
+				}
+			} catch {
+				// partial line
+			}
+		}
+	}
+	return undefined;
+}
+
+/** Reads the event from stdin and posts it to the Axle window that owns this folder now. Never blocks the agent. */
 function HOOK_SCRIPT(portFile: string, tokenFile: string) {
-	return `// Written by Flow: forwards Claude Code hook events to the Flow window (observe only).
+	return `// Written by Axle: forwards Claude Code hook events to the Axle window (observe only).
 const fs = require('fs'), http = require('http');
 let body = '';
 process.stdin.on('data', d => body += d).on('end', () => {
 	let port, token;
 	try { port = fs.readFileSync(${JSON.stringify(portFile)}, 'utf8').trim(); token = fs.readFileSync(${JSON.stringify(tokenFile)}, 'utf8').trim(); } catch { process.exit(0); }
 	if (!port) process.exit(0);
-	const req = http.request({ host: '127.0.0.1', port, path: '/hook', method: 'POST', timeout: 3000, headers: { 'Content-Type': 'application/json', 'X-Flow-Token': token } }, res => { res.resume(); res.on('end', () => process.exit(0)); });
+	const req = http.request({ host: '127.0.0.1', port, path: '/hook', method: 'POST', timeout: 3000, headers: { 'Content-Type': 'application/json', 'X-Flow-Token': token, 'X-Flow-Agent': process.env.FLOW_AGENT_SESSION || '' } }, res => { res.resume(); res.on('end', () => process.exit(0)); });
 	req.on('error', () => process.exit(0)).on('timeout', () => { req.destroy(); process.exit(0); });
 	req.end(body);
 });
@@ -136,33 +180,65 @@ export class Agents implements vscode.Disposable {
 	private token = '';
 	private dir = '';
 	private readonly watchers = new Map<string, FSWatcher>();
+	/** Debounce of the transcript watcher, per session. */
+	private readonly titleTimers = new Map<string, NodeJS.Timeout>();
 	/** Permission questions still open, so the answer can be recorded when the tool runs (or does not). */
 	private readonly asked = new Map<string, { tool: string; input: Record<string, unknown>; at: number }>();
 	private readonly disposables: vscode.Disposable[] = [];
 	/** Agents from before a reload, waiting for their terminal to come back. */
 	private readonly orphans = new Map<number, Saved['sessions'][number]>();
+	private orphanTimer: NodeJS.Timeout | undefined;
+	/** Claude session ids that continue a Axle agent after /clear or /resume gave the conversation a new one. */
+	private readonly aliases = new Map<string, string>();
+	/** Set once start() has run: spawn waits on it so an agent never starts before the hook settings exist. */
+	private ready: Promise<void> | undefined;
+	private settingsOk = false;
+	/** Files an agent edited since its last prompt, for the turn-end impact. */
+	private readonly touched = new Map<string, Set<string>>();
+	/** Sessions whose plan was drawn from PreToolUse this turn, so PostToolUse does not draw it twice. */
+	private readonly planDrawn = new Set<string>();
 
 	constructor(private readonly context: vscode.ExtensionContext, private readonly log: vscode.LogOutputChannel) {
 		this.disposables.push(
 			vscode.window.onDidCloseTerminal(t => this.closed(t)),
 			vscode.window.onDidChangeActiveTerminal(t => this.seen(t)),
 			vscode.window.onDidChangeTerminalState(t => t.state.isInteractedWith && this.seen(t)),
+			// An untrusted workspace starts nothing; trusting it later starts the hook server and brings the agents back.
+			vscode.workspace.onDidGrantWorkspaceTrust(() => void this.start()),
 		);
 	}
 
-	async start() {
+	/** Safe to call again: the work happens once. Does nothing in an untrusted workspace until it is trusted. */
+	start(): Promise<void> {
+		if (!vscode.workspace.isTrusted) {
+			this.log.info('Agents: workspace not trusted; agents stay off');
+			return Promise.resolve();
+		}
+		this.ready ??= this.init().catch(e => this.log.error(`Agents: start failed: ${(e as Error).message}`));
+		return this.ready;
+	}
+
+	private async init() {
 		// Keyed by folder, not by window: a reloaded window can get a fresh storageUri while the old
 		// extension host lingers, and the agents' hook settings must find the newest window either way.
-		const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? 'empty';
-		this.dir = path.join(this.context.globalStorageUri.fsPath, 'agents', createHash('sha1').update(folder).digest('hex').slice(0, 12));
-		const saved = await fs.readFile(path.join(this.dir, 'sessions.json'), 'utf8').then(t => JSON.parse(t) as Saved).catch(() => undefined);
-		this.token = saved?.token ?? randomBytes(16).toString('hex');
+		// A window without a folder has nothing to key on, and two of them would take each other's hook port
+		// and agent list: it gets a directory of its own (its agents are not picked up again after a reload).
+		const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		const key = folder ?? `empty:${vscode.env.sessionId}:${process.pid}`;
+		this.dir = path.join(this.context.globalStorageUri.fsPath, 'agents', (folder ? '' : 'empty-') + createHash('sha1').update(key).digest('hex').slice(0, 12));
+		const saved = await fs.readFile(path.join(this.dir, 'sessions.json'), 'utf8').then(t => parseSaved(JSON.parse(t))).catch(() => undefined);
+		this.token = saved?.token || randomBytes(16).toString('hex');
 		try {
 			await this.listen();
 		} catch (e) {
 			this.log.warn(`Agents: no port for hooks; agents run without status (${(e as Error).message})`);
 		}
-		await this.writeSettings();
+		try {
+			await this.writeSettings();
+			this.settingsOk = true;
+		} catch (e) {
+			this.log.warn(`Agents: could not write the hook settings; agents run without status (${(e as Error).message})`);
+		}
 		await this.revive(saved);
 		this.save();
 	}
@@ -184,8 +260,8 @@ export class Agents implements vscode.Disposable {
 	}
 
 	/**
-	 * The hooks a Flow agent gets on top of the user's own: read-only observers that print nothing,
-	 * so they never decide anything. Each one posts the event to whichever Flow window holds this
+	 * The hooks a Axle agent gets on top of the user's own: read-only observers that print nothing,
+	 * so they never decide anything. Each one posts the event to whichever Axle window holds this
 	 * workspace now: the port is read from a file at call time, because after a window reload the
 	 * old extension host can linger on the old port while the agent keeps running.
 	 */
@@ -198,11 +274,14 @@ export class Agents implements vscode.Disposable {
 		// A tiny Node script, run with the editor's own Node: the same on macOS, Linux and Windows.
 		const script = path.join(this.dir, 'flow-hook.js');
 		await fs.writeFile(script, HOOK_SCRIPT(portFile, tokenFile));
-		const command = `"${process.execPath}" "${script}"`;
+		// On the desktop `process.execPath` is the Axle executable itself: without ELECTRON_RUN_AS_NODE it would open
+		// an editor window for the script on every hook event. Claude Code runs hooks through bash, which takes the prefix.
+		const asNode = process.versions.electron ? 'ELECTRON_RUN_AS_NODE=1 ' : '';
+		const command = `${asNode}"${process.execPath}" "${script}"`;
 		const hook = { type: 'command', command, timeout: 5 };
 		const hooks: Record<string, unknown[]> = {};
 		for (const e of HOOK_EVENTS) {
-			const matcher = e === 'PreToolUse' ? EDIT_TOOLS : e === 'PostToolUse' || e === 'PermissionRequest' ? '*' : undefined;
+			const matcher = e === 'PreToolUse' ? PRE_TOOLS : e === 'PostToolUse' || e === 'PostToolUseFailure' || e === 'PermissionRequest' ? '*' : undefined;
 			hooks[e] = [{ ...(matcher ? { matcher } : {}), hooks: [hook] }];
 		}
 		await fs.writeFile(this.settingsFile, JSON.stringify({ hooks }, null, 2), { mode: 0o600 });
@@ -210,26 +289,57 @@ export class Agents implements vscode.Disposable {
 
 	/** Terminals outlive a window reload; find ours again by their process (they may reattach after we start). */
 	private async revive(saved: Saved | undefined) {
+		// First, so nothing below can leave a reattaching terminal unnoticed.
+		this.disposables.push(vscode.window.onDidOpenTerminal(t => void this.adopt(t)));
 		for (const s of saved?.sessions ?? []) {
+			let alive = false;
 			try {
 				process.kill(s.pid!, 0); // still running?
+				alive = true;
+			} catch (e) {
+				alive = (e as NodeJS.ErrnoException).code === 'EPERM'; // exists, just not ours to signal
+			}
+			if (alive) {
 				this.orphans.set(s.pid!, s);
-			} catch {
-				// Its terminal is gone (Flow quit, or it was closed). A Claude conversation can be
-				// picked up again with --resume, so it stays listed; other CLIs are dropped.
-				if (s.cli === 'claude' && !this.sessions.has(s.id)) {
-					const session: AgentSession = { ...s, pid: undefined, state: 'ended', since: Date.now(), todos: [], unread: false, activity: 'Closed · click to resume' };
-					this.sessions.set(s.id, session);
-					void this.readTitle(session, true);
-				}
+			} else {
+				this.listEnded(s);
 			}
 		}
-		this.disposables.push(vscode.window.onDidOpenTerminal(t => void this.adopt(t)));
 		await Promise.all(vscode.window.terminals.map(t => this.adopt(t)));
+		// A terminal that has not come back by now is not coming back (or its pid now belongs to something else).
+		if (this.orphans.size) {
+			this.orphanTimer = setTimeout(() => this.expireOrphans(), ORPHAN_TTL_MS);
+		}
+	}
+
+	/**
+	 * Its terminal is gone (Axle quit, or it was closed). A Claude conversation can be
+	 * picked up again with --resume, so it stays listed; other CLIs are dropped.
+	 */
+	private listEnded(s: Saved['sessions'][number]) {
+		if (s.cli === 'claude' && !this.sessions.has(s.id)) {
+			const session: AgentSession = { ...s, pid: undefined, state: 'ended', since: Date.now(), todos: [], unread: false, activity: 'Closed · click to resume' };
+			this.sessions.set(s.id, session);
+			void this.readTitle(session, true);
+		}
+	}
+
+	private expireOrphans() {
+		this.orphanTimer = undefined;
+		if (!this.orphans.size) {
+			return;
+		}
+		for (const s of this.orphans.values()) {
+			this.log.info(`Agents: ${s.name} did not reattach`);
+			this.listEnded(s);
+		}
+		this.orphans.clear();
+		this.save();
+		this.changed.fire();
 	}
 
 	private async adopt(t: vscode.Terminal) {
-		const pid = await t.processId;
+		const pid = await Promise.resolve(t.processId).catch(() => undefined);
 		const s = pid ? this.orphans.get(pid) : undefined;
 		if (!s || this.sessions.has(s.id)) {
 			return;
@@ -246,15 +356,60 @@ export class Agents implements vscode.Disposable {
 	}
 
 	private save() {
+		if (!this.dir) {
+			return; // not started: there is no folder to write to (a relative path would land in the cwd)
+		}
 		const saved: Saved = {
 			token: this.token,
 			sessions: [...[...this.sessions.values()].map(({ id, cli, name, pid, prompt, transcript, command }) => ({ id, cli, name, pid, prompt, transcript, command })), ...this.orphans.values()],
 		};
-		void fs.writeFile(path.join(this.dir, 'sessions.json'), JSON.stringify(saved), { mode: 0o600 }).catch(() => undefined);
+		// One write at a time, through a temp file: overlapping writes could interleave and lose every saved session.
+		const file = path.join(this.dir, 'sessions.json');
+		this.writing = this.writing.then(async () => {
+			const tmp = `${file}.${process.pid}.tmp`;
+			await fs.writeFile(tmp, JSON.stringify(saved), { mode: 0o600 });
+			await fs.rename(tmp, file);
+		}).catch(() => undefined);
+	}
+
+	private writing: Promise<void> = Promise.resolve();
+
+	/**
+	 * The MCP config that gives an Axle agent the `axle` tools (open files, show flows, draw boards): a file declaring the stdio
+	 * server of the flow-view extension for this folder. Undefined, and the agent starts without it, when the setting is off,
+	 * flow-view or its server script is missing, or the file cannot be written: the tools are a bonus, never a reason not to start.
+	 */
+	private async mcpConfig(cwd: string | undefined): Promise<string | undefined> {
+		if (!this.dir || !vscode.workspace.getConfiguration('flow.agents').get<boolean>('mcp', true)) {
+			return undefined;
+		}
+		try {
+			const view = vscode.extensions.getExtension('flow.flow-view');
+			const script = view && path.join(view.extensionPath, 'out', 'axle-mcp.js');
+			if (!script || !existsSync(script)) {
+				return undefined;
+			}
+			// Like the hooks: on the desktop process.execPath is the editor, which runs a script only as Node.
+			const electron = !!process.versions.electron;
+			const config = { mcpServers: { axle: { command: process.execPath, args: [script], env: { ...(electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}), ...(cwd ? { AXLE_WORKSPACE: cwd } : {}) } } } };
+			const file = path.join(this.dir, 'axle-mcp.json');
+			await fs.mkdir(this.dir, { recursive: true });
+			await fs.writeFile(file, JSON.stringify(config, null, 2), { mode: 0o600 });
+			return file;
+		} catch (e) {
+			this.log.warn(`Agents: no MCP config for this agent (${(e as Error).message})`);
+			return undefined;
+		}
 	}
 
 	/** Starts a CLI in a new terminal. Claude gets a session id we chose, so every hook maps to its terminal. */
-	async spawn(cli: AgentCli, resume?: AgentSession, custom?: CustomAgent) {
+	async spawn(cli: AgentCli, resume?: AgentSession, custom?: CustomAgent): Promise<AgentSession | undefined> {
+		if (!vscode.workspace.isTrusted) {
+			void vscode.window.showWarningMessage('Agents run commands in your workspace: trust this folder to start one.', 'Manage Workspace Trust')
+				.then(c => c && vscode.commands.executeCommand('workbench.trust.manage'));
+			return undefined;
+		}
+		await this.start(); // the hook settings and the session list must exist before the first agent
 		const id = resume?.id ?? randomUUID();
 		const base = cli === 'claude' ? 'Claude' : cli === 'codex' ? 'Codex' : custom?.name ?? 'Agent';
 		const same = [...this.sessions.values()].filter(s => s.state !== 'ended' && (s.cli === 'custom' ? s.command === custom?.command : s.cli === cli)).length;
@@ -270,8 +425,10 @@ export class Agents implements vscode.Disposable {
 		});
 		// Double quotes work in bash, zsh, PowerShell and cmd alike.
 		const quote = (x: string) => `"${x}"`;
+		// --mcp-config takes any number of files, so it goes last; it adds to the user's own MCP servers (no --strict-mcp-config).
+		const mcp = cli === 'claude' ? await this.mcpConfig(cwd) : undefined;
 		const command = cli === 'claude'
-			? `claude ${resume ? '--resume' : '--session-id'} ${id}${this.server ? ` --settings ${quote(this.settingsFile)}` : ''}`
+			? `claude ${resume ? '--resume' : '--session-id'} ${id}${this.server && this.settingsOk ? ` --settings ${quote(this.settingsFile)}` : ''}${mcp ? ` --mcp-config ${quote(mcp)}` : ''}`
 			: cli === 'codex' ? 'codex' : resume?.command ?? custom?.command ?? '';
 		terminal.show();
 		terminal.sendText(command);
@@ -316,6 +473,13 @@ export class Agents implements vscode.Disposable {
 		this.terminals.get(id)?.dispose();
 		this.terminals.delete(id);
 		this.sessions.delete(id);
+		this.touched.delete(id);
+		this.planDrawn.delete(id);
+		for (const [alias, owner] of this.aliases) {
+			if (owner === id) {
+				this.aliases.delete(alias);
+			}
+		}
 		this.unwatch(id);
 		this.save();
 		this.changed.fire();
@@ -365,15 +529,17 @@ export class Agents implements vscode.Disposable {
 			return reply(403);
 		}
 		let body = '';
+		req.setEncoding('utf8'); // chunks can split a multibyte character; the decoder joins them
 		req.on('data', d => {
 			body += d;
 			if (body.length > 4_000_000) {
 				req.destroy();
 			}
 		});
+		const agent = String(req.headers['x-flow-agent'] ?? '');
 		req.on('end', async () => {
 			try {
-				await this.hook(JSON.parse(body) as HookPayload);
+				await this.hook(JSON.parse(body) as HookPayload, agent);
 			} catch (e) {
 				this.log.warn(`Agents: hook failed: ${(e as Error).message}`);
 			}
@@ -381,10 +547,28 @@ export class Agents implements vscode.Disposable {
 		});
 	}
 
-	private async hook(p: HookPayload) {
-		const s = p.session_id ? this.sessions.get(p.session_id) : undefined;
+	/**
+	 * The agent a hook event belongs to. /clear and /resume can give the conversation a new session id,
+	 * but the terminal still carries the id Axle chose (FLOW_AGENT_SESSION): remember the new one for it.
+	 */
+	private sessionFor(id: string | undefined, agent: string) {
+		const known = id ? this.sessions.get(id) ?? this.sessions.get(this.aliases.get(id) ?? '') : undefined;
+		if (known || !id) {
+			return known;
+		}
+		const owner = agent ? this.sessions.get(agent) : undefined;
+		if (owner?.cli === 'claude') {
+			this.aliases.set(id, owner.id);
+			this.log.info(`Agents: ${owner.name} continues as session ${id}`);
+			return owner;
+		}
+		return undefined;
+	}
+
+	private async hook(p: HookPayload, agent = '') {
+		const s = this.sessionFor(p.session_id, agent);
 		if (!s) {
-			return; // a session Flow did not start (or forgot): stay out of it
+			return; // a session Axle did not start (or forgot): stay out of it
 		}
 		if (p.transcript_path && p.transcript_path !== s.transcript) {
 			s.transcript = p.transcript_path;
@@ -410,24 +594,41 @@ export class Agents implements vscode.Disposable {
 				this.settleAsked(s, 'denied');
 				s.prompt = p.prompt?.trim().slice(0, 400);
 				s.todos = [];
+				s.impact = undefined;
+				this.touched.delete(s.id);
+				this.planDrawn.delete(s.id);
 				set('working', 'Thinking');
 				await Promise.resolve(vscode.commands.executeCommand('flow.agentTurn', s.prompt ?? 'Prompt', AGENT)).catch(() => undefined);
 				break;
 			case 'PreToolUse':
-				// Only edits come here: remember the files as they are, for the timeline and Undo.
-				await Promise.resolve(vscode.commands.executeCommand('flow.agentWillEdit', filesOf(p.tool_input))).catch(() => undefined);
+				if (tool === 'ExitPlanMode') {
+					// The plan is proposed, not yet approved: draw it now, and never hold the prompt back for it.
+					this.planProposed(s, p, 'before');
+					break;
+				}
+				// Otherwise an edit: remember the files as they are, for the timeline and Undo.
+				await bounded(Promise.resolve(vscode.commands.executeCommand('flow.agentWillEdit', filesOf(p.tool_input))).catch(() => undefined), SNAPSHOT_WAIT_MS);
+				this.planEdit(s, filesOf(p.tool_input), 'before');
 				break;
 			case 'PermissionRequest':
 				this.asked.set(s.id, { tool, input: p.tool_input ?? {}, at: Date.now() });
 				set('blocked', `Wants to: ${describe(tool, p.tool_input)}`);
 				break;
-			case 'PostToolUse': {
+			case 'PostToolUse':
+			case 'PostToolUseFailure': {
+				// A tool that ran and failed was still allowed: either way the question is over and the agent works on.
 				this.settleAsked(s, 'allowed');
 				set('working', describe(tool, p.tool_input));
-				if (EDIT_TOOLS.split('|').includes(tool)) {
-					void Promise.resolve(vscode.commands.executeCommand('flow.agentDidEdit', filesOf(p.tool_input))).catch(() => undefined);
+				if (p.hook_event_name === 'PostToolUse') {
+					if (EDIT_TOOLS.split('|').includes(tool)) {
+						void Promise.resolve(vscode.commands.executeCommand('flow.agentDidEdit', filesOf(p.tool_input))).catch(() => undefined);
+						this.touch(s, filesOf(p.tool_input));
+						this.planEdit(s, filesOf(p.tool_input), 'after');
+					} else if (tool === 'ExitPlanMode') {
+						this.planProposed(s, p, 'after');
+					}
+					this.todos(s, tool, p.tool_input ?? {}, p.tool_response ?? {});
 				}
-				this.todos(s, tool, p.tool_input ?? {}, p.tool_response ?? {});
 				void this.readUsage(s);
 				break;
 			}
@@ -444,6 +645,7 @@ export class Agents implements vscode.Disposable {
 				this.settleAsked(s, 'denied');
 				set('done', undefined);
 				void this.readUsage(s);
+				void this.turnImpact(s);
 				break;
 			case 'SessionEnd':
 				set('ended', undefined);
@@ -458,6 +660,65 @@ export class Agents implements vscode.Disposable {
 		}
 		this.save();
 		this.changed.fire();
+	}
+
+	/**
+	 * An agent left plan mode: its plan (Markdown) becomes a board in Axle. Claude Code puts the plan into the hook input
+	 * (`tool_input.plan` before approval, `tool_response.plan` after); older versions may give only a file path. Fire and
+	 * forget: the hook runs before the approval prompt appears, so nothing here may delay it. One board per session, so a
+	 * revised plan replaces the old one.
+	 */
+	private planProposed(s: AgentSession, p: HookPayload, phase: 'before' | 'after') {
+		if (!vscode.workspace.getConfiguration('flow.agents').get<boolean>('planBoard', true) || (phase === 'after' && this.planDrawn.has(s.id))) {
+			return;
+		}
+		const source = phase === 'before' ? p.tool_input : p.tool_response;
+		const file = [source?.planFilePath, source?.filePath].find((f): f is string => typeof f === 'string' && /\.md$/i.test(f));
+		void (async () => {
+			let plan = typeof source?.plan === 'string' ? source.plan : undefined;
+			if (!plan && file) {
+				plan = await bounded(fs.readFile(file, 'utf8'), 2000).catch(() => undefined);
+			}
+			if (plan?.trim()) {
+				this.planDrawn.add(s.id);
+				await vscode.commands.executeCommand('flow.agent.plan', s.id, plan, file);
+			}
+		})().catch(e => this.log.warn(`Agents: plan board failed: ${(e as Error).message}`));
+	}
+
+	/** An edit of a file a plan step points at moves that step (doing before the edit, done after it). */
+	private planEdit(s: AgentSession, files: string[], phase: 'before' | 'after') {
+		if (files.length) {
+			void Promise.resolve(vscode.commands.executeCommand('flow.agent.edited', s.id, files, phase)).catch(() => undefined);
+		}
+	}
+
+	private touch(s: AgentSession, files: string[]) {
+		const set = this.touched.get(s.id) ?? new Set<string>();
+		files.forEach(f => set.size < MAX_TOUCHED && set.add(f));
+		this.touched.set(s.id, set);
+	}
+
+	/** The turn is over: which flows did the edited files reach? Shown on the agent's row; clicking one opens it. */
+	private async turnImpact(s: AgentSession) {
+		const files = [...(this.touched.get(s.id) ?? [])];
+		if (!files.length || !vscode.workspace.getConfiguration('flow.agents').get<boolean>('turnImpact', true)) {
+			return;
+		}
+		const impact = await bounded(Promise.resolve(vscode.commands.executeCommand<TurnImpact>('flow.agent.turnImpact', files)).catch(() => undefined), IMPACT_WAIT_MS);
+		// A new prompt may have started while this was computed: its answer no longer describes the turn on screen.
+		if (impact?.flows?.length && s.state !== 'working' && this.touched.get(s.id)) {
+			s.impact = impact;
+			this.changed.fire();
+		}
+	}
+
+	/** Opens the flow at `index` of an agent's turn impact (the dock sends an index, never an id of its own making). */
+	openImpactFlow(id: string, index: number) {
+		const flow = this.sessions.get(id)?.impact?.flows[index];
+		if (flow) {
+			void Promise.resolve(vscode.commands.executeCommand('flow.showEntry', flow.id, flow.name, flow.source)).catch(() => undefined);
+		}
 	}
 
 	/** The question was answered: the tool ran (allowed) or the turn moved on without it (denied). */
@@ -481,8 +742,10 @@ export class Agents implements vscode.Disposable {
 	/** TodoWrite replaces the list; the Task tools add and update one item at a time. */
 	private todos(s: AgentSession, tool: string, input: Record<string, unknown>, response: Record<string, unknown>) {
 		if (tool === 'TodoWrite' && Array.isArray(input.todos)) {
-			s.todos = (input.todos as { content?: string; activeForm?: string; status?: Todo['status'] }[])
-				.map(t => ({ text: (t.status === 'in_progress' ? t.activeForm : t.content) ?? t.content ?? '', status: t.status ?? 'pending' }));
+			// The list comes from the model: only the three known statuses are kept (the dock puts the status in a class name).
+			const STATUSES: Todo['status'][] = ['pending', 'in_progress', 'completed'];
+			s.todos = (input.todos as { content?: string; activeForm?: string; status?: string }[])
+				.map(t => ({ text: String((t.status === 'in_progress' ? t.activeForm : t.content) ?? t.content ?? ''), status: STATUSES.find(x => x === t.status) ?? 'pending' }));
 		} else if (tool === 'TaskCreate') {
 			const task = (response.task ?? response) as { id?: string | number };
 			s.todos.push({ text: String(input.subject ?? input.description ?? 'Task'), status: 'pending', key: String(task.id ?? s.todos.length + 1) });
@@ -505,7 +768,6 @@ export class Agents implements vscode.Disposable {
 		}
 		const dir = path.dirname(s.transcript);
 		const file = path.basename(s.transcript);
-		let timer: NodeJS.Timeout | undefined;
 		void fs.mkdir(dir, { recursive: true }).then(() => {
 			if (this.watchers.has(s.id) || !this.sessions.has(s.id)) {
 				return;
@@ -515,12 +777,15 @@ export class Agents implements vscode.Disposable {
 					if (name && name !== file) {
 						return;
 					}
-					clearTimeout(timer);
-					timer = setTimeout(() => {
+					clearTimeout(this.titleTimers.get(s.id));
+					this.titleTimers.set(s.id, setTimeout(() => {
+						this.titleTimers.delete(s.id);
 						void this.readTitle(s);
 						void this.checkRefusal(s);
-					}, 250);
+					}, 250));
 				});
+				// A watched folder that goes away (EPERM on Windows) must not become an uncaught error.
+				w.on('error', () => this.unwatch(s.id));
 				this.watchers.set(s.id, w);
 			} catch {
 				// no folder: no rename tracking
@@ -533,30 +798,34 @@ export class Agents implements vscode.Disposable {
 		if (!s.transcript) {
 			return;
 		}
-		const lines = whole
-			? (await fs.readFile(s.transcript, 'utf8').catch(() => '')).split('\n')
-			: await this.tail(s.transcript, 16384).catch(() => [] as string[]);
-		for (let i = lines.length - 1; i >= 0; i--) {
-			if (!lines[i].includes('"custom-title"')) {
-				continue;
-			}
-			try {
-				const title = (JSON.parse(lines[i]) as { customTitle?: string }).customTitle?.trim();
-				if (title && title !== s.name) {
-					s.name = title;
-					this.save();
-					this.changed.fire();
-				}
-			} catch {
-				// partial line
-			}
-			return;
+		// A transcript can be hundreds of MB: only its ends are read, never the whole file. A title is written again
+		// near the end when a session continues; at startup (`whole`) the beginning is looked at too.
+		const tail = await this.tail(s.transcript, whole ? 1 << 20 : 16384).catch(() => [] as string[]);
+		const title = lastTitle(tail) ?? (whole ? lastTitle(await this.head(s.transcript, 256 * 1024).catch(() => [] as string[])) : undefined);
+		if (title && title !== s.name) {
+			s.name = title;
+			this.save();
+			this.changed.fire();
 		}
 	}
 
 	private unwatch(id: string) {
 		this.watchers.get(id)?.close();
 		this.watchers.delete(id);
+		clearTimeout(this.titleTimers.get(id));
+		this.titleTimers.delete(id);
+	}
+
+	private async head(file: string, bytes: number) {
+		const h = await fs.open(file, 'r');
+		try {
+			const buf = Buffer.alloc(bytes);
+			const { bytesRead } = await h.read(buf, 0, bytes, 0);
+			const lines = buf.toString('utf8', 0, bytesRead).split('\n');
+			return (bytesRead === bytes ? lines.slice(0, -1) : lines).filter(Boolean); // the last line of a full read may be cut
+		} finally {
+			await h.close();
+		}
 	}
 
 	private async tail(file: string, bytes = 65536) {
@@ -615,7 +884,21 @@ export class Agents implements vscode.Disposable {
 
 	dispose() {
 		this.server?.close();
+		// Hooks read the port at call time: leave it blank rather than pointing at a dead port, but not when a newer
+		// window of this folder has already put its own there.
+		if (this.server && this.dir) {
+			try {
+				const portFile = path.join(this.dir, 'hook-port');
+				if (readFileSync(portFile, 'utf8').trim() === String(this.port)) {
+					writeFileSync(portFile, '');
+				}
+			} catch {
+				// already gone
+			}
+		}
+		clearTimeout(this.orphanTimer);
 		this.watchers.forEach(w => w.close());
+		this.titleTimers.forEach(clearTimeout);
 		this.changed.dispose();
 		this.disposables.forEach(d => d.dispose());
 	}

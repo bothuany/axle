@@ -1,27 +1,18 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow Harness: hook studio. Run a hook with the exact JSON Claude Code would send, see its exit
+ *  Axle Harness: hook studio. Run a hook with the exact JSON Claude Code would send, see its exit
  *  code, output and time; add a new hook from a short form instead of hand-editing JSON.
  *--------------------------------------------------------------------------------------------*/
 
-import { spawn } from 'child_process';
-import { promises as fs } from 'fs';
+import { execFile, spawn, type ChildProcess } from 'child_process';
+import { existsSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { HarnessItem } from './scan';
-import { previewAndWrite } from './settings';
+import { arrayAt, objectAt, previewAndWrite } from './settings';
 
-export interface HookRun {
-	at: number;
-	label: string;
-	event: string;
-	exit: number | null;
-	ms: number;
-	stdout: string;
-	stderr: string;
-	/** What the hook decided, read from its JSON output or exit code 2. */
-	verdict: 'allowed' | 'blocked' | 'asked' | 'ok' | 'failed';
-}
+/** What the hook decided, read from its JSON output or exit code 2. */
+type Verdict = 'allowed' | 'blocked' | 'asked' | 'ok' | 'failed';
 
 /** The payload Claude Code sends on stdin for this event, filled in from the active editor. */
 function samplePayload(event: string, root: string, matcher?: string) {
@@ -47,11 +38,57 @@ function samplePayload(event: string, root: string, matcher?: string) {
 	}
 }
 
+const MAX_OUTPUT = 256 * 1024;
+
+let bashPath: Promise<string | null> | undefined;
+const output = (file: string, args: string[]) => new Promise<string>(resolve => execFile(file, args, { encoding: 'utf8', timeout: 5000, windowsHide: true }, (_e, out) => resolve(out ?? '')));
+/**
+ * The bash that runs hooks, found once: `bash` on macOS and Linux; on Windows the one Claude Code uses
+ * (CLAUDE_CODE_GIT_BASH_PATH, else the Git for Windows install that `git` belongs to). Never the `bash.exe` in System32:
+ * that is WSL, which would run the hook inside Linux against Windows paths. Null where there is none.
+ */
+function findBash(): Promise<string | null> {
+	if (process.platform !== 'win32') {
+		return Promise.resolve('bash');
+	}
+	return bashPath ??= (async () => {
+		const [where, execPath] = await Promise.all([output('where', ['git']), output('git', ['--exec-path'])]);
+		const below = (file: string, levels: number) => { let dir = file; for (let i = 0; i < levels; i++) { dir = path.dirname(dir); } return dir; };
+		// A Git for Windows root holds bin\bash.exe and usr\bin\bash.exe. It is two or three levels above the git.exe that `where` finds
+		// (cmd\git.exe, mingw64\bin\git.exe) and three above `git --exec-path` (mingw64\libexec\git-core), which also works
+		// where `where` only finds a shim (Scoop and the like).
+		const roots = [
+			...where.split(/\r?\n/).map(l => l.trim()).filter(Boolean).flatMap(git => [2, 3].map(levels => below(git, levels))),
+			...(execPath.trim() ? [below(path.normalize(execPath.trim()), 3)] : []),
+			...[process.env.ProgramFiles, process.env['ProgramFiles(x86)'], process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs')].filter((p): p is string => !!p).map(p => path.join(p, 'Git')),
+		];
+		const candidates = [
+			process.env.CLAUDE_CODE_GIT_BASH_PATH,
+			...roots.flatMap(r => [path.join(r, 'bin', 'bash.exe'), path.join(r, 'usr', 'bin', 'bash.exe')]),
+		];
+		const isWsl = (p: string) => /[\\/]windows[\\/]system32[\\/]/i.test(p);
+		const found = candidates.find((p): p is string => !!p && !isWsl(p) && existsSync(p)) ?? null;
+		if (!found) {
+			bashPath = undefined; // look again next time: Git may have been installed meanwhile
+		}
+		return found;
+	})();
+}
+
+/** True when a command leans on bash syntax that cmd.exe does not understand. */
+const looksLikeBash = (command: string) => /\[\[|\bthen\b|\bfi\b|\$\(|\$\{|\$[A-Za-z_]|\.sh\b|\/dev\/null|^\s*(?:bash|sh|export)\s/m.test(command);
+
+/** Ends the hook and everything it started: on Windows killing the shell alone leaves its children (and their open pipes) behind. */
+function killTree(child: ChildProcess) {
+	if (process.platform === 'win32' && child.pid) {
+		execFile('taskkill', ['/T', '/F', '/PID', String(child.pid)], { windowsHide: true }, e => e && child.kill());
+	} else {
+		child.kill('SIGTERM');
+	}
+}
+
 export class HookStudio implements vscode.Disposable {
-	private readonly out = vscode.window.createOutputChannel('Flow Hooks');
-	readonly runs: HookRun[] = [];
-	private readonly changed = new vscode.EventEmitter<void>();
-	readonly onDidRun = this.changed.event;
+	private readonly out = vscode.window.createOutputChannel('Axle Hooks');
 
 	constructor(private readonly root: () => string | undefined) { }
 
@@ -61,7 +98,24 @@ export class HookStudio implements vscode.Disposable {
 		if (!item.hook || !root) {
 			return;
 		}
+		// A hook is a command from the repository's settings: it only runs where the user trusts the folder.
+		if (!vscode.workspace.isTrusted) {
+			void vscode.window.showWarningMessage('This folder is not trusted, so Axle will not run its hooks. Trust the folder first if you want to test them.');
+			return;
+		}
 		const payload = samplePayload(item.hook.event, root, item.hook.matcher);
+		// Claude Code runs hooks through bash (Git Bash on Windows); the system shell is the fallback where there is none.
+		const bash = await findBash();
+		if (!bash && looksLikeBash(item.hook.command)) {
+			const anyway = await vscode.window.showWarningMessage(
+				'Axle could not find Git Bash, and this hook looks like it needs bash. In the Windows shell it would most likely fail in a way that says nothing about the hook itself.',
+				{ detail: 'Install Git for Windows or set CLAUDE_CODE_GIT_BASH_PATH to its bash.exe (Claude Code needs the same).' },
+				'Run Anyway',
+			);
+			if (anyway !== 'Run Anyway') {
+				return;
+			}
+		}
 		const go = await vscode.window.showInformationMessage(
 			`Run "${item.label}" now with a sample ${item.hook.event} payload?`,
 			{ modal: true, detail: `It runs on your machine, exactly as Claude Code would:\n\n${item.hook.command}\n\nPayload:\n${JSON.stringify(payload, null, 2)}` },
@@ -72,25 +126,45 @@ export class HookStudio implements vscode.Disposable {
 		}
 		const started = Date.now();
 		const run = await new Promise<{ exit: number | null; stdout: string; stderr: string }>(resolve => {
-			// Claude Code runs hooks through bash (Git Bash on Windows); fall back to the system shell there.
-			const env = { ...process.env, CLAUDE_PROJECT_DIR: root };
-			const child = process.platform === 'win32'
-				? spawn(item.hook!.command, { cwd: root, env, shell: true })
-				: spawn('/bin/bash', ['-c', item.hook!.command], { cwd: root, env });
+			// The editor's own Electron flag must not leak into the hook: a `node` it starts would behave as plain Node.
+			const { ELECTRON_RUN_AS_NODE: _electron, ...base } = process.env;
+			const env = { ...base, CLAUDE_PROJECT_DIR: root };
+			const child = bash
+				? spawn(bash, ['-c', item.hook!.command], { cwd: root, env, windowsHide: true })
+				: spawn(item.hook!.command, { cwd: root, env, shell: true, windowsHide: true });
 			let stdout = '';
 			let stderr = '';
-			const timer = setTimeout(() => child.kill('SIGTERM'), 60_000);
-			child.stdout.on('data', d => stdout += d);
-			child.stderr.on('data', d => stderr += d);
-			child.on('close', code => {
+			let done = false;
+			// The hook is over when its shell exits, not when every pipe closes: a command it left running in the background holds
+			// them open for as long as it lives. Output still in flight gets a moment, then the pipes are cut.
+			const finish = (exit: number | null, note = '') => {
+				if (done) {
+					return;
+				}
+				done = true;
 				clearTimeout(timer);
-				resolve({ exit: code, stdout, stderr });
-			});
-			child.on('error', e => resolve({ exit: null, stdout, stderr: String(e) }));
+				child.stdout.destroy();
+				child.stderr.destroy();
+				resolve({ exit, stdout, stderr: stderr + note });
+			};
+			const timer = setTimeout(() => {
+				killTree(child);
+				// Normally 'exit' follows; if it never does, still report.
+				setTimeout(() => finish(null, '\nTimed out after 60 s and was stopped.'), 2000);
+			}, 60_000);
+			// A hook that prints without end must not fill the editor's memory: keep the first 256 KB.
+			const keep = (text: string, chunk: Buffer) => text.length < MAX_OUTPUT ? text + chunk.toString('utf8') : text;
+			child.stdout.on('data', d => stdout = keep(stdout, d));
+			child.stderr.on('data', d => stderr = keep(stderr, d));
+			// A hook that exits without reading its payload closes the pipe: that is EPIPE, not a crash.
+			child.stdin.on('error', () => undefined);
+			child.on('exit', code => setTimeout(() => finish(code), 300));
+			child.on('close', code => finish(code));
+			child.on('error', e => finish(null, String(e)));
 			child.stdin.end(JSON.stringify(payload));
 		});
 		const ms = Date.now() - started;
-		let verdict: HookRun['verdict'] = run.exit === 0 ? 'ok' : run.exit === 2 ? 'blocked' : 'failed';
+		let verdict: Verdict = run.exit === 0 ? 'ok' : run.exit === 2 ? 'blocked' : 'failed';
 		try {
 			const json = JSON.parse(run.stdout) as { decision?: string; hookSpecificOutput?: { permissionDecision?: string } };
 			const d = json.hookSpecificOutput?.permissionDecision ?? json.decision;
@@ -98,10 +172,6 @@ export class HookStudio implements vscode.Disposable {
 		} catch {
 			// plain text output
 		}
-		const result: HookRun = { at: started, label: item.label, event: item.hook.event, exit: run.exit, ms, stdout: run.stdout, stderr: run.stderr, verdict };
-		this.runs.unshift(result);
-		this.runs.splice(30);
-		this.changed.fire();
 		this.out.appendLine(`── ${new Date(started).toLocaleTimeString()}  ${item.label}  (${item.hook.event})  exit ${run.exit ?? 'killed'}  ${ms} ms  → ${verdict}`);
 		if (run.stdout.trim()) {
 			this.out.appendLine(`stdout:\n${run.stdout.trimEnd()}`);
@@ -168,19 +238,14 @@ export class HookStudio implements vscode.Disposable {
 		if (!where?.file) {
 			return;
 		}
-		await previewAndWrite(where.file, `Add ${event.label} hook`, (s: { hooks?: Record<string, { matcher?: string; hooks: { type: string; command: string }[] }[]> }) => {
-			s.hooks ??= {};
-			s.hooks[event.label] ??= [];
-			s.hooks[event.label].push({ ...(matcher ? { matcher } : {}), hooks: [{ type: 'command', command }] });
+		await previewAndWrite(where.file, `Add ${event.label} hook`, (s: object) => {
+			// A settings file whose "hooks" is not an object must be reported, not silently rewritten.
+			const hooks = objectAt<Record<string, unknown>>(s, 'hooks');
+			arrayAt<unknown>(hooks, event.label).push({ ...(matcher ? { matcher } : {}), hooks: [{ type: 'command', command }] });
 		});
 	}
 
 	dispose() {
 		this.out.dispose();
-		this.changed.dispose();
 	}
-}
-
-export async function ensureDir(file: string) {
-	await fs.mkdir(path.dirname(file), { recursive: true });
 }

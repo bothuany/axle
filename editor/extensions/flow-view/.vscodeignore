@@ -1,0 +1,12 @@
+# The extension is bundled by esbuild into out/ (extension.js, polyWorker.js and the tree-sitter wasm in
+# out/wasm); ws and diff are inlined, so no node_modules ships. Keep out/, media/ and package.json.
+src/**
+test/**
+node_modules/**
+**/*.map
+**/*.ts
+tsconfig*.json
+esbuild.mjs
+package-lock.json
+.gitignore
+.vscodeignore

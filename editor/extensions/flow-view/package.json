@@ -1,6 +1,6 @@
 {
   "name": "flow-view",
-  "displayName": "Flow View",
+  "displayName": "Axle View",
   "description": "See code as a flow: callers on the left, the method in the middle, everything it calls on the right.",
   "version": "0.1.0",
   "publisher": "flow",
@@ -27,82 +27,129 @@
       {
         "command": "flow.showAtCursor",
         "title": "Show Flow at Cursor",
-        "category": "Flow",
+        "category": "Axle",
         "icon": "$(type-hierarchy-sub)"
       },
       {
         "command": "flow.pickEndpoint",
         "title": "Open Endpoint Flow…",
-        "category": "Flow"
+        "category": "Axle"
       },
       {
         "command": "flow.pickSolution",
         "title": "Choose Solution…",
-        "category": "Flow",
+        "category": "Axle",
         "icon": "$(folder-library)"
       },
       {
         "command": "flow.showTarget",
         "title": "Show Flow",
-        "category": "Flow"
+        "category": "Axle"
       },
       {
         "command": "flow.agentWillEdit",
         "title": "Agent Will Edit",
-        "category": "Flow"
+        "category": "Axle"
       },
       {
         "command": "flow.agentDidEdit",
         "title": "Agent Did Edit",
-        "category": "Flow"
+        "category": "Axle"
       },
       {
         "command": "flow.askAgent",
         "title": "Ask Agent About This Flow",
-        "category": "Flow"
+        "category": "Axle"
+      },
+      {
+        "command": "flow.showMethod",
+        "title": "Show Method Flow",
+        "category": "Axle"
+      },
+      {
+        "command": "flow.showEntry",
+        "title": "Show Entry Flow",
+        "category": "Axle"
       },
       {
         "command": "flow.agentTurn",
         "title": "Agent Turn",
-        "category": "Flow"
+        "category": "Axle"
       },
       {
         "command": "flow.agentProposes",
         "title": "Agent Proposes Edit",
-        "category": "Flow"
+        "category": "Axle"
       },
       {
         "command": "flow.agentProposalDone",
         "title": "Agent Proposal Done",
-        "category": "Flow"
+        "category": "Axle"
       },
       {
         "command": "flow.home",
         "title": "Home",
-        "category": "Flow",
+        "category": "Axle",
         "icon": "$(home)"
       },
       {
         "command": "flow.ide.accept",
         "title": "Accept Claude's Change",
-        "category": "Flow",
+        "category": "Axle",
         "icon": "$(check)"
       },
       {
         "command": "flow.ide.reject",
         "title": "Reject Claude's Change",
-        "category": "Flow",
+        "category": "Axle",
         "icon": "$(close)"
       },
       {
         "command": "flow.ide.mention",
         "title": "Mention Selection in Claude Code",
-        "category": "Flow"
+        "category": "Axle"
       },
       {
         "command": "flow.ide.howTo",
         "title": "Connect Claude Code",
-        "category": "Flow"
+        "category": "Axle"
+      },
+      {
+        "command": "flow.mcp.connect",
+        "title": "Connect Claude Code Tools (MCP)",
+        "category": "Axle"
+      },
+      {
+        "command": "flow.mcp.disconnect",
+        "title": "Disconnect Claude Code Tools (MCP)",
+        "category": "Axle"
+      },
+      {
+        "command": "flow.board.show",
+        "title": "Show Board…",
+        "category": "Axle"
+      },
+      {
+        "command": "flow.types.showDtoDiagram",
+        "title": "Show DTO Diagram",
+        "category": "Axle",
+        "icon": "$(symbol-structure)"
+      },
+      {
+        "command": "flow.types.showArchitecture",
+        "title": "Show Architecture Diagram",
+        "category": "Axle",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "flow.types.exportMermaid",
+        "title": "Copy Diagram as Mermaid",
+        "category": "Axle"
+      },
+      {
+        "command": "flow.types.focusType",
+        "title": "Show Type in DTO Diagram",
+        "category": "Axle"
       }
     ],
     "keybindings": [
@@ -147,6 +194,11 @@
           "command": "flow.showAtCursor",
           "when": "editorTextFocus || editorFocus",
           "group": "navigation@0"
+        },
+        {
+          "command": "flow.types.focusType",
+          "when": "editorTextFocus || editorHasSelection",
+          "group": "navigation@90"
         }
       ],
       "commandPalette": [
@@ -177,28 +229,122 @@
         {
           "command": "flow.agentProposalDone",
           "when": "false"
+        },
+        {
+          "command": "flow.showMethod",
+          "when": "false"
+        },
+        {
+          "command": "flow.showEntry",
+          "when": "false"
+        },
+        {
+          "command": "flow.ide.accept",
+          "when": "false"
+        },
+        {
+          "command": "flow.ide.reject",
+          "when": "false"
+        },
+        {
+          "command": "flow.types.showDtoDiagram"
+        },
+        {
+          "command": "flow.types.showArchitecture"
+        },
+        {
+          "command": "flow.types.exportMermaid"
+        },
+        {
+          "command": "flow.types.focusType"
         }
       ],
       "view/title": [
         {
-          "command": "flow.pickSolution",
+          "command": "flow.types.showDtoDiagram",
           "when": "view == flow.endpoints",
-          "group": "navigation"
+          "group": "navigation@8"
+        },
+        {
+          "command": "flow.types.showArchitecture",
+          "when": "view == flow.endpoints",
+          "group": "navigation@9"
         }
       ]
     },
     "configuration": {
-      "title": "Flow",
+      "title": "Axle",
       "properties": {
         "flow.codeLens": {
           "type": "boolean",
           "default": true,
-          "description": "Show a \"Flow\" link above every C# method."
+          "description": "Show a \"Axle\" link above every method."
+        },
+        "flow.lspResolution": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ask the language server to resolve calls the built-in index could not (go-to-definition and go-to-implementation). Needs the language's extension."
+        },
+        "flow.ide.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Let Claude Code in a terminal connect to Axle: its diffs open here and your selection is shared. Starts a local WebSocket server (127.0.0.1) and a lock file in `~/.claude/ide`. Takes effect after a window reload."
         },
         "flow.showTests": {
           "type": "boolean",
           "default": false,
           "description": "Show test code (test projects, *Tests files, *.spec/*.test files) among callers and callees in a flow."
+        },
+        "flow.types.dtoSuffixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Dto",
+            "DTO",
+            "Request",
+            "Response",
+            "Command",
+            "Query",
+            "Result",
+            "Model",
+            "ViewModel",
+            "Payload",
+            "Input",
+            "Output",
+            "Params",
+            "Args",
+            "Event",
+            "Message",
+            "Resource",
+            "Vm"
+          ],
+          "description": "Name suffixes that make a type a DTO."
+        },
+        "flow.types.includeEntities": {
+          "type": "boolean",
+          "default": false,
+          "description": "Draw entities (JPA, EF Core, Django) in the DTO diagram."
+        },
+        "flow.types.includeEnums": {
+          "type": "boolean",
+          "default": true,
+          "description": "Draw the enums that DTO fields refer to."
+        },
+        "flow.types.maxNodes": {
+          "type": "number",
+          "default": 120,
+          "minimum": 10,
+          "maximum": 400,
+          "description": "Most types a diagram draws; the most connected stay."
+        },
+        "flow.types.defaultCollapseLevel": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 9,
+          "description": "Architecture diagram: 0 keeps modules closed, 1 opens modules and keeps roles closed, 2 or more opens everything."
         }
       }
     },
@@ -206,7 +352,7 @@
       "activitybar": [
         {
           "id": "flow",
-          "title": "Flow",
+          "title": "Axle",
           "icon": "media/flow.svg"
         }
       ]
@@ -226,7 +372,7 @@
         "id": "flowView.entry",
         "description": "Entry points.",
         "defaults": {
-          "dark": "#e2c08d",
+          "dark": "#ffb454",
           "light": "#9a6b1f"
         }
       },
@@ -234,7 +380,7 @@
         "id": "flowView.get",
         "description": "GET endpoints.",
         "defaults": {
-          "dark": "#6fcf97",
+          "dark": "#5fe0a1",
           "light": "#1f8a4c"
         }
       },
@@ -242,7 +388,7 @@
         "id": "flowView.post",
         "description": "POST endpoints.",
         "defaults": {
-          "dark": "#e5b567",
+          "dark": "#ffb454",
           "light": "#a36d00"
         }
       },
@@ -250,7 +396,7 @@
         "id": "flowView.put",
         "description": "PUT endpoints.",
         "defaults": {
-          "dark": "#7aa2f7",
+          "dark": "#6f86ff",
           "light": "#3b6fd4"
         }
       },
@@ -258,7 +404,7 @@
         "id": "flowView.patch",
         "description": "PATCH endpoints.",
         "defaults": {
-          "dark": "#b392f0",
+          "dark": "#b88cff",
           "light": "#7a4fc7"
         }
       },
@@ -266,22 +412,24 @@
         "id": "flowView.delete",
         "description": "DELETE endpoints.",
         "defaults": {
-          "dark": "#f2777a",
+          "dark": "#ff6b7d",
           "light": "#c4383c"
         }
       }
     ]
   },
   "scripts": {
-    "build": "node esbuild.mjs"
+    "build": "node esbuild.mjs",
+    "typecheck": "node ../../vscode/node_modules/typescript/bin/tsc6 --noEmit -p .",
+    "test": "node esbuild.mjs && node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "@vscode/tree-sitter-wasm": "0.3.1",
     "diff": "8.0.4",
-    "ws": "^8.19.0"
+    "ws": "8.22.0"
   },
   "devDependencies": {
-    "@types/ws": "^8.18.2",
+    "@types/ws": "8.18.2",
     "esbuild": "0.28.1"
   }
 }

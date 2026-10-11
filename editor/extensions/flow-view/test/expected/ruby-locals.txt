@@ -1,0 +1,3 @@
+GET /users        UsersController.index
+  call: UsersController.fetch_user [method]
+  call: UsersController.audit [method]

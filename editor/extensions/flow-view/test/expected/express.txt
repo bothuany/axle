@@ -1,0 +1,3 @@
+GET /api/orders   orders.getOrders
+  call: load [method]
+POST /ping        app./ping

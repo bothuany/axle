@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Flow: the chat UI binds every request to a language model. Our agents bring their own model
+ *  Axle: the chat UI binds every request to a language model. Our agents bring their own model
  *  (picked in the session's Model picker), so each session type gets one placeholder model that
  *  only exists for that type and never answers directly.
  *--------------------------------------------------------------------------------------------*/
