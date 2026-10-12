@@ -89,7 +89,8 @@ body { margin: 0; padding: 0 8px 16px 6px; color: var(--text); font: 13px/1.4 va
 .group > summary:hover { background: var(--hover); }
 .chev { width: 14px; height: 14px; flex: none; color: var(--muted); transition: transform .12s; }
 .group[open] > summary .chev { transform: rotate(90deg); }
-.group > summary .name { font-weight: 600; }
+.group > summary .name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group > summary .n { flex: none; }
 .group > summary .n { margin-left: auto; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 
 .row { display: flex; align-items: center; gap: 0; width: 100%; height: 24px; padding: 0 6px 0 22px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
@@ -124,7 +125,7 @@ function render() {
 		if (!items.length) return '';
 		shown += items.length;
 		const open = q || state.open[g.name] || items.some(e => e.id === data.current);
-		return '<details class="group"' + (open ? ' open' : '') + ' data-name="' + esc(g.name) + '"><summary><svg class="chev" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">' + hl(g.name, verbOnly ? '' : q) + '</span><span class="n">' + items.length + '</span></summary>'
+		return '<details class="group"' + (open ? ' open' : '') + ' data-name="' + esc(g.name) + '"><summary title="' + esc(g.name) + '"><svg class="chev" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">' + hl(g.name, verbOnly ? '' : q) + '</span><span class="n">' + items.length + '</span></summary>'
 			+ items.map(e => '<button class="row' + (e.id === data.current ? ' current' : '') + '" data-id="' + esc(e.id) + '" data-source="' + esc(e.source) + '" data-label="' + esc(g.name + '.' + e.action) + '" title="' + esc(e.verb + ' ' + (e.route || '') + '\\n' + e.file + ':' + e.line) + '"><span class="verb ' + (VERBS.includes(e.verb) ? e.verb : 'other') + '">' + esc(e.verb) + '</span><span class="action">' + hl(e.action, verbOnly ? '' : q) + '</span></button>').join('')
 			+ '</details>';
 	}).join('');
