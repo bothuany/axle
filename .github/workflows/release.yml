@@ -43,7 +43,9 @@ jobs:
   installer:
     name: Windows installer
     needs: release
-    runs-on: windows-latest
+    # windows-2022 rather than windows-latest (Visual Studio 2026): VS Code 1.141's preinstall accepts only Visual Studio
+    # 2019 and 2022, as VS Code's own Windows CI has. Move on when Axle moves to a VS Code that knows 2026.
+    runs-on: windows-2022
     timeout-minutes: 150
     defaults:
       run:
