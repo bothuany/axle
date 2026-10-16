@@ -1,0 +1,15 @@
+# Kept apart from axle.yml: a `generic` rule is tested against its own fixture (webview-csp.txt).
+rules:
+  - id: axle-webview-html-without-csp
+    message: >-
+      This webview page has no Content-Security-Policy. Every Axle webview sets one starting from default-src 'none',
+      so injected markup in the page cannot load anything from outside it.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: ['/editor/extensions/*/src/**/*.ts', '/.semgrep/rules/webview-csp.*']
+    # A page whose <head> closes with no CSP meta in it. The head may be built from several concatenated strings.
+    pattern-regex: '(?i)<!doctype html>(?:(?!Content-Security-Policy)[\s\S])*?</head>'
+    metadata:
+      category: security
+      cwe: 'CWE-79: Improper Neutralization of Input During Web Page Generation'

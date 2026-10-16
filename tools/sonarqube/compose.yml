@@ -1,0 +1,27 @@
+# A local SonarQube for `npm run sonar`. Data lives in named volumes, so the server, its token and its history survive
+# `npm run sonar:down`; `docker compose -f tools/sonarqube/compose.yml down -v` wipes them.
+name: axle-sonarqube
+
+services:
+  sonarqube:
+    image: sonarqube:26.9.0.129388-community
+    ports:
+      - '127.0.0.1:9000:9000'
+    environment:
+      # Docker Desktop's WSL2 VM ships vm.max_map_count below what Elasticsearch's bootstrap check wants.
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: 'true'
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:9000/api/system/status | grep -q UP']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+volumes:
+  sonarqube_data:
+  sonarqube_extensions:
+  sonarqube_logs:

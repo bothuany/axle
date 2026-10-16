@@ -18,7 +18,18 @@ Thumbs.db
 brag-output*/
 .agents/
 skills-lock.json
-.claude/
+# Claude Code: the project harness (settings, hooks, agents, our skills) is shared; machine-local state is not.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/agents/
+!.claude/skills/
+.claude/skills/brag/
 .mcp.json
 .vscode/
 .idea/
+
+# Local quality tooling
+tools/sonarqube/.token
+.scannerwork/
+.sonarqube/

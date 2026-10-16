@@ -131,7 +131,8 @@ export class HookStudio implements vscode.Disposable {
 			const env = { ...base, CLAUDE_PROJECT_DIR: root };
 			const child = bash
 				? spawn(bash, ['-c', item.hook!.command], { cwd: root, env, windowsHide: true })
-				: spawn(item.hook!.command, { cwd: root, env, shell: true, windowsHide: true });
+				// A hook is a shell command line by definition (Claude Code runs it the same way), and only on the user's click.
+				: spawn(item.hook!.command, { cwd: root, env, shell: true, windowsHide: true }); // nosemgrep: axle-shell-true
 			let stdout = '';
 			let stderr = '';
 			let done = false;

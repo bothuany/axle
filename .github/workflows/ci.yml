@@ -32,6 +32,7 @@ jobs:
           node-version: 24.x
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             ui/package-lock.json
             editor/extensions/*/package-lock.json
 
@@ -70,3 +71,31 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           node esbuild.mjs
+
+      # Last, so every package's node_modules exist and the devDependency rule can resolve imports; it still runs when
+      # an earlier step failed, so a broken test does not hide an architecture violation.
+      - name: Architecture rules (dependency-cruiser, wire types, command contracts)
+        if: ${{ !cancelled() }}
+        run: |
+          npm ci --no-audit --no-fund
+          npm run arch
+
+  semgrep:
+    name: semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+
+      - name: Install semgrep
+        run: pipx install semgrep==1.181.0
+
+      - name: Axle's rules pass their fixtures
+        run: semgrep --test --metrics=off .semgrep/rules
+
+      # Same rulesets and policy as `npm run semgrep` locally: ERROR findings fail, WARNING findings are listed.
+      - name: Scan
+        run: node scripts/semgrep.mjs

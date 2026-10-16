@@ -16,6 +16,18 @@
     "installer": "node scripts/installer.mjs",
     "package": "node scripts/package.mjs",
     "build:extensions": "node scripts/build-extensions.mjs",
-    "build:canvas": "npm --prefix ui run build"
+    "build:canvas": "npm --prefix ui run build",
+    "check": "npm run arch && npm run semgrep",
+    "arch": "depcruise editor/extensions/flow-view/src editor/extensions/flow-view/mcp editor/extensions/flow-agent/src editor/extensions/flow-harness/src ui/src -c .dependency-cruiser.cjs && node --test \"test/arch/*.test.mjs\"",
+    "arch:graph": "depcruise editor/extensions/flow-view/src editor/extensions/flow-view/mcp editor/extensions/flow-agent/src editor/extensions/flow-harness/src ui/src -c .dependency-cruiser.cjs -T archi",
+    "semgrep": "node scripts/semgrep.mjs",
+    "semgrep:test": "semgrep --test --metrics=off .semgrep/rules",
+    "sonar": "node scripts/sonar.mjs scan",
+    "sonar:up": "node scripts/sonar.mjs up",
+    "sonar:down": "node scripts/sonar.mjs down"
+  },
+  "devDependencies": {
+    "dependency-cruiser": "18.6.0",
+    "typescript": "5.9.3"
   }
 }

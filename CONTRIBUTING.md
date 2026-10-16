@@ -18,6 +18,8 @@ Follow "Getting started" in [docs/building.md](docs/building.md): `npm run setup
 CI runs these; run them locally first:
 
 ```bash
+# architecture rules and tests (root)
+npm ci && npm run arch
 # canvas
 cd ui && npm ci && npm run typecheck && npm run build
 # flow-view (needs `npm run setup` for typecheck)
@@ -25,6 +27,8 @@ cd editor/extensions/flow-view && npm ci && npm test
 # analyzer
 dotnet build analyzer
 ```
+
+Optional local scans: `npm run semgrep` (needs `semgrep` on PATH or Docker) and SonarQube (`tools/sonarqube/README.md`).
 
 - A new language or framework needs a fixture under `editor/extensions/flow-view/test/fixtures` and its expected output under `test/expected`. After an intended change, run `UPDATE=1 npm test` and read the diff before committing it.
 - If you change the core patch, regenerate it as described in "Developing" in [docs/building.md](docs/building.md) (in Git Bash, not Windows PowerShell 5.1, which writes UTF-16).

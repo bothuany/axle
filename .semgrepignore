@@ -1,0 +1,20 @@
+# Replaces Semgrep's default ignore list, so the .gitignore entries are pulled back in first.
+:include .gitignore
+
+# The VS Code checkout, worktrees and generated output
+editor/vscode/
+.claude/
+brag-output*/
+editor/branding/
+docs/media/
+
+# Sample projects the analyzers parse in tests: they are deliberately small apps in eight languages, not Axle code.
+editor/extensions/flow-view/test/fixtures/
+editor/extensions/flow-view/test/types-fixtures/
+editor/extensions/flow-view/test/expected/
+editor/extensions/flow-view/test/types-expected/
+
+# Rule fixtures contain the patterns on purpose
+.semgrep/rules/
+
+package-lock.json
