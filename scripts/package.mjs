@@ -347,7 +347,7 @@ if (PLATFORM === 'linux') {
 		['files.push(path.join(buildDir, \'bin\', product.tunnelApplicationName));', '// Axle ships no tunnel CLI (edited by scripts/package.mjs for this build).'],
 	]
 	const description = [
-		`Description: ${pkg.description.split('. ')[0].replace(/^Axle: /, '')}`,
+		`Description: ${pkg.description.split('. ')[0].replace(/^Axle: a/, 'A')}`,
 		...pkg.description.split('. ').slice(1).map(s => ` ${s.replace(/\.$/, '')}.`),
 		' Built on Code - OSS. See https://github.com/bothuany/axle',
 	]

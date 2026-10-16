@@ -31,7 +31,7 @@ here hand those release files to package managers. **None of them is published y
 - **Windows:** the installer has no Authenticode signature, so SmartScreen warns before it runs. winget accepts unsigned
   installers, but Defender's SmartScreen still shows its prompt.
 - **macOS:** the app has an ad hoc signature, not a Developer ID one, and it is not notarized. Gatekeeper blocks the
-  first launch until the user allows it. Third-party taps accept such casks; homebrew-core does not. Signing needs an
+  first launch until the user allows it. Third-party taps accept such casks; the official homebrew/cask repository requires signed, notarized apps. Signing needs an
   Apple Developer account, the certificate and an app-specific password in Actions secrets, then `codesign` with the
   hardened runtime and VS Code's entitlements (`build/azure-pipelines/darwin/*.plist`) and `xcrun notarytool submit
   --wait` + `stapler staple` in `scripts/package.mjs` in place of the ad hoc step.
