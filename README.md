@@ -21,9 +21,7 @@
   </a>
 </p>
 
-<!-- VIDEO PLAYER: replace this line with the github.com/user-attachments/assets/... URL of axle-demo.mp4, on its own line -->
-
-<p align="center"><sub>▶ <a href="docs/media/axle-demo.mp4">Watch the 28-second demo with sound</a></sub></p>
+https://github.com/user-attachments/assets/ea31fc6d-1561-4d4f-a5cd-fa33b7163ba6
 
 ## See how your code runs
 
