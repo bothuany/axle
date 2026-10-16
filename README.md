@@ -43,7 +43,7 @@ C# / .NET · Java · Python · JavaScript / TypeScript · Go · PHP · Ruby · R
 
 **Windows:** download `Axle-Setup-<version>-x64.exe` from [Releases](https://github.com/bothuany/axle/releases) and run it. No admin rights, no Node or build tools needed.
 
-**macOS and Linux:** build from source.
+**macOS and Linux:** from the next release on, a `.dmg` (unsigned: allow it once in Privacy & Security) and a `.deb`; `brew`, `apt` and `winget` installs are not published yet ([install docs](docs/building.md#install)). Or build from source:
 
 ```bash
 git clone https://github.com/bothuany/axle.git

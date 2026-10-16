@@ -1,15 +1,46 @@
 # Building and running Axle
 
-## Install (Windows)
+## Install
 
-Download `Axle-Setup-<version>-x64.exe` from the [Releases](https://github.com/bothuany/axle/releases) page and run it. That is all: Axle ships with everything it needs, so no Node, git or build tools are required. It installs for the current user (no admin rights) into `%LOCALAPPDATA%\Programs\Axle`, adds a Start menu entry and, if you leave the options ticked, the `axle` command on your PATH and "Open with Axle" on folders in Explorer. Your data lives in `~/.axle`. Updating means running a newer Setup over the old install; uninstalling is Windows Settings, Apps.
+Axle is installed from the files on the [Releases](https://github.com/bothuany/axle/releases) page: an installer for Windows, an app for macOS and packages for Linux, with `SHA256SUMS.txt` beside them. Each one ships with everything it needs, so no Node, git or build tools are required. Your data lives in `~/.axle` on every OS. Axle installs beside, not over, a stock VS Code: it has its own app id, install folder, `axle://` link scheme and data folder.
 
-- **C# flows need the .NET 10 SDK on the PC** ([download](https://dotnet.microsoft.com/download/dotnet/10.0)). Axle's C# analyzer is a .NET 10 program that loads your solution with MSBuild, so the runtime alone is not enough. Without the SDK everything else works; the first time a C# flow is asked for, Axle shows one notice that says so. Other languages need nothing.
+**C# flows need the .NET 10 SDK** ([download](https://dotnet.microsoft.com/download/dotnet/10.0)), whatever the OS. Axle's C# analyzer is a .NET 10 program that loads your solution with MSBuild, so the runtime alone is not enough. Without the SDK everything else works; the first time a C# flow is asked for, Axle shows one notice that says so. Other languages need nothing.
+
+> **Not published yet:** `winget install bothuany.Axle`, `brew install --cask bothuany/tap/axle` and an APT repository are prepared in [`packaging/`](../packaging/README.md) but not submitted or hosted. Until they are, install from the release files below; updating means installing the newer release over the old one.
+>
+> **macOS and Linux packages are new:** the release workflow builds them from the next tag on; they have not been run on a Mac or a Linux desktop yet.
+
+### Windows
+
+Download `Axle-Setup-<version>-x64.exe` and run it. It installs for the current user (no admin rights) into `%LOCALAPPDATA%\Programs\Axle`, adds a Start menu entry and, if you leave the options ticked, the `axle` command on your PATH and "Open with Axle" on folders in Explorer. Updating means running a newer Setup over the old install; uninstalling is Windows Settings, Apps.
+
 - Install into a short path (the default, `%LOCALAPPDATA%\Programs\Axle`, is fine). The longest file in Axle is about 155 characters below the install folder, and Windows stops at 260 in total, so an install folder that is itself 100 characters deep fails with "MoveFile failed; code 3".
 - The installer is not code-signed yet, so Windows SmartScreen shows "Windows protected your PC" the first time: choose *More info*, then *Run anyway*.
-- Axle is installed beside, not over, a stock VS Code or Code - OSS: it has its own app id, install folder, `axle://` link scheme and data folder.
+- Later: `winget install bothuany.Axle` (not submitted yet).
 
-**Build the installer yourself** (Windows, after `npm run setup`, plus the .NET 10 SDK and the Windows SDK, whose `signtool.exe` VS Code's build calls):
+### macOS
+
+Download `Axle-<version>-darwin-arm64.dmg` (Apple silicon) or `Axle-<version>-darwin-x64.dmg` (Intel), open it and drag Axle to Applications. The `.zip` files hold the same app. For the `axle` command, choose *Shell Command: Install 'axle' command in PATH* from the Command Palette.
+
+- **Axle is not signed with an Apple Developer ID yet**, so macOS blocks the first launch. Open it once, then go to *System Settings > Privacy & Security* and choose *Open Anyway* (then confirm with your password). If macOS says Axle "is damaged and can't be opened", clear the download quarantine instead: `xattr -dr com.apple.quarantine /Applications/Axle.app`.
+- Later: `brew install --cask bothuany/tap/axle` (the tap does not exist yet). The cask also puts `axle` on your PATH, and `brew upgrade` will keep it current.
+
+### Linux
+
+Download `axle_<version>_amd64.deb` and install it on Debian 12, Ubuntu 22.04 or newer:
+
+```bash
+sudo apt install ./axle_<version>_amd64.deb
+```
+
+It installs into `/usr/share/axle`, adds `axle` to `/usr/bin` and a desktop entry. Unlike VS Code's package, it does not add any apt repository. For Fedora and other RPM distributions there is `axle-<version>-1.x86_64.rpm` (`sudo dnf install ./axle-*.rpm`), and `Axle-<version>-linux-x64.tar.gz` unpacks anywhere (run `Axle-linux-x64/axle`). All are x64 only.
+
+- The package still uses Code - OSS's desktop entry and icon names (`com.visualstudio.CodeOSS.desktop`, `code-oss.png`), so it cannot be installed next to a Code - OSS package; a stock VS Code is fine.
+- Later: an APT repository so that `sudo apt install axle` and `apt upgrade` work ([how it would be hosted](../packaging/apt/README.md); not set up yet).
+
+### Build the packages yourself
+
+**The Windows installer** (Windows, after `npm run setup`, plus the .NET 10 SDK and the Windows SDK, whose `signtool.exe` VS Code's build calls):
 
 ```bash
 npm run installer                   # dist/Axle-Setup-<version>-x64.exe, per user
@@ -19,6 +50,14 @@ npm run installer -- --full         # the full build whatever the stamp says (th
 ```
 
 It builds the extensions, the canvas and the analyzer, runs VS Code's production build (15 to 40 minutes, several GB of RAM, about 20 GB of disk) and its Inno Setup step, and prints where the installer is. Pushing a `v*` tag builds and attaches it to a GitHub release (`.github/workflows/release.yml`).
+
+**The macOS and Linux packages** (on that OS, after `npm run setup`, plus the .NET 10 SDK; on Linux also `fakeroot`, and `rpm` for the .rpm):
+
+```bash
+npm run package                     # macOS: dist/Axle-<version>-darwin-<arch>.zip and .dmg; Linux: dist/axle_<version>_amd64.deb, the .rpm and the .tar.gz
+```
+
+It does what the installer does up to VS Code's production build, then signs the app ad hoc and makes the zip and the disk image (macOS), or runs VS Code's deb and rpm packaging with Axle's control file and maintainer scripts (Linux). The packages are built for the machine's own processor. A `v*` tag builds all of them on GitHub's runners and attaches them to the release.
 
 ## Requirements
 

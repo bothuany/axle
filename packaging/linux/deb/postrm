@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Axle's postrm, in place of VS Code's (which also deletes Microsoft's VS Code apt source and signing key, breaking a
+# VS Code installed from that repository).
+
+rm -f /usr/bin/@@NAME@@
+
+# Uninstall the desktop entry
+if hash update-desktop-database 2>/dev/null; then
+	update-desktop-database
+fi
+
+# Drop the workspace mimetype
+if hash update-mime-database 2>/dev/null; then
+	update-mime-database /usr/share/mime
+fi
+
+exit 0
