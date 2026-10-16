@@ -7,7 +7,7 @@
 // Safe to run again: the clone, the patches and the links are skipped when done, and so is the editor's `npm ci`
 // when its dependencies have not changed (`--force-install` runs it anyway, `--skip-editor-install` never runs it).
 
-import { copyFileSync, cpSync, existsSync, lstatSync, readdirSync, rmSync, statSync, symlinkSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, lstatSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { EXTENSIONS, ROOT, VSCODE, buildableExtensions, isWin, launchSync } from './lib.mjs'
 
@@ -129,8 +129,13 @@ for (const patch of readdirSync(PATCHES).filter(f => f.endsWith('.patch')).sort(
 	if (applied) {
 		console.log(`  ${patch}: already applied`)
 	} else {
+		// An Axle checkout from before .gitattributes kept patches LF can still hold one with CRLF line endings, which
+		// git apply rejects: deleting editor/vscode would not help there.
+		const crlf = readFileSync(file, 'utf8').includes('\r\n')
 		run('git', ['apply', '--whitespace=nowarn', file], VSCODE, {
-			hint: `${patch} does not apply to editor/vscode: it was probably changed by hand, or an earlier setup stopped half way. Delete editor/vscode and run setup again for a clean checkout.`,
+			hint: crlf
+				? `${patch} has CRLF line endings, which git apply rejects. Restore it as LF (delete editor/patches/${patch}, then run git checkout -- editor/patches/${patch}) and run setup again.`
+				: `${patch} does not apply to editor/vscode: it was probably changed by hand, or an earlier setup stopped half way. Delete editor/vscode and run setup again for a clean checkout.`,
 		})
 	}
 }
