@@ -1,6 +1,11 @@
-# Builds the Windows installer (npm run installer) when a version tag is pushed, and attaches it to the GitHub release.
-# It needs the full `npm run setup` (a VS Code checkout, `npm ci`, native modules) and VS Code's production build, so it is slow:
-# plan for 60 to 90 minutes on windows-latest. Written but not run yet: the first tag is the test.
+# Builds Axle when a version tag is pushed and attaches the result to the GitHub release:
+#   Windows  the installer (npm run installer)                      Axle-Setup-<version>-x64.exe
+#   macOS    the app for Apple silicon and Intel (npm run package)  Axle-<version>-darwin-{arm64,x64}.{zip,dmg}
+#   Linux    the Debian package, an RPM and a tarball               axle_<version>_amd64.deb, axle-<version>-1.x86_64.rpm, Axle-<version>-linux-x64.tar.gz
+# plus SHA256SUMS.txt over all of them (what packaging/homebrew/axle.rb and packaging/winget need).
+# Each build needs the full `npm run setup` (a VS Code checkout, `npm ci`, native modules) and VS Code's production build,
+# so it is slow: plan for 60 to 90 minutes. A manual run (no tag) keeps the files as build artifacts instead.
+# Only the Windows build has been run by hand; the macOS and Linux jobs are first tested by a tag (or a manual run).
 #   git tag v0.1.0 && git push origin v0.1.0
 name: release
 
@@ -13,8 +18,31 @@ permissions:
   contents: write
 
 jobs:
+  # Creates the release once, before the builds, so that parallel jobs do not race to create it.
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${version}: the packages would be named for ${version}."
+            exit 1
+          fi
+
+      - name: Create the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --title "Axle ${GITHUB_REF_NAME#v}" --generate-notes
+
   installer:
     name: Windows installer
+    needs: release
     runs-on: windows-latest
     timeout-minutes: 150
     defaults:
@@ -73,3 +101,109 @@ jobs:
           name: axle-installer
           path: dist/Axle-Setup-*.exe
           retention-days: 7
+
+  packages:
+    name: ${{ matrix.name }}
+    needs: release
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple silicon)
+            runner: macos-latest
+            arch: arm64
+            files: dist/Axle-*-darwin-arm64.zip dist/Axle-*-darwin-arm64.dmg
+          # An Intel runner, so that the native modules are built for the processor they run on (no cross-compiling).
+          - name: macOS (Intel)
+            runner: macos-15-intel
+            arch: x64
+            files: dist/Axle-*-darwin-x64.zip dist/Axle-*-darwin-x64.dmg
+          # 22.04 rather than ubuntu-latest: the native modules are compiled here and need this machine's glibc (2.35) or
+          # newer, so the .deb also installs on Ubuntu 22.04 and Debian 12. Move to ubuntu-latest when 22.04 is retired.
+          - name: Linux (x64)
+            runner: ubuntu-22.04
+            arch: x64
+            files: dist/axle_*_amd64.deb dist/axle-*.rpm dist/Axle-*-linux-x64.tar.gz
+    defaults:
+      run:
+        shell: bash
+    env:
+      # VS Code's build downloads Electron, built-in extensions and (Linux) sysroots from GitHub: authenticated, it is not rate limited.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      # The runner has about 14 GB free and the build needs about 20: toolchains Axle does not use go first.
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
+          df -h /
+
+      - name: Linux build tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev fakeroot rpm
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Axle
+        run: npm run setup
+
+      - name: Build the packages
+        run: npm run package -- --arch ${{ matrix.arch }}
+
+      - name: Attach them to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FILES: ${{ matrix.files }}
+        run: |
+          shopt -s nullglob
+          # The RPM is best effort (scripts/package.mjs): a pattern that matches nothing is left out, not an error.
+          files=()
+          for file in $FILES; do files+=("$file"); done
+          gh release upload "${GITHUB_REF_NAME}" "${files[@]}" --clobber
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        with:
+          name: axle-${{ runner.os }}-${{ matrix.arch }}
+          path: |
+            dist/*.zip
+            dist/*.dmg
+            dist/*.deb
+            dist/*.rpm
+            dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  # Checksums of everything on the release: the values the Homebrew cask and the winget manifest take.
+  checksums:
+    name: Checksums
+    needs: [installer, packages]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: SHA256SUMS.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir assets && cd assets
+          gh release download "${GITHUB_REF_NAME}" --pattern 'Axle-*' --pattern 'axle*'
+          sha256sum -- * | tee ../SHA256SUMS.txt
+          gh release upload "${GITHUB_REF_NAME}" ../SHA256SUMS.txt --clobber
