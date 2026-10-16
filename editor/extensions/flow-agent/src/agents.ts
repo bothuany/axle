@@ -6,18 +6,21 @@
  *  list and how full its context is. The hooks never answer a permission question: the CLI asks.
  *--------------------------------------------------------------------------------------------*/
 
+import { execFile } from 'child_process';
 import { createHash, randomBytes, randomUUID } from 'crypto';
 import { existsSync, promises as fs, readFileSync, watch, writeFileSync, type FSWatcher } from 'fs';
 import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { inheritedAgentEnv } from './env';
+import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexProfile, codexProfileFile } from './codexHooks';
+import { agentProcessEnv, inheritedAgentEnv } from './env';
+import { parsePatch, patchFiles, patchText } from './patch';
 import { shimScript } from './shim';
 
-/** claude reports through hooks; codex and custom CLIs are plain terminals Axle only lists. */
+/** claude and codex report through hooks (codex once its hooks are trusted); custom CLIs are plain terminals Axle only lists. */
 export type AgentCli = 'claude' | 'codex' | 'custom';
-/** working: busy · blocked: waiting for you · done: finished a turn · idle: started, no prompt yet · unknown: no reports (Codex) · ended: the CLI exited. */
+/** working: busy · blocked: waiting for you · done: finished a turn · idle: started, no prompt yet · unknown: no reports (custom CLIs, untrusted Codex hooks) · ended: the CLI exited. */
 export type AgentState = 'starting' | 'working' | 'blocked' | 'done' | 'idle' | 'unknown' | 'ended';
 
 export interface Todo {
@@ -46,6 +49,8 @@ export interface AgentSession {
 	command?: string;
 	/** The flows the files edited in the last turn reach, worked out when the turn ended. */
 	impact?: TurnImpact;
+	/** Codex picks its own session id: learned from its first hook, it is what `codex resume` takes. */
+	agentId?: string;
 }
 
 /** What flow-view answers to `flow.agent.turnImpact`. */
@@ -63,11 +68,12 @@ export interface CustomAgent {
 
 interface Saved {
 	token: string;
-	sessions: Pick<AgentSession, 'id' | 'cli' | 'name' | 'pid' | 'prompt' | 'transcript' | 'command'>[];
+	sessions: Pick<AgentSession, 'id' | 'cli' | 'name' | 'pid' | 'prompt' | 'transcript' | 'command' | 'agentId'>[];
 }
 
 interface HookPayload {
 	session_id?: string;
+	cwd?: string;
 	hook_event_name?: string;
 	transcript_path?: string;
 	prompt?: string;
@@ -79,7 +85,10 @@ interface HookPayload {
 }
 
 const AGENT = 'Claude Code (terminal)';
+const agentLabel = (s: AgentSession) => s.cli === 'codex' ? 'Codex (terminal)' : AGENT;
 const EDIT_TOOLS = 'Edit|Write|MultiEdit|NotebookEdit';
+/** Codex reports every file edit as this one tool, the patch in `tool_input.command` (see patch.ts). */
+const PATCH_TOOL = 'apply_patch';
 /** PreToolUse also sees the plan an agent proposes when it leaves plan mode (tool_input.plan, injected by Claude Code). */
 const PRE_TOOLS = `${EDIT_TOOLS}|ExitPlanMode`;
 /** The most files of one turn that are checked for the flows they affect. */
@@ -92,10 +101,14 @@ const ORPHAN_TTL_MS = 90_000;
 /** The most a hook may wait for Axle to snapshot a file: the edit must not stall on it. */
 const SNAPSHOT_WAIT_MS = 2500;
 
-const KIND: Record<string, string> = { Bash: 'execute', Edit: 'edit', Write: 'edit', MultiEdit: 'edit', NotebookEdit: 'edit', Read: 'read', Grep: 'search', Glob: 'search', WebFetch: 'fetch', WebSearch: 'fetch' };
+const KIND: Record<string, string> = { Bash: 'execute', Edit: 'edit', Write: 'edit', MultiEdit: 'edit', NotebookEdit: 'edit', Read: 'read', Grep: 'search', Glob: 'search', WebFetch: 'fetch', WebSearch: 'fetch', [PATCH_TOOL]: 'edit' };
 
 /** One line for what a tool call is about: the command, the file, the pattern. */
 function describe(tool: string, input: Record<string, unknown> = {}) {
+	if (tool === PATCH_TOOL) {
+		const files = parsePatch(patchText(input)).map(o => path.basename(o.file));
+		return files.length ? `Editing ${files.slice(0, 3).join(', ')}${files.length > 3 ? ` +${files.length - 3}` : ''}` : 'Editing';
+	}
 	const file = typeof input.file_path === 'string' ? path.basename(input.file_path) : typeof input.notebook_path === 'string' ? path.basename(input.notebook_path) : undefined;
 	const detail = typeof input.command === 'string' ? input.command
 		: file ?? (typeof input.pattern === 'string' ? input.pattern : typeof input.url === 'string' ? input.url : typeof input.description === 'string' ? input.description : '');
@@ -104,10 +117,16 @@ function describe(tool: string, input: Record<string, unknown> = {}) {
 	return detail ? `${head} ${String(detail).split('\n')[0].slice(0, 120)}` : head;
 }
 
-function filesOf(input: Record<string, unknown> = {}) {
+/** The files a tool call writes. `cwd` resolves the relative paths of a Codex patch. */
+function filesOf(tool: string, input: Record<string, unknown> = {}, cwd?: string) {
+	if (tool === PATCH_TOOL) {
+		return patchFiles(input, cwd);
+	}
 	const f = input.file_path ?? input.notebook_path;
 	return typeof f === 'string' ? [f] : [];
 }
+
+const isEdit = (tool: string) => tool === PATCH_TOOL || EDIT_TOOLS.split('|').includes(tool);
 
 /** Resolves with undefined once `ms` have passed, whatever `p` is doing. */
 function bounded<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
@@ -125,7 +144,7 @@ function parseSaved(raw: unknown): Saved | undefined {
 	const sessions: Saved['sessions'] = [];
 	for (const e of Array.isArray(o.sessions) ? o.sessions as Record<string, unknown>[] : []) {
 		if (e && typeof e === 'object' && typeof e.id === 'string' && (e.cli === 'claude' || e.cli === 'codex' || e.cli === 'custom')) {
-			sessions.push({ id: e.id, cli: e.cli, name: str(e.name) ?? e.id, pid: typeof e.pid === 'number' ? e.pid : undefined, prompt: str(e.prompt), transcript: str(e.transcript), command: str(e.command) });
+			sessions.push({ id: e.id, cli: e.cli, name: str(e.name) ?? e.id, pid: typeof e.pid === 'number' ? e.pid : undefined, prompt: str(e.prompt), transcript: str(e.transcript), command: str(e.command), agentId: str(e.agentId) });
 		}
 	}
 	return { token: str(o.token) ?? '', sessions };
@@ -188,7 +207,7 @@ export class Agents implements vscode.Disposable {
 	/** Debounce of the transcript watcher, per session. */
 	private readonly titleTimers = new Map<string, NodeJS.Timeout>();
 	/** Permission questions still open, so the answer can be recorded when the tool runs (or does not). */
-	private readonly asked = new Map<string, { tool: string; input: Record<string, unknown>; at: number }>();
+	private readonly asked = new Map<string, { tool: string; input: Record<string, unknown>; cwd?: string; at: number }>();
 	private readonly disposables: vscode.Disposable[] = [];
 	/** Agents from before a reload, waiting for their terminal to come back. */
 	private readonly orphans = new Map<number, Saved['sessions'][number]>();
@@ -198,6 +217,8 @@ export class Agents implements vscode.Disposable {
 	/** Set once start() has run: spawn waits on it so an agent never starts before the hook settings exist. */
 	private ready: Promise<void> | undefined;
 	private settingsOk = false;
+	/** Whether Codex can take Axle's profile (`-p axle`): settled on the first Codex start of this window. */
+	private codexHooks: Promise<boolean> | undefined;
 	/** Files an agent edited since its last prompt, for the turn-end impact. */
 	private readonly touched = new Map<string, Set<string>>();
 	/** Sessions whose plan was drawn from PreToolUse this turn, so PostToolUse does not draw it twice. */
@@ -310,6 +331,50 @@ export class Agents implements vscode.Disposable {
 		await fs.writeFile(this.settingsFile, JSON.stringify({ hooks }, null, 2), { mode: 0o600 });
 	}
 
+	/**
+	 * Codex's hooks, in Axle's own Codex profile (see codexHooks.ts). One script for every window, outside the
+	 * per-workspace folder, so the profile's text (and the trust Codex keeps for it) is the same everywhere.
+	 * Written only when it changed: rewriting the same bytes is harmless, but a changed file asks for trust again.
+	 */
+	private async writeCodexProfile() {
+		const shared = path.join(this.context.globalStorageUri.fsPath, 'agents');
+		await fs.mkdir(shared, { recursive: true });
+		const script = path.join(shared, 'codex-hook.js');
+		if (await fs.readFile(script, 'utf8').catch(() => '') !== CODEX_HOOK_SCRIPT) {
+			await fs.writeFile(script, CODEX_HOOK_SCRIPT);
+		}
+		const file = codexProfileFile();
+		const text = codexProfile(codexHookCommand(process.platform, process.execPath, script, !!process.versions.electron));
+		if (await fs.readFile(file, 'utf8').catch(() => '') !== text) {
+			await fs.mkdir(path.dirname(file), { recursive: true });
+			await fs.writeFile(file, text);
+			this.log.info(`Agents: wrote the Codex profile ${file}; Codex asks once to trust its hooks (/hooks)`);
+		}
+	}
+
+	/**
+	 * Codex gets `-p axle` only once the profile is written and this `codex` takes it: an older Codex reads `-p` as a
+	 * [profiles] name and would not start at all. `codex -p axle mcp list` loads the profile without starting a
+	 * session (a profile it cannot read fails it). Asked on the first Codex start, never at activation, so nothing
+	 * is written to ~/.codex for someone who never runs Codex from Axle. Any failure means plain `codex`.
+	 */
+	private codexTakesHooks(): Promise<boolean> {
+		if (!this.server || !vscode.workspace.getConfiguration('flow.agents').get<boolean>('codexHooks', true)) {
+			return Promise.resolve(false);
+		}
+		return this.codexHooks ??= this.writeCodexProfile().then(() => new Promise<boolean>(resolve => {
+			execFile('codex', ['-p', CODEX_PROFILE, 'mcp', 'list'], { shell: true, timeout: 8000, windowsHide: true, env: agentProcessEnv() }, (err, _out, stderr) => {
+				if (err) {
+					this.log.warn(`Agents: Codex runs without status: \`codex -p ${CODEX_PROFILE}\` failed (${String(stderr || err.message).trim().split('\n')[0]})`);
+				}
+				resolve(!err);
+			});
+		}), e => {
+			this.log.warn(`Agents: Codex runs without status: no Codex profile (${(e as Error).message})`);
+			return false;
+		});
+	}
+
 	/** Terminals outlive a window reload; find ours again by their process (they may reattach after we start). */
 	private async revive(saved: Saved | undefined) {
 		// First, so nothing below can leave a reattaching terminal unnoticed.
@@ -384,7 +449,7 @@ export class Agents implements vscode.Disposable {
 		}
 		const saved: Saved = {
 			token: this.token,
-			sessions: [...[...this.sessions.values()].map(({ id, cli, name, pid, prompt, transcript, command }) => ({ id, cli, name, pid, prompt, transcript, command })), ...this.orphans.values()],
+			sessions: [...[...this.sessions.values()].map(({ id, cli, name, pid, prompt, transcript, command, agentId }) => ({ id, cli, name, pid, prompt, transcript, command, agentId })), ...this.orphans.values()],
 		};
 		// One write at a time, through a temp file: overlapping writes could interleave and lose every saved session.
 		const file = path.join(this.dir, 'sessions.json');
@@ -443,21 +508,25 @@ export class Agents implements vscode.Disposable {
 			cwd,
 			iconPath: new vscode.ThemeIcon(cli === 'claude' ? 'sparkle' : cli === 'codex' ? 'hubot' : 'terminal'),
 			color: new vscode.ThemeColor(cli === 'claude' ? 'terminal.ansiYellow' : cli === 'codex' ? 'terminal.ansiCyan' : 'terminal.ansiMagenta'),
-			env: { ...inheritedAgentEnv(), FLOW_AGENT_SESSION: id },
+			env: { ...inheritedAgentEnv(), FLOW_AGENT_SESSION: id, FLOW_HOOK_DIR: this.dir },
 			isTransient: false,
 		});
 		// Double quotes work in bash, zsh, PowerShell and cmd alike.
 		const quote = (x: string) => `"${x}"`;
 		// --mcp-config takes any number of files, so it goes last; it adds to the user's own MCP servers (no --strict-mcp-config).
 		const mcp = cli === 'claude' ? await this.mcpConfig(cwd) : undefined;
+		const codexHooks = cli === 'codex' && await this.codexTakesHooks();
+		const profile = codexHooks ? ` -p ${CODEX_PROFILE}` : '';
 		const command = cli === 'claude'
 			? `claude ${resume ? '--resume' : '--session-id'} ${id}${this.server && this.settingsOk ? ` --settings ${quote(this.settingsFile)}` : ''}${mcp ? ` --mcp-config ${quote(mcp)}` : ''}`
-			: cli === 'codex' ? (resume ? `codex resume ${id}` : 'codex') : resume?.command ?? custom?.command ?? '';
+			// Codex chose its session id; until a hook told us, `codex resume` without one opens its own picker.
+			: cli === 'codex' ? (resume ? `codex resume${profile}${resume.agentId ? ` ${resume.agentId}` : ''}` : `codex${profile}`)
+			: resume?.command ?? custom?.command ?? '';
 		terminal.show();
 		terminal.sendText(command);
 		const session: AgentSession = {
 			id, cli, name, state: cli === 'claude' ? 'starting' : 'unknown', since: Date.now(), todos: [], unread: false,
-			prompt: resume?.prompt, command: cli === 'custom' ? command : undefined,
+			prompt: resume?.prompt, command: cli === 'custom' ? command : undefined, agentId: resume?.agentId,
 			transcript: cli === 'claude' ? resume?.transcript ?? transcriptPath(id, cwd) : undefined,
 		};
 		this.sessions.set(id, session);
@@ -470,6 +539,15 @@ export class Agents implements vscode.Disposable {
 				this.changed.fire();
 			}
 		}, 8000);
+		// Codex skips hooks the user has not trusted yet, without a word: say what brings the status in.
+		if (codexHooks) {
+			setTimeout(() => {
+				if (session.state === 'unknown' && !session.activity) {
+					session.activity = 'No status yet: run /hooks in Codex and trust Axle\'s hooks';
+					this.changed.fire();
+				}
+			}, 20_000);
+		}
 		session.pid = await terminal.processId;
 		this.save();
 		this.changed.fire();
@@ -614,6 +692,12 @@ export class Agents implements vscode.Disposable {
 			return known;
 		}
 		const owner = agent ? this.sessions.get(agent) : undefined;
+		if (owner?.cli === 'codex') {
+			// Codex chose this id: it is the one `codex resume` takes from now on.
+			this.aliases.set(id, owner.id);
+			owner.agentId = id;
+			return owner;
+		}
 		if (owner?.cli === 'claude') {
 			this.aliases.set(id, owner.id);
 			this.log.info(`Agents: ${owner.name} continues as session ${id}`);
@@ -643,7 +727,7 @@ export class Agents implements vscode.Disposable {
 		const tool = p.tool_name ?? '';
 		switch (p.hook_event_name) {
 			case 'SessionStart':
-				if (s.state === 'starting') {
+				if (s.state === 'starting' || s.state === 'unknown') {
 					set(s.prompt ? 'done' : 'idle');
 				}
 				break;
@@ -655,20 +739,25 @@ export class Agents implements vscode.Disposable {
 				this.touched.delete(s.id);
 				this.planDrawn.delete(s.id);
 				set('working', 'Thinking');
-				await Promise.resolve(vscode.commands.executeCommand('flow.agentTurn', s.prompt ?? 'Prompt', AGENT)).catch(() => undefined);
+				await Promise.resolve(vscode.commands.executeCommand('flow.agentTurn', s.prompt ?? 'Prompt', agentLabel(s))).catch(() => undefined);
 				break;
-			case 'PreToolUse':
+			case 'PreToolUse': {
 				if (tool === 'ExitPlanMode') {
 					// The plan is proposed, not yet approved: draw it now, and never hold the prompt back for it.
 					this.planProposed(s, p, 'before');
 					break;
 				}
-				// Otherwise an edit: remember the files as they are, for the timeline and Undo.
-				await bounded(Promise.resolve(vscode.commands.executeCommand('flow.agentWillEdit', filesOf(p.tool_input))).catch(() => undefined), SNAPSHOT_WAIT_MS);
-				this.planEdit(s, filesOf(p.tool_input), 'before');
+				// An edit: remember the files as they are, for the timeline and Undo.
+				if (!isEdit(tool)) {
+					break;
+				}
+				const files = filesOf(tool, p.tool_input, p.cwd);
+				await bounded(Promise.resolve(vscode.commands.executeCommand('flow.agentWillEdit', files)).catch(() => undefined), SNAPSHOT_WAIT_MS);
+				this.planEdit(s, files, 'before');
 				break;
+			}
 			case 'PermissionRequest':
-				this.asked.set(s.id, { tool, input: p.tool_input ?? {}, at: Date.now() });
+				this.asked.set(s.id, { tool, input: p.tool_input ?? {}, cwd: p.cwd, at: Date.now() });
 				set('blocked', `Wants to: ${describe(tool, p.tool_input)}`);
 				break;
 			case 'PostToolUse':
@@ -677,10 +766,11 @@ export class Agents implements vscode.Disposable {
 				this.settleAsked(s, 'allowed');
 				set('working', describe(tool, p.tool_input));
 				if (p.hook_event_name === 'PostToolUse') {
-					if (EDIT_TOOLS.split('|').includes(tool)) {
-						void Promise.resolve(vscode.commands.executeCommand('flow.agentDidEdit', filesOf(p.tool_input))).catch(() => undefined);
-						this.touch(s, filesOf(p.tool_input));
-						this.planEdit(s, filesOf(p.tool_input), 'after');
+					if (isEdit(tool)) {
+						const files = filesOf(tool, p.tool_input, p.cwd);
+						void Promise.resolve(vscode.commands.executeCommand('flow.agentDidEdit', files)).catch(() => undefined);
+						this.touch(s, files);
+						this.planEdit(s, files, 'after');
 					} else if (tool === 'ExitPlanMode') {
 						this.planProposed(s, p, 'after');
 					}
@@ -785,12 +875,15 @@ export class Agents implements vscode.Disposable {
 			return;
 		}
 		this.asked.delete(s.id);
+		if (s.cli !== 'claude') {
+			return; // the permission inbox writes Claude Code rules; Codex keeps its own approvals
+		}
 		void Promise.resolve(vscode.commands.executeCommand('flowHarness.recordPermission', {
 			at: q.at,
 			agent: AGENT,
 			kind: KIND[q.tool] ?? (q.tool.startsWith('mcp__') ? 'other' : undefined),
 			title: q.tool.startsWith('mcp__') ? q.tool : describe(q.tool, q.input),
-			files: filesOf(q.input),
+			files: filesOf(q.tool, q.input, q.cwd),
 			rawInput: q.input,
 			decision,
 		})).catch(() => undefined);

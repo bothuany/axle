@@ -229,6 +229,11 @@
           "type": "boolean",
           "default": true,
           "description": "When an agent finishes a turn, show on its row which flows (endpoints) the files it edited may affect."
+        },
+        "flow.agents.codexHooks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Codex's status (working, needs you, done) and its edits on the canvas. Axle writes read-only hooks to its own Codex profile ($CODEX_HOME/axle.config.toml) and starts Codex with `-p axle`; your config.toml is not changed. Codex asks you once to trust these hooks (/hooks)."
         }
       }
     },
@@ -248,7 +253,8 @@
     }
   },
   "scripts": {
-    "build": "node esbuild.mjs"
+    "build": "node esbuild.mjs",
+    "test": "node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "0.88.0",
