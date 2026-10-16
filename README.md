@@ -1,13 +1,59 @@
-# Axle
+<p align="center">
+  <img src="editor/branding/icon.png" width="112" alt="Axle icon">
+</p>
 
-A code editor built around how code **runs**, and around the agents that change it.
+<h1 align="center">Axle</h1>
 
-Axle is VS Code with a small set of core patches and four built-in extensions, in a native window. It adds:
+<p align="center">
+  <b>A harness-first code editor.</b><br>
+  Built around how code <b>runs</b>, and around the agents that change it.
+</p>
 
-- **A call-flow canvas.** Pick an endpoint, or put the cursor in any method, and see the chain it runs: controller → handler → services → database, each step as an editable card with its real code. Database cards show the table schema the query touches.
-- **Terminal-first agents.** Claude Code and Codex run as their real CLIs in terminals. An Agents dock shows each one's state at a glance (working, needs you, done), its prompt, its current step, its to-dos and how full its context is. Closed sessions resume where they stopped. You can add any other agent CLI.
-- **Claude Code `/ide` support.** `claude` in a Axle terminal connects automatically: its diffs open in Axle with Accept and Reject, and the methods they touch light up on the canvas.
-- **Harness engineering tools.** A map and health score of your `CLAUDE.md`, skills, hooks and permissions; a hook studio that runs a hook with a realistic payload; a permission inbox that turns an answer into a standing rule; a context-budget meter.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6f86ff" alt="License: MIT"></a>
+  <a href="https://github.com/bothuany/axle/releases"><img src="https://img.shields.io/badge/installer-Windows-6f86ff" alt="Windows installer"></a>
+  <img src="https://img.shields.io/badge/build-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-6f86ff" alt="Builds on macOS, Linux and Windows">
+  <img src="https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-6f86ff" alt="Agents: Claude Code and Codex">
+</p>
+
+<p align="center">
+  <a href="#install-windows">Install</a> ·
+  <a href="#getting-started">Build from source</a> ·
+  <a href="#languages">Languages</a> ·
+  <a href="#agent-tools-mcp">Agent tools</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+<!-- For inline playback on GitHub, drag docs/media/axle-demo.mp4 into this README in GitHub's editor and replace this block with the user-attachments URL it gives you. -->
+<p align="center">
+  <a href="docs/media/axle-demo.mp4">
+    <img src="docs/media/axle-poster.jpg" width="100%" alt="Axle demo: the call-flow canvas, a Claude Code diff lighting up the methods it touches, the Agents dock and the harness map">
+  </a>
+  <br>
+  <sub>▶ <a href="docs/media/axle-demo.mp4">Watch the 28-second demo</a> (with sound)</sub>
+</p>
+
+Axle is VS Code with a small set of core patches and four built-in extensions, in a native window. Every editor shows where code is stored; Axle shows how it runs.
+
+### See the chain a request runs
+
+Pick an endpoint, or put the cursor in any method, and see the chain it runs: controller → handler → services → database, each step as an editable card with its real code. Database cards show the table schema the query touches.
+
+<p align="center">
+  <img src="docs/media/axle-canvas.gif" width="88%" alt="An endpoint's call chain building card by card on the Axle canvas, from controller to database">
+</p>
+
+### Agents in real terminals
+
+Claude Code and Codex run as their real CLIs in terminals. An Agents dock shows each one's state at a glance (working, needs you, done), its prompt, its current step, its to-dos and how full its context is. Whatever needs you rises to the top. Closed sessions resume where they stopped. You can add any other agent CLI.
+
+### Claude Code `/ide`, on the canvas
+
+`claude` in an Axle terminal connects automatically: its diffs open in Axle with Accept and Reject, and the methods they touch light up on the canvas. When a turn ends, the Agents dock lists the flows it touched.
+
+### Harness engineering, built in
+
+A map and health score of your `CLAUDE.md`, skills, hooks and permissions; a hook studio that runs a hook with a realistic payload; a permission inbox that turns an answer into a standing rule; a context-budget meter.
 
 ## Languages
 
@@ -27,7 +73,7 @@ Axle is VS Code with a small set of core patches and four built-in extensions, i
 
 ## Install (Windows)
 
-Download `Axle-Setup-<version>-x64.exe` from the [Releases](https://github.com/bothuany/harness-flow/releases) page and run it. That is all: Axle ships with everything it needs, so no Node, git or build tools are required. It installs for the current user (no admin rights) into `%LOCALAPPDATA%\Programs\Axle`, adds a Start menu entry and, if you leave the options ticked, the `axle` command on your PATH and "Open with Axle" on folders in Explorer. Your data lives in `~/.axle`. Updating means running a newer Setup over the old install; uninstalling is Windows Settings, Apps.
+Download `Axle-Setup-<version>-x64.exe` from the [Releases](https://github.com/bothuany/axle/releases) page and run it. That is all: Axle ships with everything it needs, so no Node, git or build tools are required. It installs for the current user (no admin rights) into `%LOCALAPPDATA%\Programs\Axle`, adds a Start menu entry and, if you leave the options ticked, the `axle` command on your PATH and "Open with Axle" on folders in Explorer. Your data lives in `~/.axle`. Updating means running a newer Setup over the old install; uninstalling is Windows Settings, Apps.
 
 - **C# flows need the .NET 10 SDK on the PC** ([download](https://dotnet.microsoft.com/download/dotnet/10.0)). Axle's C# analyzer is a .NET 10 program that loads your solution with MSBuild, so the runtime alone is not enough. Without the SDK everything else works; the first time a C# flow is asked for, Axle shows one notice that says so. Other languages need nothing.
 - Install into a short path (the default, `%LOCALAPPDATA%\Programs\Axle`, is fine). The longest file in Axle is about 155 characters below the install folder, and Windows stops at 260 in total, so an install folder that is itself 100 characters deep fails with "MoveFile failed; code 3".
@@ -58,8 +104,8 @@ It builds the extensions, the canvas and the analyzer, runs VS Code's production
 ## Getting started
 
 ```bash
-git clone https://github.com/bothuany/harness-flow.git
-cd harness-flow
+git clone https://github.com/bothuany/axle.git
+cd axle
 npm run setup
 npm start
 ```
@@ -121,6 +167,10 @@ Claude Code over `/ide` only shows its model the `getDiagnostics` tool, so Axle 
 ## How agent status works
 
 Axle starts `claude` with `--settings <file>` that adds observe-only hooks on top of your own settings (your hooks still run). Each hook runs a small Node script that posts the event to the Axle window. The hooks never answer a permission question: Claude Code keeps asking you itself. Codex and custom agents are listed without status.
+
+## Contributing
+
+Bug reports, fixes and new language support are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## License
 

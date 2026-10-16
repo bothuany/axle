@@ -1,0 +1,36 @@
+# Contributing to Axle
+
+Bug reports, fixes and new language support are welcome. For anything larger than a fix, open an issue first so we can agree on the approach before you spend time on it.
+
+## Setup
+
+Follow "Getting started" in the [README](README.md): `npm run setup` clones VS Code, applies `editor/patches` and builds everything (10–20 minutes the first time). Node 24.18 or newer (not 25) and git are required; the .NET 10 SDK is only needed for the C# analyzer.
+
+## Where things live
+
+- `editor/extensions/*`: the four built-in extensions (TypeScript, bundled with esbuild).
+- `ui/`: the canvas (React Flow + Monaco).
+- `analyzer/`: the C# analyzer (.NET 10, Roslyn).
+- `editor/patches/flow-core.patch`: Axle's changes to VS Code itself. Keep it as small as you can; prefer an extension.
+
+## Before you open a pull request
+
+CI runs these; run them locally first:
+
+```bash
+# canvas
+cd ui && npm ci && npm run typecheck && npm run build
+# flow-view (needs `npm run setup` for typecheck)
+cd editor/extensions/flow-view && npm ci && npm test
+# analyzer
+dotnet build analyzer
+```
+
+- A new language or framework needs a fixture under `editor/extensions/flow-view/test/fixtures` and its expected output under `test/expected`. After an intended change, run `UPDATE=1 npm test` and read the diff before committing it.
+- If you change the core patch, regenerate it as described in "Developing" in the README (in Git Bash, not Windows PowerShell 5.1, which writes UTF-16).
+- Keep changes focused: one fix or feature per pull request, with a message that says why.
+- Match the style of the surrounding code; there is no separate formatter to run.
+
+## Licence
+
+By contributing you agree that your contribution is licensed under the [MIT License](LICENSE).

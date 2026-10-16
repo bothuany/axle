@@ -15,9 +15,10 @@ target/
 Thumbs.db
 
 # Local tooling and generated demos
-brag-output/
+brag-output*/
 .agents/
 skills-lock.json
 .claude/
+.mcp.json
 .vscode/
 .idea/
