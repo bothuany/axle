@@ -1076,7 +1076,7 @@ export class Project {
 			return [];
 		}
 		// Only HTTP routes: a listener's `MSG orders` or a job reads like a route but no request reaches it.
-		const routes = this.entries.filter(e => /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|\*) /.test(e.http));
+		const routes = this.entries.filter(e => !/^(MSG|JOB|SOAP|JSF|WS) /.test(e.http));
 		const to = [...new Map(matchEndpoints(call, routes).map(e => [e.fn.id, e.fn] as const)).values()].filter(f => f.id !== fn.id);
 		if (to.length === 1) {
 			return [{ kind: 'fn', fn: to[0], edge: 'http', guess: true }];
@@ -1129,7 +1129,8 @@ export class Project {
 					if (lang === 'python' && /^(shared_task|task)$/.test(a.name)) {
 						out.push({ fn: e.fn, keys: celeryTaskNames(a, this.files.get(e.fn.file)?.module, e.fn.name), celery: true });
 					} else if ((lang === 'java' && /^(KafkaListener|JmsListener|RabbitListener|SqsListener|StreamListener)$/.test(a.name)) || (lang === 'js' && /^(MessagePattern|EventPattern)$/.test(a.name))) {
-						const keys = listenerKeys(a);
+						// `topics = Topics.ORDERS` / `{A, B}`: the constants the producer side usually shares.
+						const keys = listenerKeys(a, expr => this.constOf(e.fn, expr));
 						if (keys.length) {
 							out.push({ fn: e.fn, keys });
 						}

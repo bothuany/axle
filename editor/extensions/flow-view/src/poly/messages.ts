@@ -24,10 +24,10 @@ export interface MessageSend {
 
 /** Spring's messaging templates, by declared type or (when the type is unknown) by field name. */
 const JAVA_SENDERS: { type: RegExp; name: RegExp; methods: Set<string>; via: string; keys: 1 | 2 }[] = [
-	{ type: /^KafkaTemplate$/, name: /kafka\w*template$/i, methods: new Set(['send']), via: 'kafka', keys: 1 },
+	{ type: /^(KafkaTemplate|KafkaOperations)$/, name: /kafka\w*template$/i, methods: new Set(['send']), via: 'kafka', keys: 1 },
 	// convertAndSend(routingKey, msg) or convertAndSend(exchange, routingKey, msg): either of the first two may name the queue.
-	{ type: /^(RabbitTemplate|AmqpTemplate|RabbitMessagingTemplate)$/, name: /(rabbit|amqp)\w*template$/i, methods: new Set(['convertAndSend', 'send']), via: 'rabbit', keys: 2 },
-	{ type: /^(JmsTemplate|JmsMessagingTemplate)$/, name: /jms\w*template$/i, methods: new Set(['convertAndSend', 'send']), via: 'jms', keys: 1 },
+	{ type: /^(RabbitTemplate|RabbitOperations|AmqpTemplate|RabbitMessagingTemplate)$/, name: /(rabbit|amqp)\w*template$/i, methods: new Set(['convertAndSend', 'send']), via: 'rabbit', keys: 2 },
+	{ type: /^(JmsTemplate|JmsOperations|JmsMessagingTemplate)$/, name: /jms\w*template$/i, methods: new Set(['convertAndSend', 'send']), via: 'jms', keys: 1 },
 	{ type: /^StreamBridge$/, name: /streamBridge$/i, methods: new Set(['send']), via: 'stream', keys: 1 },
 	{ type: /^(QueueMessagingTemplate|SqsTemplate)$/, name: /(sqs|queueMessaging)\w*template$/i, methods: new Set(['convertAndSend', 'send']), via: 'sqs', keys: 1 },
 ];
@@ -103,11 +103,18 @@ function literalsIn(raw: string | undefined): string[] {
 /**
  * The destinations a listener consumes: Spring `@KafkaListener(topics = …)`, `@RabbitListener(queues = …)`,
  * `@JmsListener(destination = …)`, `@SqsListener("q")`, `@StreamListener("binding")`, NestJS
- * `@EventPattern('x')` / `@MessagePattern('x')`. Placeholders (`${app.topic}`) and constants are left out.
+ * `@EventPattern('x')` / `@MessagePattern('x')`. A constant (`Topics.ORDERS`) is read through `constOf`;
+ * placeholders (`${app.topic}`) are left out.
  */
-export function listenerKeys(a: Ann): string[] {
+export function listenerKeys(a: Ann, constOf?: (expr: string) => string | undefined): string[] {
 	const raw = a.named.topics ?? a.named.queues ?? a.named.destination ?? a.named.queueNames ?? a.named.value ?? (a.args[0] && !a.args[0].includes('=') ? a.args[0] : undefined);
-	return [...new Set(literalsIn(raw).map(written).filter((k): k is string => !!k))];
+	const names = literalsIn(raw);
+	if (raw && constOf) {
+		// The items that are not literals: `{Topics.ORDERS, "audit"}` → Topics.ORDERS.
+		const rest = raw.replace(/"[^"\\]*"|'[^'\\]*'/g, '').replace(/^\s*[{[]|[}\]]\s*$/g, '');
+		names.push(...rest.split(',').map(x => x.trim()).filter(x => /^[A-Za-z_][\w.]*$/.test(x)).map(x => constOf(x) ?? ''));
+	}
+	return [...new Set(names.map(written).filter((k): k is string => !!k))];
 }
 
 /** A Celery task's names: `@app.task(name="x")`, else Celery's default `module.function`. */

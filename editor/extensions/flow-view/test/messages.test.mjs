@@ -77,6 +77,10 @@ test('listener keys: named topics/queues/destination, arrays, the positional val
 	assert.deepEqual(m.listenerKeys(ann('EventPattern', {}, ["'order.created'"])), ['order.created'])
 	assert.deepEqual(m.listenerKeys(ann('KafkaListener', { topicPattern: '"orders.*"' }, ['topicPattern = "orders.*"'])), [])
 	assert.deepEqual(m.listenerKeys(ann('KafkaListener', { topics: 'Topics.ORDERS' })), [])
+	// A constant, alone or in an array, through constOf.
+	const constOf = e => ({ 'Topics.ORDERS': 'orders', AUDIT: '${app.audit}' })[e]
+	assert.deepEqual(m.listenerKeys(ann('KafkaListener', { topics: 'Topics.ORDERS' }), constOf), ['orders'])
+	assert.deepEqual(m.listenerKeys(ann('KafkaListener', { topics: '{Topics.ORDERS, "refunds", AUDIT}' }), constOf), ['refunds', 'orders'])
 })
 
 test('Celery task names and matching', () => {
@@ -112,6 +116,11 @@ public class OrderController {
 		kafkaTemplate.send(TOPIC, "key", order);
 	}
 
+	@PostMapping("/refunds")
+	public void refund(@RequestBody String order) {
+		kafkaTemplate.send(Topics.REFUNDS, order);
+	}
+
 	@PostMapping("/audit")
 	public void audit(@RequestBody String order) {
 		kafkaTemplate.send("\${app.audit-topic}", order);
@@ -130,12 +139,22 @@ public class OrderListener {
 		charge(order);
 	}
 
+	@KafkaListener(topics = Topics.REFUNDS)
+	public void onRefund(String order) {
+	}
+
 	@KafkaListener(topics = "\${app.audit-topic}")
 	public void onAudit(String order) {
 	}
 
 	private void charge(String order) {
 	}
+}
+`
+const TOPICS = `package shop;
+
+public final class Topics {
+	public static final String REFUNDS = "refunds";
 }
 `
 const TASKS = `from celery import shared_task
@@ -162,7 +181,7 @@ const FRONT = `export function load() {
 
 test('the flow goes on from a send into its listener, marked as a guess', async t => {
 	const dir = mkdtempSync(join(tmpdir(), 'flow-messages-e2e-'))
-	for (const [f, text] of [['java/shop/OrderController.java', ORDER_SERVICE], ['java/shop/OrderListener.java', LISTENER], ['py/tasks.py', TASKS], ['py/views.py', VIEWS], ['web/api.js', FRONT]]) {
+	for (const [f, text] of [['java/shop/OrderController.java', ORDER_SERVICE], ['java/shop/OrderListener.java', LISTENER], ['java/shop/Topics.java', TOPICS], ['py/tasks.py', TASKS], ['py/views.py', VIEWS], ['web/api.js', FRONT]]) {
 		mkdirSync(join(dir, f, '..'), { recursive: true })
 		writeFileSync(join(dir, f), text)
 	}
@@ -178,6 +197,9 @@ test('the flow goes on from a send into its listener, marked as a guess', async 
 	assert.deepEqual(place.map(c => [c.node.label, c.guess, c.node.kind]), [['OrderListener.onOrder', true, 'controller']])
 	assert.ok(place[0].node.children.some(c => c.node.label.endsWith('charge')), 'the flow goes on inside the listener')
 
+	// One constant on both sides.
+	assert.deepEqual(message(await flowOf('java/shop/OrderController.java', 'refund')).map(c => c.node.label), ['OrderListener.onRefund'])
+
 	// A property placeholder names no topic we can know: no link, not even to the listener with the same placeholder.
 	assert.deepEqual(message(await flowOf('java/shop/OrderController.java', 'audit')), [])
 
@@ -186,11 +208,13 @@ test('the flow goes on from a send into its listener, marked as a guess', async 
 
 	// No HTTP edge from a fetch to a Kafka listener whose topic reads like the path.
 	const load = await flowOf('web/api.js', 'load')
-	assert.deepEqual(load.children.filter(c => /onOrder/.test(c.node.label)), [])
+	assert.deepEqual(load.children.map(c => [c.edgeKind, c.node.label]), [['http', 'OrderController.place']])
 
 	// And back: the listener's callers include the producer, as a message guess.
 	const back = await index.request('callers', await idOf('java/shop/OrderListener.java', 'onOrder'))
 	assert.deepEqual(back.children.map(c => [c.node.label, c.edgeKind, c.guess]), [['OrderController.place', 'message', true]])
+	const taskBack = await index.request('callers', await idOf('py/tasks.py', 'send_email'))
+	assert.deepEqual(taskBack.children.map(c => [c.node.label, c.edgeKind, c.guess]), [['signup', 'message', true]])
 
 	// Impact: changing what the listener calls reaches the HTTP endpoint that produced the message.
 	const impact = await index.request('impact', await idOf('java/shop/OrderListener.java', 'charge'))
