@@ -57,7 +57,7 @@ export async function pickAgent(agents: Agents) {
 		{ label: '$(sparkle) Claude Code', detail: 'Status, permissions, diffs and context show up in Axle', run: () => agents.spawn('claude') },
 		{ label: '$(history) Resume a Claude Session…', detail: 'Continue an earlier conversation of this folder (claude --resume)', run: () => startOrResume(agents, 'claude', false) },
 		{ label: '$(history) Resume a Codex Session…', detail: 'Continue an earlier conversation of this folder (codex resume)', run: () => startOrResume(agents, 'codex', false) },
-		{ label: '$(hubot) Codex', detail: 'Listed here; runs as a plain terminal', run: () => agents.spawn('codex') },
+		{ label: '$(hubot) Codex', detail: 'Status and edits through read-only hooks (trust them once with /hooks)', run: () => agents.spawn('codex') },
 	];
 	if (saved.length) {
 		items.push({ label: 'Your agents', kind: vscode.QuickPickItemKind.Separator });

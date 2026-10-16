@@ -195,6 +195,6 @@ export async function startOrResume(agents: Agents, cli: 'claude' | 'codex', wit
 		return;
 	}
 	const s = pick.session!;
-	const past: AgentSession = { id: s.id, cli, name: pick.label, state: 'ended', since: s.modified, prompt: s.prompt, todos: [], unread: false, transcript: cli === 'claude' ? s.file : undefined };
+	const past: AgentSession = { id: s.id, cli, name: pick.label, state: 'ended', since: s.modified, prompt: s.prompt, todos: [], unread: false, transcript: cli === 'claude' ? s.file : undefined, agentId: cli === 'codex' ? s.id : undefined };
 	await agents.spawn(cli, past);
 }
