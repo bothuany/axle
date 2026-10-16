@@ -4,7 +4,7 @@ Bug reports, fixes and new language support are welcome. For anything larger tha
 
 ## Setup
 
-Follow "Getting started" in the [README](README.md): `npm run setup` clones VS Code, applies `editor/patches` and builds everything (10–20 minutes the first time). Node 24.18 or newer (not 25) and git are required; the .NET 10 SDK is only needed for the C# analyzer.
+Follow "Getting started" in [docs/building.md](docs/building.md): `npm run setup` clones VS Code, applies `editor/patches` and builds everything (10–20 minutes the first time). Node 24.18 or newer (not 25) and git are required; the .NET 10 SDK is only needed for the C# analyzer.
 
 ## Where things live
 
@@ -27,7 +27,7 @@ dotnet build analyzer
 ```
 
 - A new language or framework needs a fixture under `editor/extensions/flow-view/test/fixtures` and its expected output under `test/expected`. After an intended change, run `UPDATE=1 npm test` and read the diff before committing it.
-- If you change the core patch, regenerate it as described in "Developing" in the README (in Git Bash, not Windows PowerShell 5.1, which writes UTF-16).
+- If you change the core patch, regenerate it as described in "Developing" in [docs/building.md](docs/building.md) (in Git Bash, not Windows PowerShell 5.1, which writes UTF-16).
 - Keep changes focused: one fix or feature per pull request, with a message that says why.
 - Match the style of the surrounding code; there is no separate formatter to run.
 

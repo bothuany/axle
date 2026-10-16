@@ -1,6 +1,6 @@
 # Hosting a signed APT repository for Axle
 
-Not set up yet. Until then, Linux users install the `.deb` from the release (see the README). This page describes how to
+Not set up yet. Until then, Linux users install the `.deb` from the release (see `docs/building.md`). This page describes how to
 host an APT repository so that `sudo apt install axle` works and `apt upgrade` picks up new releases.
 
 ## The shape
