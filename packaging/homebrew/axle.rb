@@ -24,11 +24,11 @@ cask "axle" do
   # VS Code's build names the macOS launcher script bin/code; on PATH it is `axle`.
   binary "#{appdir}/Axle.app/Contents/Resources/app/bin/code", target: "axle"
 
-  # Only Axle's own folders: the bundle identifier is still Code - OSS's (com.visualstudio.code.oss), so the
-  # preferences and saved state under that name may belong to a Code - OSS install and are left alone.
   zap trash: [
     "~/.axle",
     "~/Library/Application Support/Axle",
+    "~/Library/Preferences/io.github.bothuany.axle.plist",
+    "~/Library/Saved Application State/io.github.bothuany.axle.savedState",
   ]
 
   caveats <<~EOS

@@ -37,11 +37,17 @@ here hand those release files to package managers. **None of them is published y
   --wait` + `stapler staple` in `scripts/package.mjs` in place of the ad hoc step.
 - **Linux:** the `.deb` itself is not signed, which is normal. An APT repository signs its index instead (`apt/README.md`).
 
-## Still named like Code - OSS
+## App identity
 
-`product.json` (in `editor/patches/flow-core.patch`) still carries Code - OSS's `darwinBundleIdentifier`
-(`com.visualstudio.code.oss`), `linuxDesktopName` (`com.visualstudio.CodeOSS`) and `linuxIconName` (`code-oss`).
-On macOS this means Axle shares its preferences domain with a Code - OSS app. On Linux, the `.deb` installs
-`/usr/share/applications/com.visualstudio.CodeOSS.desktop` and `/usr/share/pixmaps/code-oss.png`, which clash with a
-Code - OSS package. Changing them is a change to the core patch, so every existing checkout has to run
-`npm run setup` again afterwards.
+`product.json` (in `editor/patches/flow-core.patch`) gives Axle its own names, so the packages install beside a
+Code - OSS or VS Code one:
+
+| | Key | Value | What uses it |
+|---|---|---|---|
+| macOS | `darwinBundleIdentifier` | `io.github.bothuany.axle` | the bundle id: preferences in `~/Library/Preferences/io.github.bothuany.axle.plist`, saved window state, the policy domain |
+| macOS | `darwinProfileUUID`, `darwinProfilePayloadUUID` | Axle's own | the identity of the policy `.mobileconfig` VS Code's build can generate |
+| Linux | `linuxDesktopName` | `io.github.bothuany.Axle` | `/usr/share/applications/io.github.bothuany.Axle.desktop` (and `.UrlHandler.desktop`), the appdata file, the window class |
+| Linux | `linuxIconName` | `axle` | `/usr/share/pixmaps/axle.png` |
+
+Two folder names are still Code - OSS's: `sharedDataFolderName` (`~/.vscode-oss-shared`) and `serverDataFolderName`
+(`~/.vscode-server-oss`, used by the remote server).
