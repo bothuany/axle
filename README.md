@@ -15,22 +15,19 @@
   <img src="https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-6f86ff" alt="Agents: Claude Code and Codex">
 </p>
 
-<!-- For inline playback on GitHub, drag docs/media/axle-demo.mp4 into this README in GitHub's editor and replace this block with the user-attachments URL it gives you. -->
 <p align="center">
   <a href="docs/media/axle-demo.mp4">
-    <img src="docs/media/axle-poster.jpg" width="100%" alt="Axle demo: the call-flow canvas, a Claude Code diff lighting up the methods it touches, the Agents dock and the harness map">
+    <img src="docs/media/axle-preview.webp" width="100%" alt="Axle demo: the call-flow canvas, a Claude Code diff lighting up the methods it touches, the Agents dock and the harness map">
   </a>
-  <br>
-  <sub>▶ <a href="docs/media/axle-demo.mp4">Watch the 28-second demo</a></sub>
 </p>
+
+<!-- VIDEO PLAYER: replace this line with the github.com/user-attachments/assets/... URL of axle-demo.mp4, on its own line -->
+
+<p align="center"><sub>▶ <a href="docs/media/axle-demo.mp4">Watch the 28-second demo with sound</a></sub></p>
 
 ## See how your code runs
 
 Pick an endpoint and watch the chain it runs, card by card: controller → handler → services → database, each with its real, editable code. Database cards show the table the query touches.
-
-<p align="center">
-  <img src="docs/media/axle-canvas.gif" width="88%" alt="An endpoint's call chain building card by card on the Axle canvas, from controller to database">
-</p>
 
 ## Let agents work, and know when they need you
 
