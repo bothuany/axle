@@ -208,11 +208,11 @@ export function layout(root: FlowNode, hidden: Set<string>, full: Set<string>, s
         targetHandle: 'in',
         type: 'smoothstep',
         zIndex: 1001,
-        animated: edge.edgeKind === 'mediator' || edge.edgeKind === 'http',
-        label: edge.edgeKind === 'mediator' ? 'MediatR.Send' : edge.edgeKind === 'impl' ? 'impl' : edge.edgeKind === 'http' ? 'HTTP?' : undefined,
+        animated: edge.edgeKind === 'mediator' || edge.edgeKind === 'http' || edge.edgeKind === 'message',
+        label: edge.edgeKind === 'mediator' ? 'MediatR.Send' : edge.edgeKind === 'impl' ? 'impl' : edge.edgeKind === 'http' ? 'HTTP?' : edge.edgeKind === 'message' ? 'topic?' : undefined,
         labelStyle: { fill: color, fontSize: 10.5, fontWeight: 500 },
         labelBgStyle: { fill: 'var(--fl-canvas)' },
-        style: { stroke: color, strokeWidth: 1.4, strokeDasharray: edge.edgeKind === 'impl' || edge.edgeKind === 'http' ? '5 4' : undefined },
+        style: { stroke: color, strokeWidth: 1.4, strokeDasharray: edge.edgeKind === 'impl' || edge.edgeKind === 'http' || edge.edgeKind === 'message' ? '5 4' : undefined },
       })
     }
 
@@ -300,8 +300,8 @@ export function layoutCallers(up: FlowNode, rootKey: string, rootY: number, hidd
         targetHandle: 'in',
         type: 'smoothstep',
         zIndex: 1001,
-        animated: edge.edgeKind === 'mediator' || edge.edgeKind === 'http',
-        label: edge.edgeKind === 'mediator' ? 'MediatR.Send' : edge.edgeKind === 'impl' ? 'interface' : edge.edgeKind === 'http' ? 'HTTP?' : undefined,
+        animated: edge.edgeKind === 'mediator' || edge.edgeKind === 'http' || edge.edgeKind === 'message',
+        label: edge.edgeKind === 'mediator' ? 'MediatR.Send' : edge.edgeKind === 'impl' ? 'interface' : edge.edgeKind === 'http' ? 'HTTP?' : edge.edgeKind === 'message' ? 'topic?' : undefined,
         labelStyle: { fill: color, fontSize: 10.5, fontWeight: 500 },
         labelBgStyle: { fill: 'var(--fl-canvas)' },
         style: { stroke: color, strokeWidth: 1.4, strokeDasharray: '2 4' },
