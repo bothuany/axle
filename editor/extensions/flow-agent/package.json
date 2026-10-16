@@ -164,6 +164,12 @@
         "title": "Start an Agent…",
         "category": "Axle",
         "icon": "$(add)"
+      },
+      {
+        "command": "flow.agents.resume",
+        "title": "Resume a Claude Session…",
+        "category": "Axle",
+        "icon": "$(history)"
       }
     ],
     "keybindings": [
@@ -207,7 +213,12 @@
         "flow.agents.mcp": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Give agents started from Axle the `axle` tools (open files and flows in the editor, find entry points, read a flow as text, draw diagrams and plans). They are added to the agent with `--mcp-config`, next to your own MCP servers; they cannot write files or run commands. Takes effect for agents started afterwards."
+          "markdownDescription": "Give agents started from Axle the `axle` tools (open files, the git diff and flows in the editor, find entry points, symbols, definitions and references, read diagnostics and flows as text, draw diagrams and plans). They are added to the agent with `--mcp-config`, next to your own MCP servers; they cannot write files or run commands. Takes effect for agents started afterwards."
+        },
+        "flow.agents.shim": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Also give a `claude` you type by hand in an Axle terminal the `axle` tools (open the diff, show flows, find symbols, diagnostics). Axle puts a small `claude` script first on the PATH of its own terminals; it runs the real `claude` with `--mcp-config` added, and passes subcommands such as `claude mcp` through untouched. Requires `#flow.agents.mcp#`. Takes effect after reloading the window."
         },
         "flow.agents.planBoard": {
           "type": "boolean",
@@ -223,6 +234,11 @@
     },
     "menus": {
       "view/title": [
+        {
+          "command": "flow.agents.resume",
+          "when": "view == flow.agents",
+          "group": "navigation"
+        },
         {
           "command": "flow.agents.new",
           "when": "view == flow.agents",

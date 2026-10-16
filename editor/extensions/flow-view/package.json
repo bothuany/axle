@@ -42,6 +42,12 @@
         "icon": "$(folder-library)"
       },
       {
+        "command": "flow.diff.showInFlow",
+        "title": "Show Git Changes in Flow",
+        "category": "Axle",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
         "command": "flow.showTarget",
         "title": "Show Flow",
         "category": "Axle"
@@ -172,7 +178,19 @@
       }
     ],
     "menus": {
+      "scm/title": [
+        {
+          "command": "flow.diff.showInFlow",
+          "when": "scmProvider == git",
+          "group": "navigation@5"
+        }
+      ],
       "editor/title": [
+        {
+          "command": "flow.diff.showInFlow",
+          "when": "isInDiffEditor && resourceScheme != flow-proposed || activeEditor == 'multiDiffEditor'",
+          "group": "navigation@5"
+        },
         {
           "command": "flow.showAtCursor",
           "when": "editorTextFocus || editorFocus",

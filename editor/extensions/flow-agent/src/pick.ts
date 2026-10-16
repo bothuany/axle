@@ -7,6 +7,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { Agents, CustomAgent } from './agents';
+import { startOrResume } from './resume';
 
 /** Agent CLIs worth offering when they are installed. */
 const KNOWN: CustomAgent[] = [
@@ -54,6 +55,8 @@ export async function pickAgent(agents: Agents) {
 	const found = (await Promise.all(KNOWN.filter(k => !saved.some(s => s.command.split(/\s+/)[0] === k.command)).map(async k => (await onPath(k.command) ? k : undefined)))).filter((k): k is CustomAgent => !!k);
 	const items: Item[] = [
 		{ label: '$(sparkle) Claude Code', detail: 'Status, permissions, diffs and context show up in Axle', run: () => agents.spawn('claude') },
+		{ label: '$(history) Resume a Claude Session…', detail: 'Continue an earlier conversation of this folder (claude --resume)', run: () => startOrResume(agents, 'claude', false) },
+		{ label: '$(history) Resume a Codex Session…', detail: 'Continue an earlier conversation of this folder (codex resume)', run: () => startOrResume(agents, 'codex', false) },
 		{ label: '$(hubot) Codex', detail: 'Listed here; runs as a plain terminal', run: () => agents.spawn('codex') },
 	];
 	if (saved.length) {

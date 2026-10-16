@@ -118,6 +118,36 @@ export const TOOLS: ToolDef[] = [
 		annotations: ro('Open file in Axle'),
 	},
 	{
+		name: 'open_diff',
+		description: "Show the git changes of the working tree in Axle's diff view (a multi-file diff editor), so the user can REVIEW them. Use this when the user asks to open, show or review the diff or the changes in the IDE. It covers modified, staged, deleted and brand-new untracked files (no `git add -N` needed) and finds nested git repositories inside the workspace. Pass `files` (files or folders) to narrow it; without it every changed file of every repository is shown. Returns the list of files it opened.",
+		inputSchema: { type: 'object', properties: { files: { type: 'array', items: { type: 'string' }, description: 'Files or folders to show (absolute, or relative to the workspace folder). Omit for all changes.' }, title: str('Title of the diff tab.'), flow: { type: 'boolean', description: "Also show the changes on Axle's flow canvas: the methods they touch are marked with what changed, and the flow of an affected endpoint opens. Use it when the user wants the diff \"in flow\"." } }, additionalProperties: false },
+		annotations: ro('Open diff in Axle'),
+	},
+	{
+		name: 'get_diagnostics',
+		description: "The errors and warnings Axle's language servers report right now (the Problems panel), for one file or the whole workspace, as `file:line:col severity [source] message`. Use it after editing to check your change compiles and lints, instead of running a build.",
+		inputSchema: { type: 'object', properties: { file: str('File to check (absolute, or relative to the workspace folder). Omit for the whole workspace.'), severity: { type: 'string', enum: ['error', 'warning', 'all'], description: 'Lowest-priority severity to include: error (only errors), warning (errors and warnings, default) or all (also info and hints).' }, limit: int('Maximum lines (default 100, at most 500).') }, additionalProperties: false },
+		annotations: ro('Get diagnostics'),
+	},
+	{
+		name: 'find_symbol',
+		description: "Search the workspace's symbols (classes, methods, functions, fields) by name with the language servers, e.g. \"OrderService\" or \"Delete\". Returns kind, name, container and file:line. Faster and more precise than grep for \"where is X defined\".",
+		inputSchema: { type: 'object', properties: { query: str('Symbol name or part of it.'), limit: int('Maximum matches (default 30, at most 100).') }, required: ['query'], additionalProperties: false },
+		annotations: ro('Find symbol'),
+	},
+	{
+		name: 'go_to_definition',
+		description: "Where a symbol is defined, with its type/signature and the first lines of its definition, using the language servers (so it follows interfaces, imports and generics like the editor's F12). Give `file` and `line`, plus `symbol` (the identifier on that line) to pick which one.",
+		inputSchema: { type: 'object', properties: { file: str('File that uses the symbol.'), line: int('1-based line of the usage.'), symbol: str('The identifier on that line (first occurrence). Without it the first token on the line is used.'), column: int('1-based column, instead of `symbol`.') }, required: ['file', 'line'], additionalProperties: false },
+		annotations: ro('Go to definition'),
+	},
+	{
+		name: 'find_references',
+		description: "Every place that uses a symbol, with the line of code, using the language servers. Use it before changing or renaming something. Give `file` and `line`, plus `symbol` (the identifier on that line) to pick which one. For who calls a method through the whole flow (interfaces, mediators) prefer `impact`.",
+		inputSchema: { type: 'object', properties: { file: str('File that declares or uses the symbol.'), line: int('1-based line.'), symbol: str('The identifier on that line (first occurrence).'), column: int('1-based column, instead of `symbol`.'), limit: int('Maximum references (default 40, at most 150).') }, required: ['file', 'line'], additionalProperties: false },
+		annotations: ro('Find references'),
+	},
+	{
 		name: 'find_entry_points',
 		description: "Find the entry points (HTTP endpoints, jobs, listeners) of the open project by a free-text query such as \"delete user\" or \"POST orders\", using Axle's code index. Returns each match with its HTTP verb and route, controller.method, file:line and an `id`. Use it first when the user names a feature (\"the delete-users flow\"), then pass the id to show_flow or flow_text. An empty query lists the entry points.",
 		inputSchema: { type: 'object', properties: { query: str('Free text: verbs (delete, create, update, list), nouns (user, order), a route or a class name.'), limit: int('Maximum matches (default 10, at most 50).') }, additionalProperties: false },

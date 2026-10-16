@@ -434,6 +434,13 @@ export class ClaudeIdeBridge implements vscode.Disposable {
 				await doc.save();
 				return this.text({ success: true, filePath: doc.uri.fsPath, saved: true, message: 'Document saved' });
 			}
+			case 'close_tab': {
+				// The CLI names the diff it opened by its tab_name; Axle titles those "<name> (Claude) ⟷ Accept or Reject".
+				const name = String(a.tab_name ?? '');
+				const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs).filter(t => name !== '' && t.label.includes(name) && (t.input as { modified?: vscode.Uri })?.modified?.scheme === SCHEME);
+				await vscode.window.tabGroups.close(tabs);
+				return this.text(tabs.length ? 'TAB_CLOSED' : 'TAB_NOT_FOUND');
+			}
 			case 'closeAllDiffTabs': {
 				const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs).filter(t => (t.input as { modified?: vscode.Uri })?.modified?.scheme === SCHEME);
 				await vscode.window.tabGroups.close(tabs);
@@ -591,5 +598,6 @@ const TOOLS = [
 	{ name: 'getDiagnostics', description: 'Get language diagnostics (errors, warnings) from the editor', inputSchema: { type: 'object', properties: { uri: { type: 'string' } }, additionalProperties: false }, annotations: { readOnlyHint: true } },
 	{ name: 'checkDocumentDirty', description: 'Check whether a document has unsaved changes', inputSchema: { type: 'object', properties: { filePath: { type: 'string' } }, required: ['filePath'], additionalProperties: false }, annotations: { readOnlyHint: true } },
 	{ name: 'saveDocument', description: 'Save a document with unsaved changes', inputSchema: { type: 'object', properties: { filePath: { type: 'string' } }, required: ['filePath'], additionalProperties: false } },
+	{ name: 'close_tab', description: 'Close the diff tab opened for review under this tab name', inputSchema: { type: 'object', properties: { tab_name: { type: 'string' } }, required: ['tab_name'], additionalProperties: false } },
 	{ name: 'closeAllDiffTabs', description: 'Close all diff tabs opened for review', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
 ];

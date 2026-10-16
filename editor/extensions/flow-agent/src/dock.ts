@@ -39,8 +39,9 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 			} else if (m.type === 'new') {
 				// The page is not trusted with what to run: only the two built-in agents start from here
 				// (your own commands go through "Start an Agent…", which reads them from your settings).
+				// The button offers a new session or one of the earlier ones to resume.
 				if (m.cli === 'claude' || m.cli === 'codex') {
-					void this.agents.spawn(m.cli);
+					void vscode.commands.executeCommand('flow.agents.start', m.cli);
 				}
 			} else if (m.type === 'show' && typeof m.id === 'string') {
 				this.agents.show(m.id);
@@ -49,6 +50,8 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				this.agents.openImpactFlow(m.id, m.index);
 			} else if (m.type === 'forget' && typeof m.id === 'string') {
 				this.agents.forget(m.id);
+			} else if (m.type === 'rename' && typeof m.id === 'string') {
+				void this.rename(m.id);
 			} else if (m.type === 'pick') {
 				void vscode.commands.executeCommand('flow.agents.new');
 			} else if (m.type === 'chat') {
@@ -62,6 +65,23 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				clearTimeout(this.timer);
 			}
 		});
+	}
+
+	/** The page only names the agent; the new name is asked for here, so the page never decides what a row says. */
+	private async rename(id: string) {
+		const s = this.agents.sessions.get(id);
+		if (!s) {
+			return;
+		}
+		const name = await vscode.window.showInputBox({
+			title: 'Rename Agent',
+			value: s.name,
+			prompt: s.cli === 'claude' ? 'Shown in this list and in Claude\'s /resume' : 'Shown in this list',
+			validateInput: v => v.trim() ? undefined : 'A name is required',
+		});
+		if (name !== undefined) {
+			await this.agents.rename(id, name);
+		}
 	}
 
 	/** Coalesces bursts of hook events into one repaint. */
@@ -140,8 +160,11 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 .ctx.warn i { background: var(--blocked); } .ctx.full i { background: #ff6b7d; }
 .x { position: absolute; top: 6px; right: 6px; display: none; width: 18px; height: 18px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 18px; }
 .agent.ended:hover .x { display: block; }
-.agent.ended:hover .state { visibility: hidden; }
-.x:hover { background: var(--hover); color: var(--text); }
+.agent:hover .state { visibility: hidden; }
+.x:hover, .ren:hover { background: var(--hover); color: var(--text); }
+.ren { position: absolute; top: 6px; right: 6px; display: none; width: 18px; height: 18px; border-radius: 5px; color: var(--muted); cursor: pointer; font-size: 12px; line-height: 18px; text-align: center; }
+.agent:hover .ren, .agent:focus-visible .ren { display: block; }
+.agent.ended:hover .ren { right: 26px; }
 .empty { margin: 4px 2px; color: var(--muted); line-height: 1.55; }
 .empty b { color: var(--text); font-weight: 600; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 12px; color: var(--muted); font-size: 11.5px; }
@@ -152,9 +175,9 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 @media (prefers-reduced-motion: reduce) { .working .light::after { animation: none; } }
 </style></head><body>
 <div class="new">
-	<button data-cli="claude" title="Start Claude Code in a new terminal">${ICON.claude}Claude</button>
-	<button data-cli="codex" title="Start Codex in a new terminal">${ICON.codex}Codex</button>
-	<button class="more" data-cli="pick" title="Start another agent: Gemini, Aider, your own command…" aria-label="Start another agent">Other…</button>
+	<button data-cli="claude" title="Start Claude Code in a new terminal, or resume an earlier session">${ICON.claude}Claude</button>
+	<button data-cli="codex" title="Start Codex in a new terminal, or resume an earlier session">${ICON.codex}Codex</button>
+	<button class="more" data-cli="pick"title="Start another agent: Gemini, Aider, your own command…" aria-label="Start another agent">Other…</button>
 </div>
 <div id="list"></div>
 <script>
@@ -186,13 +209,15 @@ function render() {
 			+ todos
 			+ impact
 			+ (s.usage ? '<div class="ctx' + (pct >= 90 ? ' full' : pct >= 70 ? ' warn' : '') + '"><i style="width:' + pct + '%"></i></div>' : '')
-			+ (s.state === 'ended' ? '<span class="x" data-forget="' + esc(s.id) + '" title="Remove from list" role="button">×</span>' : '')
+			+ '<span class="ren" data-rename="' + esc(s.id) + '" title="Rename" role="button">✎</span>'
+			+ (s.state === 'ended' ? '<span class="x"data-forget="' + esc(s.id) + '" title="Remove from list" role="button">×</span>' : '')
 			+ '</button>';
 	}).join('');
 	el.querySelectorAll('.agent').forEach(b => b.onclick = e => {
 		const f = e.target.closest('[data-forget]');
 		const fl = e.target.closest('[data-flow]');
-		vscode.postMessage(f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : { type: 'show', id: b.dataset.id });
+		const rn = e.target.closest('[data-rename]');
+		vscode.postMessage(rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : { type: 'show', id: b.dataset.id });
 	});
 }
 document.querySelectorAll('.new button').forEach(b => b.onclick = () => vscode.postMessage(b.dataset.cli === 'pick' ? { type: 'pick' } : { type: 'new', cli: b.dataset.cli }));

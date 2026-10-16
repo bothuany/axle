@@ -200,6 +200,37 @@ export class AgentChanges implements vscode.Disposable {
 		this.save();
 	}
 
+	/**
+	 * Review uncommitted work on the canvas: each file counts as changed since `before` (its text at HEAD, undefined for a
+	 * new file), so the cards of the methods it touched show their diff like an agent's edit. Replaces the earlier set
+	 * with the same label, so asking again does not stack timeline steps.
+	 */
+	async trackAgainst(label: string, agent: string, entries: { file: string; before: string | undefined }[]) {
+		await this.loading;
+		for (let i = this.turns.length - 1; i >= 0; i--) {
+			if (this.turns[i].prompt === label && this.turns[i].agent === agent) {
+				this.turns.splice(i, 1);
+			}
+		}
+		this.startTurn(label, agent, true);
+		const turn = this.turns.at(-1)!;
+		for (const { file, before } of entries) {
+			const f = fileKey(file);
+			const text = norm(before ?? '');
+			turn.before.set(f, text);
+			if (before === undefined) {
+				turn.created.add(f);
+			}
+			turn.after.set(f, norm(await fs.readFile(f, 'utf8').catch(() => '')));
+			this.baselines.set(f, text);
+		}
+		while (this.baselines.size > MAX_BASELINES) {
+			this.baselines.delete(this.baselines.keys().next().value!);
+		}
+		this.save();
+		this.changed.fire();
+	}
+
 	/** Edits from a CLI Axle did not start come without prompts: group those arriving close together into one step. */
 	ensureTurn(label: string, agent: string) {
 		const last = this.turns.at(-1);

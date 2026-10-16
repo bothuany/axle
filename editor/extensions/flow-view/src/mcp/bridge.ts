@@ -21,6 +21,13 @@ export class AgentBridge implements vscode.Disposable {
 		this.tools = new AgentTools(deps);
 	}
 
+	/** The uncommitted changes on the flow canvas (marks and the affected flow); `only` narrows them to files or folders. */
+	async showChangesInFlow(only?: string[]) {
+		const tools = this.tools;
+		const rows = only ? (await tools.changesOf(only)).list : undefined;
+		return tools.changesInFlow(rows, true).catch(e => ({ ok: false, opened: false, message: (e as Error).message }));
+	}
+
 	/** A failure (no port, an unwritable home folder) is logged and leaves Axle working without the bridge. */
 	async start() {
 		try {

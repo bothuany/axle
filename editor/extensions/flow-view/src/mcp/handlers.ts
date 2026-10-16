@@ -1,11 +1,12 @@
 /*---------------------------------------------------------------------------------------------
  *  Axle agent bridge: what the tools do inside the window. Everything here reads, opens or draws:
- *  no file is written and no command is run. Paths must be inside a workspace folder; the board is
+ *  no file is written and no command is run (the diff view only reads git state through the Git extension). Paths must be inside a workspace folder; the board is
  *  validated here (the MCP process is not the trust boundary). Nothing starts the analyzer in a way
  *  that could ask the user a question: a C# solution that is not chosen yet is reported, not prompted.
  *--------------------------------------------------------------------------------------------*/
 
 import { promises as fs } from 'fs';
+import { structuredPatch } from 'diff';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { innermost, type Analyzer } from '../analyzer';
@@ -15,6 +16,7 @@ import { cleanBoardId, type BoardStore } from '../board/store';
 import { POLY_LANGUAGES, type PolyIndex } from '../poly/client';
 import type { FlowProvider, FlowTarget } from '../providers';
 import { flowToText } from './flowtext';
+import type { TurnImpact } from './turnImpact';
 import { errorResult, type ToolResult } from './protocol';
 import { resolveInWorkspace } from './registry';
 import { searchEntries } from './search';
@@ -32,7 +34,29 @@ export interface ToolDeps {
 	showTarget(target: FlowTarget, label: string): Promise<void>;
 	/** The flow the canvas shows now. */
 	currentFlow(): { id: string; label: string } | undefined;
+	/** Marks files as changed since the given text (HEAD) on the canvas. */
+	trackChanges(entries: { file: string; before: string | undefined }[]): Promise<void>;
+	/** The endpoints that reach these files (what turnImpact answers). */
+	impactOf(files: string[]): Promise<TurnImpact>;
 }
+
+/** The Git extension's API, as far as the diff view uses it (its `Status` enum, numbered the same). */
+interface GitChange { uri: vscode.Uri; originalUri: vscode.Uri; status: number }
+interface GitRepo {
+	rootUri: vscode.Uri;
+	state: { workingTreeChanges: GitChange[]; untrackedChanges?: GitChange[]; indexChanges: GitChange[]; mergeChanges: GitChange[] };
+	status(): Promise<void>;
+}
+interface GitApi {
+	repositories: GitRepo[];
+	openRepository(root: vscode.Uri): Promise<GitRepo | null>;
+	toGitUri(uri: vscode.Uri, ref: string): vscode.Uri;
+}
+interface ChangeRow { uri: vscode.Uri; original?: vscode.Uri; modified?: vscode.Uri; mark: string; repo: string }
+/** Files the flow canvas can draw: the languages of the code index and the C# analyzer. */
+const CODE_FILE = /\.(cs|ts|tsx|js|jsx|java|kt|py|go|rs|php|rb)$/i;
+const GitStatus = { IndexAdded: 1, IndexDeleted: 2, IndexRenamed: 3, Deleted: 6, Untracked: 7, IntentToAdd: 9, IntentToRename: 10 } as const;
+const SKIP_DIRS = new Set(['node_modules', 'bin', 'obj', 'dist', 'out', 'build', 'target', 'vendor', 'packages', '__pycache__', 'venv']);
 
 const text = (t: string): ToolResult => ({ content: [{ type: 'text', text: t }] });
 const num = (v: unknown, fallback: number, max: number) => typeof v === 'number' && Number.isFinite(v) ? Math.max(1, Math.min(max, Math.floor(v))) : fallback;
@@ -58,6 +82,11 @@ export class AgentTools {
 		try {
 			switch (tool) {
 				case 'open': return await this.open(a);
+				case 'open_diff': return await this.openDiff(a);
+				case 'get_diagnostics': return await this.getDiagnostics(a);
+				case 'find_symbol': return await this.findSymbol(a);
+				case 'go_to_definition': return await this.definition(a);
+				case 'find_references': return await this.references(a);
 				case 'find_entry_points': return await this.find(a);
 				case 'show_flow': return await this.flow(a, true);
 				case 'flow_text': return await this.flow(a, false);
@@ -118,6 +147,391 @@ export class AgentTools {
 		// preserveFocus: the user is typing in the terminal; the editor shows the file without taking the keyboard.
 		await vscode.window.showTextDocument(doc, { preview: a.preview !== false, preserveFocus: true, selection, viewColumn: vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One });
 		return text(`Opened ${this.rel(file)}${line ? ` at line ${line}${endLine !== line ? `-${endLine}` : ''}` : ''} (${doc.lineCount} lines, ${doc.languageId}).`);
+	}
+
+	// ── diff ────────────────────────────────────────────────────────────────
+
+	private async gitApi(): Promise<GitApi> {
+		const ext = vscode.extensions.getExtension('vscode.git');
+		const api = ext && (ext.isActive ? ext.exports : await ext.activate())?.getAPI?.(1);
+		if (!api) {
+			throw new Error('The Git extension is not available in this window.');
+		}
+		return api as GitApi;
+	}
+
+	/** Git repositories below the workspace folders (a few levels deep): the Git view only lists the ones it noticed. */
+	private async nestedRepos(): Promise<string[]> {
+		const found: string[] = [];
+		let visited = 0;
+		const walk = async (dir: string, depth: number): Promise<void> => {
+			if (depth > 3 || visited++ > 3000) {
+				return;
+			}
+			const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+			if (entries.some(e => e.name === '.git')) {
+				if (await this.plainRepo(dir)) {
+					found.push(dir);
+				} else {
+					this.d.log.info(`open_diff: not opening ${dir}: its git config can run programs, or its git folder is outside the workspace`);
+				}
+			}
+			for (const e of entries) {
+				if (e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith('.')) {
+					await walk(path.join(dir, e.name), depth + 1);
+				}
+			}
+		};
+		await Promise.all(this.folders.map(f => walk(f, 0)));
+		return found.map(f => vscode.Uri.file(f).fsPath);
+	}
+
+	/**
+	 * A repository the Git extension did not discover itself is opened only when asking it for its status cannot run a program:
+	 * its git folder is inside this workspace (or is a submodule's folder under its superproject), and its config has no
+	 * fsmonitor, textconv, external diff, include, or filter other than git-lfs (those run commands during `git status`).
+	 */
+	private async plainRepo(dir: string): Promise<boolean> {
+		try {
+			const dot = path.join(dir, '.git');
+			const st = await fs.lstat(dot);
+			let gitDir = dot;
+			if (st.isFile()) {
+				const m = /^gitdir:\s*(.+)$/m.exec(await fs.readFile(dot, 'utf8'));
+				if (!m) {
+					return false;
+				}
+				gitDir = path.resolve(dir, m[1].trim());
+				const modules = gitDir.split(/[\\/]\.git[\\/]modules[\\/]/);
+				const submodule = modules.length > 1 && !!resolveInWorkspace(dir, [modules[0]]);
+				if (!submodule && !resolveInWorkspace(gitDir, this.folders)) {
+					return false;
+				}
+			} else if (!st.isDirectory()) {
+				return false;
+			}
+			const config = await fs.readFile(path.join(gitDir, 'config'), 'utf8').catch(() => '');
+			let section = '';
+			for (const raw of config.split('\n')) {
+				const line = raw.trim();
+				if (line.startsWith('[')) {
+					section = line.toLowerCase();
+					if (/^\[(include|includeif)\b/.test(section)) {
+						return false;
+					}
+				} else if (/^(fsmonitor|textconv|external)\s*=/i.test(line)) {
+					return false;
+				} else if (section.startsWith('[filter') && line && !/^(clean|smudge|process)\s*=\s*git-lfs\b/i.test(line) && !/^required\s*=/i.test(line)) {
+					return false;
+				}
+			}
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	private async openDiff(a: Record<string, unknown>): Promise<ToolResult> {
+		const only = Array.isArray(a.files) && a.files.length ? await Promise.all(a.files.map(f => this.safeFile(f, false))) : undefined;
+		const { list, repos } = await this.collectChanges(only);
+		if (!list.length) {
+			return text(only ? 'No changes in the given files.' : `No uncommitted changes in ${repos} git repositor${repos === 1 ? 'y' : 'ies'} of this workspace.`);
+		}
+		const title = typeof a.title === 'string' && a.title.trim() ? a.title.trim().slice(0, 80) : `Axle: Changes (${list.length} file${list.length === 1 ? '' : 's'})`;
+		await vscode.commands.executeCommand('vscode.changes', title, list.map(r => [r.uri, r.original, r.modified]));
+		const multi = new Set(list.map(r => r.repo)).size > 1;
+		const out = [
+			`Opened the diff of ${list.length} file${list.length === 1 ? '' : 's'} in Axle (working tree against HEAD; A new, M modified, D deleted, R renamed):`,
+			...list.slice(0, 60).map(r => `${r.mark} ${this.rel(r.uri.fsPath)}${multi ? `  [${r.repo}]` : ''}`),
+			list.length > 60 ? `... and ${list.length - 60} more` : '',
+		].filter(Boolean);
+		// `flow: true`: the same changes on the flow canvas too (marked methods, the affected endpoint's flow).
+		if (a.flow === true) {
+			out.push('', (await this.changesInFlow(list)).message);
+		}
+		return text(out.join('\n'));
+	}
+
+	/** Opens a resolved flow target on the canvas (what show_flow does after resolving). */
+	private async openResolved(r: Resolved) {
+		if (r.source === 'lsp') {
+			await this.d.showTarget(r.target, r.label);
+		} else {
+			await this.d.showEntry(r.id!, r.label, r.source);
+		}
+	}
+
+	/**
+	 * Methods that changed, as flow targets: for an edited file the methods holding changed lines, for a new file its first
+	 * methods. Only what resolves quietly (a backend that is ready) is listed; at most a dozen.
+	 */
+	private async changedMethods(entries: { file: string; before: string | undefined }[], why: string[] = []): Promise<{ label: string; where: string; resolved: Resolved }[]> {
+		const out: { label: string; where: string; resolved: Resolved }[] = [];
+		const seen = new Set<string>();
+		for (const { file, before } of entries.slice(0, 8)) {
+			let lines: number[] = [];
+			if (before === undefined) {
+				const all = /\.cs$/i.test(file) && this.d.analyzer.isReady ? await within(this.d.analyzer.methods(file), 10_000, 'the C# analyzer').catch(() => []) : this.d.poly.isReady ? await within(this.d.poly.methods(file), 10_000, 'the code index').catch(() => []) : [];
+				lines = all.slice(0, 3).map(m => m.line);
+			} else {
+				const now = (await fs.readFile(file, 'utf8').catch(() => '')).replace(/\r\n/g, '\n');
+				// With no context lines, a hunk's newStart is its first changed line (for a pure deletion, the line it was cut from).
+				lines = structuredPatch('a', 'b', before.replace(/\r\n/g, '\n'), now, '', '', { context: 0 }).hunks.map(h => Math.max(1, h.newStart));
+			}
+			for (const line of lines.slice(0, 6)) {
+				if (out.length >= 12) {
+					return out;
+				}
+				try {
+					const resolved = await this.resolve({ file, line });
+					const key = resolved.id ?? `${file}:${resolved.label}`;
+					if (!seen.has(key)) {
+						seen.add(key);
+						out.push({ label: resolved.label, where: `${this.rel(file)}:${line}`, resolved });
+					}
+				} catch (e) {
+					// not inside a method the backends know (or a backend is still loading): skip, but remember why
+					why.push((e as Error).message);
+				}
+			}
+		}
+		return out;
+	}
+
+	changesOf(only: string[]) {
+		return this.collectChanges(only);
+	}
+
+	/** The working-tree changes (against HEAD) of every git repository of this workspace, narrowed to `only` (files or folders). */
+	private async collectChanges(only?: string[]): Promise<{ list: ChangeRow[]; repos: number }> {
+		const api = await this.gitApi();
+		const repos = new Map<string, GitRepo>(api.repositories.map(r => [r.rootUri.fsPath, r]));
+		for (const root of await this.nestedRepos()) {
+			if (!repos.has(root)) {
+				const opened = await api.openRepository(vscode.Uri.file(root)).catch(() => null);
+				if (opened) {
+					repos.set(opened.rootUri.fsPath, opened);
+				}
+			}
+		}
+		const rows = new Map<string, ChangeRow>();
+		for (const repo of repos.values()) {
+			const root = repo.rootUri.fsPath;
+			// A repository that belongs to this window: inside a workspace folder, or one that contains it.
+			if (!resolveInWorkspace(root, this.folders) && !this.folders.some(f => resolveInWorkspace(f, [root]))) {
+				continue;
+			}
+			await within(repo.status(), 15_000, 'git status').catch(e => this.d.log.warn(`open_diff: ${(e as Error).message}`));
+			// With git.untrackedChanges "separate" the new files are not in workingTreeChanges.
+			const all = [...repo.state.workingTreeChanges, ...(repo.state.untrackedChanges ?? []), ...repo.state.indexChanges, ...repo.state.mergeChanges];
+			for (const c of all) {
+				const file = c.uri.fsPath;
+				// A submodule shows up as a changed "file" in its superproject: it is a folder with a repository of its own.
+				if (repos.has(file)) {
+					continue;
+				}
+				if (!resolveInWorkspace(file, this.folders) || (only && !only.some(o => file === o || resolveInWorkspace(file, [o])))) {
+					continue;
+				}
+				const kinds = all.filter(x => x.uri.fsPath === file).map(x => x.status);
+				const added = kinds.some(k => k === GitStatus.IndexAdded || k === GitStatus.Untracked || k === GitStatus.IntentToAdd);
+				const deleted = !added && kinds.every(k => k === GitStatus.IndexDeleted || k === GitStatus.Deleted);
+				const renamed = kinds.includes(GitStatus.IndexRenamed) || kinds.includes(GitStatus.IntentToRename);
+				rows.set(file, {
+					uri: c.uri,
+					original: added ? undefined : api.toGitUri(renamed ? c.originalUri : c.uri, 'HEAD'),
+					modified: deleted ? undefined : c.uri,
+					mark: added ? 'A' : deleted ? 'D' : renamed ? 'R' : 'M',
+					repo: path.basename(root),
+				});
+			}
+		}
+		return { list: [...rows.values()].sort((x, y) => x.uri.fsPath.localeCompare(y.uri.fsPath)), repos: repos.size };
+	}
+
+	/**
+	 * Review the uncommitted changes on the flow canvas: the files count as changed since HEAD, so the methods they touch show
+	 * their diff on the cards, and the flow of an endpoint that reaches them is opened. With `choose`, several affected
+	 * endpoints are offered in a pick; without it the first is shown and the others are named.
+	 */
+	async changesInFlow(rows?: ChangeRow[], choose = false): Promise<{ ok: boolean; opened: boolean; message: string }> {
+		const list = rows ?? (await this.collectChanges()).list;
+		const code = list.filter(r => r.modified && CODE_FILE.test(r.uri.fsPath));
+		if (!code.length) {
+			return { ok: false, opened: false, message: 'No changed source files to show on the flow canvas.' };
+		}
+		const entries = await Promise.all(code.map(async r => ({
+			file: r.uri.fsPath,
+			before: r.original ? await Promise.resolve(vscode.workspace.openTextDocument(r.original)).then(d => d.getText(), () => '') : undefined,
+		})));
+		await this.d.trackChanges(entries);
+		const impact = await within(this.d.impactOf(code.map(r => r.uri.fsPath)), 30_000, 'the flow lookup').catch(() => undefined);
+		const flows = impact?.flows ?? [];
+		const marked = `${code.length} changed file${code.length === 1 ? '' : 's'} marked on the canvas (cards show what changed since HEAD).`;
+		if (!flows.length) {
+			// No endpoint reaches them (a job, a library, a new file): show the flow of a method that changed instead.
+			const why: string[] = [];
+			const spots = await this.changedMethods(entries, why);
+			if (!spots.length) {
+				const reason = why.find(w => /loading|choose|several C# solutions|still building/i.test(w)) ?? why[0];
+				return { ok: true, opened: false, message: `${marked} No endpoint flow reaches them and no changed method could be opened${reason ? `: ${reason}` : ''}${impact?.note ? ` (${impact.note})` : ''}` };
+			}
+			let spot = spots[0];
+			if (choose && spots.length > 1) {
+				const pick = await vscode.window.showQuickPick(spots.map(x => ({ label: x.label, description: x.where, spot: x })), { title: 'Show the changes in which method?', placeHolder: 'No endpoint reaches the changed files: pick a changed method' });
+				if (!pick) {
+					return { ok: true, opened: false, message: marked };
+				}
+				spot = pick.spot;
+			}
+			await this.openResolved(spot.resolved);
+			return { ok: true, opened: true, message: `${marked} No endpoint reaches the changed files, so Axle opened the flow of the changed method ${spot.label} (${spot.where}).${spots.length > 1 ? ` Other changed methods: ${spots.slice(1, 8).map(x => `${x.label} (${x.where})`).join(', ')}; use show_flow with file and line to open one.` : ''}` };
+		}
+		let flow = flows[0];
+		if (choose && flows.length > 1) {
+			const pick = await vscode.window.showQuickPick(flows.map(f => ({ label: f.label, description: f.name, flow: f })), { title: 'Show the changes in which flow?', placeHolder: `${flows.length} flows reach the changed files` });
+			if (!pick) {
+				return { ok: true, opened: false, message: marked };
+			}
+			flow = pick.flow;
+		}
+		await this.d.showEntry(flow.id, flow.name, flow.source);
+		const others = flows.filter(f => f !== flow);
+		return { ok: true, opened: true, message: `${marked} Opened the flow of ${flow.label}.${others.length ? ` Other affected flows: ${others.slice(0, 8).map(f => `${f.label} (id=${f.id})`).join(', ')}${impact!.more ? ` and ${impact!.more} more` : ''}; use show_flow with an id to open one.` : ''}` };
+	}
+
+	// ── diagnostics, symbols, definitions, references ───────────────────────
+
+	private async getDiagnostics(a: Record<string, unknown>): Promise<ToolResult> {
+		const level = a.severity === 'error' ? 0 : a.severity === 'all' ? 3 : 1;
+		const limit = num(a.limit, 100, 500);
+		const names = ['error', 'warning', 'info', 'hint'];
+		const only = typeof a.file === 'string' ? vscode.Uri.file(await this.safeFile(a.file)) : undefined;
+		const entries = only ? [[only, vscode.languages.getDiagnostics(only)] as const] : vscode.languages.getDiagnostics();
+		const lines: { sev: number; text: string }[] = [];
+		let files = 0;
+		for (const [uri, list] of entries) {
+			if (uri.scheme !== 'file' || !vscode.workspace.getWorkspaceFolder(uri)) {
+				continue;
+			}
+			const hit = list.filter(d => d.severity <= level);
+			files += hit.length ? 1 : 0;
+			for (const d of hit) {
+				const code = typeof d.code === 'object' ? d.code.value : d.code;
+				lines.push({ sev: d.severity, text: `${this.rel(uri.fsPath)}:${d.range.start.line + 1}:${d.range.start.character + 1} ${names[d.severity]}${d.source ? ` [${d.source}${code !== undefined ? ` ${code}` : ''}]` : ''} ${d.message.split('\n')[0].slice(0, 300)}` });
+			}
+		}
+		lines.sort((x, y) => x.sev - y.sev);
+		if (!lines.length) {
+			return text(`No ${level === 0 ? 'errors' : level === 1 ? 'errors or warnings' : 'diagnostics'}${only ? ` in ${this.rel(only.fsPath)}` : ' in the workspace'}.`);
+		}
+		return text([`${lines.length} diagnostic${lines.length === 1 ? '' : 's'} in ${files} file${files === 1 ? '' : 's'}:`, ...lines.slice(0, limit).map(l => l.text), lines.length > limit ? `... and ${lines.length - limit} more (raise limit or pass a file)` : ''].filter(Boolean).join('\n'));
+	}
+
+	private async findSymbol(a: Record<string, unknown>): Promise<ToolResult> {
+		const query = typeof a.query === 'string' ? a.query.trim() : '';
+		if (!query) {
+			throw new Error('`query` is required.');
+		}
+		const limit = num(a.limit, 30, 100);
+		const found = await within(Promise.resolve(vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', query)), 20_000, 'the symbol search') ?? [];
+		const inside: vscode.SymbolInformation[] = [];
+		for (const sym of found) {
+			if (await this.inside(sym.location.uri)) {
+				inside.push(sym);
+			}
+		}
+		if (!inside.length) {
+			return text(`No symbol matches "${query}". The language servers may still be loading: try again in a few seconds, or use grep.`);
+		}
+		return text([`${Math.min(inside.length, limit)} of ${inside.length} symbols for "${query}":`, ...inside.slice(0, limit).map(s => `- ${vscode.SymbolKind[s.kind].toLowerCase()} ${s.containerName ? `${s.containerName}.` : ''}${s.name}  ${this.rel(s.location.uri.fsPath)}:${s.location.range.start.line + 1}`)].join('\n'));
+	}
+
+	/** The position a tool call points at: `symbol` found on the line, else `column`, else the line's first token. */
+	private async locate(a: Record<string, unknown>) {
+		const file = await this.safeFile(a.file);
+		const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+		const line = typeof a.line === 'number' ? Math.floor(a.line) : 0;
+		if (line < 1 || line > doc.lineCount) {
+			throw new Error(`\`line\` must be between 1 and ${doc.lineCount} for ${this.rel(file)}.`);
+		}
+		const row = doc.lineAt(line - 1);
+		let character = row.firstNonWhitespaceCharacterIndex;
+		if (typeof a.symbol === 'string' && a.symbol) {
+			const at = row.text.indexOf(a.symbol);
+			if (at < 0) {
+				throw new Error(`"${a.symbol}" is not on line ${line} of ${this.rel(file)}: ${row.text.trim().slice(0, 160)}`);
+			}
+			// For "a.b" or "A::B" the editor resolves the last segment.
+			const last = a.symbol.split(/[.:>]+/).filter(Boolean).pop() ?? a.symbol;
+			character = at + a.symbol.lastIndexOf(last);
+		} else if (typeof a.column === 'number' && a.column >= 1) {
+			character = Math.min(Math.floor(a.column) - 1, row.text.length);
+		}
+		return { file, doc, position: new vscode.Position(line - 1, character) };
+	}
+
+	/** Whether a file is inside the workspace by the same test `safeFile` applies (symbolic links resolved). */
+	private async inside(uri: vscode.Uri): Promise<boolean> {
+		return uri.scheme === 'file' && await this.safeFile(uri.fsPath).then(() => true, () => false);
+	}
+
+	private where(l: vscode.Location | vscode.LocationLink) {
+		const uri = 'targetUri' in l ? l.targetUri : l.uri;
+		const range = 'targetUri' in l ? l.targetSelectionRange ?? l.targetRange : l.range;
+		return { uri, range, shown: uri.scheme === 'file' ? this.rel(uri.fsPath) : uri.toString() };
+	}
+
+	private async definition(a: Record<string, unknown>): Promise<ToolResult> {
+		const { file, doc, position } = await this.locate(a);
+		const [defs, hovers] = await Promise.all([
+			within(Promise.resolve(vscode.commands.executeCommand<(vscode.Location | vscode.LocationLink)[]>('vscode.executeDefinitionProvider', doc.uri, position)), 20_000, 'the definition lookup'),
+			within(Promise.resolve(vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', doc.uri, position)), 10_000, 'the hover lookup').catch(() => [] as vscode.Hover[]),
+		]);
+		const word = doc.getText(doc.getWordRangeAtPosition(position)) || `${path.basename(file)}:${position.line + 1}`;
+		const out: string[] = [];
+		const info = (hovers ?? []).flatMap(h => h.contents).map(c => typeof c === 'string' ? c : c.value).join('\n').replace(/```\w*/g, '').trim();
+		if (info) {
+			out.push(`${word}:`, info.slice(0, 800), '');
+		}
+		if (!defs?.length) {
+			out.push(`No definition found for ${word} at ${this.rel(file)}:${position.line + 1}. The language server may still be loading.`);
+			return text(out.join('\n'));
+		}
+		for (const d of defs.slice(0, 5)) {
+			const w = this.where(d);
+			out.push(`Definition: ${w.shown}:${w.range.start.line + 1}`);
+			// The code of a definition is shown only when it lies inside the workspace (framework sources elsewhere: the place only).
+			if (await this.inside(w.uri)) {
+				const target = await vscode.workspace.openTextDocument(w.uri);
+				const from = w.range.start.line;
+				out.push(...Array.from({ length: Math.min(10, target.lineCount - from) }, (_, i) => `  ${from + i + 1}| ${target.lineAt(from + i).text.slice(0, 200)}`));
+			}
+		}
+		return text(out.join('\n'));
+	}
+
+	private async references(a: Record<string, unknown>): Promise<ToolResult> {
+		const { file, doc, position } = await this.locate(a);
+		const limit = num(a.limit, 40, 150);
+		const refs = await within(Promise.resolve(vscode.commands.executeCommand<vscode.Location[]>('vscode.executeReferenceProvider', doc.uri, position)), 30_000, 'the reference search') ?? [];
+		const inside: vscode.Location[] = [];
+		for (const r of refs) {
+			if (await this.inside(r.uri)) {
+				inside.push(r);
+			}
+		}
+		const word = doc.getText(doc.getWordRangeAtPosition(position)) || `${path.basename(file)}:${position.line + 1}`;
+		if (!inside.length) {
+			return text(`No references to ${word} found. The language server may still be loading.`);
+		}
+		const lines: string[] = [];
+		for (const r of inside.slice(0, limit)) {
+			const target = await vscode.workspace.openTextDocument(r.uri);
+			lines.push(`${this.rel(r.uri.fsPath)}:${r.range.start.line + 1}  ${target.lineAt(r.range.start.line).text.trim().slice(0, 160)}`);
+		}
+		const files = new Set(inside.map(r => r.uri.fsPath)).size;
+		return text([`${inside.length} reference${inside.length === 1 ? '' : 's'} to ${word} in ${files} file${files === 1 ? '' : 's'}:`, ...lines, inside.length > limit ? `... and ${inside.length - limit} more (raise limit)` : ''].filter(Boolean).join('\n'));
 	}
 
 	// ── entry points ────────────────────────────────────────────────────────

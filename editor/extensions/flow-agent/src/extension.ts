@@ -9,6 +9,7 @@ import { Agents } from './agents';
 import { AgentsDock } from './dock';
 import { registerPlaceholderModels } from './models';
 import { pickAgent } from './pick';
+import { startOrResume } from './resume';
 import { AgentSessionType } from './sessionType';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -41,6 +42,8 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('flow.agents.newClaude', () => agents.spawn('claude')),
 		vscode.commands.registerCommand('flow.agents.newCodex', () => agents.spawn('codex')),
 		vscode.commands.registerCommand('flow.agents.new', () => pickAgent(agents)),
+		vscode.commands.registerCommand('flow.agents.resume', () => startOrResume(agents, 'claude', false)),
+		vscode.commands.registerCommand('flow.agents.start', (cli: unknown) => cli === 'claude' || cli === 'codex' ? startOrResume(agents, cli) : undefined),
 	);
 	log.info('Axle agents registered');
 }

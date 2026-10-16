@@ -13,6 +13,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { inheritedAgentEnv } from './env';
+import { shimScript } from './shim';
 
 /** claude reports through hooks; codex and custom CLIs are plain terminals Axle only lists. */
 export type AgentCli = 'claude' | 'codex' | 'custom';
@@ -165,9 +166,13 @@ setTimeout(() => process.exit(0), 4000);
 }
 
 /** Where Claude Code keeps a session's transcript: the cwd with every non-alphanumeric turned into '-'. */
-function transcriptPath(id: string, cwd: string | undefined) {
+export function projectDir(cwd: string | undefined) {
 	const config = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude');
-	return path.join(config, 'projects', (cwd ?? '').replace(/[^a-zA-Z0-9]/g, '-'), `${id}.jsonl`);
+	return path.join(config, 'projects', (cwd ?? '').replace(/[^a-zA-Z0-9]/g, '-'));
+}
+
+function transcriptPath(id: string, cwd: string | undefined) {
+	return path.join(projectDir(cwd), `${id}.jsonl`);
 }
 
 export class Agents implements vscode.Disposable {
@@ -239,8 +244,26 @@ export class Agents implements vscode.Disposable {
 		} catch (e) {
 			this.log.warn(`Agents: could not write the hook settings; agents run without status (${(e as Error).message})`);
 		}
+		await this.installShim().catch(e => this.log.warn(`Agents: no claude shim (${(e as Error).message})`));
 		await this.revive(saved);
 		this.save();
+	}
+
+	/** Puts the `claude` shim first on PATH of Axle's terminals (or takes it away), so a hand-typed `claude` gets the `axle` tools too. */
+	private async installShim() {
+		const collection = this.context.environmentVariableCollection;
+		const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		const config = process.platform === 'win32' || !vscode.workspace.getConfiguration('flow.agents').get<boolean>('shim', true) ? undefined : await this.mcpConfig(cwd);
+		if (!config) {
+			collection.delete('PATH');
+			return;
+		}
+		const bin = path.join(this.dir, 'bin');
+		await fs.mkdir(bin, { recursive: true });
+		const file = path.join(bin, 'claude');
+		await fs.writeFile(file, shimScript(config), { mode: 0o755 });
+		await fs.chmod(file, 0o755);
+		collection.prepend('PATH', bin + path.delimiter);
 	}
 
 	private listen() {
@@ -429,7 +452,7 @@ export class Agents implements vscode.Disposable {
 		const mcp = cli === 'claude' ? await this.mcpConfig(cwd) : undefined;
 		const command = cli === 'claude'
 			? `claude ${resume ? '--resume' : '--session-id'} ${id}${this.server && this.settingsOk ? ` --settings ${quote(this.settingsFile)}` : ''}${mcp ? ` --mcp-config ${quote(mcp)}` : ''}`
-			: cli === 'codex' ? 'codex' : resume?.command ?? custom?.command ?? '';
+			: cli === 'codex' ? (resume ? `codex resume ${id}` : 'codex') : resume?.command ?? custom?.command ?? '';
 		terminal.show();
 		terminal.sendText(command);
 		const session: AgentSession = {
@@ -465,6 +488,40 @@ export class Agents implements vscode.Disposable {
 		if (s) {
 			s.unread = false;
 			this.changed.fire();
+		}
+	}
+
+	/**
+	 * Gives an agent a name of the user's choosing. Claude's own /rename is a `custom-title` line in the transcript, so one is
+	 * appended: the new name then survives readTitle (which takes the newest title) and shows in Claude's own /resume list.
+	 */
+	async rename(id: string, name: string) {
+		const s = this.sessions.get(id);
+		const title = name.replace(/\s+/g, ' ').trim().slice(0, 80);
+		if (!s || !title || title === s.name) {
+			return;
+		}
+		s.name = title;
+		this.save();
+		this.changed.fire();
+		if (s.cli === 'claude' && s.transcript && existsSync(s.transcript)) {
+			const line = JSON.stringify({ type: 'custom-title', customTitle: title, sessionId: path.basename(s.transcript, '.jsonl') });
+			try {
+				// Start on a fresh line only when the last one is unfinished: a blank line in the middle would be one more thing to parse.
+				const h = await fs.open(s.transcript, 'a+');
+				try {
+					const { size } = await h.stat();
+					const last = Buffer.alloc(1);
+					if (size) {
+						await h.read(last, 0, 1, size - 1);
+					}
+					await h.appendFile(`${size && last[0] !== 0x0a ? '\n' : ''}${line}\n`);
+				} finally {
+					await h.close();
+				}
+			} catch (e) {
+				this.log.warn(`Agents: could not write the new name to the transcript (${(e as Error).message})`);
+			}
 		}
 	}
 

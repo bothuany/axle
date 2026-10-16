@@ -332,6 +332,11 @@ function wireAgentBridge(flow: Flow) {
 			await panel.show(target, label);
 		},
 		currentFlow: () => flow.currentFlow,
+		trackChanges: async entries => {
+			await flow.changes.trackAgainst('Git changes', 'Git', entries);
+			panel.refreshSoon();
+		},
+		impactOf: files => turnImpact(files, { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor }),
 	}, log);
 	context.subscriptions.push(
 		viewer, bridge, boardPanel, TypeService.get(log),
@@ -357,6 +362,17 @@ function wireAgentBridge(flow: Flow) {
 			}
 		}),
 		vscode.commands.registerCommand('flow.agent.turnImpact', (files: string[]) => turnImpact(Array.isArray(files) ? files.filter(f => typeof f === 'string') : [], { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor })),
+	);
+	context.subscriptions.push(
+		// "Show the git changes on the flow canvas": from a diff editor's title (its resource, when it is a file, narrows it to that file),
+		// the Source Control title, or the command palette.
+		vscode.commands.registerCommand('flow.diff.showInFlow', async (resource?: unknown) => {
+			const only = resource instanceof vscode.Uri && resource.scheme === 'file' ? [resource.fsPath] : undefined;
+			const r = await bridge.showChangesInFlow(only);
+			if (!r.opened) {
+				void vscode.window.showInformationMessage(`Axle: ${r.message}`);
+			}
+		}),
 	);
 	registerMcpCommands(context, log);
 	void bridge.start();
