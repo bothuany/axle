@@ -324,7 +324,7 @@ function wireAgentBridge(flow: Flow) {
 		},
 	});
 	const bridge = new AgentBridge({
-		log, endpoints: endpointList, analyzer, poly, boards,
+		log, state: context.workspaceState, endpoints: endpointList, analyzer, poly, boards,
 		providerFor: flow.providerFor,
 		showEntry: (id, label, source) => flow.showEntry(id, label, source),
 		showTarget: async (target, label) => {

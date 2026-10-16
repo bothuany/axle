@@ -10,6 +10,7 @@ import { execFile } from 'child_process';
 import { promises as fs } from 'fs';
 import { promisify } from 'util';
 import { structuredPatch } from 'diff';
+import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { innermost, type Analyzer } from '../analyzer';
@@ -28,6 +29,8 @@ import { NODE_STATUSES } from './tools';
 /** What the tools need from the rest of the extension. */
 export interface ToolDeps {
 	log: vscode.LogOutputChannel;
+	/** Where "open this repository" approvals are remembered (per workspace). */
+	state: vscode.Memento;
 	endpoints: Endpoints;
 	analyzer: Analyzer;
 	poly: PolyIndex;
@@ -54,6 +57,7 @@ interface GitApi {
 	repositories: GitRepo[];
 	openRepository(root: vscode.Uri): Promise<GitRepo | null>;
 	toGitUri(uri: vscode.Uri, ref: string): vscode.Uri;
+	git?: { path: string };
 }
 interface ChangeRow { uri: vscode.Uri; original?: vscode.Uri; modified?: vscode.Uri; mark: string; repo: string }
 /** Files the flow canvas can draw: the languages of the code index and the C# analyzer. */
@@ -65,6 +69,7 @@ const LFS_FILTER: Record<string, (v: string) => boolean> = {
 	process: v => v === 'git-lfs filter-process',
 	required: v => v === 'true',
 };
+const APPROVED_KEY = 'flow.diff.approvedRepos';
 const GitStatus = { IndexAdded: 1, IndexDeleted: 2, IndexRenamed: 3, Deleted: 6, Untracked: 7, IntentToAdd: 9, IntentToRename: 10 } as const;
 const SKIP_DIRS = new Set(['node_modules', 'bin', 'obj', 'dist', 'out', 'build', 'target', 'vendor', 'packages', '__pycache__', 'venv']);
 
@@ -197,6 +202,63 @@ export class AgentTools {
 		return found.map(f => vscode.Uri.file(f).fsPath);
 	}
 
+	/** Repositories declined in this window: not asked about again until it reloads. */
+	private readonly declined = new Set<string>();
+
+	/** The git the Git extension itself runs (an absolute path), so a `git` planted in a repository or on a relative PATH entry is never used. */
+	private async gitPath(): Promise<string> {
+		const gitPath = (await this.gitApi()).git?.path;
+		if (!gitPath || !path.isAbsolute(gitPath)) {
+			throw new Error('The Git extension has no absolute git path.');
+		}
+		return gitPath;
+	}
+
+	/**
+	 * Nested repositories the Git extension has not found itself. Opening one makes Git run inside it (its config and hooks are
+	 * whatever its author wrote), so each is opened only after the user said yes once (remembered per workspace), on top of the
+	 * config check in `plainRepo`.
+	 */
+	private async approvedNestedRepos(known: Map<string, GitRepo>): Promise<string[]> {
+		const approved = this.d.state.get<string[]>(APPROVED_KEY, []);
+		const fresh = (await this.nestedRepos()).filter(r => !known.has(r));
+		const waiting = fresh.filter(r => !approved.includes(r) && !this.declined.has(r));
+		if (waiting.length) {
+			const pick = await vscode.window.showWarningMessage(
+				'An agent asked to show the git changes, and these repositories inside the workspace are not open in Source Control yet:',
+				{ modal: true, detail: `${waiting.map(r => this.rel(r) || r).join('\n')}\n\nShowing their changes runs git in them, and a repository can carry its own git configuration and hooks. Only open ones you trust.` },
+				'Open and Remember',
+			);
+			if (pick) {
+				await this.d.state.update(APPROVED_KEY, [...new Set([...approved, ...waiting])].slice(-100));
+				approved.push(...waiting);
+			} else {
+				waiting.forEach(r => this.declined.add(r));
+			}
+		}
+		return fresh.filter(r => approved.includes(r));
+	}
+
+	/** Git's own reading of one config file (no includes; quoting and continuation as git understands them): are its keys free of commands? */
+	private async configIsPlain(file: string): Promise<boolean> {
+		const { stdout } = await execFileP(await this.gitPath(), ['config', '--file', file, '--list', '-z', '--no-includes'], { timeout: 5000, maxBuffer: 1 << 20, cwd: os.tmpdir() }).catch(() => ({ stdout: undefined }));
+		if (stdout === undefined) {
+			return false;
+		}
+		for (const entry of stdout.split('\0').filter(Boolean)) {
+			const nl = entry.indexOf('\n');
+			const key = (nl < 0 ? entry : entry.slice(0, nl)).toLowerCase();
+			const value = nl < 0 ? '' : entry.slice(nl + 1);
+			if (/^(include|includeif)\b/.test(key) || /^core\.(fsmonitor|hookspath|sshcommand|askpass|pager|editor|alternaterefscommand)$/.test(key) || key === 'diff.external' || /^(credential|gpg)\./.test(key) || /\.(textconv|external|command|helper|program)$/.test(key) || /^extensions\.worktreeconfig$/.test(key)) {
+				return false;
+			}
+			if (key.startsWith('filter.') && !LFS_FILTER[key.slice(key.lastIndexOf('.') + 1)]?.(value)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	/**
 	 * A repository the Git extension did not discover itself is opened only when asking it for its status cannot run a program:
 	 * its git folder is inside this workspace (or is a submodule's folder under its superproject), and its config has no
@@ -228,19 +290,25 @@ export class AgentTools {
 					return false;
 				}
 			}
-			// Git itself reads the config (no includes, quoting and continuation lines as git understands them); only its keys are judged.
-			const { stdout } = await execFileP('git', ['config', '--file', path.join(gitDir, 'config'), '--list', '-z', '--no-includes'], { timeout: 5000, maxBuffer: 1 << 20 }).catch(() => ({ stdout: undefined }));
-			if (stdout === undefined) {
-				return false;
-			}
-			for (const entry of stdout.split('\0').filter(Boolean)) {
-				const nl = entry.indexOf('\n');
-				const key = (nl < 0 ? entry : entry.slice(0, nl)).toLowerCase();
-				const value = nl < 0 ? '' : entry.slice(nl + 1);
-				if (/^(include|includeif)\b/.test(key) || key === 'core.fsmonitor' || key === 'diff.external' || /\.(textconv|external|command)$/.test(key) || /^extensions\.worktreeconfig$/.test(key)) {
-					return false;
+			// `git status` also goes into submodules, which read their own configs: every one under modules/ must pass too.
+			const configs = [path.join(gitDir, 'config')];
+			const walk = async (dir: string, depth: number): Promise<void> => {
+				if (depth > 4 || configs.length > 60) {
+					return;
 				}
-				if (key.startsWith('filter.') && !LFS_FILTER[key.slice(key.lastIndexOf('.') + 1)]?.(value)) {
+				for (const e of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+					if (e.isDirectory()) {
+						const sub = path.join(dir, e.name);
+						if (await fs.lstat(path.join(sub, 'config')).then(st => st.isFile(), () => false)) {
+							configs.push(path.join(sub, 'config'));
+						}
+						await walk(sub, depth + 1);
+					}
+				}
+			};
+			await walk(path.join(gitDir, 'modules'), 0);
+			for (const config of configs) {
+				if (!await this.configIsPlain(config)) {
 					return false;
 				}
 			}
@@ -325,12 +393,10 @@ export class AgentTools {
 	private async collectChanges(only?: string[]): Promise<{ list: ChangeRow[]; repos: number }> {
 		const api = await this.gitApi();
 		const repos = new Map<string, GitRepo>(api.repositories.map(r => [r.rootUri.fsPath, r]));
-		for (const root of await this.nestedRepos()) {
-			if (!repos.has(root)) {
-				const opened = await api.openRepository(vscode.Uri.file(root)).catch(() => null);
-				if (opened) {
-					repos.set(opened.rootUri.fsPath, opened);
-				}
+		for (const root of await this.approvedNestedRepos(repos)) {
+			const opened = await api.openRepository(vscode.Uri.file(root)).catch(() => null);
+			if (opened) {
+				repos.set(opened.rootUri.fsPath, opened);
 			}
 		}
 		const rows = new Map<string, ChangeRow>();
