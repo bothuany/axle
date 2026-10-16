@@ -2,7 +2,7 @@
 
 ## Install
 
-Axle is installed from the files on the [Releases](https://github.com/bothuany/axle/releases) page: an installer for Windows, an app for macOS and packages for Linux, with `SHA256SUMS.txt` beside them. Each one ships with everything it needs, so no Node, git or build tools are required. Your data lives in `~/.axle` on every OS. Axle installs beside, not over, a stock VS Code: it has its own app id, install folder, `axle://` link scheme and data folder.
+Axle is installed from the files on the [Releases](https://github.com/bothuany/axle/releases) page: an installer for Windows, an app for macOS and packages for Linux, with `SHA256SUMS.txt` beside them. Each one ships with everything it needs, so no Node, git or build tools are required. Your data lives in `~/.axle` on every OS. Axle installs beside, not over, a stock VS Code or Code - OSS: it has its own app id (bundle id on macOS, desktop entry on Linux), install folder, `axle://` link scheme and data folder.
 
 **C# flows need the .NET 10 SDK** ([download](https://dotnet.microsoft.com/download/dotnet/10.0)), whatever the OS. Axle's C# analyzer is a .NET 10 program that loads your solution with MSBuild, so the runtime alone is not enough. Without the SDK everything else works; the first time a C# flow is asked for, Axle shows one notice that says so. Other languages need nothing.
 
@@ -33,9 +33,8 @@ Download `axle_<version>_amd64.deb` and install it on Debian 12, Ubuntu 22.04 or
 sudo apt install ./axle_<version>_amd64.deb
 ```
 
-It installs into `/usr/share/axle`, adds `axle` to `/usr/bin` and a desktop entry. Unlike VS Code's package, it does not add any apt repository. For Fedora and other RPM distributions there is `axle-<version>-1.x86_64.rpm` (`sudo dnf install ./axle-*.rpm`), and `Axle-<version>-linux-x64.tar.gz` unpacks anywhere (run `Axle-linux-x64/axle`). All are x64 only.
+It installs into `/usr/share/axle`, adds `axle` to `/usr/bin` and a desktop entry (`io.github.bothuany.Axle.desktop`, icon `axle`), so it installs beside a VS Code or Code - OSS package. Unlike VS Code's package, it does not add any apt repository. For Fedora and other RPM distributions there is `axle-<version>-1.x86_64.rpm` (`sudo dnf install ./axle-*.rpm`), and `Axle-<version>-linux-x64.tar.gz` unpacks anywhere (run `Axle-linux-x64/axle`). All are x64 only.
 
-- The package still uses Code - OSS's desktop entry and icon names (`com.visualstudio.CodeOSS.desktop`, `code-oss.png`), so it cannot be installed next to a Code - OSS package; a stock VS Code is fine.
 - Later: an APT repository so that `sudo apt install axle` and `apt upgrade` work ([how it would be hosted](../packaging/apt/README.md); not set up yet).
 
 ### Build the packages yourself
@@ -112,4 +111,6 @@ scripts/            setup, start, build-extensions, install-shortcut and install
 - Canvas: `npm run build:canvas`, then reload the window.
 - Core patches: change files in `editor/vscode`, then regenerate the patch from there. New files must be known to git first, and the icons that `setup` copies into `resources/` must stay out of the patch:
   `git add -N src product.json && git diff HEAD -- build src product.json > ../patches/flow-core.patch`. Run it in Git Bash (or any POSIX shell): Windows PowerShell 5.1 writes `>` output as UTF-16, which breaks the patch.
+- After a pull that changes `editor/patches/flow-core.patch`, `editor/vscode` still carries the old patch: `npm run setup` stops with "does not apply", and `npm run installer` / `npm run package` say the patches are missing. When only `product.json` changed in the patch (as when Axle's macOS bundle id and Linux desktop and icon names replaced Code - OSS's), re-apply just that file, then run setup:
+  `git -C editor/vscode checkout -- product.json && git -C editor/vscode apply --include=product.json ../patches/flow-core.patch`. After any other patch change, delete `editor/vscode` and run `npm run setup` for a clean checkout.
 - Tests: `cd editor/extensions/flow-view && npm test` builds the index worker and checks what it finds in every project under `test/fixtures` against `test/expected` (after an intended change: `UPDATE=1 npm test`, then read the diff). `npm run typecheck` there checks the types.

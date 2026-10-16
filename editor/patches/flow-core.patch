@@ -1,8 +1,8 @@
 diff --git a/product.json b/product.json
-index 64e1c4d2..0f46665c 100644
+index 64e1c4d2..12b78386 100644
 --- a/product.json
 +++ b/product.json
-@@ -1,30 +1,30 @@
+@@ -1,40 +1,40 @@
  {
 -	"nameShort": "Code - OSS",
 -	"nameLong": "Code - OSS",
@@ -36,6 +36,11 @@ index 64e1c4d2..0f46665c 100644
 -	"win32ShellNameShort": "C&ode - OSS",
 -	"win32TunnelServiceMutex": "vscodeoss-tunnelservice",
 -	"win32TunnelMutex": "vscodeoss-tunnel",
+-	"darwinBundleIdentifier": "com.visualstudio.code.oss",
+-	"darwinProfileUUID": "47827DD9-4734-49A0-AF80-7E19B11495CC",
+-	"darwinProfilePayloadUUID": "CF808BE7-53F3-46C6-A7E2-7EDB98A5E959",
+-	"linuxDesktopName": "com.visualstudio.CodeOSS",
+-	"linuxIconName": "code-oss",
 +	"tunnelApplicationName": "axle-tunnel",
 +	"win32DirName": "Axle",
 +	"win32NameVersion": "Axle",
@@ -48,10 +53,12 @@ index 64e1c4d2..0f46665c 100644
 +	"win32ShellNameShort": "A&xle",
 +	"win32TunnelServiceMutex": "axle-tunnelservice",
 +	"win32TunnelMutex": "axle-tunnel",
- 	"darwinBundleIdentifier": "com.visualstudio.code.oss",
- 	"darwinProfileUUID": "47827DD9-4734-49A0-AF80-7E19B11495CC",
- 	"darwinProfilePayloadUUID": "CF808BE7-53F3-46C6-A7E2-7EDB98A5E959",
-@@ -34,7 +34,7 @@
++	"darwinBundleIdentifier": "io.github.bothuany.axle",
++	"darwinProfileUUID": "1CA2F027-C8C7-4FDD-A9BF-44BAF36F3646",
++	"darwinProfilePayloadUUID": "327D19B2-ED28-45E2-9567-C542F33BFA18",
++	"linuxDesktopName": "io.github.bothuany.Axle",
++	"linuxIconName": "axle",
+ 	"licenseFileName": "LICENSE.txt",
  	"reportIssueUrl": "https://github.com/microsoft/vscode/issues/new",
  	"nodejsArtifactFeed": "",
  	"electronArtifactFeed": "",
