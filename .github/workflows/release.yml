@@ -144,7 +144,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev fakeroot rpm
+          sudo apt-get install -y build-essential pkg-config libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev fakeroot rpm clang-15 libstdc++-12-dev
+          # Electron's V8 headers do not compile with 22.04's GCC 11 (nor GCC 12): the native modules are built with clang,
+          # as VS Code's own Linux build does. libstdc++-12-dev, because clang takes the newest GCC it finds for its headers.
+          echo "CC=clang-15" >> "$GITHUB_ENV"
+          echo "CXX=clang++-15" >> "$GITHUB_ENV"
+          clang++-15 -v 2>&1 | grep 'Selected GCC'
 
       - uses: actions/checkout@v4
 
