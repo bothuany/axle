@@ -1,5 +1,5 @@
 export type Kind = 'controller' | 'handler' | 'method' | 'db' | 'ambiguous' | 'external'
-export type EdgeKind = 'call' | 'mediator' | 'impl' | 'db'
+export type EdgeKind = 'call' | 'mediator' | 'impl' | 'db' | 'http'
 
 export interface FlowNode {
   key: string

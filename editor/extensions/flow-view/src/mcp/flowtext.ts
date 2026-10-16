@@ -74,7 +74,7 @@ export function flowToText(root: FlowNode, opts: FlowTextOptions, direction: 'ca
 				truncated = true;
 				return;
 			}
-			const kind = c.edgeKind === 'mediator' ? ' ~mediator' : c.edgeKind === 'impl' ? ' ~impl' : '';
+			const kind = c.edgeKind === 'mediator' ? ' ~mediator' : c.edgeKind === 'impl' ? ' ~impl' : c.edgeKind === 'http' ? ' ~http' : '';
 			const guess = c.guess ? ' ~guess' : '';
 			const at = c.callLine > 0 ? `L${c.callLine} ` : '';
 			const start = lines.length;

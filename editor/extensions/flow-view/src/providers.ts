@@ -15,7 +15,7 @@ export interface FlowNode {
 	startLine: number;
 	endLine: number;
 	code: string | null;
-	children: { callLine: number; edgeKind: 'call' | 'mediator' | 'impl' | 'db'; guess?: boolean; node: FlowNode }[];
+	children: { callLine: number; edgeKind: 'call' | 'mediator' | 'impl' | 'db' | 'http'; guess?: boolean; node: FlowNode }[];
 	/** Calls the static index could not resolve: the host asks the language server, then drops this field. */
 	pending?: { line: number; name: string }[];
 }

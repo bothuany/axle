@@ -10,6 +10,7 @@ import * as path from 'path';
 import { isSpringRepo, isWrite, javaSchema, jsSchema, looksLikeSql, opsOf, pythonSchema, sqlTables, unq, type PrismaModel } from './db';
 import { baseType, callBefore, chainBefore, isConstructorName, Kind, paramLabels, recvText, signatureDetail, wordAt, type Place, type Seg, type Suggestion } from './assist';
 import { joinPath, type CallFact, type DbSchema, type EntryPoint, type FileFacts, type FuncFact, type Lang, type RouteFact, type TypeFact } from './model';
+import { httpCallOf, matchEndpoints } from './links';
 
 /** Same shape as the canvas (custom-ide/ui/src/types.ts); `guess` marks a link made by name alone. */
 export interface FlowNode {
@@ -22,7 +23,7 @@ export interface FlowNode {
 	startLine: number;
 	endLine: number;
 	code: string | null;
-	children: { callLine: number; edgeKind: 'call' | 'mediator' | 'impl' | 'db'; guess?: boolean; node: FlowNode }[];
+	children: { callLine: number; edgeKind: 'call' | 'mediator' | 'impl' | 'db' | 'http'; guess?: boolean; node: FlowNode }[];
 	schema?: DbSchema;
 	/** Calls the static index could not resolve: the host asks the language server, then drops this field. */
 	pending?: { line: number; name: string }[];
@@ -38,8 +39,8 @@ export interface Axis2Service {
 }
 
 type Target =
-	| { kind: 'fn'; fn: FuncFact; edge: 'call' | 'impl'; guess?: boolean }
-	| { kind: 'ambiguous'; label: string; options: FuncFact[] }
+	| { kind: 'fn'; fn: FuncFact; edge: 'call' | 'impl' | 'http'; guess?: boolean }
+	| { kind: 'ambiguous'; label: string; options: FuncFact[]; edge?: 'http' }
 	| { kind: 'db'; schema: DbSchema; label: string; file: string | null; line: number };
 
 /** An entry point with the declared types of its parameters and result, for the type chips. */
@@ -100,7 +101,7 @@ export class Project {
 	private schemas = new Map<string, DbSchema & { orm: string }>();
 	private schemaByTable = new Map<string, DbSchema & { orm: string }>();
 	private entries: Entry[] = [];
-	private callersOf: Map<string, { from: string; line: number }[]> | undefined;
+	private callersOf: Map<string, { from: string; line: number; http?: boolean }[]> | undefined;
 	private resolved = new Map<string, Target[][]>();
 	/** Go/PHP/Ruby/Rust free functions by directory and by module name, built on first use. */
 	private pkgIndex: Map<string, FuncFact[]> | undefined;
@@ -1060,10 +1061,36 @@ export class Project {
 	private targets(fn: FuncFact): Target[][] {
 		let t = this.resolved.get(fn.id);
 		if (!t) {
-			t = fn.calls.map(c => this.resolveCall(fn, c).filter(x => x.kind !== 'fn' || !this.isAccessor(x.fn)));
+			t = fn.calls.map(c => {
+				const found = this.resolveCall(fn, c).filter(x => x.kind !== 'fn' || !this.isAccessor(x.fn));
+				// A name guess (`post` → some function named post) must not hide the endpoint an HTTP client call names.
+				if (found.length && !found.every(x => x.kind === 'fn' && x.guess)) {
+					return found;
+				}
+				const http = this.httpLink(fn, c);
+				return http.length ? http : found;
+			});
 			this.resolved.set(fn.id, t);
 		}
 		return t;
+	}
+
+	/**
+	 * An HTTP client call into an endpoint of this index (a frontend calling its backend, one service calling
+	 * another): always a guess, matched by the route's written segments (see links.ts). Several candidates
+	 * (a verb the call does not say, a base path it does not write) become one ambiguous card.
+	 */
+	private httpLink(fn: FuncFact, c: CallFact): Target[] {
+		const lang = this.files.get(fn.file)?.lang;
+		const call = lang && httpCallOf(lang, c);
+		if (!call) {
+			return [];
+		}
+		const to = [...new Map(matchEndpoints(call, this.entries).map(e => [e.fn.id, e.fn] as const)).values()].filter(f => f.id !== fn.id);
+		if (to.length === 1) {
+			return [{ kind: 'fn', fn: to[0], edge: 'http', guess: true }];
+		}
+		return to.length ? [{ kind: 'ambiguous', label: `${call.verb ?? 'HTTP'} ${call.url.trim().replace(/\s+/g, '{…}')}`, options: to.slice(0, 6), edge: 'http' }] : [];
 	}
 
 	private code(fn: { file: string; line: number; endLine: number }) {
@@ -1132,19 +1159,19 @@ export class Project {
 						}
 						seen.add(t.label);
 						count++;
-						const amb: FlowNode = { key: `p${key++}`, symbolId: null, label: t.label, sub: `${t.options.length} implementations`, kind: 'ambiguous', file: null, startLine: 0, endLine: 0, code: null, children: [] };
+						const amb: FlowNode = { key: `p${key++}`, symbolId: null, label: t.label, sub: t.edge === 'http' ? `${t.options.length} matching endpoints` : `${t.options.length} implementations`, kind: 'ambiguous', file: null, startLine: 0, endLine: 0, code: null, children: [] };
 						for (const o of t.options.slice(0, 6)) {
 							if (!trail.has(o.id)) {
-								amb.children.push({ callLine: c.line, edgeKind: 'impl', node: node(o, 'method', d + 1, new Set([...trail, o.id])) });
+								amb.children.push({ callLine: c.line, edgeKind: t.edge === 'http' ? 'http' : 'impl', ...(t.edge === 'http' ? { guess: true } : {}), node: node(o, this.entryOf(o) ? 'controller' : 'method', d + 1, new Set([...trail, o.id])) });
 							}
 						}
-						n.children.push({ callLine: c.line, edgeKind: 'call', node: amb });
+						n.children.push({ callLine: c.line, edgeKind: t.edge ?? 'call', ...(t.edge === 'http' ? { guess: true } : {}), node: amb });
 					} else {
 						if (seen.has(t.fn.id) || trail.has(t.fn.id)) {
 							continue;
 						}
 						seen.add(t.fn.id);
-						n.children.push({ callLine: c.line, edgeKind: t.edge, ...(t.guess ? { guess: true } : {}), node: node(t.fn, 'method', d + 1, new Set([...trail, t.fn.id])) });
+						n.children.push({ callLine: c.line, edgeKind: t.edge, ...(t.guess ? { guess: true } : {}), node: node(t.fn, t.edge === 'http' && this.entryOf(t.fn) ? 'controller' : 'method', d + 1, new Set([...trail, t.fn.id])) });
 					}
 				}
 				// Nothing found: library call, or a link only a language server can make.
@@ -1161,14 +1188,15 @@ export class Project {
 		if (this.callersOf) {
 			return this.callersOf;
 		}
-		const map = new Map<string, { from: string; line: number }[]>();
+		const map = new Map<string, { from: string; line: number; http?: boolean }[]>();
 		for (const fn of this.funcsById.values()) {
 			const all = this.targets(fn);
 			fn.calls.forEach((c, i) => {
 				for (const t of all[i]) {
 					const ids = t.kind === 'fn' ? [t.fn.id] : t.kind === 'ambiguous' ? t.options.map(o => o.id) : [];
+					const http = t.kind !== 'db' && t.edge === 'http';
 					for (const id of ids) {
-						this.push(map, id, { from: fn.id, line: c.line });
+						this.push(map, id, { from: fn.id, line: c.line, ...(http ? { http } : {}) });
 					}
 				}
 			});
@@ -1198,7 +1226,7 @@ export class Project {
 					continue;
 				}
 				seen.add(from.id);
-				n.children.push({ callLine: c.line, edgeKind: 'call', node: node(from, d + 1, new Set([...trail, from.id])) });
+				n.children.push({ callLine: c.line, edgeKind: c.http ? 'http' : 'call', ...(c.http ? { guess: true } : {}), node: node(from, d + 1, new Set([...trail, from.id])) });
 			}
 			return n;
 		};

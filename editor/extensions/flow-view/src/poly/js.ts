@@ -8,6 +8,8 @@ import type { Ann, CallFact, FileFacts, FuncFact, ParamFact, TypeFact } from './
 import { endLine, line, receiverText, same, splitType, stringValue, walk, type TsNode } from './ts';
 
 const VERBS = new Set(['get', 'post', 'put', 'patch', 'delete', 'all', 'options', 'head']);
+/** Receivers that are HTTP clients, never an app or a router. */
+const HTTP_CLIENT = /^(axios|ky|got|superagent|http|httpClient|apiClient|client)$/i;
 
 function typeText(n: TsNode | null | undefined) {
 	// type_annotation is ": Foo<Bar>"
@@ -332,7 +334,8 @@ function route(e: TsNode, facts: FileFacts, fnFrom: FnFrom): boolean {
 		facts.prefixes[args.at(-1)!.text] = path;
 		return true;
 	}
-	if (!VERBS.has(verb) || path === undefined || args.length < 2 || !/^\w+$/.test(on)) {
+	// An HTTP client's request (`axios.post('/orders', body)`) has the same shape as a route; `api` stays a route (express.Router()).
+	if (!VERBS.has(verb) || path === undefined || args.length < 2 || !/^\w+$/.test(on) || HTTP_CLIENT.test(on)) {
 		return false;
 	}
 	const handler = args.at(-1)!;
