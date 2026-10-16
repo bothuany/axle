@@ -227,8 +227,9 @@ export function extractGo(root: TsNode, file: string, mtime: number): FileFacts 
 		if (written === undefined || args.length < 2 || !GO_ROUTE_VERB.test(verb)) {
 			return undefined;
 		}
-		// http.Post("/x", "application/json", body) is a request: net/http registers only with Handle/HandleFunc.
-		if (f.childForFieldName('operand')?.text === 'http' && !/^Handle(Func)?$/.test(verb)) {
+		// http.Post("/x", "application/json", body), client.Post(…) are requests: net/http registers only with
+		// Handle/HandleFunc, and no router takes a string (a content type) or nil as a handler.
+		if ((f.childForFieldName('operand')?.text === 'http' && !/^Handle(Func)?$/.test(verb)) || str(args[1]) !== undefined || args.at(-1)!.type === 'nil') {
 			return undefined;
 		}
 		// net/http (Go 1.22) patterns: "GET /users/{id}". Anything else must look like a path, so

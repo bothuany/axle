@@ -272,6 +272,7 @@ func main() {
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/go-resty/resty/v2"
@@ -282,6 +283,8 @@ var baseURL = "http://orders"
 func FetchOrder(id string) { http.Get(baseURL + "/api/orders/" + id) }
 
 func PlaceOrder() { http.Post("/api/orders", "application/json", nil) }
+
+func PlaceWithClient(body io.Reader) { http.DefaultClient.Post("/api/orders", "application/json", body) }
 
 func PlaceWithContext(ctx context.Context) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/api/orders", baseURL), nil)
@@ -296,6 +299,7 @@ func FetchWithResty(client *resty.Client, id string) {
 	assert.deepEqual(await w.reach('client/client.go', 'FetchOrder'), [['getOrder', true]])
 	assert.deepEqual(await w.reach('client/client.go', 'PlaceOrder'), [['createOrder', true]])
 	assert.deepEqual(await w.reach('client/client.go', 'PlaceWithContext'), [['createOrder', true]])
+	assert.deepEqual(await w.reach('client/client.go', 'PlaceWithClient'), [['createOrder', true]])
 	assert.deepEqual(await w.reach('client/client.go', 'FetchWithResty'), [['getOrder', true]])
 	const entries = await w.ix.request('entries')
 	assert.deepEqual(entries.filter(e => e.file === join(w.root, 'client', 'client.go')), [], 'a request registers no route')
