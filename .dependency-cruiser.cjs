@@ -31,6 +31,20 @@ module.exports = {
 			to: { path: '^ui/' },
 		},
 		{
+			name: 'protocol-imports-nothing',
+			severity: 'error',
+			comment: 'protocol/ holds the shapes the host sends the canvas. Both sides import it, so it must not pull in either side (or anything else).',
+			from: { path: '^protocol/' },
+			to: { pathNot: '^protocol/' },
+		},
+		{
+			name: 'protocol-is-type-only',
+			severity: 'error',
+			comment: 'protocol/ is erased from both bundles: the extension and the canvas reach it with `import type` / `export type` only.',
+			from: { path: '^(editor|ui)/' },
+			to: { path: '^protocol/', dependencyTypesNot: ['type-only'] },
+		},
+		{
 			name: 'canvas-no-node-builtins',
 			severity: 'error',
 			comment: 'The canvas runs in a browser sandbox.',

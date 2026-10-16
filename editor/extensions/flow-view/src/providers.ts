@@ -2,23 +2,11 @@
  *  Axle: where a flow comes from. One provider per kind of target; the canvas only sees FlowNode.
  *--------------------------------------------------------------------------------------------*/
 
+import type { FlowNode } from '../../../../protocol/flow';
 import type { Analyzer } from './analyzer';
 
-/** Same shape the canvas lays out (custom-ide/ui/src/types.ts). */
-export interface FlowNode {
-	key: string;
-	symbolId: string | null;
-	label: string;
-	sub: string;
-	kind: 'controller' | 'handler' | 'method' | 'db' | 'ambiguous' | 'external';
-	file: string | null;
-	startLine: number;
-	endLine: number;
-	code: string | null;
-	children: { callLine: number; edgeKind: 'call' | 'mediator' | 'impl' | 'db' | 'http'; guess?: boolean; node: FlowNode }[];
-	/** Calls the static index could not resolve: the host asks the language server, then drops this field. */
-	pending?: { line: number; name: string }[];
-}
+/** What every provider hands the canvas (declared in protocol/flow.ts). */
+export type { FlowNode };
 
 /** Opaque to the webview; each provider defines its own fields. */
 export type FlowTarget =

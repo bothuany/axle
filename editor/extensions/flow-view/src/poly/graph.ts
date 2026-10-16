@@ -7,27 +7,11 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import type { DbSchema, EntryPoint, FlowNode } from '../../../../../protocol/flow';
 import { isSpringRepo, isWrite, javaSchema, jsSchema, looksLikeSql, opsOf, pythonSchema, sqlTables, unq, type PrismaModel } from './db';
 import { baseType, callBefore, chainBefore, isConstructorName, Kind, paramLabels, recvText, signatureDetail, wordAt, type Place, type Seg, type Suggestion } from './assist';
-import { joinPath, type CallFact, type DbSchema, type EntryPoint, type FileFacts, type FuncFact, type Lang, type RouteFact, type TypeFact } from './model';
+import { joinPath, type CallFact, type FileFacts, type FuncFact, type Lang, type RouteFact, type TypeFact } from './model';
 import { httpCallOf, matchEndpoints } from './links';
-
-/** Same shape as the canvas (custom-ide/ui/src/types.ts); `guess` marks a link made by name alone. */
-export interface FlowNode {
-	key: string;
-	symbolId: string | null;
-	label: string;
-	sub: string;
-	kind: 'controller' | 'handler' | 'method' | 'db' | 'ambiguous' | 'external';
-	file: string | null;
-	startLine: number;
-	endLine: number;
-	code: string | null;
-	children: { callLine: number; edgeKind: 'call' | 'mediator' | 'impl' | 'db' | 'http'; guess?: boolean; node: FlowNode }[];
-	schema?: DbSchema;
-	/** Calls the static index could not resolve: the host asks the language server, then drops this field. */
-	pending?: { line: number; name: string }[];
-}
 
 export interface Axis2Service {
 	name: string;

@@ -8,6 +8,7 @@ A harness-first code editor: a VS Code fork with built-in extensions. Contributo
 - `editor/extensions/flow-agent`: Claude Code / Codex sessions over ACP, the agent dock.
 - `editor/extensions/flow-harness`: harness map, hooks studio, permissions.
 - `ui/`: the canvas webview (React Flow + Monaco), built into a bundle flow-view inlines.
+- `protocol/`: the types flow-view sends the canvas, declared once and imported type-only by both.
 - `analyzer/`: C# Roslyn analyzer (.NET 10). `editor/vscode/` is the generated VS Code checkout: never edit it.
 
 ## Architecture rules (enforced by `npm run arch`)
@@ -15,7 +16,7 @@ A harness-first code editor: a VS Code fork with built-in extensions. Contributo
 - Extensions never import each other's source; they talk through registered commands. Every `flow.*` / `flowHarness.*` command one extension invokes must be registered (test/arch/commands.test.mjs).
 - `ui/` and `editor/` never import each other. The canvas has no Node built-ins.
 - `src/poly/worker.ts` and `mcp/axle-mcp.ts` must not reach `vscode`, even transitively. In `src/poly|board|types|mcp` only the host-facing files listed in `.dependency-cruiser.cjs` may import `vscode`.
-- The wire types (`FlowNode`, `EntryPoint`, `DbSchema`) exist in both the host and `ui/src/types.ts`; the host's must keep fitting the canvas's (test/arch/wire-types.ts).
+- The wire types (`FlowNode`, `FlowEdge`, `EntryPoint`, `DbSchema`, `DbColumn`) are declared once, in `protocol/flow.ts`. flow-view and `ui/src/types.ts` re-export them with `import type` / `export type` only, `protocol/` imports nothing, and no other file may declare them again (`.dependency-cruiser.cjs`, test/arch/wire-types.test.mjs).
 - Every webview page sets a Content-Security-Policy; a command id from a webview message is checked against an allowlist (.semgrep/rules).
 
 ## Commands

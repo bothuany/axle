@@ -147,37 +147,8 @@ export interface FileFacts {
 	globals: Record<string, string>;
 }
 
-/** Same shapes the canvas and the endpoints list use (custom-ide/ui/src/types.ts). */
-export interface DbColumn {
-	name: string;
-	column: string;
-	type: string;
-	key: boolean;
-	nullable: boolean;
-	maxLength: number | null;
-}
-
-export interface DbSchema {
-	entity: string;
-	table: string;
-	dbSchemaName: string | null;
-	context: string;
-	columns: DbColumn[];
-	relations: string[];
-	ops: string[];
-	writes: boolean;
-	file: string | null;
-	line: number;
-}
-
-export interface EntryPoint {
-	id: string;
-	controller: string;
-	action: string;
-	http: string;
-	file: string;
-	line: number;
-}
+/** The database card and endpoint shapes the canvas reads (declared in protocol/flow.ts). */
+export type { DbColumn, DbSchema, EntryPoint } from '../../../../../protocol/flow';
 
 /** Directory names whose files are never indexed (dependencies, caches, editor state), wherever they are. */
 export const EXCLUDED_DIRS = new Set([

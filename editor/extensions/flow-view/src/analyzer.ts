@@ -9,7 +9,10 @@ import * as net from 'net';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { flowRoot } from './root';
+import type { EntryPoint } from '../../../../protocol/flow';
 import type { CsTypesResponse } from './types/wire';
+
+export type { EntryPoint };
 
 export interface MethodInfo {
 	id: string;
@@ -18,15 +21,6 @@ export interface MethodInfo {
 	startLine: number;
 	endLine: number;
 	isEntry: boolean;
-}
-
-export interface EntryPoint {
-	id: string;
-	controller: string;
-	action: string;
-	http: string;
-	file: string;
-	line: number;
 }
 
 /** What the analyzer is asked about a card (Assist.cs `CardRequest`). Without `text` the file is read as it is. */
