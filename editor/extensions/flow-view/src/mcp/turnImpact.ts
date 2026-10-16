@@ -1,14 +1,18 @@
 /*---------------------------------------------------------------------------------------------
  *  Axle agent bridge: which flows an agent's turn touched. Given the files edited in a turn, finds the
- *  entry points (endpoints, jobs) that reach the functions in those files, using only backends that are
- *  ready (nothing is started or asked). It is file-level: every function of an edited file counts, so the
- *  list is "may be affected", capped in time and size because Roslyn answers one request at a time.
+ *  entry points (endpoints, jobs) that reach the methods the turn changed, using only backends that are
+ *  ready (nothing is started or asked). With the turn's line ranges (`rangesOf`) only the methods an edit
+ *  landed in count, and each flow says which of them it goes through; an edit outside every method, or a
+ *  file without ranges, counts the whole file ("may be affected"). Capped in time and size because Roslyn
+ *  answers one request at a time.
  *--------------------------------------------------------------------------------------------*/
 
 import type { Analyzer } from '../analyzer';
 import { entryName, type Endpoints, type Entry } from '../backends';
 import type { PolyIndex } from '../poly/client';
 import type { FlowProvider, FlowTarget } from '../providers';
+import { promises as fs } from 'fs';
+import { methodsTouched, spansMatch, type LineRange, type MethodSpan } from './changedMethods';
 
 export interface AffectedFlow {
 	id: string;
@@ -17,6 +21,8 @@ export interface AffectedFlow {
 	/** What `flow.showEntry` takes as the label: "Orders.Place". */
 	name: string;
 	source: 'roslyn' | 'poly';
+	/** The changed methods this flow goes through ("Orders.Place"), when the turn's edits were placed in methods. */
+	via?: string[];
 }
 
 export interface TurnImpact {
@@ -42,29 +48,38 @@ export function entryForItem(item: string, entries: Entry[]): Entry | undefined 
 		?? entries.find(e => ` ${want}`.endsWith(` ${norm(`${e.controller}.${e.action}`)}`) || ` ${want}`.endsWith(` ${norm(entryName(e))}`));
 }
 
-export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly: PolyIndex; endpoints: Endpoints; providerFor(t: FlowTarget): FlowProvider }): Promise<TurnImpact> {
+export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly: PolyIndex; endpoints: Endpoints; providerFor(t: FlowTarget): FlowProvider; rangesOf?(file: string): Promise<LineRange[] | undefined> }): Promise<TurnImpact> {
 	const deadline = Date.now() + BUDGET_MS;
 	const entries = d.endpoints.cached();
 	const found = new Map<string, AffectedFlow>();
 	const unique = [...new Set(files)];
 	let skipped = Math.max(0, unique.length - MAX_FILES);
 	let partial = false;
+	// The agent wrote these moments ago: have the index read them now rather than after its watcher's delay.
+	if (d.poly.isReady) {
+		await d.poly.refresh(unique.slice(0, MAX_FILES).filter(f => !/\.cs$/i.test(f))).catch(() => undefined);
+	}
 	for (const file of unique.slice(0, MAX_FILES)) {
 		if (Date.now() > deadline) {
 			skipped++;
 			continue;
 		}
-		let targets: FlowTarget[] = [];
+		let targets: (FlowTarget & { name?: string })[] = [];
 		try {
-			if (/\.cs$/i.test(file)) {
-				// Only when the analyzer is already up: asking for it here could start a solution load nobody wanted.
-				targets = d.analyzer.isReady ? (await d.analyzer.methods(file)).slice(0, MAX_FUNCTIONS_PER_FILE).map(m => ({ kind: 'roslyn' as const, id: m.id })) : [];
-				partial ||= !d.analyzer.isReady;
-			} else if (d.poly.isReady) {
-				targets = (await d.poly.methods(file)).slice(0, MAX_FUNCTIONS_PER_FILE).map(m => ({ kind: 'poly' as const, id: m.id }));
-			} else {
-				partial = true;
-			}
+			// Only when the analyzer is already up: asking for it here could start a solution load nobody wanted.
+			const cs = /\.cs$/i.test(file);
+			const methods: (MethodSpan & { kind: 'roslyn' | 'poly' })[] = cs
+				? d.analyzer.isReady ? (await d.analyzer.methods(file)).map(m => ({ ...m, kind: 'roslyn' as const })) : []
+				: d.poly.isReady ? (await d.poly.methods(file)).map(m => ({ ...m, kind: 'poly' as const })) : [];
+			partial ||= cs ? !d.analyzer.isReady : !d.poly.isReady;
+			// Spans from a copy of the file older than the disk would misplace the edit: then the whole file counts.
+			const fresh = methods.length > 0 && spansMatch(methods, await fs.readFile(file, 'utf8').catch(() => ''));
+			const ranges = fresh ? await d.rangesOf?.(file).catch(() => undefined) : undefined;
+			// Without ranges nothing is known to be changed: every method counts, none is named.
+			const touched = ranges ? methodsTouched(methods, ranges) : { methods: [] as typeof methods, wholeFile: true };
+			// The changed methods first, so the cap never drops them for the rest of the file.
+			const chosen = touched.wholeFile ? [...touched.methods, ...methods.filter(m => !touched.methods.includes(m))] : touched.methods;
+			targets = chosen.slice(0, MAX_FUNCTIONS_PER_FILE).map(m => ({ kind: m.kind, id: m.id, name: touched.methods.includes(m) ? m.name : undefined }));
 		} catch {
 			continue; // a file the backends do not know (a config, a doc)
 		}
@@ -78,7 +93,11 @@ export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly:
 				for (const item of items) {
 					const e = entryForItem(item, entries);
 					if (e) {
-						found.set(e.id, { id: e.id, label: e.http, name: entryName(e), source: e.source });
+						const flow = found.get(e.id) ?? { id: e.id, label: e.http, name: entryName(e), source: e.source };
+						if (t.name && !flow.via?.includes(t.name)) {
+							flow.via = [...flow.via ?? [], t.name];
+						}
+						found.set(e.id, flow);
 					}
 				}
 			} catch {

@@ -94,7 +94,7 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 		this.timer = setTimeout(() => {
 			const list = [...this.agents.sessions.values()]
 				.sort((a, b) => ORDER[a.state] - ORDER[b.state] || b.since - a.since)
-				.map(s => ({ ...s, done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label })) } }));
+				.map(s => ({ ...s, done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })) } }));
 			void this.view?.webview.postMessage({ type: 'data', list, now: Date.now() });
 		}, 60);
 	}
@@ -201,7 +201,7 @@ function render() {
 		const pct = s.usage ? Math.min(100, Math.round(s.usage.used / s.usage.size * 100)) : 0;
 		const state = s.state === 'working' || s.state === 'blocked' ? LABEL[s.state] + ' · ' + ago(s.since, Date.now()) : s.state === 'done' ? 'Done ' + ago(s.since, Date.now()) + ' ago' : LABEL[s.state];
 		const todos = s.todos.length ? '<div class="todos"><span class="segs">' + s.todos.slice(0, 12).map(t => '<span class="seg ' + esc(t.status) + '"></span>').join('') + '</span><span class="count">' + s.done + '/' + s.todos.length + '</span>' + (s.current ? '<span class="now">' + esc(s.current) + '</span>' : '') + '</div>' : '';
-		const impact = s.impact && s.impact.flows.length ? '<div class="impact"><b>This turn touched ' + (s.impact.flows.length + s.impact.more) + (s.impact.flows.length + s.impact.more === 1 ? ' flow' : ' flows') + ':</b> ' + s.impact.flows.map((f, i) => '<span class="flow" role="button" tabindex="0" data-flow="' + i + '" title="Open this flow">' + esc(f.label) + '</span>').join('') + (s.impact.more ? '<span>+' + s.impact.more + ' more</span>' : '') + '</div>' : '';
+		const impact = s.impact && s.impact.flows.length ? '<div class="impact"><b>This turn touched ' + (s.impact.flows.length + s.impact.more) + (s.impact.flows.length + s.impact.more === 1 ? ' flow' : ' flows') + ':</b> ' + s.impact.flows.map((f, i) => '<span class="flow" role="button" tabindex="0" data-flow="' + i + '" title="' + esc((f.via && f.via.length ? 'Through ' + f.via.join(', ') + '. ' : '') + 'Open this flow') + '">' + esc(f.label) + '</span>').join('') + (s.impact.more ? '<span>+' + s.impact.more + ' more</span>' : '') + '</div>' : '';
 		return '<button class="agent ' + s.state + (s.unread ? ' unread' : '') + '" data-id="' + esc(s.id) + '" title="' + esc(s.name + (s.usage ? ' · context ' + pct + '% full' : '')) + '">'
 			+ '<div class="top"><span class="av">' + icon(s) + '<span class="light"></span></span><span class="name">' + esc(s.name) + '</span><span class="state">' + esc(state) + '</span></div>'
 			+ (s.prompt ? '<div class="prompt">' + esc(s.prompt) + '</div>' : '')

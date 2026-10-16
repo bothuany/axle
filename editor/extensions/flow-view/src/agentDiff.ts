@@ -7,6 +7,7 @@ import { structuredPatch } from 'diff';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { rangesFromHunks, type LineRange } from './mcp/changedMethods';
 import type { FlowNode } from './providers';
 
 /** Per-card agent change, in current-file line numbers. */
@@ -311,6 +312,23 @@ export class AgentChanges implements vscode.Disposable {
 		const later = this.turns.slice(i + 1).find(t => t.before.has(file));
 		const to = later ? later.before.get(file)! : this.turns[i].after.get(file) ?? norm(await currentText(file).catch(() => ''));
 		return from === to ? [] : structuredPatch('a', 'b', from, to, '', '', { context: 0 }).hunks;
+	}
+
+	/**
+	 * The lines of `file` the latest prompt that touched it changed, in the numbers of the file on disk: the index
+	 * reads the disk too, and the turn impact matches these against its method spans. An editor that has not reloaded
+	 * the agent's write yet, or holds unsaved edits, would number them differently. Undefined when no prompt holds
+	 * the file as it was before.
+	 */
+	async changedRanges(file: string): Promise<LineRange[] | undefined> {
+		await this.loading;
+		const f = fileKey(file);
+		const from = [...this.turns].reverse().find(t => t.before.has(f))?.before.get(f);
+		if (from === undefined) {
+			return undefined;
+		}
+		const now = norm(await fs.readFile(f, 'utf8').catch(() => ''));
+		return rangesFromHunks(from === now ? [] : structuredPatch('a', 'b', from, now, '', '', { context: 0 }).hunks);
 	}
 
 	/** The prompts that changed something, oldest first, with what each changed. */

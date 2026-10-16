@@ -1564,9 +1564,9 @@ export class Project {
 	}
 
 	/** Functions in a file, for the ◆ Flow lenses. */
-	methodsIn(file: string): { id: string; name: string; line: number; isEntry: boolean }[] {
+	methodsIn(file: string): { id: string; name: string; line: number; startLine: number; endLine: number; isEntry: boolean }[] {
 		this.build();
-		return (this.files.get(file)?.funcs ?? []).map(fn => ({ id: `poly:${fn.id}`, name: fn.owner ? `${fn.owner}.${fn.name}` : fn.name, line: fn.line, isEntry: !!this.entryOf(fn) }));
+		return (this.files.get(file)?.funcs ?? []).map(fn => ({ id: `poly:${fn.id}`, name: fn.owner ? `${fn.owner}.${fn.name}` : fn.name, line: fn.line, startLine: fn.line, endLine: fn.endLine, isEntry: !!this.entryOf(fn) }));
 	}
 
 	/**

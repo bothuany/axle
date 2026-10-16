@@ -23,6 +23,9 @@ function wasmDir(extensionPath: string) {
 }
 
 const MAX_RESTARTS = 5;
+/** The files the index reads, as watcher globs, and the same as a test on a file name. */
+const WATCHED = ['*.java', '*.py', '*.js', '*.jsx', '*.mjs', '*.cjs', '*.ts', '*.tsx', '*.go', '*.php', '*.rb', '*.rs', '*.xhtml', '*.jsp', '*.jspx', '*.jsf', 'services.xml', '*.prisma'];
+const WATCHED_FILE = new RegExp(`^(${WATCHED.map(g => g.replace(/\./g, '\\.').replace('*', '.*')).join('|')})$`, 'i');
 
 export class PolyIndex implements vscode.Disposable {
 	private worker: Worker | undefined;
@@ -47,13 +50,11 @@ export class PolyIndex implements vscode.Disposable {
 
 	constructor(private readonly context: vscode.ExtensionContext, private readonly log: vscode.LogOutputChannel) {
 		PolyIndex.current = this;
-		const watcher = vscode.workspace.createFileSystemWatcher('**/{*.java,*.py,*.js,*.jsx,*.mjs,*.cjs,*.ts,*.tsx,*.go,*.php,*.rb,*.rs,*.xhtml,*.jsp,*.jspx,*.jsf,services.xml,*.prisma}');
+		const watcher = vscode.workspace.createFileSystemWatcher(`**/{${WATCHED.join(',')}}`);
 		const changed = (u: vscode.Uri) => {
-			const folder = vscode.workspace.getWorkspaceFolder(u);
-			if (!folder || isExcludedPath(u.fsPath, folder.uri.fsPath)) {
+			if (!this.note(u)) {
 				return;
 			}
-			this.changedFiles.add(u.fsPath);
 			clearTimeout(this.changeTimer);
 			this.changeTimer = setTimeout(() => void this.flush(), 400);
 		};
@@ -208,8 +209,27 @@ export class PolyIndex implements vscode.Disposable {
 		return this.request<{ places: Place[]; message?: string }>('definition', q);
 	}
 
+	/**
+	 * Queues a changed file the way the watcher sees it: keyed as VS Code spells the path (an agent says `C:\x`, the
+	 * index holds `c:\x`), and only a file the index reads, inside a workspace folder and not excluded.
+	 */
+	private note(u: vscode.Uri) {
+		const folder = vscode.workspace.getWorkspaceFolder(u);
+		if (!folder || isExcludedPath(u.fsPath, folder.uri.fsPath) || !WATCHED_FILE.test(path.basename(u.fsPath))) {
+			return false;
+		}
+		this.changedFiles.add(u.fsPath);
+		return true;
+	}
+
+	/** Re-reads these files now, without waiting for the watcher: for answers about files that just changed. */
+	async refresh(files: string[]) {
+		files.forEach(f => this.note(vscode.Uri.file(f)));
+		await this.flush();
+	}
+
 	methods(file: string) {
-		return this.request<{ id: string; name: string; line: number; isEntry: boolean }[]>('methods', file);
+		return this.request<{ id: string; name: string; line: number; startLine: number; endLine: number; isEntry: boolean }[]>('methods', file);
 	}
 
 	/** Everything the type model is built from (see `Project.typeFacts`): the facts of every file without function bodies, the calls between classes, the entry points with their types. */

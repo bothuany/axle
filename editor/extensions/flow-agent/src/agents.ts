@@ -56,7 +56,8 @@ export interface AgentSession {
 /** What flow-view answers to `flow.agent.turnImpact`. */
 export interface TurnImpact {
 	files: number;
-	flows: { id: string; label: string; name: string; source: 'roslyn' | 'poly' }[];
+	/** `via`: the changed methods the flow goes through, when the edits could be placed in methods. */
+	flows: { id: string; label: string; name: string; source: 'roslyn' | 'poly'; via?: string[] }[];
 	more: number;
 	note?: string;
 }

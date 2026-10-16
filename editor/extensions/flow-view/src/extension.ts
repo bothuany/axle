@@ -336,7 +336,7 @@ function wireAgentBridge(flow: Flow) {
 			await flow.changes.trackAgainst('Git changes', 'Git', entries);
 			panel.refreshSoon();
 		},
-		impactOf: files => turnImpact(files, { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor }),
+		impactOf: files => turnImpact(files, { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor, rangesOf: f => flow.changes.changedRanges(f) }),
 	}, log);
 	context.subscriptions.push(
 		viewer, bridge, boardPanel, TypeService.get(log),
@@ -361,7 +361,7 @@ function wireAgentBridge(flow: Flow) {
 				}
 			}
 		}),
-		vscode.commands.registerCommand('flow.agent.turnImpact', (files: string[]) => turnImpact(Array.isArray(files) ? files.filter(f => typeof f === 'string') : [], { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor })),
+		vscode.commands.registerCommand('flow.agent.turnImpact', (files: string[]) => turnImpact(Array.isArray(files) ? files.filter(f => typeof f === 'string') : [], { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor, rangesOf: f => flow.changes.changedRanges(f) })),
 	);
 	context.subscriptions.push(
 		// "Show the git changes on the flow canvas": from a diff editor's title (its resource, when it is a file, narrows it to that file),
