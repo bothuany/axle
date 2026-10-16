@@ -1,11 +1,14 @@
 /*---------------------------------------------------------------------------------------------
  *  Axle agent bridge: what the tools do inside the window. Everything here reads, opens or draws:
- *  no file is written and no command is run (the diff view only reads git state through the Git extension). Paths must be inside a workspace folder; the board is
+ *  no file is written and no agent-chosen command is run (the diff view reads git state through the Git extension, and
+ *  asks `git config --list` about a repository's config before opening a repository the Git extension has not found itself). Paths must be inside a workspace folder; the board is
  *  validated here (the MCP process is not the trust boundary). Nothing starts the analyzer in a way
  *  that could ask the user a question: a C# solution that is not chosen yet is reported, not prompted.
  *--------------------------------------------------------------------------------------------*/
 
+import { execFile } from 'child_process';
 import { promises as fs } from 'fs';
+import { promisify } from 'util';
 import { structuredPatch } from 'diff';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -55,9 +58,17 @@ interface GitApi {
 interface ChangeRow { uri: vscode.Uri; original?: vscode.Uri; modified?: vscode.Uri; mark: string; repo: string }
 /** Files the flow canvas can draw: the languages of the code index and the C# analyzer. */
 const CODE_FILE = /\.(cs|ts|tsx|js|jsx|java|kt|py|go|rs|php|rb)$/i;
+/** The only filter commands a repository may configure: git-lfs's own, spelled exactly as `git lfs install` writes them. */
+const LFS_FILTER: Record<string, (v: string) => boolean> = {
+	clean: v => v === 'git-lfs clean -- %f',
+	smudge: v => v === 'git-lfs smudge -- %f',
+	process: v => v === 'git-lfs filter-process',
+	required: v => v === 'true',
+};
 const GitStatus = { IndexAdded: 1, IndexDeleted: 2, IndexRenamed: 3, Deleted: 6, Untracked: 7, IntentToAdd: 9, IntentToRename: 10 } as const;
 const SKIP_DIRS = new Set(['node_modules', 'bin', 'obj', 'dist', 'out', 'build', 'target', 'vendor', 'packages', '__pycache__', 'venv']);
 
+const execFileP = promisify(execFile);
 const text = (t: string): ToolResult => ({ content: [{ type: 'text', text: t }] });
 const num = (v: unknown, fallback: number, max: number) => typeof v === 'number' && Number.isFinite(v) ? Math.max(1, Math.min(max, Math.floor(v))) : fallback;
 const slash = (p: string) => p.replace(/\\/g, '/');
@@ -203,25 +214,33 @@ export class AgentTools {
 				}
 				gitDir = path.resolve(dir, m[1].trim());
 				const modules = gitDir.split(/[\\/]\.git[\\/]modules[\\/]/);
-				const submodule = modules.length > 1 && !!resolveInWorkspace(dir, [modules[0]]);
+				// A submodule's git folder lives under its superproject's own .git folder (a real folder, not another gitfile).
+				const submodule = modules.length > 1 && !!resolveInWorkspace(dir, [modules[0]]) && (await fs.lstat(path.join(modules[0], '.git')).catch(() => undefined))?.isDirectory() === true;
 				if (!submodule && !resolveInWorkspace(gitDir, this.folders)) {
 					return false;
 				}
 			} else if (!st.isDirectory()) {
 				return false;
 			}
-			const config = await fs.readFile(path.join(gitDir, 'config'), 'utf8').catch(() => '');
-			let section = '';
-			for (const raw of config.split('\n')) {
-				const line = raw.trim();
-				if (line.startsWith('[')) {
-					section = line.toLowerCase();
-					if (/^\[(include|includeif)\b/.test(section)) {
-						return false;
-					}
-				} else if (/^(fsmonitor|textconv|external)\s*=/i.test(line)) {
+			// Linked worktrees and per-worktree config read settings from files this check does not look at.
+			for (const extra of ['commondir', 'config.worktree']) {
+				if (await fs.lstat(path.join(gitDir, extra)).then(() => true, () => false)) {
 					return false;
-				} else if (section.startsWith('[filter') && line && !/^(clean|smudge|process)\s*=\s*git-lfs\b/i.test(line) && !/^required\s*=/i.test(line)) {
+				}
+			}
+			// Git itself reads the config (no includes, quoting and continuation lines as git understands them); only its keys are judged.
+			const { stdout } = await execFileP('git', ['config', '--file', path.join(gitDir, 'config'), '--list', '-z', '--no-includes'], { timeout: 5000, maxBuffer: 1 << 20 }).catch(() => ({ stdout: undefined }));
+			if (stdout === undefined) {
+				return false;
+			}
+			for (const entry of stdout.split('\0').filter(Boolean)) {
+				const nl = entry.indexOf('\n');
+				const key = (nl < 0 ? entry : entry.slice(0, nl)).toLowerCase();
+				const value = nl < 0 ? '' : entry.slice(nl + 1);
+				if (/^(include|includeif)\b/.test(key) || key === 'core.fsmonitor' || key === 'diff.external' || /\.(textconv|external|command)$/.test(key) || /^extensions\.worktreeconfig$/.test(key)) {
+					return false;
+				}
+				if (key.startsWith('filter.') && !LFS_FILTER[key.slice(key.lastIndexOf('.') + 1)]?.(value)) {
 					return false;
 				}
 			}
@@ -331,6 +350,10 @@ export class AgentTools {
 					continue;
 				}
 				if (!resolveInWorkspace(file, this.folders) || (only && !only.some(o => file === o || resolveInWorkspace(file, [o])))) {
+					continue;
+				}
+				// A symbolic link inside the workspace can point anywhere: the file is read below, so it must be inside by its real path too.
+				if (!await this.inside(c.uri)) {
 					continue;
 				}
 				const kinds = all.filter(x => x.uri.fsPath === file).map(x => x.status);
