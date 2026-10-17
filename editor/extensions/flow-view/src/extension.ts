@@ -6,7 +6,7 @@
 
 import * as vscode from 'vscode';
 import { Analyzer, innermost } from './analyzer';
-import { AgentChanges } from './agentDiff';
+import { AgentChanges, GIT_AGENT } from './agentDiff';
 import { Endpoints, entryName, type Entry, type Source } from './backends';
 import { nodesLinkedTo, parsePlan, statusAfterEdit } from './board/plan';
 import { BoardStore } from './board/store';
@@ -350,7 +350,7 @@ function wireAgentBridge(flow: Flow) {
 		},
 		currentFlow: () => flow.currentFlow,
 		trackChanges: async entries => {
-			await flow.changes.trackAgainst('Git changes', 'Git', entries);
+			await flow.changes.trackAgainst('Git changes', GIT_AGENT, entries);
 			panel.refreshSoon();
 		},
 		impactOf: files => turnImpact(files, { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor, rangesOf: f => flow.changes.changedRanges(f) }),

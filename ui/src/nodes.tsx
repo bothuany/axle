@@ -582,7 +582,7 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
 
       {node.diff && !editing && (
         <div className="review nodrag">
-          <span className="review-what">Agent edit</span>
+          <span className="review-what">{node.diff.source === 'git' ? 'Uncommitted change' : 'Agent edit'}</span>
           <span className="review-stat">
             <b className="plus">+{node.diff.plus}</b>
             <b className="minus">−{node.diff.minus}</b>

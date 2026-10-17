@@ -17,6 +17,8 @@ export interface CardDiff {
 	removed: { after: number; lines: string[] }[];
 	plus: number;
 	minus: number;
+	/** 'git' when the change is only known from the Git-changes view: uncommitted, not necessarily an agent's. */
+	source?: 'git';
 }
 
 interface Hunk {
@@ -82,6 +84,9 @@ interface Saved {
 
 /** Older prompts are dropped first; a timeline is for the work in progress, not history. */
 const MAX_TURNS = 30;
+
+/** The agent name of the Git-changes view's step: uncommitted work, not an agent's. */
+export const GIT_AGENT = 'Git';
 
 /** What the canvas lists in its timeline. */
 export interface TurnSummary {
@@ -446,6 +451,11 @@ export class AgentChanges implements vscode.Disposable {
 			return;
 		}
 		const tracked = (f: string) => turnId === undefined ? this.baselines.has(f) : !!this.turns.find(t => t.id === turnId)?.before.has(f);
+		// Only the Git-changes view (agent 'Git') holds the file: nobody known made the change, so it is not an "agent edit".
+		const fromGit = (f: string) => {
+			const by = this.turns.filter(t => (turnId === undefined || t.id === turnId) && t.before.has(f));
+			return by.length > 0 && by.every(t => t.agent === GIT_AGENT);
+		};
 		const cache = new Map<string, Hunk[]>();
 		const visit = async (n: FlowNode) => {
 			// Cards carry the path as their backend spells it; the tracker keys files as VS Code spells them.
@@ -455,6 +465,9 @@ export class AgentChanges implements vscode.Disposable {
 					cache.set(file, turnId === undefined ? await this.hunks(file) : await this.turnHunks(turnId, file));
 				}
 				const d = this.cardDiff(cache.get(file)!, n.startLine, n.endLine);
+				if (d && fromGit(file)) {
+					d.source = 'git';
+				}
 				if (d) {
 					(n as FlowNode & { diff?: CardDiff }).diff = d;
 				}

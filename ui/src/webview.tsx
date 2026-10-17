@@ -41,6 +41,8 @@ const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Err
 const REQUEST_TIMEOUT_MS = 120_000
 /** Below this zoom a card's code is too small to read: a flow that only fits smaller opens at its start instead. */
 const READABLE_ZOOM = 0.55
+/** The agent name of the Git-changes view's step (flow-view's GIT_AGENT): uncommitted work, not an agent's. */
+const GIT_AGENT = 'Git'
 function request<T>(op: string, payload: Record<string, unknown>): Promise<T> {
   const id = ++seq
   return new Promise<T>((resolve, reject) => {
@@ -616,6 +618,19 @@ function Flow() {
        .react-flow__edge:not([data-testid$="-${trace.source}-${trace.target}"]) { opacity: .35; }
        .react-flow__node[data-id="${trace.target}"] .card { box-shadow: 0 0 0 1.5px var(--k), var(--fl-lift); }`
     : ''
+  // The timeline is the whole workspace's; the chip counts only the steps that changed a file of this flow.
+  const flowFiles = useMemo(() => {
+    const out: string[] = []
+    const walk = (n: FlowNode | null) => {
+      if (!n) return
+      if (n.file) out.push(n.file)
+      n.children.forEach(c => walk(c.node))
+    }
+    walk(down)
+    walk(up)
+    return out
+  }, [down, up])
+  const flowTurns = useMemo(() => turns.filter(t => t.files.some(f => flowFiles.some(x => samePath(x, f.file)))), [turns, flowFiles])
   const impactCount = impact?.items.length ?? 0
   const impactText = impact && `${impactCount ? `Affects ${impactCount}` : 'No'} ${impact.label}${impactCount === 1 ? '' : 's'}`
   return (
@@ -646,10 +661,14 @@ function Flow() {
         ) : (
           <span className="chip ghosted">Checking impact…</span>
         )}
-        {turns.length > 0 && (
+        {(flowTurns.length > 0 || turn !== undefined) && (
           <span className="impact-wrap">
-            <button className={`chip${turn !== undefined ? ' agent' : ''}`} aria-expanded={timelineOpen} onClick={() => setTimelineOpen(v => !v)} title="Agent edits, prompt by prompt">
-              {turn !== undefined ? `Prompt ${turns.findIndex(t => t.id === turn) + 1} of ${turns.length}` : `${turns.length} ${turns.length === 1 ? 'prompt' : 'prompts'} changed code`}
+            <button className={`chip${turn !== undefined ? ' agent' : ''}`} aria-expanded={timelineOpen} onClick={() => setTimelineOpen(v => !v)} title="Changes by prompt (all of them; Undo works across files)">
+              {turn !== undefined
+                ? `Prompt ${turns.findIndex(t => t.id === turn) + 1} of ${turns.length}`
+                : flowTurns.every(t => t.agent === GIT_AGENT)
+                  ? 'Uncommitted changes'
+                  : `${flowTurns.length} ${flowTurns.length === 1 ? 'prompt' : 'prompts'} changed this flow`}
             </button>
             {timelineOpen && <Timeline turns={turns} active={turn} onPick={id => setTurn(id)} onUndo={undoFrom} />}
           </span>
