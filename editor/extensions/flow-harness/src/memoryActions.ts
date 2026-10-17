@@ -21,7 +21,12 @@ interface Staleness {
 	missing: string[];
 	/** Names nobody could answer for (the index still loading, no language server): not called missing. */
 	unknown: string[];
+	/** When it was checked: unknown names are asked again only after a while, not on every rescan. */
+	at: number;
 }
+
+/** How long names nobody could answer for wait before they are asked again. */
+const RETRY_UNKNOWN_MS = 5 * 60_000;
 
 const STALE = 'May be stale: ';
 
@@ -92,15 +97,25 @@ export class MemoryActions {
 	 */
 	async checkStale(h: Harness): Promise<boolean> {
 		const memories = h.items.filter(i => i.kind === 'memory' && i.memory);
+		const now = Date.now();
+		// Which memories need a fresh look: changed since, or with names nobody could answer for a while ago.
+		const due: { item: HarnessItem; mtime: number }[] = [];
+		for (const item of memories) {
+			const mtime = (await fs.stat(item.file).catch(() => undefined))?.mtimeMs ?? 0;
+			const s = this.cache.get(item.file);
+			if (!s || s.mtime !== mtime || (s.unknown.length && now - s.at > RETRY_UNKNOWN_MS)) {
+				due.push({ item, mtime });
+			}
+		}
+		// Every name of every memory due goes to the index in one request, not one request per memory.
+		const names = [...new Set(due.flatMap(d => mentions(d.item.memory!.body).symbols))];
+		const answers = names.length ? await Promise.resolve(vscode.commands.executeCommand<{ name: string; found: boolean | null }[]>('flow.index.resolveNames', names)).catch(() => undefined) : [];
+		for (const d of due) {
+			this.cache.set(d.item.file, await this.check(d.item.memory!, h.root, d.mtime, answers));
+		}
 		let changed = false;
 		for (const item of memories) {
-			const st = await fs.stat(item.file).catch(() => undefined);
-			const mtime = st?.mtimeMs ?? 0;
-			let s = this.cache.get(item.file);
-			if (!s || s.mtime !== mtime || s.unknown.length) {
-				s = await this.check(item.memory!, h.root, mtime);
-				this.cache.set(item.file, s);
-			}
+			const s = this.cache.get(item.file)!;
 			const before = item.issues.find(x => x.message.startsWith(STALE))?.message;
 			item.issues = item.issues.filter(x => !x.message.startsWith(STALE));
 			if (s.missing.length) {
@@ -114,29 +129,26 @@ export class MemoryActions {
 		return changed;
 	}
 
-	private async check(m: Memory, root: string, mtime: number): Promise<Staleness> {
+	private async check(m: Memory, root: string, mtime: number, answers: { name: string; found: boolean | null }[] | undefined): Promise<Staleness> {
 		const { paths, symbols } = mentions(m.body);
 		const missing: string[] = [];
 		const unknown: string[] = [];
 		for (const p of paths) {
 			// The path comes from the memory's text, and only its existence is asked: nothing is read from it or written to it.
 			// nosemgrep: javascript.express.security.audit.express-path-join-resolve-traversal.express-path-join-resolve-traversal
-			const abs =p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : path.isAbsolute(p) ? p : path.join(root, p);
+			const abs = p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : path.isAbsolute(p) ? p : path.join(root, p);
 			if (!await fs.stat(abs).then(() => true, () => false)) {
 				missing.push(p);
 			}
 		}
-		if (symbols.length) {
-			const answers = await Promise.resolve(vscode.commands.executeCommand<{ name: string; found: boolean | null }[]>('flow.index.resolveNames', symbols)).catch(() => undefined);
-			for (const name of symbols) {
-				const a = answers?.find(x => x.name === name);
-				if (a?.found === false) {
-					missing.push(name);
-				} else if (!a || a.found === null) {
-					unknown.push(name);
-				}
+		for (const name of symbols) {
+			const a = answers?.find(x => x.name === name);
+			if (a?.found === false) {
+				missing.push(name);
+			} else if (!a || a.found === null) {
+				unknown.push(name);
 			}
 		}
-		return { mtime, missing, unknown };
+		return { mtime, missing, unknown, at: Date.now() };
 	}
 }

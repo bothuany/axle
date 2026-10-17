@@ -354,3 +354,17 @@ test('reading a memory file counts as recalling it, from an event or a past tran
 	assert.ok(a.isTracked({ kind: 'memory', scope: 'user', memory: {} }))
 	assert.ok(!a.isTracked({ kind: 'memory', scope: 'user' }), 'MEMORY.md is read every session; a count says nothing')
 })
+
+test('usage counts read the sessions of agent worktrees too', async () => {
+	const outfile = join(tmp, 'dirs.mjs')
+	await build({ entryPoints: [join(ROOT, 'src', 'dirs.ts')], bundle: true, platform: 'node', format: 'esm', outfile, logLevel: 'silent' })
+	const d = await import(pathToFileURL(outfile).href)
+	const root = String.raw`c:\development\harness-flow`
+	assert.ok(d.isProjectTranscriptDir('C--development-harness-flow', root, 'win32'), 'the drive letter in either case')
+	assert.ok(d.isProjectTranscriptDir('C--development-harness-flow--claude-worktrees-happy-vaughan-1a2b', root, 'win32'))
+	assert.ok(d.isProjectTranscriptDir('C--development-harness-flow--axle-worktrees-claude-aae3', root, 'win32'))
+	assert.ok(!d.isProjectTranscriptDir('C--development-harness-flow-other', root, 'win32'), 'another project with the same start')
+	assert.ok(!d.isProjectTranscriptDir('C--development-harness-flow-src', root, 'win32'))
+	assert.ok(!d.isProjectTranscriptDir('-Home-me-app', '/home/me/app', 'linux'), 'POSIX keeps case')
+	assert.ok(d.isProjectTranscriptDir('-home-me-app--claude-worktrees-x', '/home/me/app', 'linux'))
+})

@@ -219,7 +219,18 @@ async function settingsFile(items: HarnessItem[], root: string, file: string, sc
 		items.push({ kind: 'hooks', scope, label: show(root, file), detail: 'Not valid JSON: the agent ignores this file', file, issues: [{ severity: 'error', message: `Invalid JSON: ${(e as Error).message}` }], agents: ['Claude'] });
 		return;
 	}
-	const lineOf = (needle: string) => Math.max(0, text.split(/\r?\n/).findIndex(l => l.includes(needle)));
+	const lines = text.split(/\r?\n/);
+	const lineOf = (needle: string) => Math.max(0, lines.findIndex(l => l.includes(needle)));
+	// Two hooks may run the same command: each takes the next line that holds it, in file order (the order JSON.parse
+	// gives too), so a finding about the second one lands on the second one.
+	const taken = new Map<string, number>();
+	const nextLineOf = (needle: string) => {
+		const i = lines.findIndex((l, n) => n > (taken.get(needle) ?? -1) && l.includes(needle));
+		if (i >= 0) {
+			taken.set(needle, i);
+		}
+		return i >= 0 ? i : lineOf(needle);
+	};
 	for (const [event, entries] of Object.entries(s.hooks ?? {})) {
 		for (const entry of entries) {
 			for (const h of entry.hooks ?? []) {
@@ -250,7 +261,7 @@ async function settingsFile(items: HarnessItem[], root: string, file: string, sc
 					detail: `${event}${entry.matcher ? ` · ${entry.matcher}` : ''}`,
 					file, issues, agents: ['Claude'],
 					hook: { event, matcher: entry.matcher, command: h.command, settingsFile: file },
-					line: lineOf(h.command.slice(0, 60).replace(/"/g, '\\"')),
+					line: nextLineOf(JSON.stringify(h.command).slice(1, 61)),
 				});
 			}
 		}

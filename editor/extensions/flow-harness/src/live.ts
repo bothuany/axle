@@ -12,7 +12,7 @@ import * as vscode from 'vscode';
 import { countEvent, countTranscript, coveredDays, coveredFrom, loadActivity, prune, summary, WINDOW_DAYS, type ActivityData, type AgentEvent, type HookLike, type Summary } from './activity';
 import { redact, type FailureRecord, type PromptRecord } from './friction';
 import { isTranscriptPath, parseTranscript, type TranscriptFacts } from './transcript';
-import { claudeDir } from './dirs';
+import { claudeDir, projectTranscripts } from './dirs';
 
 const ACTIVITY = 'flowHarness.activity';
 const FRICTION = 'flowHarness.friction';
@@ -43,9 +43,6 @@ export interface LiveSession {
 	transcript?: string;
 	at: number;
 }
-
-/** Where Claude Code keeps this folder's transcripts: the path with every character that is not a letter or digit turned into '-'. */
-export const projectTranscriptDir = (root: string) => path.join(claudeDir(), 'projects', root.replace(/[^A-Za-z0-9]/g, '-'));
 
 /** Claude Code's permission modes, as hooks report them: anything else is not kept. */
 const MODES = new Set(['default', 'plan', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions']);
@@ -260,17 +257,16 @@ export class Live implements vscode.Disposable {
 		}
 	}
 
-	/** Once per window: the last 30 days of this folder's transcripts, newest first and bounded, read in the background. */
+	/** Once per window: the last 30 days of this folder's transcripts (its worktrees' too), newest first and bounded, read in the background. */
 	async backfill(root: string) {
 		if (this.backfilled) {
 			return;
 		}
 		this.backfilled = true;
-		const dir = projectTranscriptDir(root);
-		const names = await fs.readdir(dir).catch(() => [] as string[]);
+		// Sessions an agent ran in a worktree of this project count too: an editor built on a worktree per agent has most there.
+		const transcripts = await projectTranscripts(root);
 		const cutoff = Date.now() - WINDOW_DAYS * DAY;
-		const inWindow = (await Promise.all(names.filter(n => n.endsWith('.jsonl')).map(async n => {
-			const file = path.join(dir, n);
+		const inWindow = (await Promise.all(transcripts.map(async file => {
 			const st = await fs.stat(file).catch(() => undefined);
 			return st && st.mtimeMs >= cutoff ? { file, mtime: st.mtimeMs, size: st.size } : undefined;
 		}))).filter((x): x is { file: string; mtime: number; size: number } => !!x).sort((a, b) => b.mtime - a.mtime);

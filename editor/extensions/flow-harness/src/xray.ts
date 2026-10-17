@@ -9,13 +9,13 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { itemKey } from './activity';
-import { projectTranscriptDir, type Live } from './live';
+import type { Live } from './live';
 import { page } from './page';
 import type { Harness } from './scan';
 import { arrayAt, previewAndWrite } from './settings';
 import { isTranscriptPath } from './transcript';
 import { xray, type XrayModel } from './xraymodel';
-import { claudeDir } from './dirs';
+import { claudeDir, projectTranscriptDir } from './dirs';
 
 /** What flow-agent's dock sends for one agent: never a command, only what it knows about the session. */
 export interface XraySession {
