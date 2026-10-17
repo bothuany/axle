@@ -220,7 +220,10 @@ export async function readMcp(input: McpReadInput): Promise<McpConfig> {
 		settings: { user: path.join(input.claudeDir, 'settings.json'), project: path.join(root, '.claude', 'settings.json'), local: path.join(root, '.claude', 'settings.local.json') },
 		managed: managedMcpPath(platform),
 	};
-	const json = async (file: string): Promise<Record<string, unknown> | undefined> => {
+	// Files Claude Code reads as strict JSON: a comment or a trailing comma makes it reject the whole file (`claude mcp add`
+	// says ".mcp.json is malformed"), so the servers in it are listed, but as off.
+	const nonStrict = new Set<string>();
+	const json = async (file: string, strict = false): Promise<Record<string, unknown> | undefined> => {
 		const text = await input.read(file);
 		if (text === undefined || !text.trim()) {
 			return undefined;
@@ -230,23 +233,40 @@ export async function readMcp(input: McpReadInput): Promise<McpConfig> {
 			problems.push({ file, message: error ?? 'Not a JSON object' });
 			return isObject(value) ? value : undefined;
 		}
+		if (strict) {
+			try {
+				JSON.parse(text);
+			} catch {
+				nonStrict.add(file);
+				problems.push({ file, message: 'Not strict JSON (a comment or a trailing comma): Claude Code rejects the file and loads none of its servers' });
+			}
+		}
 		return value;
 	};
 
 	// ---- Claude Code
-	const cj = await json(claudeJson) ?? {};
+	const cj = await json(claudeJson, true) ?? {};
 	const projects = isObject(cj.projects) ? cj.projects : {};
 	const projectKey = findProjectKey(Object.keys(projects), root, platform) ?? claudeProjectKey(root, platform);
 	const proj = isObject(projects[projectKey]) ? projects[projectKey] as Record<string, unknown> : {};
 	const settings = { user: await json(files.settings.user), project: await json(files.settings.project), local: await json(files.settings.local) };
-	const managed = await json(files.managed);
+	const managed = await json(files.managed, true);
 
 	const claude: McpServer[] = [];
 	if (managed) {
 		claude.push(...serversIn(managed.mcpServers, { harness: 'Claude', scope: 'managed', file: files.managed, keyPath: ['mcpServers'], format: 'json', readOnly: 'Deployed by your organization (managed-mcp.json)' }, platform));
 	}
-	claude.push(...serversIn(proj.mcpServers, { harness: 'Claude', scope: 'local', file: claudeJson, keyPath: ['projects', projectKey, 'mcpServers'], format: 'json' }, platform));
-	const mcpJson = await json(files.mcpJson);
+	// Claude Code keys a folder by its working directory exactly as it was started there, so on Windows "C:/a" and "c:/a"
+	// can both exist (a terminal and an editor spell the drive differently); each one's servers are this folder's.
+	for (const key of [projectKey, ...Object.keys(projects).filter(k => k !== projectKey && findProjectKey([k], root, platform))]) {
+		const entry = isObject(projects[key]) ? projects[key] as Record<string, unknown> : {};
+		const found = serversIn(entry.mcpServers, { harness: 'Claude', scope: 'local', file: claudeJson, keyPath: ['projects', key, 'mcpServers'], format: 'json' }, platform);
+		if (key !== projectKey) {
+			found.forEach(s => s.issues.push({ severity: 'info', message: `Written under "${key}": Claude Code sees it only when started from the folder spelled that way` }));
+		}
+		claude.push(...found.filter(f => !claude.some(c => c.scope === 'local' && c.name === f.name)));
+	}
+	const mcpJson = await json(files.mcpJson, true);
 	claude.push(...serversIn(mcpJson?.mcpServers, { harness: 'Claude', scope: 'project', file: files.mcpJson, keyPath: ['mcpServers'], format: 'json' }, platform));
 	claude.push(...serversIn(cj.mcpServers, { harness: 'Claude', scope: 'user', file: claudeJson, keyPath: ['mcpServers'], format: 'json' }, platform));
 	claude.push(...await pluginServers(input, settings, problems));
@@ -284,6 +304,9 @@ export async function readMcp(input: McpReadInput): Promise<McpConfig> {
 		} else {
 			winner.set(s.name, s);
 		}
+	}
+	for (const s of claude.filter(x => nonStrict.has(x.file))) {
+		[s.state, s.stateWhy] = ['off', `${path.basename(s.file)} is not strict JSON, so Claude Code rejects the whole file`];
 	}
 	if (managed) {
 		for (const s of claude.filter(x => x.scope !== 'managed')) {

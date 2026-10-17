@@ -136,7 +136,8 @@ export async function previewAndWriteFiles(title: string, changes: FileChange[],
 			return false;
 		}
 		if (after !== before) {
-			planned.push({ c, before, after, key: `/${Date.now()}-${planned.length}/${path.basename(c.file)}` });
+			// An excerpt carries `//` lines that say where it is from: named .jsonc, it does not show as broken JSON.
+			planned.push({ c, before, after, key: `/${Date.now()}-${planned.length}/${path.basename(c.file)}${c.show && c.file.endsWith('.json') ? 'c' : ''}` });
 		}
 	}
 	if (!planned.length) {

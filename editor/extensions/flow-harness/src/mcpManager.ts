@@ -57,6 +57,8 @@ export class McpManager implements vscode.Disposable {
 	private config: McpConfig | undefined;
 	private readonly busy = new Set<string>();
 	private focus: string | undefined;
+	/** The page posts 'ready' once its listener is up; a render before that is lost, so the focus waits for it. */
+	private ready = false;
 	private readonly disposables: vscode.Disposable[] = [];
 
 	constructor(
@@ -94,6 +96,7 @@ export class McpManager implements vscode.Disposable {
 		this.focus = id;
 		if (!this.panel) {
 			this.panel = vscode.window.createWebviewPanel('flowHarness.mcp', 'MCP Servers', { viewColumn: vscode.ViewColumn.Active, preserveFocus: false }, { enableScripts: true, localResourceRoots: [], retainContextWhenHidden: true });
+			this.ready = false;
 			this.panel.webview.html = html();
 			this.panel.onDidDispose(() => this.panel = undefined, null, this.disposables);
 			this.panel.webview.onDidReceiveMessage(m => void this.message(m).catch(e => void vscode.window.showErrorMessage(`MCP servers: ${(e as Error).message}`)), null, this.disposables);
@@ -123,7 +126,9 @@ export class McpManager implements vscode.Disposable {
 			problems: (this.config?.problems ?? []).map(p => ({ file: p.file.replace(os.homedir(), '~'), message: p.message })),
 			files: this.config && { claudeJson: this.config.files.claudeJson.replace(os.homedir(), '~'), codexUser: this.config.files.codexUser.replace(os.homedir(), '~') },
 		});
-		this.focus = undefined;
+		if (this.ready) {
+			this.focus = undefined;
+		}
 	}
 
 	private server(id: unknown): McpServer | undefined {
@@ -131,8 +136,28 @@ export class McpManager implements vscode.Disposable {
 	}
 
 	private async message(m: { type?: unknown; id?: unknown }) {
+		// Add and edit walk through several inputs: a second click while one is open would interleave two of them.
+		if ((m.type === 'add' || m.type === 'edit' || m.type === 'toggle' || m.type === 'remove') && this.flow) {
+			return;
+		}
+		if (m.type === 'add' || m.type === 'edit' || m.type === 'toggle' || m.type === 'remove') {
+			this.flow = true;
+			try {
+				return await this.act(m);
+			} finally {
+				this.flow = false;
+			}
+		}
+		return this.act(m);
+	}
+
+	private flow = false;
+
+	private async act(m: { type?: unknown; id?: unknown }) {
 		switch (m.type) {
 			case 'ready':
+				this.ready = true;
+				return this.render();
 			case 'refresh':
 				return this.render();
 			case 'add':
@@ -220,7 +245,7 @@ export class McpManager implements vscode.Disposable {
 				return undefined;
 			}
 			const t0 = Date.now();
-			const r = await runCli(exe, ['mcp', 'get', s.name], { cwd: root, timeoutMs: 60_000 });
+			const r = await runCli(exe, ['mcp', 'get', s.name], { cwd: this.cliCwd() ?? root, timeoutMs: 60_000 });
 			const parsed = parseClaudeGet(r.out);
 			return parsed ? { ...parsed, how: 'claude mcp get', ms: Date.now() - t0, at: Date.now() } : undefined;
 		};
@@ -263,7 +288,7 @@ export class McpManager implements vscode.Disposable {
 			{ label: 'Claude Code', h: ['Claude'] as McpHarness[] },
 			{ label: 'Codex', h: ['Codex'] as McpHarness[] },
 			{ label: 'Both', description: 'the same server for Claude Code and Codex', h: ['Claude', 'Codex'] as McpHarness[] },
-		], { title: 'Add an MCP server: for which agent?' });
+		], { ignoreFocusOut: true, title: 'Add an MCP server: for which agent?' });
 		if (!harness) {
 			return;
 		}
@@ -273,12 +298,12 @@ export class McpManager implements vscode.Disposable {
 			{ label: 'Project', scope: 'project' as const, description: both ? 'shared with the repository: .mcp.json and .codex/config.toml' : harness.h[0] === 'Claude' ? 'shared with the repository: .mcp.json' : 'this repository: .codex/config.toml (trusted projects)' },
 			...(harness.h.includes('Codex') ? [] : [{ label: 'Local', scope: 'local' as const, description: 'this folder only, private to you: .claude.json' }]),
 		];
-		const scope = await vscode.window.showQuickPick(scopes, { title: 'Add an MCP server: where?' });
+		const scope = await vscode.window.showQuickPick(scopes, { ignoreFocusOut: true, title: 'Add an MCP server: where?' });
 		if (!scope) {
 			return;
 		}
 		const taken = (n: string) => c.servers.some(s => s.name === n && harness.h.includes(s.harness) && s.scope === scope.scope);
-		const name = await vscode.window.showInputBox({
+		const name = await vscode.window.showInputBox({ ignoreFocusOut: true,
 			title: 'Add an MCP server: name', prompt: 'Letters, digits, - and _ (the agents name its tools mcp__<name>__…)',
 			validateInput: v => !NAME.test(v) ? 'Use letters, digits, - and _ only' : taken(v) ? `There is a ${scope.label.toLowerCase()} server called ${v} already: edit that one` : undefined,
 		});
@@ -289,7 +314,7 @@ export class McpManager implements vscode.Disposable {
 			{ label: 'stdio', description: 'a program the agent starts', t: 'stdio' as const },
 			{ label: 'HTTP', description: 'a URL (streamable HTTP)', t: 'http' as const },
 			...(both || harness.h[0] === 'Codex' ? [] : [{ label: 'SSE', description: 'a URL (deprecated SSE transport)', t: 'sse' as const }]),
-		], { title: `Add ${name}: how does the agent reach it?` });
+		], { ignoreFocusOut: true, title: `Add ${name}: how does the agent reach it?` });
 		if (!transport) {
 			return;
 		}
@@ -308,7 +333,7 @@ export class McpManager implements vscode.Disposable {
 		if (def.transport === 'stdio') {
 			const masked = old ? maskArgs(old.args) : [];
 			const hidden = masked.some((a, n) => a !== old!.args[n]);
-			const line = await vscode.window.showInputBox({
+			const line = await vscode.window.showInputBox({ ignoreFocusOut: true,
 				title: `${name}: command and arguments`, prompt: hidden ? `Arguments shown as ${MASK} keep their value unless you change them` : 'For example: npx -y @modelcontextprotocol/server-filesystem .',
 				value: old ? commandLine(old.command ?? '', masked) : '',
 				validateInput: v => splitCommandLine(v).length ? undefined : 'Type the program to run',
@@ -321,7 +346,7 @@ export class McpManager implements vscode.Disposable {
 			const secrets = old ? old.args.filter((a, n) => masked[n] !== a) : [];
 			args = args.map(a => a === MASK ? secrets.shift() ?? a : a.includes(MASK) && secrets.length ? a.replace(MASK, secrets.shift()!.replace(/^--?[\w-]+=/, '')) : a);
 			if (process.platform === 'win32' && /^(npx|npm|pnpm|yarn|bunx|uvx)$/i.test(command)) {
-				const wrap = await vscode.window.showQuickPick([{ label: `Run it as cmd /c ${command} …`, description: 'recommended: the agents cannot start a .cmd script directly', w: true }, { label: `Keep ${command}`, w: false }], { title: `${name}: ${command} is a .cmd script on Windows` });
+				const wrap = await vscode.window.showQuickPick([{ label: `Run it as cmd /c ${command} …`, description: 'recommended: the agents cannot start a .cmd script directly', w: true }, { label: `Keep ${command}`, w: false }], { ignoreFocusOut: true, title: `${name}: ${command} is a .cmd script on Windows` });
 				if (!wrap) {
 					return false;
 				}
@@ -356,13 +381,14 @@ export class McpManager implements vscode.Disposable {
 	private async editVars(def: ServerDef, kind: 'env' | 'headers', name: string): Promise<boolean> {
 		const map = def[kind] ??= {};
 		const noun = kind === 'env' ? 'environment variable' : 'header';
+		const aNoun = kind === 'env' ? 'an environment variable' : 'a header';
 		for (; ;) {
 			const items: (vscode.QuickPickItem & { act: 'done' | 'add' | 'item'; key?: string })[] = [
 				{ label: '$(check) Done', act: 'done' },
-				{ label: `$(add) Add a ${noun}…`, act: 'add' },
+				{ label: `$(add) Add ${aNoun}…`, act: 'add' },
 				...Object.entries(map).map(([k, v]) => ({ label: k, description: /^\$\{([^}:]+)/.exec(v)?.[1] ? `from $${/^\$\{([^}:]+)/.exec(v)![1]}` : v ? 'set (hidden)' : 'empty', act: 'item' as const, key: k })),
 			];
-			const pick = await vscode.window.showQuickPick(items, { title: `${name}: ${noun}s (${Object.keys(map).length})`, placeHolder: Object.keys(map).length ? 'Pick one to change or remove it' : `Add one, or Done if it needs none` });
+			const pick = await vscode.window.showQuickPick(items, { ignoreFocusOut: true, title: `${name}: ${noun}s (${Object.keys(map).length})`, placeHolder: Object.keys(map).length ? 'Pick one to change or remove it' : `Add one, or Done if it needs none` });
 			if (!pick) {
 				return false;
 			}
@@ -371,7 +397,7 @@ export class McpManager implements vscode.Disposable {
 			}
 			let key = pick.key;
 			if (pick.act === 'add') {
-				key = await vscode.window.showInputBox({
+				key = await vscode.window.showInputBox({ ignoreFocusOut: true,
 					title: `${name}: ${noun} name`, prompt: kind === 'env' ? 'For example: API_KEY' : 'For example: Authorization',
 					validateInput: v => !(kind === 'env' ? /^[A-Za-z_][A-Za-z0-9_]*$/ : /^[A-Za-z0-9-]+$/).test(v) ? `Not a valid ${noun} name` : v in map ? 'Already there: pick it in the list to change it' : undefined,
 				});
@@ -379,7 +405,7 @@ export class McpManager implements vscode.Disposable {
 					continue;
 				}
 			} else {
-				const what = await vscode.window.showQuickPick([{ label: 'Change the value…', a: 'set' }, { label: `Remove ${key}`, a: 'remove' }], { title: `${name}: ${key}` });
+				const what = await vscode.window.showQuickPick([{ label: 'Change the value…', a: 'set' }, { label: `Remove ${key}`, a: 'remove' }], { ignoreFocusOut: true, title: `${name}: ${key}` });
 				if (what?.a === 'remove') {
 					delete map[key!];
 				}
@@ -412,7 +438,7 @@ export class McpManager implements vscode.Disposable {
 					? { label: 'Command and arguments', description: commandLine(def.command ?? '', maskArgs(def.args ?? [])), a: 'target' }
 					: { label: 'URL', description: maskUrl(def.url ?? ''), a: 'target' },
 				{ label: kind === 'env' ? 'Environment variables' : 'Headers', description: vars.length ? vars.join(', ') : 'none', a: 'vars' },
-			], { title: `Edit ${s.name} (${s.harness}, ${s.scope})`, placeHolder: 'Pick what to change, then Save' });
+			], { ignoreFocusOut: true, title: `Edit ${s.name} (${s.harness}, ${s.scope})`, placeHolder: 'Pick what to change, then Save' });
 			if (!pick) {
 				return;
 			}
@@ -467,7 +493,9 @@ export class McpManager implements vscode.Disposable {
 			void vscode.window.showInformationMessage(`${s.name}: ${s.readOnly}.`);
 			return;
 		}
-		const cli = s.harness === 'Claude' ? this.claudeCli() : s.scope === 'user' ? this.codexCli() : undefined;
+		// A local server filed under another spelling of this folder is out of the CLI's reach from here: edit the file.
+		const otherKey = s.scope === 'local' && s.keyPath[1] !== this.config?.projectKey;
+		const cli = otherKey ? undefined : s.harness === 'Claude' ? this.claudeCli() : s.scope === 'user' ? this.codexCli() : undefined;
 		if (cli && s.scope !== 'profile') {
 			const args = s.harness === 'Claude' ? claudeRemoveArgs(s.name, s.scope as ClaudeCliScope) : codexRemoveArgs(s.name);
 			await this.cli([{ program: cli, args, shown: commandLine(path.basename(cli, '.exe'), args) }], `Remove MCP server ${s.name}?`, `From ${s.file.replace(os.homedir(), '~')} (${s.scope}).`, 'Remove');
@@ -508,7 +536,7 @@ export class McpManager implements vscode.Disposable {
 
 	/** Runs CLI commands after one confirmation that shows them exactly, with typed secrets masked; never logs a value. */
 	private async cli(runs: { program: string; args: string[]; shown: string }[], question: string, intro: string, button: string, defs: ServerDef[] = []): Promise<boolean> {
-		const root = this.root();
+		const root = this.cliCwd();
 		if (!root) {
 			return false;
 		}
@@ -550,6 +578,21 @@ export class McpManager implements vscode.Disposable {
 			await this.after();
 		}
 		return written;
+	}
+
+	/**
+	 * Where the CLI runs: the folder spelled as .claude.json already knows it. Claude Code files local and project state
+	 * under its working directory exactly as given, and VS Code spells the drive "c:" where a terminal says "C:", so
+	 * running from the editor's spelling would start a second entry for the same folder.
+	 */
+	private cliCwd(): string | undefined {
+		const root = this.root();
+		const key = this.config?.projectKey;
+		if (!root || process.platform !== 'win32') {
+			return root;
+		}
+		const win = (p: string) => p.replace(/\//g, '\\').replace(/\\+$/, '');
+		return key && win(key).toLowerCase() === win(root).toLowerCase() ? win(key) : root.replace(/^([a-z]):/, (_, d: string) => `${d.toUpperCase()}:`);
 	}
 
 	private async after() {
@@ -614,7 +657,7 @@ const ago = t => { const s = (Date.now() - t) / 1000; return s < 90 ? 'just now'
 const SCOPE = { user: 'user', local: 'local', project: 'project', plugin: 'plugin', managed: 'managed', profile: 'profile' };
 function vars(list, noun) {
 	if (!list.length) return null;
-	return el('span', {}, noun + ': ', list.map((v, i) => [i ? ', ' : '', el('span', { class: 'mono' }, v.name), v.from ? el('span', { class: 'muted' }, ' ← $' + v.from) : v.set ? el('span', { class: 'muted' }, ' (set)') : el('span', { class: 'muted' }, ' (empty)')]));
+	return el('span', {}, noun + ': ', list.flatMap((v, i) => [i ? ', ' : '', el('span', { class: 'mono' }, v.name), v.from ? el('span', { class: 'muted' }, ' ← $' + v.from) : v.set ? el('span', { class: 'muted' }, ' (set)') : el('span', { class: 'muted' }, ' (empty)')]));
 }
 function row(s, cli, trusted) {
 	const target = s.transport === 'stdio' ? [s.command || '', ...s.args].join(' ') : s.url || '';
@@ -653,7 +696,7 @@ window.addEventListener('message', e => {
 	const d = e.data;
 	if (d.type !== 'data') return;
 	const probs = document.getElementById('problems');
-	probs.replaceChildren(...d.problems.map(p => el('div', { class: 'card issue error' }, p.file + ': ' + p.message + ' (its servers are not listed)')));
+	probs.replaceChildren(...d.problems.map(p => el('div', { class: 'card issue error' }, p.file + ': ' + p.message)));
 	const list = document.getElementById('list');
 	const groups = [['Claude', 'Claude Code', d.cli.claude ? 'claude CLI found: adds and removes go through it' : 'claude CLI not found: changes edit the files'], ['Codex', 'Codex', d.cli.codex ? 'codex CLI found: user-scope adds and removes go through it' : 'codex CLI not startable without a shell here: changes edit config.toml']];
 	list.replaceChildren(...groups.map(([h, title, note]) => {

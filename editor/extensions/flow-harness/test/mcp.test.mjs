@@ -79,6 +79,19 @@ test('Claude Code on Windows: user, local (project key in another spelling), pro
 	assert.deepEqual(by('shared', 'local').keyPath, ['projects', 'C:/work/app', 'mcpServers', 'shared'])
 })
 
+test('Windows: a folder filed under two drive spellings ("C:/a" from a terminal, "c:/a" from the editor) shows both entries', async () => {
+	const c = await cfg.readMcp(windowsInput({ 'C:/Users/me/.claude.json': JSON.stringify({ projects: { 'C:/work/app': { mcpServers: { one: { command: 'a' } } }, 'c:/work/app': { mcpServers: { two: { command: 'b' }, one: { command: 'dup' } } } } }) }))
+	const local = c.servers.filter(s => s.scope === 'local')
+	assert.deepEqual(local.map(s => `${s.name}@${s.keyPath[1]}`).sort(), ['one@C:/work/app', 'two@c:/work/app'])
+	assert.match(local.find(s => s.name === 'two').issues[0].message, /spelled that way/)
+})
+
+test('a .mcp.json with a comment: Claude Code rejects it, so its servers are listed as off', async () => {
+	const c = await cfg.readMcp(windowsInput({ 'c:/work/app/.mcp.json': '{\n  // mine\n  "mcpServers": { "x": { "command": "x" } }\n}' }))
+	assert.equal(c.servers[0].state, 'off')
+	assert.match(c.problems[0].message, /strict JSON/)
+})
+
 test('CLAUDE_CONFIG_DIR moves .claude.json into it; POSIX paths and a pending project server', async () => {
 	assert.equal(cfg.claudeJsonPath('/home/me', '/tmp/cc'), join('/tmp/cc', '.claude.json'))
 	assert.equal(cfg.claudeJsonPath('/home/me'), join('/home/me', '.claude.json'))
