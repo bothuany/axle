@@ -429,10 +429,11 @@ function wireAgentBridge(flow: Flow) {
 				}
 			}
 		}),
-		// flow-agent's dock lists the flows; the changed methods' targets stay here.
+		// flow-agent's dock lists the flows; the changed methods' targets stay here. Their names and files go along, so the
+		// dock can tell two agents that change the same method apart from two that only share a file.
 		vscode.commands.registerCommand('flow.agent.turnImpact', async (files: string[]) => {
-			const { changed: _, ...impact } = await turnImpact(Array.isArray(files) ? files.filter(f => typeof f === 'string') : [], { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor, rangesOf: f => flow.changes.changedRanges(f) });
-			return impact;
+			const { changed, ...impact } = await turnImpact(Array.isArray(files) ? files.filter(f => typeof f === 'string') : [], { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor, rangesOf: f => flow.changes.changedRanges(f) });
+			return { ...impact, methods: changed.slice(0, 40).map(m => ({ file: m.file, name: m.name })) };
 		}),
 	);
 	context.subscriptions.push(
@@ -450,6 +451,16 @@ function wireAgentBridge(flow: Flow) {
 				return;
 			}
 			const r = await bridge.showChangesInFlow(only, pick.base);
+			if (!r.opened) {
+				void vscode.window.showInformationMessage(`Axle: ${r.message}`);
+			}
+		}),
+		// flow-agent's dock, on an agent worktree's row: its branch since it left `base`, as a diff and on the flow canvas.
+		vscode.commands.registerCommand('flow.diff.showWorktree', async (root: unknown, base: unknown) => {
+			if (typeof root !== 'string' || typeof base !== 'string') {
+				return;
+			}
+			const r = await bridge.showWorktreeInFlow(root, base);
 			if (!r.opened) {
 				void vscode.window.showInformationMessage(`Axle: ${r.message}`);
 			}

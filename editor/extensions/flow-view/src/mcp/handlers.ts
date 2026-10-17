@@ -271,7 +271,7 @@ export class AgentTools {
 			return text([`${none}.`, ...notes].join('\n'));
 		}
 		const title = typeof a.title === 'string' && a.title.trim() ? a.title.trim().slice(0, 80) : `Axle: ${since ? `Changes since ${since}` : 'Changes'} (${list.length} file${list.length === 1 ? '' : 's'})`;
-		await vscode.commands.executeCommand('vscode.changes', title, list.map(r => [r.uri, r.original, r.modified]));
+		await this.openChanges(changes, title);
 		const multi = new Set(list.map(r => r.repo)).size > 1;
 		const out = [
 			`Opened the diff of ${list.length} file${list.length === 1 ? '' : 's'} in Axle (working tree against ${since ?? 'HEAD'}; A new, M modified, D deleted, R renamed):`,
@@ -288,6 +288,52 @@ export class AgentTools {
 
 	changesOf(only?: string[], base: DiffBase = 'uncommitted') {
 		return this.collectChanges(only, base);
+	}
+
+	/** The changes in VS Code's multi-file diff editor (nothing opens when there are none). */
+	async openChanges(changes: Changes, title: string) {
+		if (changes.list.length) {
+			await vscode.commands.executeCommand('vscode.changes', title, changes.list.map(r => [r.uri, r.original, r.modified]));
+		}
+	}
+
+	/**
+	 * The changes of an agent worktree flow-agent made (`<repo>/.axle/worktrees/<slug>`) since its branch left `base`. Only a
+	 * linked worktree of a repository the Git extension already has open for this window is accepted: its git folder must be
+	 * `<that repo's .git>/worktrees/<name>`, so it shares that repository's config (already trusted by opening it) and
+	 * opening it cannot run anything new. `base` is a branch name, checked here and resolved to a commit before use.
+	 */
+	async worktreeChanges(root: string, base: string): Promise<Changes> {
+		if (!/^[A-Za-z0-9._/-]{1,200}$/.test(base) || base.startsWith('-') || base.includes('..')) {
+			throw new Error(`"${base}" is not a branch name.`);
+		}
+		const dir = resolveInWorkspace(root, this.folders);
+		if (!dir) {
+			throw new Error('That worktree is outside this workspace.');
+		}
+		const m = /^gitdir:\s*(.+)$/m.exec(await fs.readFile(path.join(dir, '.git'), 'utf8').catch(() => ''));
+		if (!m) {
+			throw new Error(`${dir} is not a git worktree.`);
+		}
+		const gitDir = path.resolve(dir, m[1].trim());
+		// Windows paths ignore case, and git and VS Code do not always spell a drive letter alike.
+		const same = (a: string, b: string) => process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+		const api = await this.gitApi();
+		const owner = api.repositories.find(r => {
+			return same(path.dirname(gitDir), path.join(r.rootUri.fsPath, '.git', 'worktrees')) && (!!resolveInWorkspace(r.rootUri.fsPath, this.folders) || this.folders.some(f => resolveInWorkspace(f, [r.rootUri.fsPath])));
+		});
+		if (!owner) {
+			throw new Error(`${path.basename(dir)} is not a worktree of a repository open in this window.`);
+		}
+		const repo = api.repositories.find(r => same(r.rootUri.fsPath, dir)) ?? await api.openRepository(vscode.Uri.file(dir)).catch(() => null);
+		if (!repo) {
+			throw new Error(`The Git extension could not open ${dir}.`);
+		}
+		const hash = await within(repo.getMergeBase('HEAD', base), 15_000, 'finding the base commit').catch(() => undefined);
+		if (!hash || !/^[0-9a-f]{7,64}$/i.test(hash)) {
+			throw new Error(`${path.basename(dir)} has no common commit with ${base}.`);
+		}
+		return this.collectChanges(undefined, { hash, name: base }, repo);
 	}
 
 	/**
@@ -315,10 +361,11 @@ export class AgentTools {
 	 * The working-tree changes of every git repository of this workspace against HEAD (or `base`), narrowed to `only` (files
 	 * or folders). A repository whose base cannot be found is left out, with a note saying why.
 	 */
-	private async collectChanges(only?: string[], base: DiffBase = 'uncommitted'): Promise<Changes> {
+	private async collectChanges(only?: string[], base: DiffBase | { hash: string; name: string } = 'uncommitted', single?: GitRepo): Promise<Changes> {
 		const api = await this.gitApi();
-		const repos = new Map<string, GitRepo>(api.repositories.map(r => [r.rootUri.fsPath, r]));
-		for (const root of await this.nestedRepos()) {
+		// `single`: one repository against a commit already resolved (an agent worktree), no others.
+		const repos = new Map<string, GitRepo>(single ? [[single.rootUri.fsPath, single]] : api.repositories.map(r => [r.rootUri.fsPath, r]));
+		for (const root of single ? [] : await this.nestedRepos()) {
 			if (!repos.has(root)) {
 				const opened = await api.openRepository(vscode.Uri.file(root)).catch(() => null);
 				if (opened) {
@@ -340,7 +387,7 @@ export class AgentTools {
 			// With git.untrackedChanges "separate" the new files are not in workingTreeChanges.
 			let all = [...repo.state.workingTreeChanges, ...(repo.state.untrackedChanges ?? []), ...repo.state.indexChanges, ...repo.state.mergeChanges];
 			if (base !== 'uncommitted') {
-				const found = await within(this.baseCommit(repo, base), 15_000, 'finding the base commit').catch(e => (e as Error).message);
+				const found = typeof base === 'object' ? base : await within(this.baseCommit(repo, base), 15_000, 'finding the base commit').catch(e => (e as Error).message);
 				if (typeof found === 'string') {
 					notes.push(`${path.basename(root)}: left out, ${found}.`);
 					continue;

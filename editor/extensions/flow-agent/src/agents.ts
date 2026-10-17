@@ -14,6 +14,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { crashNeed, nextAttention, attentionKind, type Attention, type Need } from './attention';
+import { findConflicts, key, type Conflict, type SessionEdits } from './conflicts';
 import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexProfile, codexProfileFile } from './codexHooks';
 import { agentProcessEnv, inheritedAgentEnv } from './env';
 import { CostTracker, statusUsd, type SessionCost } from './cost';
@@ -21,6 +22,7 @@ import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, compactAllowed, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
+import { createWorktree, validBranch, worktreeSlug, type Worktree } from './worktrees';
 
 /** claude and codex report through hooks (codex once its hooks are trusted); custom CLIs are plain terminals Axle only lists. */
 export type AgentCli = 'claude' | 'codex' | 'custom';
@@ -66,6 +68,8 @@ export interface AgentSession {
 	pr?: PrState;
 	/** The folder it works in, as its hooks report it. */
 	cwd?: string;
+	/** The git worktree it was started in, when it has one of its own (see worktrees.ts). */
+	worktree?: Worktree;
 }
 
 /** What flow-view answers to `flow.agent.turnImpact`. */
@@ -75,6 +79,8 @@ export interface TurnImpact {
 	flows: { id: string; label: string; name: string; source: 'roslyn' | 'poly'; via?: string[] }[];
 	more: number;
 	note?: string;
+	/** The methods the turn's edits landed in, where their lines are known. */
+	methods?: { file: string; name: string }[];
 }
 
 export interface CustomAgent {
@@ -84,7 +90,7 @@ export interface CustomAgent {
 
 interface Saved {
 	token: string;
-	sessions: Pick<AgentSession, 'id' | 'cli' | 'name' | 'pid' | 'prompt' | 'transcript' | 'command' | 'agentId'>[];
+	sessions: Pick<AgentSession, 'id' | 'cli' | 'name' | 'pid' | 'prompt' | 'transcript' | 'command' | 'agentId' | 'worktree'>[];
 }
 
 interface HookPayload {
@@ -167,10 +173,19 @@ function parseSaved(raw: unknown): Saved | undefined {
 	const sessions: Saved['sessions'] = [];
 	for (const e of Array.isArray(o.sessions) ? o.sessions as Record<string, unknown>[] : []) {
 		if (e && typeof e === 'object' && typeof e.id === 'string' && (e.cli === 'claude' || e.cli === 'codex' || e.cli === 'custom')) {
-			sessions.push({ id: e.id, cli: e.cli, name: str(e.name) ?? e.id, pid: typeof e.pid === 'number' ? e.pid : undefined, prompt: str(e.prompt), transcript: str(e.transcript), command: str(e.command), agentId: str(e.agentId) });
+			sessions.push({ id: e.id, cli: e.cli, name: str(e.name) ?? e.id, pid: typeof e.pid === 'number' ? e.pid : undefined, prompt: str(e.prompt), transcript: str(e.transcript), command: str(e.command), agentId: str(e.agentId), worktree: parseWorktree(e.worktree) });
 		}
 	}
 	return { token: str(o.token) ?? '', sessions };
+}
+
+/** A saved worktree, taken only when every part has the right shape: its branch names reach git when it is merged or removed. */
+function parseWorktree(raw: unknown): Worktree | undefined {
+	const w = raw as Partial<Record<keyof Worktree, unknown>> | null;
+	if (!w || typeof w !== 'object' || typeof w.path !== 'string' || typeof w.root !== 'string' || typeof w.branch !== 'string' || typeof w.base !== 'string') {
+		return undefined;
+	}
+	return path.isAbsolute(w.path) && path.isAbsolute(w.root) && validBranch(w.branch) && validBranch(w.base) ? { path: w.path, root: w.root, branch: w.branch, base: w.base } : undefined;
 }
 
 /** The newest /rename in these transcript lines. */
@@ -253,6 +268,8 @@ export class Agents implements vscode.Disposable {
 	private readonly costs = new Map<string, CostTracker>();
 	private readonly prs = new PrWatcher(cwd => this.prChanged(cwd));
 	private prTimer: NodeJS.Timeout | undefined;
+	/** Everything a session has edited since it started (files, and the methods and flows once a turn's impact is known), for conflicts.ts. */
+	private readonly edits = new Map<string, SessionEdits>();
 
 	constructor(private readonly context: vscode.ExtensionContext, private readonly log: vscode.LogOutputChannel) {
 		this.disposables.push(
@@ -515,7 +532,7 @@ export class Agents implements vscode.Disposable {
 		}
 		const saved: Saved = {
 			token: this.token,
-			sessions: [...[...this.sessions.values()].map(({ id, cli, name, pid, prompt, transcript, command, agentId }) => ({ id, cli, name, pid, prompt, transcript, command, agentId })), ...this.orphans.values()],
+			sessions: [...[...this.sessions.values()].map(({ id, cli, name, pid, prompt, transcript, command, agentId, worktree }) => ({ id, cli, name, pid, prompt, transcript, command, agentId, worktree })), ...this.orphans.values()],
 		};
 		// One write at a time, through a temp file: overlapping writes could interleave and lose every saved session.
 		const file = path.join(this.dir, 'sessions.json');
@@ -556,8 +573,12 @@ export class Agents implements vscode.Disposable {
 		}
 	}
 
-	/** Starts a CLI in a new terminal. Claude gets a session id we chose, so every hook maps to its terminal. */
-	async spawn(cli: AgentCli, resume?: AgentSession, custom?: CustomAgent): Promise<AgentSession | undefined> {
+	/**
+	 * Starts a CLI in a new terminal. Claude gets a session id we chose, so every hook maps to its terminal. `place` puts a new
+	 * agent in a git worktree of its own or in this checkout; left out, the flow.agents.worktree setting decides. A resumed
+	 * agent goes back to where it ran.
+	 */
+	async spawn(cli: AgentCli, resume?: AgentSession, custom?: CustomAgent, place?: 'worktree' | 'here'): Promise<AgentSession | undefined> {
 		if (!vscode.workspace.isTrusted) {
 			void vscode.window.showWarningMessage('Agents run commands in your workspace: trust this folder to start one.', 'Manage Workspace Trust')
 				.then(c => c && vscode.commands.executeCommand('workbench.trust.manage'));
@@ -568,7 +589,23 @@ export class Agents implements vscode.Disposable {
 		const base = cli === 'claude' ? 'Claude' : cli === 'codex' ? 'Codex' : custom?.name ?? 'Agent';
 		const same = [...this.sessions.values()].filter(s => s.state !== 'ended' && (s.cli === 'custom' ? s.command === custom?.command : s.cli === cli)).length;
 		const name = resume?.name ?? base + (same ? ` ${same + 1}` : '');
-		const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		let worktree = resume?.worktree && existsSync(resume.worktree.path) ? resume.worktree : undefined;
+		if (resume?.worktree && !worktree) {
+			void vscode.window.showErrorMessage(`Axle: the worktree of ${resume.name} (${resume.worktree.path}) is gone; it cannot be resumed there.`);
+			return undefined;
+		}
+		if (!resume && folder && (place ?? (vscode.workspace.getConfiguration('flow.agents').get<boolean>('worktree', false) ? 'worktree' : 'here')) === 'worktree') {
+			try {
+				const slug = worktreeSlug(cli === 'custom' ? custom?.name ?? 'agent' : cli, randomBytes(2).toString('hex'));
+				worktree = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: 'Axle: creating a worktree for the agent' }, () => createWorktree(folder, slug));
+			} catch (e) {
+				// Never fall back to the shared checkout without saying so: the user asked for a checkout of the agent's own.
+				void vscode.window.showErrorMessage(`Axle: could not create a worktree for the agent: ${(e as Error).message}`);
+				return undefined;
+			}
+		}
+		const cwd = worktree?.path ?? folder;
 		const terminal = vscode.window.createTerminal({
 			name,
 			cwd,
@@ -580,7 +617,8 @@ export class Agents implements vscode.Disposable {
 		// Double quotes work in bash, zsh, PowerShell and cmd alike.
 		const quote = (x: string) => `"${x}"`;
 		// --mcp-config takes any number of files, so it goes last; it adds to the user's own MCP servers (no --strict-mcp-config).
-		const mcp = cli === 'claude' ? await this.mcpConfig(cwd) : undefined;
+		// The `axle` tools find this window by its folder, so a worktree agent gets the main folder's config.
+		const mcp = cli === 'claude' ? await this.mcpConfig(folder) : undefined;
 		const codexHooks = cli === 'codex' && await this.codexTakesHooks();
 		const profile = codexHooks ? ` -p ${CODEX_PROFILE}` : '';
 		const command = cli === 'claude'
@@ -592,7 +630,7 @@ export class Agents implements vscode.Disposable {
 		terminal.sendText(command);
 		const session: AgentSession = {
 			id, cli, name, state: cli === 'claude' ? 'starting' : 'unknown', since: Date.now(), todos: [], unread: false,
-			prompt: resume?.prompt, command: cli === 'custom' ? command : undefined, agentId: resume?.agentId,
+			prompt: resume?.prompt, command: cli === 'custom' ? command : undefined, agentId: resume?.agentId, worktree,
 			cwd, pr: cwd ? this.prs.get(cwd) : undefined,
 			transcript: cli === 'claude' ? resume?.transcript ?? transcriptPath(id, cwd) : undefined,
 		};
@@ -731,6 +769,7 @@ export class Agents implements vscode.Disposable {
 		this.planDrawn.delete(id);
 		this.attention.delete(id);
 		this.costs.delete(id);
+		this.edits.delete(id);
 		for (const [alias, owner] of this.aliases) {
 			if (owner === id) {
 				this.aliases.delete(alias);
@@ -948,6 +987,7 @@ export class Agents implements vscode.Disposable {
 				const files = filesOf(tool, p.tool_input, p.cwd);
 				await bounded(Promise.resolve(vscode.commands.executeCommand('flow.agentWillEdit', files)).catch(() => undefined), SNAPSHOT_WAIT_MS);
 				this.planEdit(s, files, 'before');
+				this.recordEdits(s, files);
 				break;
 			}
 			case 'PermissionRequest':
@@ -965,6 +1005,7 @@ export class Agents implements vscode.Disposable {
 						void Promise.resolve(vscode.commands.executeCommand('flow.agentDidEdit', files)).catch(() => undefined);
 						this.touch(s, files);
 						this.planEdit(s, files, 'after');
+						this.recordEdits(s, files);
 					} else if (tool === 'ExitPlanMode') {
 						this.planProposed(s, p, 'after');
 					}
@@ -1058,11 +1099,81 @@ export class Agents implements vscode.Disposable {
 			return;
 		}
 		const impact = await bounded(Promise.resolve(vscode.commands.executeCommand<TurnImpact>('flow.agent.turnImpact', files)).catch(() => undefined), IMPACT_WAIT_MS);
+		// The methods and flows count for conflicts whatever the agent does next: it did change them.
+		if (impact) {
+			this.recordImpact(s, impact);
+		}
 		// A new prompt may have started while this was computed: its answer no longer describes the turn on screen.
 		if (impact?.flows?.length && s.state !== 'working' && this.touched.get(s.id)) {
 			s.impact = impact;
 			this.changed.fire();
 		}
+	}
+
+	/** The checkout a session works in: its worktree, or the window's folder. */
+	rootOf(s: AgentSession): string | undefined {
+		return s.worktree?.path ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+	}
+
+	private editsOf(s: AgentSession): SessionEdits | undefined {
+		const root = this.rootOf(s);
+		if (!root) {
+			return undefined;
+		}
+		let e = this.edits.get(s.id);
+		if (!e || e.root !== root) {
+			e = { id: s.id, name: s.name, root, files: new Set(), methods: new Map(), flows: new Map() };
+			this.edits.set(s.id, e);
+		}
+		return e;
+	}
+
+	/** An edit is announced (PreToolUse: "is editing") or done (PostToolUse): either way the file is this session's now. */
+	private recordEdits(s: AgentSession, files: string[]) {
+		const e = this.editsOf(s);
+		if (!e) {
+			return;
+		}
+		const before = e.files.size;
+		for (const f of files) {
+			const k = key(f, e.root);
+			if (k && e.files.size < 500) {
+				e.files.add(k);
+			}
+		}
+		if (e.files.size !== before) {
+			this.changed.fire();
+		}
+	}
+
+	private recordImpact(s: AgentSession, impact: TurnImpact) {
+		const e = this.editsOf(s);
+		if (!e) {
+			return;
+		}
+		for (const m of Array.isArray(impact.methods) ? impact.methods : []) {
+			const k = typeof m?.file === 'string' && typeof m.name === 'string' ? key(m.file, e.root) : undefined;
+			if (k && e.methods.size < 500) {
+				e.methods.set(`${k}#${m.name}`, m.name);
+			}
+		}
+		for (const f of Array.isArray(impact.flows) ? impact.flows : []) {
+			if (typeof f?.id === 'string' && typeof f.label === 'string' && e.flows.size < 200) {
+				e.flows.set(f.id, f.label);
+			}
+		}
+		this.changed.fire();
+	}
+
+	/** Which live sessions overlap with which: the files, methods and flows two of them both changed. */
+	conflicts(): Map<string, Conflict[]> {
+		const live = [...this.sessions.values()].filter(s => s.state !== 'ended' && this.edits.has(s.id));
+		return findConflicts(live.map(s => ({ ...this.edits.get(s.id)!, name: s.name })));
+	}
+
+	/** Closes an agent's terminal (before its worktree is removed: a shell inside the folder keeps it busy on Windows). */
+	closeTerminal(id: string) {
+		this.terminals.get(id)?.dispose();
 	}
 
 	/** Opens the flow at `index` of an agent's turn impact (the dock sends an index, never an id of its own making). */

@@ -7,6 +7,8 @@
 import * as vscode from 'vscode';
 import type { Agents } from './agents';
 import { attentionKind, rank } from './attention';
+import { conflictText } from './conflicts';
+import { WORKTREE_ACTIONS, type WorktreeAction, type WorktreeRows } from './worktreeActions';
 
 /** The real marks: Claude's spark (from the Claude Code extension) and the Codex cloud (lobe-icons). */
 const ICON = {
@@ -17,15 +19,15 @@ const ICON = {
 export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable {
 	private view: vscode.WebviewView | undefined;
 	private timer: NodeJS.Timeout | undefined;
-	private readonly changes: vscode.Disposable;
+	private readonly changes: vscode.Disposable[];
 
-	constructor(private readonly agents: Agents) {
-		this.changes = agents.onDidChange(() => this.post());
+	constructor(private readonly agents: Agents, private readonly worktrees?: WorktreeRows) {
+		this.changes = [agents.onDidChange(() => this.post()), ...(worktrees ? [worktrees.onDidChange(() => this.post())] : [])];
 	}
 
 	dispose() {
 		clearTimeout(this.timer);
-		this.changes.dispose();
+		this.changes.forEach(d => d.dispose());
 	}
 
 	resolveWebviewView(view: vscode.WebviewView) {
@@ -55,6 +57,9 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				this.agents.compact(m.id);
 			} else if (m.type === 'rename' && typeof m.id === 'string') {
 				void this.rename(m.id);
+			} else if (m.type === 'wt' && typeof m.id === 'string' && WORKTREE_ACTIONS.includes(m.action)) {
+				// The page names the row and one of four actions; the folder and branches come from the host's own record.
+				void this.worktrees?.act(m.id, m.action as WorktreeAction);
 			} else if (m.type === 'pick') {
 				void vscode.commands.executeCommand('flow.agents.new');
 			} else if (m.type === 'chat') {
@@ -95,8 +100,12 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 		}
 		clearTimeout(this.timer);
 		this.timer = setTimeout(() => {
+			const conflicts = this.agents.conflicts();
 			const list = rank([...this.agents.sessions.values()])
-				.map(s => ({ ...s, attention: attentionKind(s), done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })) } }));
+				.map(s => ({ ...s, attention: attentionKind(s), done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })) },
+					// Worktree and conflicts are explicit fields: the session's own record (paths, the base branch) stays here.
+					worktree: s.worktree ? this.worktrees?.view(s) : undefined,
+					clash: s.state === 'ended' ? undefined : conflicts.get(s.id)?.map(c => ({ text: conflictText(c), same: c.sameCheckout, files: c.files.slice(0, 12) })) }));
 			void this.view?.webview.postMessage({ type: 'data', list, now: Date.now() });
 		}, 60);
 	}
@@ -156,6 +165,14 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 .impact b { color: var(--text); font-weight: 600; }
 .impact .flow { display: inline-block; margin: 0 4px 2px 0; padding: 0 6px; border-radius: 5px; border: 1px solid var(--line); font: 11px/1.5 var(--mono); color: var(--text); cursor: pointer; }
 .impact .flow:hover { background: var(--hover); }
+.wt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 6px 0 0 26px; color: var(--muted); font: 11px/1.5 var(--mono); }
+.wt .br { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.wt .ab { font-variant-numeric: tabular-nums; }
+.wt .act { padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font: 11px/1.5 var(--vscode-font-family, system-ui); cursor: pointer; }
+.wt .act:hover { background: var(--hover); color: var(--text); }
+.clash { margin: 6px 0 0 26px; padding: 4px 7px; border-radius: 6px; background: color-mix(in srgb, var(--blocked) 10%, transparent); color: var(--blocked); font-size: 11.5px; line-height: 1.45; }
+.clash.same { background: color-mix(in srgb, #ff6b7d 12%, transparent); color: #ff8c99; }
+.clash small { display: block; color: var(--muted); }
 .todos .count { flex: none; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .ctx { position: absolute; left: 38px; right: 10px; bottom: 0; height: 2px; border-radius: 2px; background: transparent; overflow: hidden; }
 .ctx i { display: block; height: 100%; background: color-mix(in srgb, var(--working) 55%, transparent); }
@@ -253,6 +270,14 @@ function render() {
 		const prTip = p ? p.title + ' (' + PRSTATE[p.state] + ')' + (p.checks !== 'none' ? '\\nChecks: ' + p.counts.pass + ' passed, ' + p.counts.fail + ' failed, ' + p.counts.pending + ' pending' + (p.failing.length ? '\\nFailing: ' + p.failing.join(', ') : '') : '') + '\\nOpen on GitHub' : '';
 		const pr = p ? '<span class="pr ' + esc(p.state) + '" role="button" data-pr="1" title="' + esc(prTip) + '">#' + esc(p.number) + ' ' + esc(PRSTATE[p.state]) + checks + '</span>' : '';
 		const meta = cost || pr ? '<div class="meta">' + pr + cost + '</div>' : '';
+		const w = s.worktree;
+		const counts = w && w.ahead !== undefined ? '<span class="ab" title="' + esc('Commits ahead of / behind ' + w.base) + '">↑' + w.ahead + ' ↓' + w.behind + '</span>' : '';
+		const dirty = w && w.uncommitted ? '<span title="Files changed and not committed in the worktree">' + w.uncommitted + ' uncommitted</span>' : '';
+		const act = (a, label, tip) => '<span class="act" role="button" tabindex="0" data-wt="' + a + '" title="' + esc(tip) + '">' + label + '</span>';
+		const wt = w ? '<div class="wt"><span class="br" title="' + esc('Worktree on ' + w.branch + ', from ' + w.base) + '">⎇ ' + esc(w.branch) + '</span>' + counts + dirty
+			+ act('open', 'Open', 'Open the worktree folder') + act('diff', 'Changes', 'Show the changes of this branch since ' + w.base + ' in flow') + act('merge', 'Merge', 'Merge into ' + w.base + ' (asks first)') + act('remove', 'Remove', 'Remove the worktree folder (asks first; the branch stays)') + '</div>' : '';
+		const clash = (s.clash || []).map(c => '<div class="clash' + (c.same ? ' same' : '') + '" title="' + esc(c.files.join(', ')) + '">⚠ ' + esc(c.text)
+			+ (c.same ? '<small>Same checkout: each writes over the edits of the other. Start agents that work in parallel in a worktree (Other… → in a worktree).</small>' : '') + '</div>').join('');
 		const level = pct >= 90 ? ' full' : pct >= 70 ? ' warn' : '';
 		// Only at the prompt: while the agent asks for permission, the Enter after /compact would answer its menu (compactAllowed).
 		const canCompact = s.usage && s.cli !== 'custom' && (s.state === 'idle' || s.state === 'done');
@@ -267,7 +292,9 @@ function render() {
 			+ need
 			+ (s.activity && !(kind === 'approval' && !s.need) && !(s.need && s.activity === s.need.text) ? '<div class="activity">' + esc(s.activity) + '</div>' : '')
 			+ todos
+			+ clash
 			+ impact
+			+ wt
 			+ ctx
 			+ meta
 			+ (sized ? '<div class="ctx' + level + '"><i style="width:' + pct + '%"></i></div>' : '')
@@ -280,8 +307,9 @@ function render() {
 		const fl = e.target.closest('[data-flow]');
 		const rn = e.target.closest('[data-rename]');
 		const cp = e.target.closest('[data-compact]');
+		const wa = e.target.closest('[data-wt]');
 		const pr = e.target.closest('[data-pr]');
-		vscode.postMessage(pr ? { type: 'pr', id: b.dataset.id } : cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : { type: 'show', id: b.dataset.id });
+		vscode.postMessage(wa ? { type: 'wt', id: b.dataset.id, action: wa.dataset.wt } : pr ? { type: 'pr', id: b.dataset.id } : cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : { type: 'show', id: b.dataset.id });
 	});
 }
 document.querySelectorAll('.new button').forEach(b => b.onclick = () => vscode.postMessage(b.dataset.cli === 'pick' ? { type: 'pick' } : { type: 'new', cli: b.dataset.cli }));
