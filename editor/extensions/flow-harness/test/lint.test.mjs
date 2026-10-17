@@ -56,6 +56,8 @@ test('skills and subagents: a missing description, a bad skill name, a vague des
 	assert.deepEqual(codes(run({ files: [file('.claude/agents/r.md', 'agent', 'You review.\n')] })), ['no-frontmatter@0'])
 	assert.deepEqual(codes(run({ files: [file('.claude/skills/x/SKILL.md', 'skill', '---\nname: My Skill\ndescription: Deploys the app to staging when asked to ship.\n---\n')] })), ['bad-name@1'])
 	assert.deepEqual(codes(run({ files: [file('.claude/skills/x/SKILL.md', 'skill', '---\nname: ship\ndescription: Deploys.\n---\n')] })), ['vague-description@2'])
+	assert.deepEqual(codes(run({ files: [file('.claude/skills/x/SKILL.md', 'skill', '---\nname: ship\ndescription: >\n  Deploys the app to staging\n  when someone asks to ship it.\n---\n')] })), [], 'a folded description is read whole')
+	assert.deepEqual(codes(run({ files: [file('.claude/agents/r.md', 'agent', '---\nname: r\ndescription: |\n  Reviews a change against the layer rules of this repo.\n---\n')] })), [])
 })
 
 test('a line said twice: in one file, across files of one tool, across tools', () => {

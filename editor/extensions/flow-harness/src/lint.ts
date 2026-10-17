@@ -78,11 +78,17 @@ function frontBlock(text: string): Front | undefined {
 function frontKeys(f: Front): Map<string, { value: string; line: number; list: string[] }> {
 	const keys = new Map<string, { value: string; line: number; list: string[] }>();
 	let last: { value: string; line: number; list: string[] } | undefined;
+	// `description: >` and `|`: the value is the indented lines that follow, read as one, quoted so no check mistakes it for plain YAML.
+	let block = false;
 	f.lines.forEach((l, i) => {
 		const kv = /^([A-Za-z_][\w-]*)\s*:(.*)$/.exec(l);
 		if (kv) {
-			last = { value: kv[2].trim(), line: f.start + i, list: [] };
+			const value = kv[2].trim();
+			block = /^[>|][+-]?\d*$/.test(value);
+			last = { value: block ? '' : value, line: f.start + i, list: [] };
 			keys.set(kv[1], last);
+		} else if (last && block && /^\s+\S/.test(l)) {
+			last.value = `"${[last.value.replace(/^"|"$/g, ''), l.trim()].filter(Boolean).join(' ')}"`;
 		} else if (last && /^\s+-\s+/.test(l)) {
 			last.list.push(l.replace(/^\s+-\s+/, '').trim());
 		}
