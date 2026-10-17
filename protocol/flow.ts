@@ -3,7 +3,7 @@
 // nothing (checked by `npm run arch`).
 
 export type Kind = 'controller' | 'handler' | 'method' | 'db' | 'ambiguous' | 'external';
-export type EdgeKind = 'call' | 'mediator' | 'impl' | 'db' | 'http';
+export type EdgeKind = 'call' | 'mediator' | 'impl' | 'db' | 'http' | 'message';
 
 export interface FlowNode {
 	key: string;
@@ -31,7 +31,7 @@ export interface FlowNode {
 export interface FlowEdge {
 	callLine: number;
 	edgeKind: EdgeKind;
-	/** The link was made by name alone (the polyglot index found no declared type to follow). */
+	/** The link was made by name alone (the polyglot index found no declared type to follow), or by an HTTP route or message destination it matched. */
 	guess?: boolean;
 	node: FlowNode;
 }

@@ -12,6 +12,7 @@ import { isSpringRepo, isWrite, javaSchema, jsSchema, looksLikeSql, opsOf, pytho
 import { baseType, callBefore, chainBefore, isConstructorName, Kind, paramLabels, recvText, signatureDetail, wordAt, type Place, type Seg, type Suggestion } from './assist';
 import { joinPath, type CallFact, type FileFacts, type FuncFact, type Lang, type RouteFact, type TypeFact } from './model';
 import { httpCallOf, matchEndpoints } from './links';
+import { celeryTaskNames, listenerKeys, matchConsumers, messageSendOf } from './messages';
 
 export interface Axis2Service {
 	name: string;
@@ -23,8 +24,8 @@ export interface Axis2Service {
 }
 
 type Target =
-	| { kind: 'fn'; fn: FuncFact; edge: 'call' | 'impl' | 'http'; guess?: boolean }
-	| { kind: 'ambiguous'; label: string; options: FuncFact[]; edge?: 'http' }
+	| { kind: 'fn'; fn: FuncFact; edge: 'call' | 'impl' | 'http' | 'message'; guess?: boolean }
+	| { kind: 'ambiguous'; label: string; options: FuncFact[]; edge?: 'http' | 'message' }
 	| { kind: 'db'; schema: DbSchema; label: string; file: string | null; line: number };
 
 /** An entry point with the declared types of its parameters and result, for the type chips. */
@@ -89,7 +90,9 @@ export class Project {
 	private schemas = new Map<string, DbSchema & { orm: string }>();
 	private schemaByTable = new Map<string, DbSchema & { orm: string }>();
 	private entries: Entry[] = [];
-	private callersOf: Map<string, { from: string; line: number; http?: boolean }[]> | undefined;
+	private callersOf: Map<string, { from: string; line: number; link?: 'http' | 'message' }[]> | undefined;
+	/** Message listeners and Celery tasks with the destinations they consume, built on first use. */
+	private consumers: { fn: FuncFact; keys: string[]; celery?: boolean }[] | undefined;
 	private resolved = new Map<string, Target[][]>();
 	/** Go/PHP/Ruby/Rust free functions by directory and by module name, built on first use. */
 	private pkgIndex: Map<string, FuncFact[]> | undefined;
@@ -151,6 +154,7 @@ export class Project {
 		this.resolved.clear();
 		this.pkgIndex = undefined;
 		this.callersOf = undefined;
+		this.consumers = undefined;
 		this.mergeStubTypes();
 		for (const f of this.files.values()) {
 			if (f.module) {
@@ -1056,7 +1060,8 @@ export class Project {
 					return found;
 				}
 				const http = this.httpLink(fn, c);
-				return http.length ? http : found;
+				const link = http.length ? http : this.messageLink(fn, c);
+				return link.length ? link : found;
 			});
 			this.resolved.set(fn.id, t);
 		}
@@ -1075,11 +1080,71 @@ export class Project {
 		if (!call) {
 			return [];
 		}
-		const to = [...new Map(matchEndpoints(call, this.entries).map(e => [e.fn.id, e.fn] as const)).values()].filter(f => f.id !== fn.id);
+		// Only HTTP routes: a listener's `MSG orders` or a job reads like a route but no request reaches it.
+		const routes = this.entries.filter(e => !/^(MSG|JOB|SOAP|JSF|WS) /.test(e.http));
+		const to = [...new Map(matchEndpoints(call, routes).map(e => [e.fn.id, e.fn] as const)).values()].filter(f => f.id !== fn.id);
 		if (to.length === 1) {
 			return [{ kind: 'fn', fn: to[0], edge: 'http', guess: true }];
 		}
 		return to.length ? [{ kind: 'ambiguous', label: `${call.verb ?? 'HTTP'} ${call.url.trim().replace(/\s+/g, '{…}')}`, options: to.slice(0, 6), edge: 'http' }] : [];
+	}
+
+	/**
+	 * A message sent to a listener of this index (a Kafka topic, a Rabbit/JMS queue, a Celery task): always
+	 * a guess, matched by the destination's exact name (see messages.ts). A topic with several listeners
+	 * reaches each of them, so they become separate edges, not an ambiguous card.
+	 */
+	private messageLink(fn: FuncFact, c: CallFact): Target[] {
+		const lang = this.files.get(fn.file)?.lang;
+		const send = lang && messageSendOf(lang, c, recv => this.recvType(fn, recv)?.type, expr => this.constOf(fn, expr));
+		if (!send) {
+			return [];
+		}
+		const consumers = this.buildConsumers();
+		let to: FuncFact[];
+		if (send.task) {
+			// `send_email.delay(…)`: the receiver is the task function itself, resolved like a call to it.
+			const dot = send.task.lastIndexOf('.');
+			const call: CallFact = dot < 0 ? { name: send.task, line: c.line, strings: [] } : { name: send.task.slice(dot + 1), recv: send.task.slice(0, dot), line: c.line, strings: [] };
+			const tasks = new Set(consumers.filter(x => x.celery).map(x => x.fn.id));
+			to = this.resolveCall(fn, call).flatMap(t => (t.kind === 'fn' ? [t.fn] : t.kind === 'ambiguous' ? t.options : [])).filter(f => tasks.has(f.id));
+		} else {
+			to = matchConsumers(send, consumers).map(x => x.fn);
+		}
+		return [...new Map(to.map(f => [f.id, f] as const)).values()].filter(f => f.id !== fn.id).slice(0, 6).map(f => ({ kind: 'fn', fn: f, edge: 'message', guess: true }));
+	}
+
+	/** A string constant an argument names: a local, a field of this class, or `Type.FIELD`. */
+	private constOf(fn: FuncFact, expr: string): string | undefined {
+		const parts = expr.replace(/^(this|self)\./, '').split('.');
+		if (parts.length === 1 && own(fn.consts, parts[0])) {
+			return own(fn.consts, parts[0]);
+		}
+		const t = parts.length === 1 ? this.ownerOf(fn) : parts.length === 2 ? this.type(parts[0], fn.file) : undefined;
+		const f = t?.fields.find(x => x.name === parts[parts.length - 1]);
+		return f?.init ? unq(f.init.replace(/"\s*\+\s*"/g, '')) : undefined;
+	}
+
+	private buildConsumers() {
+		if (!this.consumers) {
+			const out: { fn: FuncFact; keys: string[]; celery?: boolean }[] = [];
+			for (const e of this.entries) {
+				const lang = this.files.get(e.fn.file)?.lang;
+				for (const a of e.fn.annotations) {
+					if (lang === 'python' && /^(shared_task|task)$/.test(a.name)) {
+						out.push({ fn: e.fn, keys: celeryTaskNames(a, this.files.get(e.fn.file)?.module, e.fn.name), celery: true });
+					} else if ((lang === 'java' && /^(KafkaListener|JmsListener|RabbitListener|SqsListener|StreamListener)$/.test(a.name)) || (lang === 'js' && /^(MessagePattern|EventPattern)$/.test(a.name))) {
+						// `topics = Topics.ORDERS` / `{A, B}`: the constants the producer side usually shares.
+						const keys = listenerKeys(a, expr => this.constOf(e.fn, expr));
+						if (keys.length) {
+							out.push({ fn: e.fn, keys });
+						}
+					}
+				}
+			}
+			this.consumers = out;
+		}
+		return this.consumers;
 	}
 
 	private code(fn: { file: string; line: number; endLine: number }) {
@@ -1148,19 +1213,19 @@ export class Project {
 						}
 						seen.add(t.label);
 						count++;
-						const amb: FlowNode = { key: `p${key++}`, symbolId: null, label: t.label, sub: t.edge === 'http' ? `${t.options.length} matching endpoints` : `${t.options.length} implementations`, kind: 'ambiguous', file: null, startLine: 0, endLine: 0, code: null, children: [] };
+						const amb: FlowNode = { key: `p${key++}`, symbolId: null, label: t.label, sub: t.edge === 'http' ? `${t.options.length} matching endpoints` : t.edge === 'message' ? `${t.options.length} listeners` : `${t.options.length} implementations`, kind: 'ambiguous', file: null, startLine: 0, endLine: 0, code: null, children: [] };
 						for (const o of t.options.slice(0, 6)) {
 							if (!trail.has(o.id)) {
-								amb.children.push({ callLine: c.line, edgeKind: t.edge === 'http' ? 'http' : 'impl', ...(t.edge === 'http' ? { guess: true } : {}), node: node(o, this.entryOf(o) ? 'controller' : 'method', d + 1, new Set([...trail, o.id])) });
+								amb.children.push({ callLine: c.line, edgeKind: t.edge ?? 'impl', ...(t.edge ? { guess: true } : {}), node: node(o, this.entryOf(o) ? 'controller' : 'method', d + 1, new Set([...trail, o.id])) });
 							}
 						}
-						n.children.push({ callLine: c.line, edgeKind: t.edge ?? 'call', ...(t.edge === 'http' ? { guess: true } : {}), node: amb });
+						n.children.push({ callLine: c.line, edgeKind: t.edge ?? 'call', ...(t.edge ? { guess: true } : {}), node: amb });
 					} else {
 						if (seen.has(t.fn.id) || trail.has(t.fn.id)) {
 							continue;
 						}
 						seen.add(t.fn.id);
-						n.children.push({ callLine: c.line, edgeKind: t.edge, ...(t.guess ? { guess: true } : {}), node: node(t.fn, t.edge === 'http' && this.entryOf(t.fn) ? 'controller' : 'method', d + 1, new Set([...trail, t.fn.id])) });
+						n.children.push({ callLine: c.line, edgeKind: t.edge, ...(t.guess ? { guess: true } : {}), node: node(t.fn, (t.edge === 'http' || t.edge === 'message') && this.entryOf(t.fn) ? 'controller' : 'method', d + 1, new Set([...trail, t.fn.id])) });
 					}
 				}
 				// Nothing found: library call, or a link only a language server can make.
@@ -1177,15 +1242,15 @@ export class Project {
 		if (this.callersOf) {
 			return this.callersOf;
 		}
-		const map = new Map<string, { from: string; line: number; http?: boolean }[]>();
+		const map = new Map<string, { from: string; line: number; link?: 'http' | 'message' }[]>();
 		for (const fn of this.funcsById.values()) {
 			const all = this.targets(fn);
 			fn.calls.forEach((c, i) => {
 				for (const t of all[i]) {
 					const ids = t.kind === 'fn' ? [t.fn.id] : t.kind === 'ambiguous' ? t.options.map(o => o.id) : [];
-					const http = t.kind !== 'db' && t.edge === 'http';
+					const link = t.kind !== 'db' && (t.edge === 'http' || t.edge === 'message') ? t.edge : undefined;
 					for (const id of ids) {
-						this.push(map, id, { from: fn.id, line: c.line, ...(http ? { http } : {}) });
+						this.push(map, id, { from: fn.id, line: c.line, ...(link ? { link } : {}) });
 					}
 				}
 			});
@@ -1215,7 +1280,7 @@ export class Project {
 					continue;
 				}
 				seen.add(from.id);
-				n.children.push({ callLine: c.line, edgeKind: c.http ? 'http' : 'call', ...(c.http ? { guess: true } : {}), node: node(from, d + 1, new Set([...trail, from.id])) });
+				n.children.push({ callLine: c.line, edgeKind: c.link ?? 'call', ...(c.link ? { guess: true } : {}), node: node(from, d + 1, new Set([...trail, from.id])) });
 			}
 			return n;
 		};
