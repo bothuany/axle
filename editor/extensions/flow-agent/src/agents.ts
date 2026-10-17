@@ -13,7 +13,8 @@ import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { crashNeed, nextAttention, attentionKind, startupNeed, type Attention, type Need } from './attention';
+import { crashNeed, nextAttention, startupNeed, type Attention, type Need } from './attention';
+import { needsYouCount } from './desktopModel';
 import { findConflicts, key, type Conflict, type SessionEdits } from './conflicts';
 import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexProfile, codexProfileFile } from './codexHooks';
 import { agentProcessEnv, inheritedAgentEnv } from './env';
@@ -862,7 +863,7 @@ export class Agents implements vscode.Disposable {
 	}
 
 	get needsYou() {
-		return [...this.sessions.values()].filter(s => attentionKind(s)).length;
+		return needsYouCount(this.sessions.values());
 	}
 
 	/** Whether you are looking at this agent now: the window has focus and its terminal is the active one. */
