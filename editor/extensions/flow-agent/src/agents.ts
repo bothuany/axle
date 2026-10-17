@@ -13,9 +13,12 @@ import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { crashNeed, nextAttention, attentionKind, type Attention, type Need } from './attention';
 import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexProfile, codexProfileFile } from './codexHooks';
 import { agentProcessEnv, inheritedAgentEnv } from './env';
+import { CostTracker, statusUsd, type SessionCost } from './cost';
 import { parsePatch, patchFiles, patchText } from './patch';
+import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, compactAllowed, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 
@@ -55,6 +58,14 @@ export interface AgentSession {
 	impact?: TurnImpact;
 	/** Codex picks its own session id: learned from its first hook, it is what `codex resume` takes. */
 	agentId?: string;
+	/** Why it waits for you, when it does (attention.ts). */
+	need?: Need;
+	/** Tokens and, where the CLI says, dollars: the session and its current prompt (cost.ts). */
+	cost?: SessionCost;
+	/** The PR of the branch it works on, with its CI (prState.ts). */
+	pr?: PrState;
+	/** The folder it works in, as its hooks report it. */
+	cwd?: string;
 }
 
 /** What flow-view answers to `flow.agent.turnImpact`. */
@@ -87,6 +98,11 @@ interface HookPayload {
 	tool_response?: Record<string, unknown>;
 	notification_type?: string;
 	message?: string;
+	/** StopFailure: the error code, and what the API said. */
+	error?: string;
+	error_details?: string;
+	/** Stop: the reply the turn ended on. */
+	last_assistant_message?: string;
 }
 
 const AGENT = 'Claude Code (terminal)';
@@ -94,15 +110,17 @@ const agentLabel = (s: AgentSession) => s.cli === 'codex' ? 'Codex (terminal)' :
 const EDIT_TOOLS = 'Edit|Write|MultiEdit|NotebookEdit';
 /** Codex reports every file edit as this one tool, the patch in `tool_input.command` (see patch.ts). */
 const PATCH_TOOL = 'apply_patch';
-/** PreToolUse also sees the plan an agent proposes when it leaves plan mode (tool_input.plan, injected by Claude Code). */
-const PRE_TOOLS = `${EDIT_TOOLS}|ExitPlanMode`;
+/** PreToolUse also sees the plan an agent proposes when it leaves plan mode (tool_input.plan, injected by Claude Code), and the questions it asks you. */
+const PRE_TOOLS = `${EDIT_TOOLS}|ExitPlanMode|AskUserQuestion`;
 /** The most files of one turn that are checked for the flows they affect. */
 const MAX_TOUCHED = 40;
 /** The turn-end impact may take this long: Roslyn answers one request at a time. */
 const IMPACT_WAIT_MS = 9000;
-const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'Stop', 'SessionEnd'];
+const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'Stop', 'StopFailure', 'SessionEnd'];
 /** Agents that never come back to a reloaded window (their terminal is gone) are dropped after this. */
 const ORPHAN_TTL_MS = 90_000;
+/** How long after a failing exit code a SessionEnd may still come, making it a quit rather than a crash. */
+const CRASH_GRACE_MS = 1500;
 /** The most a hook may wait for Axle to snapshot a file: the edit must not stall on it. */
 const SNAPSHOT_WAIT_MS = 2500;
 
@@ -230,15 +248,24 @@ export class Agents implements vscode.Disposable {
 	private readonly touched = new Map<string, Set<string>>();
 	/** Sessions whose plan was drawn from PreToolUse this turn, so PostToolUse does not draw it twice. */
 	private readonly planDrawn = new Set<string>();
+	/** Why each session needs you, and its failure streak. */
+	private readonly attention = new Map<string, Attention>();
+	private readonly costs = new Map<string, CostTracker>();
+	private readonly prs = new PrWatcher(cwd => this.prChanged(cwd));
+	private prTimer: NodeJS.Timeout | undefined;
 
 	constructor(private readonly context: vscode.ExtensionContext, private readonly log: vscode.LogOutputChannel) {
 		this.disposables.push(
 			vscode.window.onDidCloseTerminal(t => this.closed(t)),
 			vscode.window.onDidChangeActiveTerminal(t => this.seen(t)),
 			vscode.window.onDidChangeTerminalState(t => t.state.isInteractedWith && this.seen(t)),
+			// The CLI runs in a shell, so a crash leaves the terminal open: shell integration still reports the command's exit code.
+			vscode.window.onDidEndTerminalShellExecution(e => this.exited(e.terminal, e.exitCode)),
 			// An untrusted workspace starts nothing; trusting it later starts the hook server and brings the agents back.
 			vscode.workspace.onDidGrantWorkspaceTrust(() => void this.start()),
 		);
+		// The PR cache refreshes itself when asked after it went stale: ask for every live agent now and then.
+		this.prTimer = setInterval(() => this.refreshPrs(), 60_000);
 	}
 
 	/** Safe to call again: the work happens once. Does nothing in an untrusted workspace until it is trusted. */
@@ -476,6 +503,7 @@ export class Agents implements vscode.Disposable {
 		this.terminals.set(s.id, t);
 		this.log.info(`Agents: reattached ${s.name}`);
 		void this.readUsage(session);
+		this.refreshPrs();
 		void this.readTitle(session, true);
 		this.watchTranscript(session);
 		this.changed.fire();
@@ -565,6 +593,7 @@ export class Agents implements vscode.Disposable {
 		const session: AgentSession = {
 			id, cli, name, state: cli === 'claude' ? 'starting' : 'unknown', since: Date.now(), todos: [], unread: false,
 			prompt: resume?.prompt, command: cli === 'custom' ? command : undefined, agentId: resume?.agentId,
+			cwd, pr: cwd ? this.prs.get(cwd) : undefined,
 			transcript: cli === 'claude' ? resume?.transcript ?? transcriptPath(id, cwd) : undefined,
 		};
 		this.sessions.set(id, session);
@@ -700,6 +729,8 @@ export class Agents implements vscode.Disposable {
 		this.sessions.delete(id);
 		this.touched.delete(id);
 		this.planDrawn.delete(id);
+		this.attention.delete(id);
+		this.costs.delete(id);
 		for (const [alias, owner] of this.aliases) {
 			if (owner === id) {
 				this.aliases.delete(alias);
@@ -711,7 +742,21 @@ export class Agents implements vscode.Disposable {
 	}
 
 	get needsYou() {
-		return [...this.sessions.values()].filter(s => s.state === 'blocked' || (s.state === 'done' && s.unread)).length;
+		return [...this.sessions.values()].filter(s => attentionKind(s)).length;
+	}
+
+	/** Whether you are looking at this agent now: the window has focus and its terminal is the active one. */
+	isWatched(id: string) {
+		const t = this.terminals.get(id);
+		return !!t && vscode.window.state.focused && vscode.window.activeTerminal === t;
+	}
+
+	/** Opens the agent's PR in the browser. The page sends only the agent: the URL is the one `gh` gave. */
+	openPr(id: string) {
+		const url = this.sessions.get(id)?.pr?.url;
+		if (url && /^https:\/\//.test(url)) {
+			void vscode.env.openExternal(vscode.Uri.parse(url));
+		}
 	}
 
 	private seen(t: vscode.Terminal | undefined) {
@@ -724,12 +769,48 @@ export class Agents implements vscode.Disposable {
 		}
 	}
 
+	/**
+	 * The agent's command ended in its still open terminal. A clean exit is SessionEnd's to report; a failing code with no
+	 * SessionEnd soon after is a crash. (Custom CLIs send no SessionEnd: their exit code alone decides.)
+	 */
+	private exited(t: vscode.Terminal, code: number | undefined) {
+		if (code) {
+			setTimeout(() => this.crashed(t, code), CRASH_GRACE_MS);
+		}
+	}
+
+	private crashed(t: vscode.Terminal, code: number) {
+		for (const [id, term] of this.terminals) {
+			const s = this.sessions.get(id);
+			const crash = term === t && s && s.state !== 'ended' ? crashNeed(code, Date.now()) : undefined;
+			if (!s || !crash) {
+				continue;
+			}
+			s.need = crash;
+			this.attention.set(id, { failures: 0, need: crash });
+			s.state = 'ended';
+			s.since = Date.now();
+			s.activity = s.cli === 'claude' ? 'Exited · click to show its terminal' : undefined;
+			if (!this.isWatched(id)) {
+				s.unread = true;
+			}
+			this.usageEnded(s);
+			this.changed.fire();
+		}
+	}
+
 	private closed(t: vscode.Terminal) {
 		for (const [id, term] of this.terminals) {
 			if (term === t) {
 				this.terminals.delete(id);
 				const s = this.sessions.get(id);
 				if (s) {
+					// Exited on its own with a failing code while it had work: a crash, worth a look.
+					const crash = s.state !== 'ended' && s.state !== 'idle' && t.exitStatus?.reason !== vscode.TerminalExitReason.User ? crashNeed(t.exitStatus?.code, Date.now()) : undefined;
+					s.need = crash;
+					if (crash && !this.isWatched(id)) {
+						s.unread = true;
+					}
 					s.state = 'ended';
 					s.activity = s.cli === 'claude' ? 'Closed · click to resume' : undefined;
 					s.since = Date.now();
@@ -807,6 +888,10 @@ export class Agents implements vscode.Disposable {
 			return; // a session Axle did not start (or forgot): stay out of it
 		}
 		this.heard.add(s.id);
+		if (p.cwd && p.cwd !== s.cwd) {
+			s.cwd = p.cwd;
+			s.pr = this.prs.get(p.cwd);
+		}
 		if (p.transcript_path && p.transcript_path !== s.transcript) {
 			s.transcript = p.transcript_path;
 			this.unwatch(s.id);
@@ -821,7 +906,15 @@ export class Agents implements vscode.Disposable {
 			s.activity = activity;
 		};
 		const tool = p.tool_name ?? '';
-		switch (p.hook_event_name) {
+		const event = p.hook_event_name ?? '';
+		const att = nextAttention(this.attention.get(s.id) ?? { failures: 0 }, {
+			event, tool, input: p.tool_input, described: tool ? describe(tool, p.tool_input) : undefined,
+			notificationType: p.notification_type, message: p.message, error: p.error, errorDetails: p.error_details, lastMessage: p.last_assistant_message,
+		}, Date.now());
+		this.attention.set(s.id, att);
+		const wasNeed = s.need;
+		s.need = att.need;
+		switch (event) {
 			case 'SessionStart':
 				if (s.state === 'starting' || s.state === 'unknown') {
 					set(s.prompt ? 'done' : 'idle');
@@ -835,12 +928,17 @@ export class Agents implements vscode.Disposable {
 				this.touched.delete(s.id);
 				this.planDrawn.delete(s.id);
 				set('working', 'Thinking');
+				void this.markPrompt(s);
 				await Promise.resolve(vscode.commands.executeCommand('flow.agentTurn', s.prompt ?? 'Prompt', agentLabel(s))).catch(() => undefined);
 				break;
 			case 'PreToolUse': {
 				if (tool === 'ExitPlanMode') {
 					// The plan is proposed, not yet approved: draw it now, and never hold the prompt back for it.
 					this.planProposed(s, p, 'before');
+					break;
+				}
+				if (tool === 'AskUserQuestion') {
+					set('blocked', s.need?.text);
 					break;
 				}
 				// An edit: remember the files as they are, for the timeline and Undo.
@@ -854,7 +952,7 @@ export class Agents implements vscode.Disposable {
 			}
 			case 'PermissionRequest':
 				this.asked.set(s.id, { tool, input: p.tool_input ?? {}, cwd: p.cwd, at: Date.now() });
-				set('blocked', `Wants to: ${describe(tool, p.tool_input)}`);
+				set('blocked', s.need?.kind === 'question' ? s.need.text : `Wants to: ${describe(tool, p.tool_input)}`);
 				break;
 			case 'PostToolUse':
 			case 'PostToolUseFailure': {
@@ -880,6 +978,10 @@ export class Agents implements vscode.Disposable {
 					if (s.state !== 'blocked') {
 						set('blocked', p.message);
 					}
+				} else if (p.notification_type === 'elicitation_dialog') {
+					if (s.state !== 'blocked') {
+						set('blocked', s.need?.text);
+					}
 				} else if (p.notification_type === 'idle_prompt' && s.state !== 'done') {
 					set('done', undefined);
 				}
@@ -890,13 +992,19 @@ export class Agents implements vscode.Disposable {
 				void this.readUsage(s);
 				void this.turnImpact(s);
 				break;
+			case 'StopFailure':
+				// The turn ended on an error: nothing is running, and the row says why (s.need).
+				this.settleAsked(s, 'denied');
+				set('done', undefined);
+				void this.readUsage(s);
+				break;
 			case 'SessionEnd':
 				set('ended', undefined);
 				this.usageEnded(s);
 				break;
 		}
 		const active = vscode.window.activeTerminal === this.terminals.get(s.id) && vscode.window.state.focused;
-		if ((s.state === 'blocked' || s.state === 'done') && was !== s.state && !active) {
+		if (((s.state === 'blocked' || s.state === 'done') && was !== s.state || (s.need && s.need.at !== wasNeed?.at)) && !active) {
 			s.unread = true;
 		}
 		if (s.state === 'working') {
@@ -1006,8 +1114,8 @@ export class Agents implements vscode.Disposable {
 	}
 
 	/**
-	 * The transcript tells what no hook does: a /rename (a `custom-title` line), and a "no" to a
-	 * permission question. Watch its folder, since the file only appears with the first message.
+	 * The transcript tells what no hook does: a /rename (a `custom-title` line), a "no" to a
+	 * permission question, and the tokens of the message that ended a turn. Watch its folder, since the file only appears with the first message.
 	 */
 	private watchTranscript(s: AgentSession) {
 		if (s.cli !== 'claude' || !s.transcript || this.watchers.has(s.id)) {
@@ -1029,6 +1137,8 @@ export class Agents implements vscode.Disposable {
 						this.titleTimers.delete(s.id);
 						void this.readTitle(s);
 						void this.checkRefusal(s);
+						// The last message of a turn lands after Stop: the transcript changing is what says it is there.
+						void this.readCost(s);
 					}, 250));
 				});
 				// A watched folder that goes away (EPERM on Windows) must not become an uncaught error.
@@ -1097,6 +1207,8 @@ export class Agents implements vscode.Disposable {
 		if (/doesn't want to proceed|Request interrupted by user|tool use was rejected/i.test(last)) {
 			this.settleAsked(s, 'denied');
 			s.state = 'done';
+			s.need = undefined;
+			this.attention.set(s.id, { failures: 0 });
 			s.activity = 'You said no';
 			s.since = Date.now();
 			this.save();
@@ -1110,6 +1222,11 @@ export class Agents implements vscode.Disposable {
 		const s = this.sessionFor(st.sessionId, agent);
 		if (s && st.usage) {
 			this.setUsage(s, st.usage);
+		}
+		const usd = statusUsd(payload);
+		if (s && usd !== undefined) {
+			this.tracker(s)?.setUsd(usd);
+			this.setCost(s);
 		}
 		if (st.limits) {
 			this.reportLimits(st.limits);
@@ -1125,6 +1242,7 @@ export class Agents implements vscode.Disposable {
 			return;
 		}
 		const epoch = s.usageEpoch ?? 0;
+		void this.readCost(s);
 		const lines = await this.tail(s.transcript).catch(() => [] as string[]);
 		if (s.cli === 'codex') {
 			const { usage, limits } = codexRolloutUsage(lines);
@@ -1148,6 +1266,62 @@ export class Agents implements vscode.Disposable {
 		if (applyUsage(s, next, epoch)) {
 			this.changed.fire();
 		}
+	}
+
+	private tracker(s: AgentSession) {
+		if (s.cli === 'custom') {
+			return undefined;
+		}
+		let t = this.costs.get(s.id);
+		if (!t) {
+			t = new CostTracker(s.cli);
+			this.costs.set(s.id, t);
+		}
+		return t;
+	}
+
+	/** Reads what the transcript gained (the first time, all of it) and shows the new totals. */
+	private async readCost(s: AgentSession) {
+		const t = this.tracker(s);
+		await t?.update(s.transcript).catch(e => this.log.warn(`Agents: could not read the cost of ${s.name} (${(e as Error).message})`));
+		this.setCost(s);
+	}
+
+	/** A prompt was sent: the tokens so far belong to the earlier ones. */
+	private async markPrompt(s: AgentSession) {
+		const t = this.tracker(s);
+		await t?.update(s.transcript).catch(() => undefined);
+		t?.markPrompt();
+		this.setCost(s);
+	}
+
+	private setCost(s: AgentSession) {
+		const next = this.tracker(s)?.snapshot();
+		if (JSON.stringify(next) !== JSON.stringify(s.cost)) {
+			s.cost = next;
+			this.changed.fire();
+		}
+	}
+
+	/** Asks for the PR of every live agent's folder; the watcher answers from its cache until that is a couple of minutes old. */
+	private refreshPrs() {
+		const fallback = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		for (const s of this.sessions.values()) {
+			const cwd = s.cwd ?? fallback;
+			if (cwd && s.state !== 'ended') {
+				this.prs.get(cwd);
+			}
+		}
+	}
+
+	private prChanged(cwd: string) {
+		const fallback = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		for (const s of this.sessions.values()) {
+			if ((s.cwd ?? fallback) === cwd) {
+				s.pr = this.prs.get(cwd);
+			}
+		}
+		this.changed.fire();
 	}
 
 	/** The CLI exited or its terminal closed: its numbers say nothing any more, and a resumed session reports afresh. */
@@ -1191,6 +1365,7 @@ export class Agents implements vscode.Disposable {
 		}
 		clearTimeout(this.orphanTimer);
 		clearTimeout(this.limitsRetry);
+		clearInterval(this.prTimer);
 		this.watchers.forEach(w => w.close());
 		this.titleTimers.forEach(clearTimeout);
 		this.changed.dispose();
