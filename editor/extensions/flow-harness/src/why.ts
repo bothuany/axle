@@ -67,7 +67,7 @@ export class WhyView implements vscode.Disposable {
 		this.picked = uri?.fsPath;
 		const file = this.picked ?? vscode.window.activeTextEditor?.document.uri.fsPath ?? this.current;
 		if (!this.panel) {
-			this.panel = vscode.window.createWebviewPanel('flowHarness.why', 'Why?', { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, { enableScripts: true, retainContextWhenHidden: false });
+			this.panel = vscode.window.createWebviewPanel('flowHarness.why', 'Why?', { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, { enableScripts: true, retainContextWhenHidden: false, localResourceRoots: [] });
 			this.panel.webview.html = this.html();
 			this.panel.onDidDispose(() => this.panel = undefined, null, this.disposables);
 			this.panel.webview.onDidReceiveMessage(m => void this.message(m), null, this.disposables);

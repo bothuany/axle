@@ -187,6 +187,12 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('flowHarness.simulatePermission', (call: unknown, agent?: unknown) => typeof call === 'string' ? why.simulate(call, agent === 'Codex' ? 'Codex' : 'Claude') : undefined),
 		vscode.commands.registerCommand('flowHarness.applyProposal', (arg: unknown) => friction.apply(arg)),
 		vscode.commands.registerCommand('flowHarness.dismissProposal', (arg: unknown) => friction.dismiss(arg)),
+		vscode.commands.registerCommand('flowHarness.clearFriction', async () => {
+			const ok = await vscode.window.showWarningMessage('Forget the prompts and tool failures the friction inbox kept for this folder?', { modal: true, detail: 'Usage counts stay. Past transcripts are not read again unless they change.' }, 'Forget');
+			if (ok === 'Forget') {
+				live.clearFriction();
+			}
+		}),
 		// For Axle Home: the health summary in one call.
 		vscode.commands.registerCommand('flowHarness.health', async () => {
 			if (!harness) {

@@ -291,3 +291,25 @@ test('the X-ray labels what it knows: /context categories, else the first reques
 	assert.deepEqual(codex.segments.map(s => [s.label, s.tokens, s.how]), [['Instructions (AGENTS.md)', 800, 'estimate'], ['System prompt, tools and conversation', 49200, 'derived']])
 	assert.equal(x.xray({ agent: 'a', cli: 'claude', reported: { used: 180000, size: 200000 }, items: [], usesOf, covered: 0 }).waste[0].action.kind, 'compact')
 })
+
+test('only Claude Code transcripts are read: a .jsonl inside ~/.claude/projects, with .. resolved', () => {
+	const home = String.raw`C:\Users\me`
+	assert.ok(t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\C--w\a.jsonl`, home))
+	assert.ok(t.isTranscriptPath('c:/users/ME/.claude/projects/x/b.jsonl', home), 'Windows paths compare without case')
+	assert.ok(!t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\..\..\secret.jsonl`, home), '.. out of the folder')
+	assert.ok(!t.isTranscriptPath(String.raw`D:\x\.claude\projects\a.jsonl`, home), 'another .claude/projects')
+	assert.ok(!t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\a.txt`, home))
+	assert.ok(!t.isTranscriptPath('.claude/projects/a.jsonl', home), 'a relative path')
+	assert.ok(!t.isTranscriptPath(42, home))
+	assert.ok(t.isTranscriptPath('/home/me/.claude/projects/p/s.jsonl', '/home/me'))
+	assert.ok(!t.isTranscriptPath('/home/ME/.claude/projects/p/s.jsonl', '/home/me'), 'POSIX paths keep their case')
+})
+
+test('secrets are blanked before a prompt or a command is stored', () => {
+	assert.equal(f.redact('use sk-ant-REDACTED_TEST_KEY please'), 'use <secret> please')
+	assert.equal(f.redact('export GITHUB_TOKEN=ghp_REDACTED_TEST_TOKEN && gh pr list'), 'export GITHUB_TOKEN=<secret> && gh pr list')
+	assert.equal(f.redact('curl -H "Authorization: Bearer abcdefghijklmnop.qrst"'), 'curl -H "Authorization: Bearer <secret>"')
+	assert.equal(f.redact('DB_PASSWORD="hunter2 x" npm start'), 'DB_PASSWORD=<secret> npm start')
+	assert.equal(f.redact('login with password: hunter22'), 'login with password=<secret>')
+	assert.equal(f.redact("Don't use yarn, use npm."), "Don't use yarn, use npm.", 'ordinary text is untouched')
+})

@@ -265,3 +265,39 @@ export function mcpToolPrefix(server: string): string {
 export function isAxleHook(command: string): boolean {
 	return command === 'callback' || /flow-hook\.js|codex-hook\.js/.test(command);
 }
+
+/** A path with `.` and `..` resolved and `/` separators; undefined for a relative path. */
+function absoluteNorm(p: string): string | undefined {
+	const s = p.replace(/\\/g, '/');
+	const drive = /^[A-Za-z]:\//.exec(s)?.[0];
+	if (!drive && !s.startsWith('/')) {
+		return undefined;
+	}
+	const out: string[] = [];
+	for (const seg of s.slice(drive ? drive.length : 1).split('/')) {
+		if (seg === '..') {
+			out.pop();
+		} else if (seg && seg !== '.') {
+			out.push(seg);
+		}
+	}
+	return `${drive ? drive.toLowerCase() : '/'}${out.join('/')}`;
+}
+
+/**
+ * Whether `p` is a Claude Code transcript: a .jsonl file inside ~/.claude/projects once `..` is resolved. Paths come from
+ * other extensions' commands; only these files are ever read as transcripts.
+ */
+export function isTranscriptPath(p: unknown, home: string): p is string {
+	if (typeof p !== 'string' || !/\.jsonl$/i.test(p)) {
+		return false;
+	}
+	const file = absoluteNorm(p);
+	const root = absoluteNorm(`${home.replace(/\\/g, '/')}/.claude/projects`);
+	if (!file || !root) {
+		return false;
+	}
+	const windows = /^[a-z]:\//.test(root);
+	const [f, r] = windows ? [file.toLowerCase(), root.toLowerCase()] : [file, root];
+	return f.startsWith(`${r}/`);
+}

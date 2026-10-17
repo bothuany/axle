@@ -136,6 +136,12 @@
         "title": "Dismiss",
         "category": "Harness",
         "icon": "$(close)"
+      },
+      {
+        "command": "flowHarness.clearFriction",
+        "title": "Clear Friction Inbox Data",
+        "category": "Harness",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -159,6 +165,11 @@
           "command": "flowHarness.refresh",
           "when": "view == flowHarness.map",
           "group": "navigation@2"
+        },
+        {
+          "command": "flowHarness.clearFriction",
+          "when": "view == flowHarness.friction",
+          "group": "navigation@9"
         }
       ],
       "view/item/context": [

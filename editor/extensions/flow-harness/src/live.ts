@@ -11,8 +11,8 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { countEvent, countTranscript, coveredDays, loadActivity, prune, summary, WINDOW_DAYS, type ActivityData, type AgentEvent, type HookLike, type Summary } from './activity';
-import type { FailureRecord, PromptRecord } from './friction';
-import { parseTranscript, type TranscriptFacts } from './transcript';
+import { redact, type FailureRecord, type PromptRecord } from './friction';
+import { isTranscriptPath, parseTranscript, type TranscriptFacts } from './transcript';
 
 const ACTIVITY = 'flowHarness.activity';
 const FRICTION = 'flowHarness.friction';
@@ -22,6 +22,8 @@ const MAX_FAILURES = 300;
 const MAX_READ = 4 << 20;
 const BACKFILL_FILES = 60;
 const DAY = 86_400_000;
+/** Agents remembered by name, for the X-ray's session list. */
+const MAX_SESSIONS = 50;
 
 export interface FrictionData {
 	prompts: PromptRecord[];
@@ -49,6 +51,7 @@ export function eventOf(raw: unknown): AgentEvent | undefined {
 	}
 	const input: Record<string, string> = {};
 	if (r.input && typeof r.input === 'object') {
+		// The same fields flow-agent forwards (EVENT_INPUT in its agents.ts): keep the two lists in step.
 		for (const k of ['skill', 'subagent_type', 'command', 'file_path', 'path', 'url', 'pattern']) {
 			const v = str((r.input as Record<string, unknown>)[k], 600);
 			if (v !== undefined) {
@@ -57,10 +60,10 @@ export function eventOf(raw: unknown): AgentEvent | undefined {
 		}
 	}
 	return {
-		at: typeof r.at === 'number' ? r.at : Date.now(),
+		at: typeof r.at === 'number' && Number.isFinite(r.at) ? r.at : Date.now(),
 		agent: r.agent.slice(0, 200), cli: str(r.cli, 20) ?? 'claude', session: str(r.session, 200), event: r.event.slice(0, 60),
-		tool: str(r.tool, 200), input, error: str(r.error, 1000), durationMs: typeof r.durationMs === 'number' ? r.durationMs : undefined,
-		prompt: str(r.prompt, 2000), agentType: str(r.agentType, 200), transcript: str(r.transcript, 1000),
+		tool: str(r.tool, 200), input, error: str(r.error, 1000), durationMs: typeof r.durationMs === 'number' && Number.isFinite(r.durationMs) ? r.durationMs : undefined,
+		prompt: str(r.prompt, 2000), agentType: str(r.agentType, 200), transcript: isTranscriptPath(r.transcript, os.homedir()) ? r.transcript : undefined,
 	};
 }
 
@@ -126,7 +129,12 @@ export class Live implements vscode.Disposable {
 		if (!ev) {
 			return;
 		}
-		this.sessions.set(ev.agent, { agent: ev.agent, cli: ev.cli, transcript: ev.transcript ?? this.sessions.get(ev.agent)?.transcript, at: ev.at });
+		const transcript = ev.transcript ?? this.sessions.get(ev.agent)?.transcript;
+		this.sessions.delete(ev.agent);
+		this.sessions.set(ev.agent, { agent: ev.agent, cli: ev.cli, transcript, at: ev.at });
+		if (this.sessions.size > MAX_SESSIONS) {
+			this.sessions.delete(this.sessions.keys().next().value!);
+		}
 		countEvent(this.data, ev, this.hooks());
 		if (ev.event === 'UserPromptSubmit' && ev.prompt) {
 			this.addPrompt({ text: ev.prompt, at: ev.at, cli: ev.cli, session: ev.session });
@@ -142,13 +150,19 @@ export class Live implements vscode.Disposable {
 	}
 
 	private addPrompt(p: PromptRecord) {
-		this.friction.prompts.push({ ...p, text: p.text.slice(0, 1000) });
+		this.friction.prompts.push({ ...p, text: redact(p.text.slice(0, 1000)) });
 		this.friction.prompts.splice(0, Math.max(0, this.friction.prompts.length - MAX_PROMPTS));
 	}
 
 	private addFailure(f: FailureRecord) {
-		this.friction.failures.push({ ...f, subject: f.subject.slice(0, 300), error: f.error.slice(0, 600) });
+		this.friction.failures.push({ ...f, subject: redact(f.subject.slice(0, 300)), error: redact(f.error.slice(0, 600)) });
 		this.friction.failures.splice(0, Math.max(0, this.friction.failures.length - MAX_FAILURES));
+	}
+
+	/** Forgets every stored prompt, failure and dismissal (the usage counts stay). */
+	clearFriction() {
+		this.friction = { prompts: [], failures: [], dismissed: [] };
+		this.touch();
 	}
 
 	dismiss(id: string) {
@@ -164,6 +178,9 @@ export class Live implements vscode.Disposable {
 	 * came as events already; for a past one they come from here.
 	 */
 	ingest(file: string, live: boolean): Promise<void> {
+		if (!isTranscriptPath(file, os.homedir())) {
+			return Promise.resolve();
+		}
 		const running = this.reading.get(file);
 		if (running) {
 			return running;
@@ -224,6 +241,9 @@ export class Live implements vscode.Disposable {
 
 	/** Everything one transcript says, for the X-ray: its start (listings, memory, the first request) and its newest part. */
 	async facts(file: string): Promise<TranscriptFacts | undefined> {
+		if (!isTranscriptPath(file, os.homedir())) {
+			return undefined;
+		}
 		try {
 			const h = await fs.open(file, 'r');
 			let head: string;

@@ -6,6 +6,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { promises as fs } from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { itemKey } from './activity';
@@ -13,6 +14,7 @@ import { projectTranscriptDir, type Live } from './live';
 import { page } from './page';
 import type { Harness } from './scan';
 import { arrayAt, previewAndWrite } from './settings';
+import { isTranscriptPath } from './transcript';
 import { xray, type XrayModel } from './xraymodel';
 
 /** What flow-agent's dock sends for one agent: never a command, only what it knows about the session. */
@@ -32,8 +34,8 @@ function sessionOf(raw: unknown): XraySession | undefined {
 	return {
 		agent: r.agent.slice(0, 200),
 		cli: typeof r.cli === 'string' ? r.cli : 'claude',
-		// Only a Claude Code transcript is read: a .jsonl under ~/.claude/projects.
-		transcript: typeof r.transcript === 'string' && /\.jsonl$/i.test(r.transcript) && /[\\/]\.claude[\\/]projects[\\/]/.test(r.transcript) ? r.transcript : undefined,
+		// Only a Claude Code transcript is read: a .jsonl inside ~/.claude/projects, `..` resolved.
+		transcript: isTranscriptPath(r.transcript, os.homedir()) ? r.transcript : undefined,
 		usage: u && typeof u.used === 'number' && typeof u.size === 'number' ? { used: u.used, size: u.size } : undefined,
 	};
 }
@@ -57,7 +59,7 @@ export class XrayView implements vscode.Disposable {
 		}
 		this.session = s;
 		if (!this.panel) {
-			this.panel = vscode.window.createWebviewPanel('flowHarness.xray', 'Context X-ray', { viewColumn: vscode.ViewColumn.Active, preserveFocus: false }, { enableScripts: true });
+			this.panel = vscode.window.createWebviewPanel('flowHarness.xray', 'Context X-ray', { viewColumn: vscode.ViewColumn.Active, preserveFocus: false }, { enableScripts: true, localResourceRoots: [] });
 			this.panel.webview.html = this.html();
 			this.panel.onDidDispose(() => this.panel = undefined, null, this.disposables);
 			this.panel.webview.onDidReceiveMessage(m => void this.message(m), null, this.disposables);
@@ -102,17 +104,25 @@ export class XrayView implements vscode.Disposable {
 		});
 		this.panel.title = `Context X-ray: ${s.agent}`;
 		void this.panel.webview.postMessage({
-			type: 'data', model: this.model, hasTerminal: !!vscode.window.terminals.find(t => t.name === s.agent),
+			type: 'data', model: this.model, hasTerminal: !!this.terminal(),
 			transcript: s.transcript ? path.basename(s.transcript) : undefined,
 		});
 	}
 
-	private async message(m: { type?: unknown; index?: unknown }) {
+	/** The agent's own terminal: one open terminal of that name, or none when the name is missing or ambiguous. */
+	private terminal(): vscode.Terminal | undefined {
+		const s = this.session;
+		const open = s ? vscode.window.terminals.filter(t => t.name === s.agent && t.exitStatus === undefined) : [];
+		return open.length === 1 ? open[0] : undefined;
+	}
+
+	private async message(m: { type?: unknown; id?: unknown }) {
 		if (m.type === 'ready' || m.type === 'refresh') {
 			await this.render();
 			return;
 		}
-		const w = m.type === 'act' && typeof m.index === 'number' ? this.model?.waste[m.index] : undefined;
+		// By id, not position: a refresh between render and click must not turn the click into another action.
+		const w = m.type === 'act' && typeof m.id === 'string' ? this.model?.waste.find(x => x.id === m.id) : undefined;
 		const a = w?.action;
 		const h = this.harness();
 		if (!a) {
@@ -139,8 +149,7 @@ export class XrayView implements vscode.Disposable {
 
 	/** Types a slash command into the agent's terminal, only on a click, without taking focus from the X-ray. */
 	private async send(command: string) {
-		const s = this.session;
-		const terminal = s && vscode.window.terminals.find(t => t.name === s.agent);
+		const terminal = this.terminal();
 		if (!terminal) {
 			void vscode.window.showInformationMessage(`Run ${command} in the session yourself; Axle has no terminal for it.`);
 			return;
@@ -183,7 +192,7 @@ function render(d) {
 		const a = w.action;
 		const label = !a ? null : a.kind === 'open' ? 'Open' : a.kind === 'disable-mcp' ? 'Disable here…' : a.kind === 'measure' ? (d.hasTerminal ? 'Measure with /context' : null) : (d.hasTerminal ? 'Compact' : null);
 		waste.append(el('div', { class: 'card row' }, el('div', { class: 'grow' }, el('b', {}, w.title), ' ', howTag(w.how), el('div', { class: 'muted' }, w.detail)),
-			label ? el('button', { class: a.kind === 'disable-mcp' ? 'primary' : '', onclick: () => vscode.postMessage({ type: 'act', index: i }) }, label) : null));
+			label ? el('button', { class: a.kind === 'disable-mcp' ? 'primary' : '', onclick: () => vscode.postMessage({ type: 'act', id: w.id }) }, label) : null));
 	});
 }
 $('refresh').onclick = () => vscode.postMessage({ type: 'refresh' });

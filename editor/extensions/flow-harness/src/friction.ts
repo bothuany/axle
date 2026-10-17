@@ -231,3 +231,18 @@ process.stdin.on('end', () => {
 
 /** A file name for a guard script: `axle-guard-npm-test.mjs`. */
 export const guardFileName = (prefix: string) => `axle-guard-${prefix.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'command'}.mjs`;
+
+/**
+ * Secrets that end up in prompts and commands (a pasted token, `export API_KEY=…`) are blanked before anything is stored,
+ * so the inbox never keeps one on disk or shows one in a tooltip.
+ */
+export function redact(text: string): string {
+	return text
+		.replace(/\b(?:sk|pk|rk)-[A-Za-z0-9_-]{16,}/g, '<secret>')
+		.replace(/\b(?:ghp|gho|ghu|ghs|ghr|github_pat|glpat|xox[abpr])[-_][A-Za-z0-9_-]{16,}/g, '<secret>')
+		.replace(/\bAKIA[0-9A-Z]{16}\b/g, '<secret>')
+		.replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g, '<secret>')
+		.replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{12,}/gi, '$1 <secret>')
+		.replace(/\b([A-Za-z_][A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD|CREDENTIALS?))\s*[=:]\s*("[^"]*"|'[^']*'|\S+)/gi, '$1=<secret>')
+		.replace(/\b(password|passwd|pwd|token|secret|api[_-]?key)\s*[=:]\s*("[^"]*"|'[^']*'|\S+)/gi, '$1=<secret>');
+}

@@ -102,7 +102,7 @@ const MAX_TOUCHED = 40;
 /** The turn-end impact may take this long: Roslyn answers one request at a time. */
 const IMPACT_WAIT_MS = 9000;
 const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'Stop', 'SubagentStop', 'SessionEnd'];
-/** The tool input fields the harness map counts by (which skill, which subagent) and keeps as evidence (the command, the file). */
+/** The tool input fields the harness map counts by (which skill, which subagent) and keeps as evidence (the command, the file). flow-harness's live.ts keeps the same list: change both. */
 const EVENT_INPUT = ['skill', 'subagent_type', 'command', 'file_path', 'path', 'url', 'pattern'];
 /** Agents that never come back to a reloaded window (their terminal is gone) are dropped after this. */
 const ORPHAN_TTL_MS = 90_000;
@@ -915,7 +915,6 @@ export class Agents implements vscode.Disposable {
 		}
 	}
 
-	/** Opens the flow at `index` of an agent's turn impact (the dock sends an index, never an id of its own making). */
 	/**
 	 * The harness map counts what agents use (skills, subagents, MCP servers, hooks) and learns from what you keep
 	 * correcting and what keeps failing. It gets a bounded copy of each event, never waited for.
@@ -940,10 +939,13 @@ export class Agents implements vscode.Disposable {
 	xray(id: string) {
 		const s = this.sessions.get(id);
 		if (s) {
-			void Promise.resolve(vscode.commands.executeCommand('flowHarness.contextXray', { agent: s.name, cli: s.cli, transcript: s.transcript, usage: s.usage })).catch(() => undefined);
+			// A click asked for it: if the harness map cannot answer, say so instead of doing nothing.
+			void Promise.resolve(vscode.commands.executeCommand('flowHarness.contextXray', { agent: s.name, cli: s.cli, transcript: s.transcript, usage: s.usage }))
+				.catch(e => void vscode.window.showWarningMessage(`The context X-ray is not available: ${(e as Error).message ?? e}`));
 		}
 	}
 
+	/** Opens the flow at `index` of an agent's turn impact (the dock sends an index, never an id of its own making). */
 	openImpactFlow(id: string, index: number) {
 		const flow = this.sessions.get(id)?.impact?.flows[index];
 		if (flow) {
