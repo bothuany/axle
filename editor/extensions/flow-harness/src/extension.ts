@@ -10,6 +10,7 @@ import { costLabel, delta, loadCosts, tok, totals, totalsBefore, trackCosts, typ
 import { FrictionView } from './frictionView';
 import { HookStudio } from './hooks';
 import { Live } from './live';
+import { MemoryActions } from './memoryActions';
 import { PermissionInbox, type PermissionRequest } from './permissions';
 import { totalsBySource, unusedGap } from './gaps';
 import { scan, type Harness, type HarnessItem } from './scan';
@@ -32,6 +33,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const frictionView = vscode.window.createTreeView('flowHarness.friction', { treeDataProvider: friction });
 	const why = new WhyView(() => harness);
 	const xray = new XrayView(() => harness, live);
+	const memories = new MemoryActions(() => harness, () => void refresh());
 	const usageOf = (i: HarnessItem) => {
 		if (!isTracked(i)) {
 			return undefined;
@@ -43,6 +45,12 @@ export function activate(context: vscode.ExtensionContext) {
 			s.failures ? `${s.failures} failed` : '',
 			s.avgMs !== undefined ? `${s.avgMs} ms on average (measured)` : '',
 		].filter(Boolean).join(', ');
+		// A memory is recalled, not used; with no transcripts at all there is nothing to count from.
+		if (i.kind === 'memory') {
+			return live.sessionsSeen
+				? { label: usageLabel(s, covered, live.sessionsSeen).replace(/^used/, 'recalled').replace(/^never used/, 'never recalled').replace(/^no use/, 'not recalled'), detail: `Read by an agent ${s.week} times this week, ${s.month} in 30 days (Reads of the file in this folder's sessions, over ${covered} days).` }
+				: { label: 'recalls unknown', detail: 'No transcripts of this folder to count recalls from.' };
+		}
 		return {
 			label: usageLabel(s, covered, live.sessionsSeen) + (s.failures ? `, ${s.failures} failed` : ''),
 			detail: `Used ${facts}.${s.inferred ? ' Hook runs are counted from the events and matchers that fire them.' : ''} The counts cover ${covered} days and ${live.sessionsSeen} sessions of this project.`,
@@ -51,7 +59,7 @@ export function activate(context: vscode.ExtensionContext) {
 	tree.setUsage(usageOf);
 	// What each file costs, and the costs at the last scan, so an edit shows as before/after.
 	let costs = loadCosts(context.workspaceState.get('flowHarness.costs'));
-	const costKinds = new Set(['instructions', 'rules', 'skills', 'agents']);
+	const costKinds = new Set(['instructions', 'rules', 'skills', 'agents', 'memory']);
 	const trackHarnessCosts = (h: Harness) => {
 		const current: Record<string, Cost> = {};
 		for (const i of h.items.filter(x => costKinds.has(x.kind) && x.agents.includes('Claude'))) {
@@ -68,7 +76,7 @@ export function activate(context: vscode.ExtensionContext) {
 			return undefined;
 		}
 		const change = costs.changes[i.file];
-		const when = i.kind === 'skills' ? 'when the skill is used' : i.kind === 'agents' ? "in the subagent's own window when it is spawned" : 'when the agent works on files it covers';
+		const when = i.kind === 'memory' ? 'when an agent recalls it' : i.kind === 'skills' ? 'when the skill is used' : i.kind === 'agents' ? "in the subagent's own window when it is spawned" : 'when the agent works on files it covers';
 		return {
 			label: costLabel(c, change),
 			detail: [
@@ -119,6 +127,9 @@ export function activate(context: vscode.ExtensionContext) {
 			if (harness) {
 				markUnused(harness);
 				void live.backfill(harness.root);
+				// Looking names up can take seconds (the index, the language servers): the map shows first, the stale marks follow.
+				const scanned = harness;
+				void memories.checkStale(scanned).then(changed => changed && harness === scanned && tree.set(scanned)).catch(e => console.warn('flow-harness: memory check failed', e));
 			}
 			tree.set(harness);
 			budget.setHarness(harness);
@@ -222,6 +233,8 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('flowHarness.simulatePermission', (call: unknown, agent?: unknown) => typeof call === 'string' ? why.simulate(call, agent === 'Codex' ? 'Codex' : 'Claude') : undefined),
 		vscode.commands.registerCommand('flowHarness.applyProposal', (arg: unknown) => friction.apply(arg)),
 		vscode.commands.registerCommand('flowHarness.dismissProposal', (arg: unknown) => friction.dismiss(arg)),
+		vscode.commands.registerCommand('flowHarness.deleteMemory', (arg: unknown) => memories.delete(arg)),
+		vscode.commands.registerCommand('flowHarness.promoteMemory', (arg: unknown) => memories.promote(arg)),
 		vscode.commands.registerCommand('flowHarness.clearFriction', async () => {
 			const ok = await vscode.window.showWarningMessage('Forget the prompts and tool failures the friction inbox kept for this folder?', { modal: true, detail: 'Usage counts stay. Past transcripts are not read again unless they change.' }, 'Forget');
 			if (ok === 'Forget') {

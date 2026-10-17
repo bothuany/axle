@@ -77,7 +77,7 @@ module.exports = {
 			name: 'harness-logic-stays-off-vscode',
 			severity: 'error',
 			comment: 'The harness map\'s matching, counting, parsing and lint modules are tested under plain Node (flow-harness/test/*.test.mjs), so none of them may reach `vscode`, even through another file. scan.ts imports effective.ts, never the other way round.',
-			from: { path: '^editor/extensions/flow-harness/src/(permmatch|effective|transcript|activity|friction|xraymodel|lint|gaps|cost)\\.ts$' },
+			from: { path: '^editor/extensions/flow-harness/src/(permmatch|effective|transcript|activity|friction|xraymodel|lint|gaps|cost|memory)\\.ts$' },
 			to: { path: '^vscode$', reachable: true },
 		},
 		{

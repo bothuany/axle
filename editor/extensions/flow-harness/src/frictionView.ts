@@ -8,6 +8,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { appendLineReviewed } from './edits';
 import { correctionProposals, failureProposals, guardFileName, guardScript, type Evidence, type Proposal } from './friction';
 import type { Live } from './live';
 import { ruleFor, type PermissionInbox, type PermissionRequest } from './permissions';
@@ -193,18 +194,7 @@ export class FrictionView implements vscode.TreeDataProvider<Row> {
 			}
 			target = pick.label as typeof target;
 		}
-		const uri = vscode.Uri.file(path.join(root, target));
-		const edit = new vscode.WorkspaceEdit();
-		const meta = { needsConfirmation: true, label: `Add an instruction to ${target}`, description: 'From the friction inbox' };
-		const existing = await fs.readFile(uri.fsPath, 'utf8').catch(() => undefined);
-		if (existing === undefined) {
-			edit.createFile(uri, { ignoreIfExists: true, contents: new TextEncoder().encode(`# Project instructions\n\n- ${line}\n`) }, meta);
-		} else {
-			const doc = await vscode.workspace.openTextDocument(uri);
-			const end = doc.lineAt(doc.lineCount - 1).range.end;
-			edit.insert(uri, end, `${existing.endsWith('\n') || !existing ? '' : '\n'}- ${line}\n`, meta);
-		}
-		return vscode.workspace.applyEdit(edit, { isRefactoring: true });
+		return appendLineReviewed(root, target, `- ${line}`, `Add an instruction to ${target}`, 'From the friction inbox');
 	}
 
 	private async applyHook(root: string, p: Proposal, reason: string): Promise<boolean> {

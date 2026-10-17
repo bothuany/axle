@@ -198,8 +198,8 @@ export function itemKey(i: { kind: string; label: string; file: string; hook?: H
 }
 
 /** Items whose use can be seen: an always-on instruction file is read in every session, so a count says nothing about it. */
-export function isTracked(i: { kind: string; scope: string; paths?: string[]; hook?: HookLike }): boolean {
-	return i.kind === 'skills' || i.kind === 'agents' || i.kind === 'mcp' || (i.kind === 'hooks' && !!i.hook)
+export function isTracked(i: { kind: string; scope: string; paths?: string[]; hook?: HookLike; memory?: unknown }): boolean {
+	return (i.kind === 'memory' && !!i.memory) || i.kind === 'skills' || i.kind === 'agents' || i.kind === 'mcp' || (i.kind === 'hooks' && !!i.hook)
 		|| (i.kind === 'rules' && !!i.paths?.length) || (i.kind === 'instructions' && i.scope === 'directory');
 }
 
@@ -281,6 +281,11 @@ function countTool(data: ActivityData, tool: string, input: Record<string, unkno
 	const server = mcpServerOf(tool);
 	if (server) {
 		bump(data, mcpKey(server), at, { failure: failed });
+	}
+	// Reading one of Claude Code's memory files is how a session recalls it.
+	const file = typeof input.file_path === 'string' ? input.file_path : '';
+	if (tool === 'Read' && /[\\/]\.claude[\\/]projects[\\/][^\\/]+[\\/]memory[\\/][^\\/]+\.md$/i.test(file) && !failed) {
+		bump(data, ruleKey(file), at);
 	}
 }
 

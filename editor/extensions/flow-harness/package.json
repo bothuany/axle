@@ -142,6 +142,18 @@
         "title": "Clear Friction Inbox Data",
         "category": "Harness",
         "icon": "$(trash)"
+      },
+      {
+        "command": "flowHarness.promoteMemory",
+        "title": "Promote to CLAUDE.md…",
+        "category": "Harness",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "flowHarness.deleteMemory",
+        "title": "Delete Memory…",
+        "category": "Harness",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -197,6 +209,16 @@
           "command": "flowHarness.dismissProposal",
           "when": "view == flowHarness.friction && viewItem =~ /^friction.(proposal|grant)$/",
           "group": "inline@2"
+        },
+        {
+          "command": "flowHarness.promoteMemory",
+          "when": "view == flowHarness.map && viewItem == memory",
+          "group": "inline@1"
+        },
+        {
+          "command": "flowHarness.deleteMemory",
+          "when": "view == flowHarness.map && viewItem == memory",
+          "group": "inline@2"
         }
       ],
       "commandPalette": [
@@ -238,6 +260,14 @@
         },
         {
           "command": "flowHarness.dismissProposal",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.promoteMemory",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.deleteMemory",
           "when": "false"
         }
       ],

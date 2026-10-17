@@ -14,6 +14,7 @@ const GROUPS: { kind: Kind; label: string; icon: string; color: string; empty: s
 	{ kind: 'hooks', label: 'Hooks', icon: 'zap', color: 'flowHarness.hooks', empty: 'No hooks' },
 	{ kind: 'mcp', label: 'MCP servers', icon: 'plug', color: 'flowHarness.mcp', empty: 'No MCP servers in settings or .mcp.json' },
 	{ kind: 'permissions', label: 'Permission rules', icon: 'shield', color: 'flowHarness.permissions', empty: 'No allow or deny rules' },
+	{ kind: 'memory', label: 'Memory', icon: 'history', color: 'flowHarness.instructions', empty: 'No agent memory for this folder' },
 ];
 
 const SCOPE_LABEL = { user: 'you', project: 'repo', local: 'local', directory: 'folder' } as const;
@@ -123,7 +124,7 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 			t.iconPath = new vscode.ThemeIcon('circle-small-filled', new vscode.ThemeColor(GROUPS.find(g => g.kind === i.kind)!.color));
 		}
 		t.command = { title: 'Open', command: 'vscode.open', arguments: [vscode.Uri.file(i.file)] };
-		t.contextValue = i.hook ? 'hook' : `item.${i.kind}`;
+		t.contextValue = i.hook ? 'hook' : i.memory ? 'memory' : `item.${i.kind}`;
 		t.resourceUri = undefined;
 		(t as vscode.TreeItem & { item?: HarnessItem }).item = i;
 		return t;

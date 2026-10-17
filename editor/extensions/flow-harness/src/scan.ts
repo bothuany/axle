@@ -4,17 +4,18 @@
  *  scope each comes from, what it costs in context, and what looks broken.
  *--------------------------------------------------------------------------------------------*/
 
-import { promises as fs } from 'fs';
+import { promises as fs, statSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { globList } from './effective';
+import { parseIndex, parseMemory, projectKey, type Memory } from './memory';
 import { lint, ruleGlobs, type InstructionKind, type LintFile } from './lint';
 import { projectGaps, type Gap } from './gaps';
 import { gitIgnoredOf } from './ignored';
 
 export type Scope = 'user' | 'project' | 'local' | 'directory';
-export type Kind = 'instructions' | 'rules' | 'skills' | 'agents' | 'hooks' | 'mcp' | 'permissions';
+export type Kind = 'instructions' | 'rules' | 'skills' | 'agents' | 'hooks' | 'mcp' | 'permissions' | 'memory';
 export type Severity = 'error' | 'warning' | 'info';
 
 export interface Issue {
@@ -43,6 +44,8 @@ export interface HarnessItem {
 	line?: number;
 	/** Permission rules: allow / ask / deny. */
 	rule?: { effect: 'allow' | 'ask' | 'deny'; pattern: string };
+	/** Memory: the parsed topic file (its body is what the staleness check reads). */
+	memory?: Memory;
 	/** Path-scoped rules: the globs they apply to (empty for an always-on rule). */
 	paths?: string[];
 	agents: string[];
@@ -375,6 +378,55 @@ async function lintItems(items: HarnessItem[], root: string) {
 	}
 }
 
+/** Where Claude Code keeps its auto memory for a folder. */
+export const claudeMemoryDir = (root: string) => path.join(home, '.claude', 'projects', projectKey(root), 'memory');
+
+/**
+ * The agents' own memory for this folder, read only: Claude Code's MEMORY.md (loaded in every session) and its topic files
+ * (read when recalled), and Codex's ~/.codex/memories when there is one.
+ */
+async function memoryIn(items: HarnessItem[], root: string) {
+	const dir = claudeMemoryDir(root);
+	const indexFile = path.join(dir, 'MEMORY.md');
+	const indexText = await read(indexFile);
+	const index = indexText === undefined ? [] : parseIndex(indexText);
+	if (indexText !== undefined) {
+		const issues: Issue[] = index.filter(e => !/^https?:/.test(e.target)).map(e => ({ e, file: path.join(dir, e.target) }))
+			.filter(x => !existsSyncSafe(x.file)).map(({ e }) => ({ severity: 'warning' as const, message: `Points at ${e.target}, which does not exist`, line: e.line, fix: 'Delete the line, or restore the file' }));
+		items.push({ kind: 'memory', scope: 'user', label: 'MEMORY.md', detail: `Claude's memory index for this folder: ${index.length} entr${index.length === 1 ? 'y' : 'ies'}, loaded in every session`, file: indexFile, tokens: tokensOf(indexText), issues, agents: ['Claude'] });
+	}
+	for (const file of (await listDir(dir)).filter(f => /\.md$/i.test(f) && path.basename(f) !== 'MEMORY.md')) {
+		const text = await read(file);
+		if (text === undefined) {
+			continue;
+		}
+		const st = await fs.stat(file).catch(() => undefined);
+		const m = parseMemory(file, text);
+		const entry = index.find(e => path.basename(e.target) === path.basename(file));
+		m.indexLine = entry?.line;
+		m.modified ??= st?.mtimeMs;
+		const issues: Issue[] = entry || indexText === undefined ? [] : [{ severity: 'info', message: 'Not in MEMORY.md: Claude does not know it is there unless it lists the folder', fix: 'Add a line for it to MEMORY.md, or delete it' }];
+		items.push({ kind: 'memory', scope: 'user', label: m.name, detail: [m.type ?? 'memory', m.description].filter(Boolean).join(' · '), file, onDemand: tokensOf(text), issues, agents: ['Claude'], memory: m });
+	}
+	const codex = path.join(home, '.codex', 'memories');
+	for (const file of (await listDir(codex)).filter(f => /\.(md|txt|json)$/i.test(f))) {
+		const text = await read(file);
+		if (text !== undefined) {
+			const m = parseMemory(file, text);
+			m.modified ??= (await fs.stat(file).catch(() => undefined))?.mtimeMs;
+			items.push({ kind: 'memory', scope: 'user', label: m.name, detail: ['Codex', m.type, m.description].filter(Boolean).join(' · '), file, onDemand: tokensOf(text), issues: [], agents: ['Codex'], memory: m });
+		}
+	}
+}
+
+const existsSyncSafe = (p: string) => {
+	try {
+		return statSync(p).isFile();
+	} catch {
+		return false;
+	}
+};
+
 export async function scan(): Promise<Harness | undefined> {
 	somewhere.clear();
 	const folder = vscode.workspace.workspaceFolders?.[0];
@@ -413,6 +465,8 @@ export async function scan(): Promise<Harness | undefined> {
 	await agentsIn(items, path.join(root, '.claude', 'agents'), 'project');
 	await agentsIn(items, path.join(home, '.claude', 'agents'), 'user');
 
+	await memoryIn(items, root);
+
 	await settingsFile(items, root, path.join(home, '.claude', 'settings.json'), 'user');
 	await settingsFile(items, root, path.join(root, '.claude', 'settings.json'), 'project');
 	await settingsFile(items, root, path.join(root, '.claude', 'settings.local.json'), 'local');
@@ -425,6 +479,6 @@ export async function scan(): Promise<Harness | undefined> {
 	items.forEach(i => i.issues.forEach(x => counts[x.severity]++));
 	const gaps = projectGaps(items);
 	const score = Math.max(0, 100 - counts.error * 12 - counts.warning * 4 - counts.info - gaps.reduce((a, g) => a + g.cost, 0));
-	const claudeStartup = items.filter(i => i.agents.includes('Claude') && i.tokens && (i.kind === 'instructions' || i.kind === 'skills' || i.kind === 'agents' || i.kind === 'rules'));
+	const claudeStartup = items.filter(i => i.agents.includes('Claude') && i.tokens && (i.kind === 'instructions' || i.kind === 'skills' || i.kind === 'agents' || i.kind === 'rules' || i.kind === 'memory'));
 	return { root, items, score, counts, gaps, startupTokens: claudeStartup.reduce((a, i) => a + (i.tokens ?? 0), 0) };
 }

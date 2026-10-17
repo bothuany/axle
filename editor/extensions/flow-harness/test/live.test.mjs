@@ -340,3 +340,16 @@ test('the same prompt seen twice (an event and its transcript) is one prompt, no
 	assert.equal(f.correctionProposals(twice).length, 0)
 	assert.equal(f.correctionProposals([...twice, P("Don't use yarn, use npm.", 90000)]).length, 1)
 })
+
+test('reading a memory file counts as recalling it, from an event or a past transcript', () => {
+	const d = a.emptyActivity(NOW)
+	const file = String.raw`C:\Users\me\.claude\projects\C--w\memory\feedback_x.md`
+	a.countEvent(d, { at: NOW, agent: 'c', cli: 'claude', event: 'PostToolUse', tool: 'Read', input: { file_path: file } }, [])
+	a.countEvent(d, { at: NOW, agent: 'c', cli: 'claude', event: 'PostToolUse', tool: 'Read', input: { file_path: 'C:/w/src/a.ts' } }, [])
+	a.countTranscript(d, { ...t.parseTranscript([]), toolUses: [{ name: 'Read', input: { file_path: file.toLowerCase() } }] }, [], NOW, true)
+	const key = a.itemKey({ kind: 'memory', label: 'x', file })
+	assert.equal(a.summary(d, key, NOW).week, 2)
+	assert.equal(Object.keys(d.keys).length, 1, 'other reads are not memory')
+	assert.ok(a.isTracked({ kind: 'memory', scope: 'user', memory: {} }))
+	assert.ok(!a.isTracked({ kind: 'memory', scope: 'user' }), 'MEMORY.md is read every session; a count says nothing')
+})
