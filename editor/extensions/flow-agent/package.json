@@ -1,7 +1,7 @@
 {
   "name": "flow-agent",
   "displayName": "Axle Agents",
-  "description": "Claude Code and Codex in the native chat, over the Agent Client Protocol, using each repo's own harness.",
+  "description": "Agents in terminals (Claude Code, Codex or any agent CLI) with the Agents dock, using each repo's own harness; the chat panel over ACP behind a setting.",
   "version": "0.1.0",
   "publisher": "flow",
   "license": "MIT",

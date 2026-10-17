@@ -113,7 +113,7 @@ export class AskRouter implements vscode.Disposable {
 				? { label: '$(question) Ask every time', detail: 'Sets flow.agents.askTarget to "ask" for this workspace', act: 'ask' }
 				: { label: '$(pin) Remember my choice', detail: 'Sets flow.agents.askTarget to "remember" for this workspace', act: 'remember' });
 		}
-		const placeHolder = o.why ? `${o.why}. Choose where to send it; later questions go there too.` : 'Later questions go to the same place; change it with "Axle: Change Agent for Questions".';
+		const placeHolder = o.why ? `${o.why}. Choose where to send it; later questions go there too.` : 'Later questions go to the same place; change it with "Axle: Change Agent for Questions…".';
 		const pick = await vscode.window.showQuickPick(items, { title: o.title, placeHolder, ignoreFocusOut: true });
 		if (pick?.act) {
 			await vscode.workspace.getConfiguration('flow.agents').update('askTarget', pick.act, vscode.ConfigurationTarget.Workspace);
