@@ -68,8 +68,9 @@ export class WorktreeRows implements vscode.Disposable {
 		}
 		for (const s of sessions.values()) {
 			const c = this.counts.get(s.id);
-			// An ended agent commits nothing more: its counts are read once, and again only after a merge (which clears them).
-			const due = s.state === 'ended' ? !c : force || !c || now - c.at > REFRESH_MS;
+			// An ended agent commits nothing more: its counts are read once after it ended, and again only after a merge
+			// (which clears them).
+			const due = s.state === 'ended' ? !c || c.at < s.since : force || !c || now - c.at > REFRESH_MS;
 			if (s.worktree && !this.running.has(s.id) && due) {
 				void this.refresh(s.id, s.worktree);
 			}

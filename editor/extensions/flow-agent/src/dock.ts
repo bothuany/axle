@@ -244,7 +244,9 @@ function render() {
 		const sized = !!(s.usage && s.usage.size);
 		// Codex counts its share its own way (it leaves out a fixed baseline): the dock shows the figure the CLI shows.
 		const pct = sized ? Math.min(100, s.usage.percent ?? Math.round(s.usage.used / s.usage.size * 100)) : 0;
-		const state = s.state === 'working' || s.state === 'blocked' ? LABEL[s.state] + ' · ' + ago(s.since, Date.now()) : s.state === 'done' ? 'Done ' + ago(s.since, Date.now()) + ' ago' : LABEL[s.state];
+		// A question or approval it waits on says "Needs you" whatever the state (a startup prompt comes before any hook).
+		const waits = (s.attention === 'question' || s.attention === 'approval') && s.state !== 'ended';
+		const state = waits && s.state !== 'blocked' ? LABEL.blocked : s.state === 'working' || s.state === 'blocked' ? LABEL[s.state] + ' · ' + ago(s.since, Date.now()) : s.state === 'done' ? 'Done ' + ago(s.since, Date.now()) + ' ago' : LABEL[s.state];
 		const todos = s.todos.length ? '<div class="todos"><span class="segs">' + s.todos.slice(0, 12).map(t => '<span class="seg ' + esc(t.status) + '"></span>').join('') + '</span><span class="count">' + s.done + '/' + s.todos.length + '</span>' + (s.current ? '<span class="now">' + esc(s.current) + '</span>' : '') + '</div>' : '';
 		const impact = s.impact && s.impact.flows.length ? '<div class="impact"><b>This turn touched ' + (s.impact.flows.length + s.impact.more) + (s.impact.flows.length + s.impact.more === 1 ? ' flow' : ' flows') + ':</b> ' + s.impact.flows.map((f, i) => '<span class="flow" role="button" tabindex="0" data-flow="' + i + '" title="' + esc((f.via && f.via.length ? 'Through ' + f.via.join(', ') + '. ' : '') + 'Open this flow') + '">' + esc(f.label) + '</span>').join('') + (s.impact.more ? '<span>+' + s.impact.more + ' more</span>' : '') + '</div>' : '';
 		const kind = s.attention;
