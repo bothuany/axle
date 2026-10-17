@@ -51,6 +51,8 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				this.agents.openImpactFlow(m.id, m.index);
 			} else if (m.type === 'pr' && typeof m.id === 'string') {
 				this.agents.openPr(m.id);
+			} else if (m.type === 'xray' && typeof m.id === 'string') {
+				this.agents.xray(m.id);
 			} else if (m.type === 'forget' && typeof m.id === 'string') {
 				this.agents.forget(m.id);
 			} else if (m.type === 'compact' && typeof m.id === 'string') {
@@ -184,6 +186,7 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 .ctxline.warn .pct { color: var(--blocked); } .ctxline.full .pct { color: #ff6b7d; font-weight: 600; }
 .cmp { flex: none; margin-left: auto; padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font: 11px/1.5 var(--vscode-font-family, system-ui); cursor: pointer; }
 .cmp:hover { background: var(--hover); color: var(--text); }
+.ctx { cursor: pointer; overflow: visible; } .ctx::before { content: ''; position: absolute; left: 0; right: 0; top: -6px; bottom: -2px; } .ctx:hover i { filter: brightness(1.4); }
 .x { position: absolute; top: 6px; right: 6px; display: none; width: 18px; height: 18px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 18px; }
 .agent.ended:hover .x { display: block; }
 .agent:hover .state { visibility: hidden; }
@@ -297,7 +300,7 @@ function render() {
 			+ wt
 			+ ctx
 			+ meta
-			+ (sized ? '<div class="ctx' + level + '"><i style="width:' + pct + '%"></i></div>' : '')
+			+ (sized ? '<div class="ctx' + level + '" data-xray="1" title="Context ' + pct + '% full: what fills it?"><i style="width:' + pct + '%"></i></div>' : '')
 			+ '<span class="ren" data-rename="' + esc(s.id) + '" title="Rename" role="button">✎</span>'
 			+ (s.state === 'ended' ? '<span class="x"data-forget="' + esc(s.id) + '" title="Remove from list" role="button">×</span>' : '')
 			+ '</button>';
@@ -309,7 +312,8 @@ function render() {
 		const cp = e.target.closest('[data-compact]');
 		const wa = e.target.closest('[data-wt]');
 		const pr = e.target.closest('[data-pr]');
-		vscode.postMessage(wa ? { type: 'wt', id: b.dataset.id, action: wa.dataset.wt } : pr ? { type: 'pr', id: b.dataset.id } : cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : { type: 'show', id: b.dataset.id });
+		const xr = e.target.closest('[data-xray]');
+		vscode.postMessage(wa ? { type: 'wt', id: b.dataset.id, action: wa.dataset.wt } : pr ? { type: 'pr', id: b.dataset.id } : cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : xr ? { type: 'xray', id: b.dataset.id } : { type: 'show', id: b.dataset.id });
 	});
 }
 document.querySelectorAll('.new button').forEach(b => b.onclick = () => vscode.postMessage(b.dataset.cli === 'pick' ? { type: 'pick' } : { type: 'new', cli: b.dataset.cli }));

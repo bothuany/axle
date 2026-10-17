@@ -14,6 +14,7 @@ const GROUPS: { kind: Kind; label: string; icon: string; color: string; empty: s
 	{ kind: 'hooks', label: 'Hooks', icon: 'zap', color: 'flowHarness.hooks', empty: 'No hooks' },
 	{ kind: 'mcp', label: 'MCP servers', icon: 'plug', color: 'flowHarness.mcp', empty: 'No MCP servers in settings or .mcp.json' },
 	{ kind: 'permissions', label: 'Permission rules', icon: 'shield', color: 'flowHarness.permissions', empty: 'No allow or deny rules' },
+	{ kind: 'memory', label: 'Memory', icon: 'history', color: 'flowHarness.instructions', empty: 'No agent memory for this folder' },
 ];
 
 const SCOPE_LABEL = { user: 'you', project: 'repo', local: 'local', directory: 'folder' } as const;
@@ -26,6 +27,21 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 	private readonly changed = new vscode.EventEmitter<void>();
 	readonly onDidChangeTreeData = this.changed.event;
 	private harness: Harness | undefined;
+	/** How often an item was used lately ("used 12× this week"), and the details for its tooltip; undefined where use cannot be seen. */
+	private usage: ((i: HarnessItem) => { label: string; detail: string } | undefined) | undefined;
+
+	/** What an item's file costs and how that changed ("710 tok (was 1.2k)"), and a sentence for its tooltip. */
+	private cost: ((i: HarnessItem) => { label: string; detail: string } | undefined) | undefined;
+
+	setCost(cost: (i: HarnessItem) => { label: string; detail: string } | undefined) {
+		this.cost = cost;
+		this.changed.fire();
+	}
+
+	setUsage(usage: (i: HarnessItem) => { label: string; detail: string } | undefined) {
+		this.usage = usage;
+		this.changed.fire();
+	}
 
 	set(h: Harness | undefined) {
 		this.harness = h;
@@ -59,11 +75,12 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 			const g = GROUPS.find(x => x.kind === node.kind)!;
 			const items = this.harness!.items.filter(i => i.kind === node.kind);
 			const tokens = items.reduce((a, i) => a + (i.agents.includes('Claude') ? i.tokens ?? 0 : 0), 0);
+			const onDemand = items.reduce((a, i) => a + (i.agents.includes('Claude') ? i.onDemand ?? 0 : 0), 0);
 			const problems = items.reduce((a, i) => a + i.issues.filter(x => x.severity !== 'info').length, 0);
 			const t = new vscode.TreeItem(g.label, items.length ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
 			t.iconPath = new vscode.ThemeIcon(g.icon, new vscode.ThemeColor(g.color));
 			t.description = items.length
-				? [String(items.length), tokens ? tok(tokens) : '', problems ? `${problems} to fix` : ''].filter(Boolean).join('  ')
+				? [String(items.length), tokens ? tok(tokens) : '', onDemand ? `+${tok(onDemand).replace(' tok', '')} on demand` : '', problems ? `${problems} to fix` : ''].filter(Boolean).join('  ')
 				: g.empty;
 			t.contextValue = `group.${g.kind}`;
 			if (problems) {
@@ -74,6 +91,9 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 		if (node.type === 'issue') {
 			const issue = node.item.issues[node.index];
 			const t = new vscode.TreeItem(issue.message);
+			if (issue.fix) {
+				t.tooltip = new vscode.MarkdownString(`${issue.message}\n\n**Fix:** ${issue.fix}`);
+			}
 			t.iconPath = new vscode.ThemeIcon(issue.severity === 'error' ? 'error' : issue.severity === 'warning' ? 'warning' : 'info',
 				new vscode.ThemeColor(issue.severity === 'error' ? 'errorForeground' : issue.severity === 'warning' ? 'editorWarning.foreground' : 'descriptionForeground'));
 			t.command = { title: 'Open', command: 'vscode.open', arguments: [vscode.Uri.file(node.item.file), { selection: new vscode.Range(issue.line ?? 0, 0, issue.line ?? 0, 0) }] };
@@ -82,10 +102,18 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 		const i = node.item;
 		const t = new vscode.TreeItem(i.label, i.issues.length ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
 		const sev = worst(i);
-		t.description = [SCOPE_LABEL[i.scope], i.kind === 'hooks' || i.kind === 'permissions' ? i.detail : tok(i.tokens)].filter(Boolean).join('  ');
-		const tip = new vscode.MarkdownString(`**${i.label}**  \n${i.detail}\n\n${i.agents.join(', ')} · ${i.scope} scope${i.tokens ? ` · about ${i.tokens.toLocaleString()} tokens per session` : ''}\n\n\`${i.file}\``);
+		const used = this.usage?.(i);
+		const cost = this.cost?.(i);
+		t.description = [SCOPE_LABEL[i.scope], i.kind === 'hooks' || i.kind === 'permissions' ? i.detail : cost?.label ?? tok(i.tokens), used?.label].filter(Boolean).join('  ');
+		const tip = new vscode.MarkdownString(`**${i.label}**  \n${i.detail}\n\n${i.agents.join(', ')} · ${i.scope} scope${!cost && i.tokens ? ` · about ${i.tokens.toLocaleString()} tokens per session` : ''}\n\n\`${i.file}\``);
 		if (i.hook) {
 			tip.appendMarkdown(`\n\n\`\`\`sh\n${i.hook.command}\n\`\`\``);
+		}
+		if (cost) {
+			tip.appendMarkdown(`\n\n${cost.detail}`);
+		}
+		if (used) {
+			tip.appendMarkdown(`\n\n${used.detail}`);
 		}
 		t.tooltip = tip;
 		if (sev) {
@@ -96,7 +124,7 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 			t.iconPath = new vscode.ThemeIcon('circle-small-filled', new vscode.ThemeColor(GROUPS.find(g => g.kind === i.kind)!.color));
 		}
 		t.command = { title: 'Open', command: 'vscode.open', arguments: [vscode.Uri.file(i.file)] };
-		t.contextValue = i.hook ? 'hook' : `item.${i.kind}`;
+		t.contextValue = i.hook ? 'hook' : i.memory ? 'memory' : `item.${i.kind}`;
 		t.resourceUri = undefined;
 		(t as vscode.TreeItem & { item?: HarnessItem }).item = i;
 		return t;

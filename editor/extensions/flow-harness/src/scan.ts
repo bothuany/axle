@@ -4,15 +4,18 @@
  *  scope each comes from, what it costs in context, and what looks broken.
  *--------------------------------------------------------------------------------------------*/
 
-import { promises as fs } from 'fs';
+import { promises as fs, statSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { globList } from './effective';
+import { parseIndex, parseMemory, projectKey, type Memory } from './memory';
+import { lint, ruleGlobs, type InstructionKind, type LintFile } from './lint';
 import { projectGaps, type Gap } from './gaps';
 import { gitIgnoredOf } from './ignored';
 
 export type Scope = 'user' | 'project' | 'local' | 'directory';
-export type Kind = 'instructions' | 'rules' | 'skills' | 'agents' | 'hooks' | 'mcp' | 'permissions';
+export type Kind = 'instructions' | 'rules' | 'skills' | 'agents' | 'hooks' | 'mcp' | 'permissions' | 'memory';
 export type Severity = 'error' | 'warning' | 'info';
 
 export interface Issue {
@@ -20,6 +23,8 @@ export interface Issue {
 	message: string;
 	/** 0-based line in `file`, when the problem is on a line. */
 	line?: number;
+	/** What to do about it, from the lint. */
+	fix?: string;
 }
 
 export interface HarnessItem {
@@ -28,13 +33,21 @@ export interface HarnessItem {
 	label: string;
 	detail: string;
 	file: string;
+	/** Tokens read only when they apply (a folder's CLAUDE.md, a path-scoped rule, a skill's or subagent's body). Estimates, like `tokens`. */
+	onDemand?: number;
 	/** Tokens this costs in every session (memory files, skill descriptions); undefined when unknown. */
 	tokens?: number;
 	issues: Issue[];
 	/** Hooks: what to run and when. */
 	hook?: { event: string; matcher?: string; command: string; settingsFile: string };
+	/** Hooks and permission rules: the 0-based line they are written on in their settings file. */
+	line?: number;
 	/** Permission rules: allow / ask / deny. */
 	rule?: { effect: 'allow' | 'ask' | 'deny'; pattern: string };
+	/** Memory: the parsed topic file (its body is what the staleness check reads). */
+	memory?: Memory;
+	/** Path-scoped rules: the globs they apply to (empty for an always-on rule). */
+	paths?: string[];
 	agents: string[];
 }
 
@@ -160,7 +173,7 @@ async function memoryFile(items: HarnessItem[], root: string, file: string, scop
 	if (lines > 300) {
 		issues.push({ severity: 'info', message: `${lines} lines: costs about ${tokens.toLocaleString()} tokens in every session` });
 	}
-	items.push({ kind: 'instructions', scope, label: show(root, file), detail: where, file, tokens: scope === 'directory' ? undefined : tokens, issues, agents });
+	items.push({ kind: 'instructions', scope, label: show(root, file), detail: where, file, tokens: scope === 'directory' ? undefined : tokens, onDemand: scope === 'directory' ? tokens : undefined, issues, agents });
 }
 
 interface HookEntry { matcher?: string; hooks?: { type?: string; command?: string }[] }
@@ -236,13 +249,14 @@ async function settingsFile(items: HarnessItem[], root: string, file: string, sc
 					detail: `${event}${entry.matcher ? ` · ${entry.matcher}` : ''}`,
 					file, issues, agents: ['Claude'],
 					hook: { event, matcher: entry.matcher, command: h.command, settingsFile: file },
+					line: lineOf(h.command.slice(0, 60).replace(/"/g, '\\"')),
 				});
 			}
 		}
 	}
 	for (const effect of ['allow', 'ask', 'deny'] as const) {
 		for (const pattern of s.permissions?.[effect] ?? []) {
-			items.push({ kind: 'permissions', scope, label: pattern, detail: effect, file, issues: [], agents: ['Claude'], rule: { effect, pattern } });
+			items.push({ kind: 'permissions', scope, label: pattern, detail: effect, file, issues: [], agents: ['Claude'], rule: { effect, pattern }, line: lineOf(JSON.stringify(pattern)) });
 		}
 	}
 	for (const name of Object.keys(s.mcpServers ?? {})) {
@@ -263,14 +277,18 @@ async function skillsIn(items: HarnessItem[], dir: string, scope: Scope, agents:
 			issues.push({ severity: 'warning', message: 'No description: the agent cannot tell when to use this skill', line: 0 });
 		}
 		// Only name + description sit in context until the skill is used.
-		items.push({ kind: 'skills', scope, label: fm.name || path.basename(d), detail: fm.description ?? '', file, tokens: tokensOf(`${fm.name ?? ''} ${fm.description ?? ''}`), issues, agents });
+		const listed = tokensOf(`${fm.name ?? ''} ${fm.description ?? ''}`);
+		items.push({ kind: 'skills', scope, label: fm.name || path.basename(d), detail: fm.description ?? '', file, tokens: listed, onDemand: Math.max(0, tokensOf(text) - listed), issues, agents });
 	}
 }
 
 async function agentsIn(items: HarnessItem[], dir: string, scope: Scope) {
 	for (const file of (await listDir(dir)).filter(f => f.endsWith('.md'))) {
-		const fm = frontMatter(await read(file) ?? '');
-		items.push({ kind: 'agents', scope, label: fm.name || path.basename(file, '.md'), detail: fm.description ?? '', file, tokens: tokensOf(`${fm.name ?? ''} ${fm.description ?? ''}`), issues: [], agents: ['Claude'] });
+		const text = await read(file) ?? '';
+		const fm = frontMatter(text);
+		const listed = tokensOf(`${fm.name ?? ''} ${fm.description ?? ''}`);
+		// The body is the subagent's own prompt: it fills the subagent's window when spawned, not the main one.
+		items.push({ kind: 'agents', scope, label: fm.name || path.basename(file, '.md'), detail: fm.description ?? '', file, tokens: listed, onDemand: Math.max(0, tokensOf(text) - listed), issues: [], agents: ['Claude'] });
 	}
 }
 
@@ -280,7 +298,7 @@ async function rulesIn(items: HarnessItem[], root: string, dir: string, scope: S
 		const text = await read(file) ?? '';
 		const fm = frontMatter(text);
 		const always = fm.alwaysApply === 'true' || !fm[globKey];
-		items.push({ kind: 'rules', scope, label: path.relative(dir, file), detail: always ? 'Every file' : `Files matching ${fm[globKey]}`, file, tokens: always ? tokensOf(text) : undefined, issues: await brokenPaths(file, text, root), agents });
+		items.push({ kind: 'rules', scope, label: path.relative(dir, file), detail: always ? 'Every file' : `Files matching ${fm[globKey]}`, file, tokens: always ? tokensOf(text) : undefined, onDemand: always ? undefined : tokensOf(text), issues: await brokenPaths(file, text, root), agents, paths: always ? [] : globList(fm[globKey]) });
 	}
 }
 
@@ -318,6 +336,97 @@ function conflicts(items: HarnessItem[]) {
 	}
 }
 
+/** Which lint rules apply to an item's file. */
+function lintKind(i: HarnessItem): InstructionKind | undefined {
+	const base = path.basename(i.file).toLowerCase();
+	if (i.kind === 'instructions') {
+		return base === 'agents.md' ? 'agents-md' : base === 'copilot-instructions.md' ? 'copilot' : 'claude-md';
+	}
+	if (i.kind === 'rules') {
+		return i.agents.includes('Cursor') ? 'cursor-rule' : 'claude-rule';
+	}
+	return i.kind === 'skills' ? 'skill' : i.kind === 'agents' ? 'agent' : undefined;
+}
+
+/** The harness lint (lint.ts) over what the scan found; each finding becomes an issue on the item whose file (and line) it names. */
+async function lintItems(items: HarnessItem[], root: string) {
+	const seen = new Set<string>();
+	const files: LintFile[] = [];
+	for (const i of items) {
+		const kind = lintKind(i);
+		if (kind && !seen.has(i.file)) {
+			seen.add(i.file);
+			files.push({ file: i.file, label: show(root, i.file), kind, text: await read(i.file) ?? '' });
+		}
+	}
+	// Listing the project is only worth it when some rule is scoped to globs.
+	const scoped = files.some(f => (f.kind === 'claude-rule' || f.kind === 'cursor-rule') && ruleGlobs(f).length);
+	const limit = 20_000;
+	const listed = scoped ? await vscode.workspace.findFiles('**/*', '{**/node_modules/**,**/.git/**,**/.claude/worktrees/**}', limit) : [];
+	const findings = lint({
+		files,
+		hooks: items.filter(i => i.hook).map(i => ({ ...i.hook!, line: i.line ?? 0 })),
+		rules: items.filter(i => i.rule).map(i => ({ ...i.rule!, scope: i.scope === 'directory' ? 'project' : i.scope, file: i.file, line: i.line ?? 0 })),
+		projectFiles: scoped ? listed.map(u => path.relative(root, u.fsPath).split(path.sep).join('/')) : undefined,
+		projectFilesTruncated: listed.length >= limit,
+		cwd: root, home,
+	});
+	for (const f of findings) {
+		const here = items.filter(i => i.file === f.file);
+		const item = here.find(i => i.line === f.line) ?? here[0];
+		item?.issues.push({ severity: f.severity, message: f.message, line: f.line, fix: f.fix });
+	}
+}
+
+/** Where Claude Code keeps its auto memory for a folder. */
+export const claudeMemoryDir = (root: string) => path.join(home, '.claude', 'projects', projectKey(root), 'memory');
+
+/**
+ * The agents' own memory for this folder, read only: Claude Code's MEMORY.md (loaded in every session) and its topic files
+ * (read when recalled), and Codex's ~/.codex/memories when there is one.
+ */
+async function memoryIn(items: HarnessItem[], root: string) {
+	const dir = claudeMemoryDir(root);
+	const indexFile = path.join(dir, 'MEMORY.md');
+	const indexText = await read(indexFile);
+	const index = indexText === undefined ? [] : parseIndex(indexText);
+	if (indexText !== undefined) {
+		const issues: Issue[] = index.filter(e => !/^https?:/.test(e.target)).map(e => ({ e, file: path.join(dir, e.target) }))
+			.filter(x => !existsSyncSafe(x.file)).map(({ e }) => ({ severity: 'warning' as const, message: `Points at ${e.target}, which does not exist`, line: e.line, fix: 'Delete the line, or restore the file' }));
+		items.push({ kind: 'memory', scope: 'user', label: 'MEMORY.md', detail: `Claude's memory index for this folder: ${index.length} entr${index.length === 1 ? 'y' : 'ies'}, loaded in every session`, file: indexFile, tokens: tokensOf(indexText), issues, agents: ['Claude'] });
+	}
+	for (const file of (await listDir(dir)).filter(f => /\.md$/i.test(f) && path.basename(f) !== 'MEMORY.md')) {
+		const text = await read(file);
+		if (text === undefined) {
+			continue;
+		}
+		const st = await fs.stat(file).catch(() => undefined);
+		const m = parseMemory(file, text);
+		const entry = index.find(e => path.basename(e.target) === path.basename(file));
+		m.indexLine = entry?.line;
+		m.modified ??= st?.mtimeMs;
+		const issues: Issue[] = entry || indexText === undefined ? [] : [{ severity: 'info', message: 'Not in MEMORY.md: Claude does not know it is there unless it lists the folder', fix: 'Add a line for it to MEMORY.md, or delete it' }];
+		items.push({ kind: 'memory', scope: 'user', label: m.name, detail: [m.type ?? 'memory', m.description].filter(Boolean).join(' · '), file, onDemand: tokensOf(text), issues, agents: ['Claude'], memory: m });
+	}
+	const codex = path.join(home, '.codex', 'memories');
+	for (const file of (await listDir(codex)).filter(f => /\.(md|txt|json)$/i.test(f))) {
+		const text = await read(file);
+		if (text !== undefined) {
+			const m = parseMemory(file, text);
+			m.modified ??= (await fs.stat(file).catch(() => undefined))?.mtimeMs;
+			items.push({ kind: 'memory', scope: 'user', label: m.name, detail: ['Codex', m.type, m.description].filter(Boolean).join(' · '), file, onDemand: tokensOf(text), issues: [], agents: ['Codex'], memory: m });
+		}
+	}
+}
+
+const existsSyncSafe = (p: string) => {
+	try {
+		return statSync(p).isFile();
+	} catch {
+		return false;
+	}
+};
+
 export async function scan(): Promise<Harness | undefined> {
 	somewhere.clear();
 	const folder = vscode.workspace.workspaceFolders?.[0];
@@ -333,6 +442,7 @@ export async function scan(): Promise<Harness | undefined> {
 	await memoryFile(items, root, path.join(root, 'CLAUDE.md'), 'project', ['Claude'], 'Loaded in every session');
 	await memoryFile(items, root, path.join(root, 'CLAUDE.local.md'), 'local', ['Claude'], 'Yours only, not committed');
 	await memoryFile(items, root, path.join(root, 'AGENTS.md'), 'project', ['Codex', 'Cursor'], 'Loaded in every session');
+	await memoryFile(items, root, path.join(root, '.github', 'copilot-instructions.md'), 'project', ['Copilot'], 'Copilot reads it in every chat');
 	const found = await vscode.workspace.findFiles('**/{CLAUDE,AGENTS}.md', '{**/node_modules/**,**/.git/**,**/bin/**,**/obj/**,**/.claude/worktrees/**}', 200);
 	// Git answers with the paths as it was given them.
 	const ignored = await gitIgnoredOf(root, found.map(u => u.fsPath));
@@ -355,17 +465,20 @@ export async function scan(): Promise<Harness | undefined> {
 	await agentsIn(items, path.join(root, '.claude', 'agents'), 'project');
 	await agentsIn(items, path.join(home, '.claude', 'agents'), 'user');
 
+	await memoryIn(items, root);
+
 	await settingsFile(items, root, path.join(home, '.claude', 'settings.json'), 'user');
 	await settingsFile(items, root, path.join(root, '.claude', 'settings.json'), 'project');
 	await settingsFile(items, root, path.join(root, '.claude', 'settings.local.json'), 'local');
 	await mcpJson(items, root, path.join(root, '.mcp.json'), 'project');
 
 	conflicts(items);
+	await lintItems(items, root);
 
 	const counts: Record<Severity, number> = { error: 0, warning: 0, info: 0 };
 	items.forEach(i => i.issues.forEach(x => counts[x.severity]++));
 	const gaps = projectGaps(items);
 	const score = Math.max(0, 100 - counts.error * 12 - counts.warning * 4 - counts.info - gaps.reduce((a, g) => a + g.cost, 0));
-	const claudeStartup = items.filter(i => i.agents.includes('Claude') && i.tokens && (i.kind === 'instructions' || i.kind === 'skills' || i.kind === 'agents' || i.kind === 'rules'));
+	const claudeStartup = items.filter(i => i.agents.includes('Claude') && i.tokens && (i.kind === 'instructions' || i.kind === 'skills' || i.kind === 'agents' || i.kind === 'rules' || i.kind === 'memory'));
 	return { root, items, score, counts, gaps, startupTokens: claudeStartup.reduce((a, i) => a + (i.tokens ?? 0), 0) };
 }

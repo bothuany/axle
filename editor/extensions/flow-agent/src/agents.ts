@@ -104,11 +104,15 @@ interface HookPayload {
 	tool_response?: Record<string, unknown>;
 	notification_type?: string;
 	message?: string;
-	/** StopFailure: the error code, and what the API said. */
+	/** StopFailure: the error code, and what the API said; PostToolUseFailure: what went wrong. */
 	error?: string;
 	error_details?: string;
 	/** Stop: the reply the turn ended on. */
 	last_assistant_message?: string;
+	/** PostToolUseFailure: how long the tool ran. */
+	duration_ms?: number;
+	/** SubagentStop: which subagent finished. */
+	agent_type?: string;
 }
 
 const AGENT = 'Claude Code (terminal)';
@@ -122,7 +126,9 @@ const PRE_TOOLS = `${EDIT_TOOLS}|ExitPlanMode|AskUserQuestion`;
 const MAX_TOUCHED = 40;
 /** The turn-end impact may take this long: Roslyn answers one request at a time. */
 const IMPACT_WAIT_MS = 9000;
-const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'Stop', 'StopFailure', 'SessionEnd'];
+const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'Stop', 'StopFailure', 'SubagentStop', 'SessionEnd'];
+/** The tool input fields the harness map counts by (which skill, which subagent) and keeps as evidence (the command, the file). flow-harness's live.ts keeps the same list: change both. */
+const EVENT_INPUT = ['skill', 'subagent_type', 'command', 'file_path', 'path', 'url', 'pattern'];
 /** Agents that never come back to a reloaded window (their terminal is gone) are dropped after this. */
 const ORPHAN_TTL_MS = 90_000;
 /** How long after a failing exit code a SessionEnd may still come, making it a quit rather than a crash. */
@@ -936,6 +942,7 @@ export class Agents implements vscode.Disposable {
 			this.unwatch(s.id);
 			this.watchTranscript(s);
 		}
+		this.forwardEvent(s, p);
 		const was = s.state;
 		const set = (state: AgentState, activity?: string) => {
 			if (state !== s.state) {
@@ -1174,6 +1181,36 @@ export class Agents implements vscode.Disposable {
 	/** Closes an agent's terminal (before its worktree is removed: a shell inside the folder keeps it busy on Windows). */
 	closeTerminal(id: string) {
 		this.terminals.get(id)?.dispose();
+	}
+
+	/**
+	 * The harness map counts what agents use (skills, subagents, MCP servers, hooks) and learns from what you keep
+	 * correcting and what keeps failing. It gets a bounded copy of each event, never waited for.
+	 */
+	private forwardEvent(s: AgentSession, p: HookPayload) {
+		const input: Record<string, string> = {};
+		for (const k of EVENT_INPUT) {
+			const v = p.tool_input?.[k];
+			if (typeof v === 'string') {
+				input[k] = v.slice(0, 600);
+			}
+		}
+		void Promise.resolve(vscode.commands.executeCommand('flowHarness.recordEvent', {
+			at: Date.now(), agent: s.name, cli: s.cli, session: p.session_id, event: p.hook_event_name, tool: p.tool_name, input,
+			error: typeof p.error === 'string' ? p.error.slice(0, 1000) : undefined, durationMs: p.duration_ms,
+			prompt: p.hook_event_name === 'UserPromptSubmit' ? p.prompt?.slice(0, 2000) : undefined,
+			agentType: p.agent_type, transcript: s.transcript,
+		})).catch(() => undefined);
+	}
+
+	/** The context X-ray of one agent, in the harness map: it reads the agent's transcript and the usage reported last. */
+	xray(id: string) {
+		const s = this.sessions.get(id);
+		if (s) {
+			// A click asked for it: if the harness map cannot answer, say so instead of doing nothing.
+			void Promise.resolve(vscode.commands.executeCommand('flowHarness.contextXray', { agent: s.name, cli: s.cli, transcript: s.transcript, usage: s.usage }))
+				.catch(e => void vscode.window.showWarningMessage(`The context X-ray is not available: ${(e as Error).message ?? e}`));
+		}
 	}
 
 	/** Opens the flow at `index` of an agent's turn impact (the dock sends an index, never an id of its own making). */

@@ -5,13 +5,20 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { isTracked, itemKey, usageLabel, type HookLike } from './activity';
 import { ContextBudget, UsageLimits } from './context';
+import { costLabel, delta, loadCosts, tok, totals, totalsBefore, trackCosts, type Cost } from './cost';
+import { FrictionView } from './frictionView';
 import { HookStudio } from './hooks';
+import { Live } from './live';
+import { MemoryActions } from './memoryActions';
 import { PermissionInbox, type PermissionRequest } from './permissions';
-import { totalsBySource } from './gaps';
-import { scan, type Harness } from './scan';
+import { totalsBySource, unusedGap } from './gaps';
+import { scan, type Harness, type HarnessItem } from './scan';
 import { registerPreviewProvider } from './settings';
 import { HarnessTree, itemOf } from './tree';
+import { WhyView } from './why';
+import { XrayView } from './xray';
 
 export function activate(context: vscode.ExtensionContext) {
 	let harness: Harness | undefined;
@@ -23,6 +30,95 @@ export function activate(context: vscode.ExtensionContext) {
 	const inbox = new PermissionInbox(() => harness?.root, () => void refresh());
 	const inboxView = vscode.window.createTreeView('flowHarness.permissions', { treeDataProvider: inbox });
 	const diagnostics = vscode.languages.createDiagnosticCollection('harness');
+	const live = new Live(context.workspaceState, () => (harness?.items ?? []).flatMap(i => i.hook ? [i.hook as HookLike] : []));
+	const friction = new FrictionView(live, inbox, () => harness);
+	const frictionView = vscode.window.createTreeView('flowHarness.friction', { treeDataProvider: friction });
+	const why = new WhyView(() => harness);
+	const xray = new XrayView(() => harness, live);
+	const memories = new MemoryActions(() => harness, () => void refresh());
+	const usageOf = (i: HarnessItem) => {
+		if (!isTracked(i)) {
+			return undefined;
+		}
+		const s = live.summary(itemKey(i));
+		const covered = live.covered;
+		const facts = [
+			`${s.week} this week, ${s.month} in 30 days`,
+			s.failures ? `${s.failures} failed` : '',
+			s.avgMs !== undefined ? `${s.avgMs} ms on average (measured)` : '',
+		].filter(Boolean).join(', ');
+		// A memory is recalled, not used; with no transcripts at all there is nothing to count from.
+		if (i.kind === 'memory') {
+			return live.sessionsSeen
+				? { label: usageLabel(s, covered, live.sessionsSeen).replace(/^used/, 'recalled').replace(/^never used/, 'never recalled').replace(/^no use/, 'not recalled'), detail: `Read by an agent ${s.week} times this week, ${s.month} in 30 days (Reads of the file in this folder's sessions, over ${covered} days).` }
+				: { label: 'recalls unknown', detail: 'No transcripts of this folder to count recalls from.' };
+		}
+		return {
+			label: usageLabel(s, covered, live.sessionsSeen) + (s.failures ? `, ${s.failures} failed` : ''),
+			detail: `Used ${facts}.${s.inferred ? ' Hook runs are counted from the events and matchers that fire them.' : ''} The counts cover ${covered} days and ${live.sessionsSeen} sessions of this project.`,
+		};
+	};
+	tree.setUsage(usageOf);
+	// What each file costs, and the costs at the last scan, so an edit shows as before/after.
+	let costs = loadCosts(context.workspaceState.get('flowHarness.costs'));
+	const costKinds = new Set(['instructions', 'rules', 'skills', 'agents', 'memory']);
+	const trackHarnessCosts = (h: Harness) => {
+		const current: Record<string, Cost> = {};
+		for (const i of h.items.filter(x => costKinds.has(x.kind) && x.agents.includes('Claude'))) {
+			const c = current[i.file] ??= { always: 0, onDemand: 0 };
+			c.always += i.tokens ?? 0;
+			c.onDemand += i.onDemand ?? 0;
+		}
+		costs = trackCosts(costs, current, Date.now());
+		void context.workspaceState.update('flowHarness.costs', costs);
+	};
+	tree.setCost(i => {
+		const c = costs.files[i.file];
+		if (!costKinds.has(i.kind) || !c || !(c.always || c.onDemand)) {
+			return undefined;
+		}
+		const change = costs.changes[i.file];
+		const when = i.kind === 'memory' ? 'when an agent recalls it' : i.kind === 'skills' ? 'when the skill is used' : i.kind === 'agents' ? "in the subagent's own window when it is spawned" : 'when the agent works on files it covers';
+		return {
+			label: costLabel(c, change),
+			detail: [
+				c.always ? `About ${c.always.toLocaleString()} tokens in every session (always-on).` : '',
+				c.onDemand ? `About ${c.onDemand.toLocaleString()} more ${when} (on demand).` : '',
+				change ? `Before the edit of ${new Date(change.at).toLocaleString()}: ${change.before.always.toLocaleString()} always-on, ${change.before.onDemand.toLocaleString()} on demand.` : '',
+				'Estimates: about 4 characters per token.',
+			].filter(Boolean).join(' '),
+		};
+	});
+	/** Skills unused for the whole window: an info line on each, and a gap entry. Applied after the scan, so the health score does not change. */
+	const markUnused = (h: Harness) => {
+		const idle = h.items.filter(i => i.kind === 'skills' && live.summary(itemKey(i)).month === 0);
+		const gap = unusedGap(idle.map(i => i.label), live.covered, live.sessionsSeen);
+		h.gaps = h.gaps.filter(g => g.key !== 'unused');
+		for (const i of h.items) {
+			i.issues = i.issues.filter(x => !x.message.startsWith('Not used in 30 days'));
+		}
+		if (gap) {
+			h.gaps.push(gap);
+			idle.forEach(i => i.issues.push({ severity: 'info', message: 'Not used in 30 days: prune it, or sharpen its description so the agent knows when to use it' }));
+		}
+	};
+	let liveTimer: NodeJS.Timeout | undefined;
+	live.onDidChange(() => {
+		clearTimeout(liveTimer);
+		liveTimer = setTimeout(() => {
+			if (harness) {
+				const before = harness.gaps.find(g => g.key === 'unused')?.message;
+				markUnused(harness);
+				tree.set(harness);
+				// The view's summary line names the gaps: when the unused-skills one comes or goes (the first backfill), say it there too.
+				if (harness.gaps.find(g => g.key === 'unused')?.message !== before) {
+					void refresh();
+				}
+			}
+			const n = friction.count;
+			frictionView.badge = n ? { value: n, tooltip: `${n} proposals from repeated friction` } : undefined;
+		}, 800);
+	});
 
 	let running: Promise<void> | undefined;
 	let dirty = false;
@@ -30,15 +126,29 @@ export function activate(context: vscode.ExtensionContext) {
 	const rescan = async () => {
 		try {
 			harness = await scan();
+			if (harness) {
+				markUnused(harness);
+				void live.backfill(harness.root);
+				// Looking names up can take seconds (the index, the language servers): the map shows first, the stale marks follow.
+				const scanned = harness;
+				void memories.checkStale(scanned).then(changed => changed && harness === scanned && tree.set(scanned)).catch(e => console.warn('flow-harness: memory check failed', e));
+			}
 			tree.set(harness);
 			budget.setHarness(harness);
+			void friction.setHarness(harness);
 			if (harness) {
 				const { score, counts, startupTokens, gaps } = harness;
+				trackHarnessCosts(harness);
+				const now = totals(costs.files);
+				const was = totalsBefore(costs);
 				const problems = counts.error + counts.warning;
-				const tokens = `About ${(startupTokens / 1000).toFixed(1)}k tokens load before your first prompt.`;
+				const trimmed = was.always !== now.always ? ` (${delta(now.always - was.always)} after your recent edits)` : '';
+				const tokens = `About ${(startupTokens / 1000).toFixed(1)}k tokens load before your first prompt${trimmed}${now.onDemand ? `, and about ${tok(now.onDemand)} more on demand` : ''}.`;
 				// "Nothing broken" alone read as "all set" for a project with no harness at all: say what is missing too.
-				const missing = gaps.length ? ` Not set up here: ${gaps.map(g => g.label).join(', ')}.` : '';
-				view.description = `Health ${score}`;
+				const notSetUp = gaps.filter(g => g.key !== 'unused');
+				const unused = gaps.find(g => g.key === 'unused');
+				const missing = (notSetUp.length ? ` Not set up here: ${notSetUp.map(g => g.label).join(', ')}.` : '') + (unused ? ` ${unused.label.replace(/^\w/, c => c.toUpperCase())} in 30 days.` : '');
+				view.description = `Health ${score} · ${tok(now.always)} always-on${now.onDemand ? ` · ${tok(now.onDemand)} on demand` : ''}`;
 				view.message = problems
 					? `${counts.error ? `${counts.error} broken, ` : ''}${counts.warning} to look at.${missing} ${tokens}`
 					: `Nothing broken.${missing} ${tokens}`;
@@ -48,7 +158,7 @@ export function activate(context: vscode.ExtensionContext) {
 				const byFile = new Map<string, vscode.Diagnostic[]>();
 				for (const i of harness.items) {
 					for (const issue of i.issues.filter(x => x.line !== undefined)) {
-						const d = new vscode.Diagnostic(new vscode.Range(issue.line!, 0, issue.line!, 999), issue.message,
+						const d = new vscode.Diagnostic(new vscode.Range(issue.line!, 0, issue.line!, 999), issue.fix ? `${issue.message}. Fix: ${issue.fix}` : issue.message,
 							issue.severity === 'error' ? vscode.DiagnosticSeverity.Error : issue.severity === 'warning' ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Information);
 						d.source = 'Axle harness';
 						byFile.set(i.file, [...(byFile.get(i.file) ?? []), d]);
@@ -97,6 +207,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		view, inboxView, limits, studio, diagnostics, watcher, registerPreviewProvider(),
+		live, frictionView, why, xray, { dispose: () => clearTimeout(liveTimer) },
 		watcher.onDidChange(soon), watcher.onDidCreate(soon), watcher.onDidDelete(soon),
 		{ dispose: () => clearTimeout(timer) },
 		vscode.window.onDidChangeWindowState(s => s.focused && ifStale()),
@@ -117,6 +228,22 @@ export function activate(context: vscode.ExtensionContext) {
 		// answer. Each agent's context fill shows in flow-agent's own Agents dock.
 		vscode.commands.registerCommand('flowHarness.reportLimits', (l: unknown) => limits.report(l)),
 		vscode.commands.registerCommand('flowHarness.recordPermission', (r: PermissionRequest) => inbox.record(r)),
+		// Called by flow-agent with every hook event of the agents it runs: what they used, what failed, what you typed.
+		vscode.commands.registerCommand('flowHarness.recordEvent', (e: unknown) => live.record(e)),
+		// From the Agents dock (one agent's session) or the Harness view (asks which session).
+		vscode.commands.registerCommand('flowHarness.contextXray', (s?: unknown) => xray.show(s)),
+		vscode.commands.registerCommand('flowHarness.why', (uri?: unknown) => why.show(uri)),
+		vscode.commands.registerCommand('flowHarness.simulatePermission', (call: unknown, agent?: unknown) => typeof call === 'string' ? why.simulate(call, agent === 'Codex' ? 'Codex' : 'Claude') : undefined),
+		vscode.commands.registerCommand('flowHarness.applyProposal', (arg: unknown) => friction.apply(arg)),
+		vscode.commands.registerCommand('flowHarness.dismissProposal', (arg: unknown) => friction.dismiss(arg)),
+		vscode.commands.registerCommand('flowHarness.deleteMemory', (arg: unknown) => memories.delete(arg)),
+		vscode.commands.registerCommand('flowHarness.promoteMemory', (arg: unknown) => memories.promote(arg)),
+		vscode.commands.registerCommand('flowHarness.clearFriction', async () => {
+			const ok = await vscode.window.showWarningMessage('Forget the prompts and tool failures the friction inbox kept for this folder?', { modal: true, detail: 'Usage counts stay. Past transcripts are not read again unless they change.' }, 'Forget');
+			if (ok === 'Forget') {
+				live.clearFriction();
+			}
+		}),
 		// For Axle Home: the health summary in one call.
 		vscode.commands.registerCommand('flowHarness.health', async () => {
 			if (!harness) {
@@ -130,7 +257,8 @@ export function activate(context: vscode.ExtensionContext) {
 				totals: Object.fromEntries(['instructions', 'rules', 'skills', 'agents', 'hooks', 'mcp', 'permissions'].map(k => [k, h.items.filter(i => i.kind === k).length])),
 				// Home says which counts are the project's and which are the user's own (~/.claude), and what is missing.
 				bySource: totalsBySource(h.items, ['instructions', 'skills', 'hooks', 'mcp', 'permissions']),
-				gaps: h.gaps.map(g => ({ label: g.label, message: g.message })),
+				// Home lists these as "not set up here": unused skills are set up, so they stay in the map.
+				gaps: h.gaps.filter(g => g.key !== 'unused').map(g => ({ label: g.label, message: g.message })),
 				issues: h.items.flatMap(i => i.issues.filter(x => x.severity !== 'info').map(x => ({ ...x, label: i.label, file: i.file }))).slice(0, 6),
 			};
 		}),

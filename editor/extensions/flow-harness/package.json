@@ -1,7 +1,7 @@
 {
   "name": "flow-harness",
   "displayName": "Axle Harness",
-  "description": "Harness engineering in the editor: one map of instructions, rules, skills, hooks, MCP and permissions, with a health score, the context budget, a hook studio and a permission inbox.",
+  "description": "Harness engineering in the editor: one map of instructions, rules, skills, hooks, MCP and permissions, with a health score, the context budget and X-ray, live usage, a \"why?\" view with a permission simulator, a hook studio and a friction inbox.",
   "version": "0.1.0",
   "publisher": "flow",
   "license": "MIT",
@@ -44,6 +44,11 @@
           "id": "flowHarness.permissions",
           "name": "Permission requests",
           "icon": "media/harness.svg"
+        },
+        {
+          "id": "flowHarness.friction",
+          "name": "Friction inbox",
+          "icon": "media/harness.svg"
         }
       ]
     },
@@ -56,7 +61,7 @@
       },
       {
         "command": "flowHarness.addHook",
-        "title": "Add Hook\u2026",
+        "title": "Add Hook…",
         "category": "Harness",
         "icon": "$(add)"
       },
@@ -68,13 +73,13 @@
       },
       {
         "command": "flowHarness.promote",
-        "title": "Always Allow\u2026",
+        "title": "Always Allow…",
         "category": "Harness",
         "icon": "$(pass)"
       },
       {
         "command": "flowHarness.promoteDeny",
-        "title": "Always Deny\u2026",
+        "title": "Always Deny…",
         "category": "Harness",
         "icon": "$(circle-slash)"
       },
@@ -97,10 +102,72 @@
         "command": "flowHarness.health",
         "title": "Harness Health",
         "category": "Harness"
+      },
+      {
+        "command": "flowHarness.contextXray",
+        "title": "Context X-ray",
+        "category": "Harness",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "flowHarness.why",
+        "title": "Why? Agent Configuration for This File",
+        "category": "Harness",
+        "icon": "$(question)"
+      },
+      {
+        "command": "flowHarness.simulatePermission",
+        "title": "Simulate a Permission",
+        "category": "Harness"
+      },
+      {
+        "command": "flowHarness.recordEvent",
+        "title": "Record Agent Event",
+        "category": "Harness"
+      },
+      {
+        "command": "flowHarness.applyProposal",
+        "title": "Apply…",
+        "category": "Harness",
+        "icon": "$(check)"
+      },
+      {
+        "command": "flowHarness.dismissProposal",
+        "title": "Dismiss",
+        "category": "Harness",
+        "icon": "$(close)"
+      },
+      {
+        "command": "flowHarness.clearFriction",
+        "title": "Clear Friction Inbox Data",
+        "category": "Harness",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "flowHarness.promoteMemory",
+        "title": "Promote to CLAUDE.md…",
+        "category": "Harness",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "flowHarness.deleteMemory",
+        "title": "Delete Memory…",
+        "category": "Harness",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "flowHarness.why",
+          "when": "view == flowHarness.map",
+          "group": "navigation@0"
+        },
+        {
+          "command": "flowHarness.contextXray",
+          "when": "view == flowHarness.map",
+          "group": "navigation@0"
+        },
         {
           "command": "flowHarness.addHook",
           "when": "view == flowHarness.map",
@@ -110,6 +177,11 @@
           "command": "flowHarness.refresh",
           "when": "view == flowHarness.map",
           "group": "navigation@2"
+        },
+        {
+          "command": "flowHarness.clearFriction",
+          "when": "view == flowHarness.friction",
+          "group": "navigation@9"
         }
       ],
       "view/item/context": [
@@ -126,6 +198,26 @@
         {
           "command": "flowHarness.promoteDeny",
           "when": "view == flowHarness.permissions && viewItem == request.promotable",
+          "group": "inline@2"
+        },
+        {
+          "command": "flowHarness.applyProposal",
+          "when": "view == flowHarness.friction && viewItem =~ /^friction.(proposal|grant)$/",
+          "group": "inline@1"
+        },
+        {
+          "command": "flowHarness.dismissProposal",
+          "when": "view == flowHarness.friction && viewItem =~ /^friction.(proposal|grant)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "flowHarness.promoteMemory",
+          "when": "view == flowHarness.map && viewItem == memory",
+          "group": "inline@1"
+        },
+        {
+          "command": "flowHarness.deleteMemory",
+          "when": "view == flowHarness.map && viewItem == memory",
           "group": "inline@2"
         }
       ],
@@ -153,6 +245,44 @@
         {
           "command": "flowHarness.health",
           "when": "false"
+        },
+        {
+          "command": "flowHarness.simulatePermission",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.recordEvent",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.applyProposal",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.dismissProposal",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.promoteMemory",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.deleteMemory",
+          "when": "false"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "flowHarness.why",
+          "when": "resourceScheme == file",
+          "group": "9_harness"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "flowHarness.why",
+          "when": "resourceScheme == file",
+          "group": "9_harness"
         }
       ]
     },
