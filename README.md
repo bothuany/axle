@@ -50,4 +50,4 @@ C# / .NET · Java · Python · JavaScript / TypeScript · Go · PHP · Ruby · R
 
 Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately ([SECURITY.md](SECURITY.md)).
 
-MIT licensed. Axle builds on [VS Code](https://github.com/microsoft/vscode); the Claude and Codex marks belong to their owners.
+MIT licensed; contributors sign a short [CLA](CLA.md). The Axle name and logo have their own [policy](TRADEMARKS.md). Axle builds on [VS Code](https://github.com/microsoft/vscode); the Claude and Codex marks belong to their owners.

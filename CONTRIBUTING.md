@@ -35,6 +35,10 @@ Optional local scans: `npm run semgrep` (needs `semgrep` on PATH or Docker) and 
 - Keep changes focused: one fix or feature per pull request, with a message that says why.
 - Match the style of the surrounding code; there is no separate formatter to run.
 
-## Licence
+## Licence and the CLA
 
-By contributing you agree that your contribution is licensed under the [MIT License](LICENSE).
+Axle is released under the [MIT License](LICENSE). Before your first pull request can be merged, you sign the [Contributor License Agreement](CLA.md) once: a bot comments on the pull request, and you reply with the sentence it gives you. You keep the copyright of your work; the agreement lets the project keep maintaining it and, if that is ever needed, ship it under other licence terms. Code you contribute stays available under the MIT License in the releases that contain it.
+
+If you contribute as part of your job, make sure your employer allows it (see point 5 of the CLA).
+
+The Axle name and logo are not covered by the code licence: see [TRADEMARKS.md](TRADEMARKS.md).
