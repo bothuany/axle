@@ -80,3 +80,14 @@ test('scalar settings: managed over local over project over user; lists merge; d
 	assert.deepEqual(eff.env.map(v => `${v.key}=${v.value}@${v.scope}`), ['B=p@project', 'A=1@user'])
 	assert.deepEqual(eff.additionalDirs, ['../lib'])
 })
+
+test('defaultMode: project and local files cannot choose auto or bypassPermissions', () => {
+	const at = (scope, mode) => e.effectiveSettings([{ scope, file: scope, data: { permissions: { defaultMode: mode } } }])
+	assert.equal(at('user', 'auto').mode, 'auto')
+	assert.equal(at('project', 'auto').mode, undefined, 'the built-in default applies')
+	assert.match(at('local', 'auto').modeNote, /does not take effect/)
+	assert.equal(at('project', 'bypassPermissions').mode, 'default', 'starts in Manual mode')
+	assert.equal(at('user', 'bypassPermissions').mode, 'bypassPermissions')
+	assert.equal(at('project', 'acceptEdits').mode, 'acceptEdits')
+	assert.equal(at('user', 'manual').mode, 'default', 'manual is an alias')
+})

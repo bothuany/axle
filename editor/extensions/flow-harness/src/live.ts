@@ -7,12 +7,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { promises as fs } from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { countEvent, countTranscript, coveredDays, coveredFrom, loadActivity, prune, summary, WINDOW_DAYS, type ActivityData, type AgentEvent, type HookLike, type Summary } from './activity';
 import { redact, type FailureRecord, type PromptRecord } from './friction';
 import { isTranscriptPath, parseTranscript, type TranscriptFacts } from './transcript';
+import { claudeDir, projectTranscripts } from './dirs';
 
 const ACTIVITY = 'flowHarness.activity';
 const FRICTION = 'flowHarness.friction';
@@ -34,14 +34,18 @@ export interface FrictionData {
 }
 
 export interface LiveSession {
+	/** flow-agent's id for the session, when it ran in the Agents dock: what Compact and Measure in the X-ray address. */
+	id?: string;
 	agent: string;
+	/** The permission mode its hooks reported last (Claude Code sends it on most events). */
+	mode?: string;
 	cli: string;
 	transcript?: string;
 	at: number;
 }
 
-/** Where Claude Code keeps this folder's transcripts: the path with every character that is not a letter or digit turned into '-'. */
-export const projectTranscriptDir = (root: string) => path.join(os.homedir(), '.claude', 'projects', root.replace(/[^A-Za-z0-9]/g, '-'));
+/** Claude Code's permission modes, as hooks report them: anything else is not kept. */
+const MODES = new Set(['default', 'plan', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions']);
 
 const str = (v: unknown, max: number) => typeof v === 'string' ? v.slice(0, max) : undefined;
 
@@ -65,7 +69,8 @@ export function eventOf(raw: unknown): AgentEvent | undefined {
 		at: typeof r.at === 'number' && Number.isFinite(r.at) ? r.at : Date.now(),
 		agent: r.agent.slice(0, 200), cli: str(r.cli, 20) ?? 'claude', session: str(r.session, 200), event: r.event.slice(0, 60),
 		tool: str(r.tool, 200), input, error: str(r.error, 1000), durationMs: typeof r.durationMs === 'number' && Number.isFinite(r.durationMs) ? r.durationMs : undefined,
-		prompt: str(r.prompt, 2000), agentType: str(r.agentType, 200), transcript: isTranscriptPath(r.transcript, os.homedir()) ? r.transcript : undefined,
+		id: str(r.id, 200), mode: typeof r.mode === 'string' && MODES.has(r.mode) ? r.mode : undefined,
+		prompt: str(r.prompt, 2000), agentType: str(r.agentType, 200), transcript: isTranscriptPath(r.transcript, claudeDir()) ? r.transcript : undefined,
 	};
 }
 
@@ -156,9 +161,12 @@ export class Live implements vscode.Disposable {
 		if (!ev) {
 			return;
 		}
-		const transcript = ev.transcript ?? this.sessions.get(ev.agent)?.transcript;
-		this.sessions.delete(ev.agent);
-		this.sessions.set(ev.agent, { agent: ev.agent, cli: ev.cli, transcript, at: ev.at });
+		// By flow-agent's id when there is one: a renamed agent is the same session, and two agents may share a name.
+		const key = ev.id ?? ev.agent;
+		const seen = this.sessions.get(key);
+		const transcript = ev.transcript ?? seen?.transcript;
+		this.sessions.delete(key);
+		this.sessions.set(key, { id: ev.id, agent: ev.agent, cli: ev.cli, transcript, at: ev.at, mode: ev.mode ?? seen?.mode });
 		if (this.sessions.size > MAX_SESSIONS) {
 			this.sessions.delete(this.sessions.keys().next().value!);
 		}
@@ -209,7 +217,7 @@ export class Live implements vscode.Disposable {
 	 * came as events already; for a past one they come from here.
 	 */
 	ingest(file: string, live: boolean): Promise<void> {
-		if (!isTranscriptPath(file, os.homedir())) {
+		if (!isTranscriptPath(file, claudeDir())) {
 			return Promise.resolve();
 		}
 		const running = this.reading.get(file);
@@ -249,17 +257,16 @@ export class Live implements vscode.Disposable {
 		}
 	}
 
-	/** Once per window: the last 30 days of this folder's transcripts, newest first and bounded, read in the background. */
+	/** Once per window: the last 30 days of this folder's transcripts (its worktrees' too), newest first and bounded, read in the background. */
 	async backfill(root: string) {
 		if (this.backfilled) {
 			return;
 		}
 		this.backfilled = true;
-		const dir = projectTranscriptDir(root);
-		const names = await fs.readdir(dir).catch(() => [] as string[]);
+		// Sessions an agent ran in a worktree of this project count too: an editor built on a worktree per agent has most there.
+		const transcripts = await projectTranscripts(root);
 		const cutoff = Date.now() - WINDOW_DAYS * DAY;
-		const inWindow = (await Promise.all(names.filter(n => n.endsWith('.jsonl')).map(async n => {
-			const file = path.join(dir, n);
+		const inWindow = (await Promise.all(transcripts.map(async file => {
 			const st = await fs.stat(file).catch(() => undefined);
 			return st && st.mtimeMs >= cutoff ? { file, mtime: st.mtimeMs, size: st.size } : undefined;
 		}))).filter((x): x is { file: string; mtime: number; size: number } => !!x).sort((a, b) => b.mtime - a.mtime);
@@ -281,7 +288,7 @@ export class Live implements vscode.Disposable {
 
 	/** Everything one transcript says, for the X-ray: its start (listings, memory, the first request) and its newest part. */
 	async facts(file: string): Promise<TranscriptFacts | undefined> {
-		if (!isTranscriptPath(file, os.homedir())) {
+		if (!isTranscriptPath(file, claudeDir())) {
 			return undefined;
 		}
 		try {

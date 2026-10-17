@@ -237,15 +237,6 @@ export function endUsage(s: UsageHolder) {
 }
 
 /**
- * Whether Compact may type `/compact` into the agent's terminal now. Only at the prompt (idle, or done with a turn):
- * while the agent asks for permission its menu takes the Enter as "Yes", and while it works the text would only
- * queue up. A custom agent may not know the command at all.
- */
-export function compactAllowed(s: { state: string; cli: string }): boolean {
-	return s.cli !== 'custom' && (s.state === 'idle' || s.state === 'done');
-}
-
-/**
  * Whether the user set a status line of their own anywhere Claude reads it for this workspace: their user settings
  * and every folder's project and local settings. Axle's status line would take its place, so Axle adds none then.
  * A file that cannot be read or parsed counts as having none.

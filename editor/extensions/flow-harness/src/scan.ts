@@ -13,6 +13,7 @@ import { parseIndex, parseMemory, projectKey, type Memory } from './memory';
 import { lint, ruleGlobs, type InstructionKind, type LintFile } from './lint';
 import { projectGaps, type Gap } from './gaps';
 import { gitIgnoredOf } from './ignored';
+import { claudeDir, codexDir } from './dirs';
 
 export type Scope = 'user' | 'project' | 'local' | 'directory';
 export type Kind = 'instructions' | 'rules' | 'skills' | 'agents' | 'hooks' | 'mcp' | 'permissions' | 'memory';
@@ -218,7 +219,18 @@ async function settingsFile(items: HarnessItem[], root: string, file: string, sc
 		items.push({ kind: 'hooks', scope, label: show(root, file), detail: 'Not valid JSON: the agent ignores this file', file, issues: [{ severity: 'error', message: `Invalid JSON: ${(e as Error).message}` }], agents: ['Claude'] });
 		return;
 	}
-	const lineOf = (needle: string) => Math.max(0, text.split(/\r?\n/).findIndex(l => l.includes(needle)));
+	const lines = text.split(/\r?\n/);
+	const lineOf = (needle: string) => Math.max(0, lines.findIndex(l => l.includes(needle)));
+	// Two hooks may run the same command: each takes the next line that holds it, in file order (the order JSON.parse
+	// gives too), so a finding about the second one lands on the second one.
+	const taken = new Map<string, number>();
+	const nextLineOf = (needle: string) => {
+		const i = lines.findIndex((l, n) => n > (taken.get(needle) ?? -1) && l.includes(needle));
+		if (i >= 0) {
+			taken.set(needle, i);
+		}
+		return i >= 0 ? i : lineOf(needle);
+	};
 	for (const [event, entries] of Object.entries(s.hooks ?? {})) {
 		for (const entry of entries) {
 			for (const h of entry.hooks ?? []) {
@@ -249,7 +261,7 @@ async function settingsFile(items: HarnessItem[], root: string, file: string, sc
 					detail: `${event}${entry.matcher ? ` · ${entry.matcher}` : ''}`,
 					file, issues, agents: ['Claude'],
 					hook: { event, matcher: entry.matcher, command: h.command, settingsFile: file },
-					line: lineOf(h.command.slice(0, 60).replace(/"/g, '\\"')),
+					line: nextLineOf(JSON.stringify(h.command).slice(1, 61)),
 				});
 			}
 		}
@@ -362,7 +374,7 @@ async function lintItems(items: HarnessItem[], root: string) {
 	// Listing the project is only worth it when some rule is scoped to globs.
 	const scoped = files.some(f => (f.kind === 'claude-rule' || f.kind === 'cursor-rule') && ruleGlobs(f).length);
 	const limit = 20_000;
-	const listed = scoped ? await vscode.workspace.findFiles('**/*', '{**/node_modules/**,**/.git/**,**/.claude/worktrees/**}', limit) : [];
+	const listed = scoped ? await vscode.workspace.findFiles('**/*', '{**/node_modules/**,**/.git/**,**/.claude/worktrees/**,**/.axle/worktrees/**}', limit) : [];
 	const findings = lint({
 		files,
 		hooks: items.filter(i => i.hook).map(i => ({ ...i.hook!, line: i.line ?? 0 })),
@@ -379,7 +391,7 @@ async function lintItems(items: HarnessItem[], root: string) {
 }
 
 /** Where Claude Code keeps its auto memory for a folder. */
-export const claudeMemoryDir = (root: string) => path.join(home, '.claude', 'projects', projectKey(root), 'memory');
+export const claudeMemoryDir = (root: string) => path.join(claudeDir(), 'projects', projectKey(root), 'memory');
 
 /**
  * The agents' own memory for this folder, read only: Claude Code's MEMORY.md (loaded in every session) and its topic files
@@ -408,7 +420,7 @@ async function memoryIn(items: HarnessItem[], root: string) {
 		const issues: Issue[] = entry || indexText === undefined ? [] : [{ severity: 'info', message: 'Not in MEMORY.md: Claude does not know it is there unless it lists the folder', fix: 'Add a line for it to MEMORY.md, or delete it' }];
 		items.push({ kind: 'memory', scope: 'user', label: m.name, detail: [m.type ?? 'memory', m.description].filter(Boolean).join(' · '), file, onDemand: tokensOf(text), issues, agents: ['Claude'], memory: m });
 	}
-	const codex = path.join(home, '.codex', 'memories');
+	const codex = path.join(codexDir(), 'memories');
 	for (const file of (await listDir(codex)).filter(f => /\.(md|txt|json)$/i.test(f))) {
 		const text = await read(file);
 		if (text !== undefined) {
@@ -437,13 +449,13 @@ export async function scan(): Promise<Harness | undefined> {
 	const items: HarnessItem[] = [];
 
 	// Instructions: user, then project, then nested folders (more specific wins).
-	await memoryFile(items, root, path.join(home, '.claude', 'CLAUDE.md'), 'user', ['Claude'], 'Your instructions, every project');
-	await memoryFile(items, root, path.join(home, '.codex', 'AGENTS.md'), 'user', ['Codex'], 'Your instructions, every project');
+	await memoryFile(items, root, path.join(claudeDir(), 'CLAUDE.md'), 'user', ['Claude'], 'Your instructions, every project');
+	await memoryFile(items, root, path.join(codexDir(), 'AGENTS.md'), 'user', ['Codex'], 'Your instructions, every project');
 	await memoryFile(items, root, path.join(root, 'CLAUDE.md'), 'project', ['Claude'], 'Loaded in every session');
 	await memoryFile(items, root, path.join(root, 'CLAUDE.local.md'), 'local', ['Claude'], 'Yours only, not committed');
 	await memoryFile(items, root, path.join(root, 'AGENTS.md'), 'project', ['Codex', 'Cursor'], 'Loaded in every session');
 	await memoryFile(items, root, path.join(root, '.github', 'copilot-instructions.md'), 'project', ['Copilot'], 'Copilot reads it in every chat');
-	const found = await vscode.workspace.findFiles('**/{CLAUDE,AGENTS}.md', '{**/node_modules/**,**/.git/**,**/bin/**,**/obj/**,**/.claude/worktrees/**}', 200);
+	const found = await vscode.workspace.findFiles('**/{CLAUDE,AGENTS}.md', '{**/node_modules/**,**/.git/**,**/bin/**,**/obj/**,**/.claude/worktrees/**,**/.axle/worktrees/**}', 200);
 	// Git answers with the paths as it was given them.
 	const ignored = await gitIgnoredOf(root, found.map(u => u.fsPath));
 	const nested = found.filter(u => !ignored.has(u.fsPath));
@@ -454,20 +466,20 @@ export async function scan(): Promise<Harness | undefined> {
 	}
 
 	await rulesIn(items, root, path.join(root, '.claude', 'rules'), 'project', ['Claude'], 'paths');
-	await rulesIn(items, root, path.join(home, '.claude', 'rules'), 'user', ['Claude'], 'paths');
+	await rulesIn(items, root, path.join(claudeDir(), 'rules'), 'user', ['Claude'], 'paths');
 	await rulesIn(items, root, path.join(root, '.cursor', 'rules'), 'project', ['Cursor'], 'globs');
 
 	await skillsIn(items, path.join(root, '.claude', 'skills'), 'project', ['Claude']);
 	await skillsIn(items, path.join(root, '.agents', 'skills'), 'project', ['Codex']);
 	await skillsIn(items, path.join(root, '.cursor', 'skills'), 'project', ['Cursor']);
-	await skillsIn(items, path.join(home, '.claude', 'skills'), 'user', ['Claude']);
+	await skillsIn(items, path.join(claudeDir(), 'skills'), 'user', ['Claude']);
 
 	await agentsIn(items, path.join(root, '.claude', 'agents'), 'project');
-	await agentsIn(items, path.join(home, '.claude', 'agents'), 'user');
+	await agentsIn(items, path.join(claudeDir(), 'agents'), 'user');
 
 	await memoryIn(items, root);
 
-	await settingsFile(items, root, path.join(home, '.claude', 'settings.json'), 'user');
+	await settingsFile(items, root, path.join(claudeDir(), 'settings.json'), 'user');
 	await settingsFile(items, root, path.join(root, '.claude', 'settings.json'), 'project');
 	await settingsFile(items, root, path.join(root, '.claude', 'settings.local.json'), 'local');
 	await mcpJson(items, root, path.join(root, '.mcp.json'), 'project');

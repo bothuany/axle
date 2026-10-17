@@ -354,6 +354,18 @@ parentPort!.on('message', async (m: { id: number; op: string; args: unknown[] })
 				result = true;
 				break;
 			}
+			case 'removedDir': {
+				// A folder was deleted (a removed worktree, say): the watcher reports the folder, not each file in it.
+				const fold = (s: string) => process.platform === 'win32' ? s.toLowerCase() : s;
+				const dir = fold(path.join(m.args[0] as string, path.sep));
+				const gone = [...project.files.keys()].filter(f => fold(f).startsWith(dir) && !fs.existsSync(f));
+				gone.forEach(f => project.delete(f));
+				if (gone.length) {
+					saveSoon();
+				}
+				result = gone.length;
+				break;
+			}
 			default: throw new Error(`unknown op ${m.op}`);
 		}
 		post({ id: m.id, result });

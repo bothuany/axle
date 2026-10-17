@@ -20,6 +20,9 @@ import { HarnessTree, itemOf } from './tree';
 import { WhyView } from './why';
 import { XrayView } from './xray';
 
+/** The files that shape an agent, as watcher globs: instructions, settings, MCP servers, rules, skills, agents, hooks, commands. */
+const WATCHED = ['**/CLAUDE.md', '**/CLAUDE.local.md', '**/AGENTS.md', '**/.mcp.json', '**/.claude/settings*.json', '**/.claude/{rules,skills,agents,hooks,commands}/**', '**/.cursor/rules/**', '**/.agents/skills/**'];
+
 export function activate(context: vscode.ExtensionContext) {
 	let harness: Harness | undefined;
 	const budget = new ContextBudget();
@@ -33,8 +36,8 @@ export function activate(context: vscode.ExtensionContext) {
 	const live = new Live(context.workspaceState, () => (harness?.items ?? []).flatMap(i => i.hook ? [i.hook as HookLike] : []));
 	const friction = new FrictionView(live, inbox, () => harness);
 	const frictionView = vscode.window.createTreeView('flowHarness.friction', { treeDataProvider: friction });
-	const why = new WhyView(() => harness);
 	const xray = new XrayView(() => harness, live);
+	const why = new WhyView(() => harness, live);
 	const memories = new MemoryActions(() => harness, () => void refresh());
 	const usageOf = (i: HarnessItem) => {
 		if (!isTracked(i)) {
@@ -191,9 +194,11 @@ export function activate(context: vscode.ExtensionContext) {
 		})();
 	};
 
-	// Only files that shape an agent (not .claude/worktrees or session logs) mean a fresh look; home-folder files refresh on focus.
-	const watcher = vscode.workspace.createFileSystemWatcher('**/{CLAUDE.md,CLAUDE.local.md,AGENTS.md,.mcp.json,.claude/{settings*.json,rules/**,skills/**,agents/**,hooks/**,commands/**},.cursor/rules/**,.agents/skills/**}');
-	const ignored = /[\\/](?:\.claude[\\/]worktrees|node_modules|\.git)[\\/]/;
+	// Only files that shape an agent (not agent worktrees or session logs) mean a fresh look; home-folder files refresh on focus.
+	// One watcher per pattern, with no brace group nested in another: the single nested pattern missed a new
+	// .claude/settings.json and its later edits.
+	const watchers = WATCHED.map(g => vscode.workspace.createFileSystemWatcher(g));
+	const ignored = /[\\/](?:\.claude[\\/]worktrees|\.axle[\\/]worktrees|node_modules|\.git)[\\/]/;
 	let timer: NodeJS.Timeout | undefined;
 	const soon = (uri?: vscode.Uri) => {
 		if (uri && ignored.test(uri.fsPath)) {
@@ -206,9 +211,9 @@ export function activate(context: vscode.ExtensionContext) {
 	const ifStale = () => Date.now() - lastScan > 30_000 && soon();
 
 	context.subscriptions.push(
-		view, inboxView, limits, studio, diagnostics, watcher, registerPreviewProvider(),
+		view, inboxView, limits, studio, diagnostics, ...watchers, registerPreviewProvider(),
 		live, frictionView, why, xray, { dispose: () => clearTimeout(liveTimer) },
-		watcher.onDidChange(soon), watcher.onDidCreate(soon), watcher.onDidDelete(soon),
+		...watchers.flatMap(w => [w.onDidChange(soon), w.onDidCreate(soon), w.onDidDelete(soon)]),
 		{ dispose: () => clearTimeout(timer) },
 		vscode.window.onDidChangeWindowState(s => s.focused && ifStale()),
 		view.onDidChangeVisibility(v => v.visible && ifStale()),

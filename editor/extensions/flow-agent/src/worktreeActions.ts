@@ -5,13 +5,13 @@
  *  Merging and removing change the user's repository, so each waits behind a modal confirm.
  *--------------------------------------------------------------------------------------------*/
 
+import { promises as fs } from 'fs';
 import * as vscode from 'vscode';
-import type { Agents, AgentSession } from './agents';
+import type { Agents, AgentSession, KeptWorktree } from './agents';
+import type { WorktreeAction } from './dockMessage';
+import { forgetFlow, mergeFlow, removeFlow, type FlowGit, type FlowUi } from './worktreeFlow';
 import { aheadBehind, changedFiles, merge, planMerge, removeWorktree, type Worktree } from './worktrees';
 
-/** What the page may ask for on a worktree row; anything else is ignored. */
-export const WORKTREE_ACTIONS = ['open', 'diff', 'merge', 'remove'] as const;
-export type WorktreeAction = typeof WORKTREE_ACTIONS[number];
 
 /** The worktree as a row shows it. */
 export interface WorktreeView {
@@ -60,9 +60,18 @@ export class WorktreeRows implements vscode.Disposable {
 
 	private refreshAll(force: boolean) {
 		const now = Date.now();
-		for (const s of this.agents.sessions.values()) {
+		const sessions = this.agents.sessions;
+		for (const id of [...this.counts.keys()]) {
+			if (!sessions.has(id)) {
+				this.counts.delete(id); // taken off the list
+			}
+		}
+		for (const s of sessions.values()) {
 			const c = this.counts.get(s.id);
-			if (s.worktree && !this.running.has(s.id) && (force || !c || now - c.at > REFRESH_MS)) {
+			// An ended agent commits nothing more: its counts are read once after it ended, and again only after a merge
+			// (which clears them).
+			const due = s.state === 'ended' ? !c || c.at < s.since : force || !c || now - c.at > REFRESH_MS;
+			if (s.worktree && !this.running.has(s.id) && due) {
 				void this.refresh(s.id, s.worktree);
 			}
 		}
@@ -122,77 +131,97 @@ export class WorktreeRows implements vscode.Disposable {
 	}
 
 	private async merge(s: AgentSession, wt: Worktree) {
-		const plan = await planMerge(wt);
-		if (plan.kind === 'refuse') {
-			void vscode.window.showWarningMessage(`Axle: not merging ${wt.branch} into ${wt.base}: ${plan.reason}`, { modal: true });
-			return;
-		}
-		if (plan.kind === 'nothing') {
-			void vscode.window.showInformationMessage(`Axle: ${wt.branch} has no commits that ${wt.base} does not have.${(await changedFiles(wt.path))?.length ? ' Its changes are not committed yet.' : ''}`);
-			return;
-		}
-		const how = plan.kind === 'fast-forward' ? `fast-forward ${wt.base} to it` : `make a merge commit on ${wt.base}`;
-		const warn = plan.uncommitted ? `\n\n${plan.uncommitted} uncommitted file${plan.uncommitted === 1 ? ' stays' : 's stay'} in the worktree and ${plan.uncommitted === 1 ? 'is' : 'are'} not merged: ask ${s.name} to commit first if ${plan.uncommitted === 1 ? 'it belongs' : 'they belong'} in.` : '';
-		const ok = await vscode.window.showWarningMessage(
-			`Merge ${wt.branch} into ${wt.base}?`,
-			{ modal: true, detail: `${plan.ahead} commit${plan.ahead === 1 ? '' : 's'} from ${s.name}'s worktree. Axle will ${how} in ${wt.root}.${warn}` },
-			'Merge',
-		);
-		if (ok !== 'Merge') {
-			return;
-		}
-		const r = await merge(wt, plan.kind);
-		if (r.ok) {
-			void vscode.window.showInformationMessage(`Axle: merged ${wt.branch} into ${wt.base}.`);
-		} else {
-			void vscode.window.showErrorMessage(`Axle: the merge of ${wt.branch} failed: ${r.reason}`);
-		}
+		await mergeFlow({ name: s.name, live: s.state !== 'ended' }, wt, UI, GIT);
 		this.counts.delete(s.id);
 		this.refreshAll(true);
 	}
 
 	/** Removes the folder; the branch stays (its commits are not lost). Uncommitted work needs a second, explicit yes. */
 	private async remove(s: AgentSession, wt: Worktree) {
-		const live = s.state !== 'ended';
-		const ok = await vscode.window.showWarningMessage(
-			`Remove the worktree of ${s.name}?`,
-			{ modal: true, detail: `Deletes the folder ${wt.path}. The branch ${wt.branch} and its commits stay.${live ? ` ${s.name}'s terminal is closed first.` : ''}` },
-			'Remove',
-		);
-		if (ok !== 'Remove') {
+		const r = await removeFlow({ name: s.name, live: s.state !== 'ended' }, wt, UI, GIT, () => this.agents.closeTerminal(s.id));
+		if (r === 'removed') {
+			this.counts.delete(s.id);
+			// Without its folder the conversation cannot be resumed where it ran (Claude keys transcripts by folder): the row goes too.
+			this.agents.forget(s.id);
+		}
+	}
+
+	/**
+	 * Takes an ended agent off the list. One with a worktree still on disk asks first: keep it (listed under Kept Agent
+	 * Worktrees, so the folder, branch and uncommitted work stay reachable), merge it, or remove it.
+	 */
+	async forget(id: string) {
+		const s = this.agents.sessions.get(id);
+		if (!s) {
 			return;
 		}
-		const dirty = await changedFiles(wt.path);
-		let force = false;
-		if (dirty === undefined || dirty.length) {
-			const files = dirty ?? [];
-			const again = await vscode.window.showWarningMessage(
-				dirty === undefined ? `Axle could not read the worktree's status. Remove it anyway?` : `${files.length} uncommitted change${files.length === 1 ? '' : 's'} in the worktree will be lost.`,
-				{ modal: true, detail: files.slice(0, 12).join('\n') + (files.length > 12 ? `\n… and ${files.length - 12} more` : '') },
-				'Remove and Lose Changes',
-			);
-			if (again !== 'Remove and Lose Changes') {
-				return;
+		const wt = s.worktree;
+		const pick = await forgetFlow({ name: s.name, live: s.state !== 'ended' }, wt, UI, GIT);
+		if (pick === 'cancelled') {
+			return;
+		}
+		if (pick === 'merge' || pick === 'remove') {
+			return this.act(id, pick);
+		}
+		if (pick === 'keep' && wt) {
+			this.agents.keepWorktree({ ...wt, agent: s.name }, true);
+		}
+		this.counts.delete(id);
+		this.agents.forget(id);
+	}
+
+	/** Agents: Kept Worktrees…: the worktrees kept after their agents left the list, each to open, show, merge or remove. */
+	async showKept() {
+		const kept: KeptWorktree[] = [];
+		for (const k of this.agents.keptWorktrees) {
+			if (await GIT.exists(k.path)) {
+				kept.push(k);
+			} else {
+				this.agents.keepWorktree(k, false); // removed outside Axle
 			}
-			force = true;
 		}
-		if (live) {
-			this.agents.closeTerminal(s.id);
-			// The shell needs a moment to exit; on Windows git cannot delete a folder a process still has as its directory.
-			await new Promise(r => setTimeout(r, 800));
-		}
-		let r = await removeWorktree(wt, force);
-		if (!r.ok && process.platform === 'win32') {
-			await new Promise(res => setTimeout(res, 1500));
-			r = await removeWorktree(wt, force);
-		}
-		if (!r.ok) {
-			void vscode.window.showErrorMessage(`Axle: could not remove the worktree: ${r.reason}`);
+		if (!kept.length) {
+			void vscode.window.showInformationMessage('Axle: no kept agent worktrees. A worktree is kept when you take its ended agent off the list and choose Keep Worktree.');
 			return;
 		}
-		this.counts.delete(s.id);
-		// Without its folder the conversation cannot be resumed where it ran (Claude keys transcripts by folder): the row goes too.
-		this.agents.forget(s.id);
-		void vscode.window.showInformationMessage(`Axle: removed the worktree. The branch ${wt.branch} is still there.`);
+		const wt = (await vscode.window.showQuickPick(kept.map(k => ({ label: `$(git-branch) ${k.branch}`, description: k.agent, detail: k.path, k })), { title: 'Kept agent worktrees' }))?.k;
+		if (!wt) {
+			return;
+		}
+		const action = (await vscode.window.showQuickPick([
+			{ label: '$(folder-opened) Open…', a: 'open' as const },
+			{ label: '$(diff) Changes', detail: `In flow, since ${wt.base}`, a: 'diff' as const },
+			{ label: '$(git-merge) Merge…', detail: `Into ${wt.base} (asks first)`, a: 'merge' as const },
+			{ label: '$(trash) Remove…', detail: 'The folder (asks first; the branch stays)', a: 'remove' as const },
+		], { title: `Worktree ${wt.branch}`, placeHolder: wt.path }))?.a;
+		const a = { name: wt.agent, live: false };
+		if (action === 'open') {
+			await this.open(wt);
+		} else if (action === 'diff') {
+			await Promise.resolve(vscode.commands.executeCommand('flow.diff.showWorktree', wt.path, wt.base)).catch(e => vscode.window.showErrorMessage(`Axle: ${(e as Error).message}`));
+		} else if (action === 'merge') {
+			await this.once(async () => {
+				await mergeFlow(a, wt, UI, GIT);
+			});
+		} else if (action === 'remove') {
+			await this.once(async () => {
+				if (await removeFlow(a, wt, UI, GIT, () => undefined) === 'removed') {
+					this.agents.keepWorktree(wt, false);
+				}
+			});
+		}
 	}
 }
+
+/** The flows' dialogs, as VS Code shows them: every question modal, nothing taking focus by itself. */
+const UI: FlowUi = {
+	choose: async (message, detail, buttons) => await vscode.window.showWarningMessage(message, { modal: true, detail }, ...buttons),
+	info: m => void vscode.window.showInformationMessage(m),
+	error: m => void vscode.window.showErrorMessage(m),
+};
+
+const GIT: FlowGit = {
+	planMerge, merge, changedFiles, removeWorktree,
+	exists: dir => fs.stat(dir).then(st => st.isDirectory(), () => false),
+	sleep: ms => new Promise(r => setTimeout(r, ms)),
+};

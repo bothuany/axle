@@ -287,15 +287,16 @@ function absoluteNorm(p: string): string | undefined {
 }
 
 /**
- * Whether `p` is a Claude Code transcript: a .jsonl file inside ~/.claude/projects once `..` is resolved. Paths come from
+ * Whether `p` is a Claude Code transcript: a .jsonl file inside `configDir`/projects (~/.claude unless CLAUDE_CONFIG_DIR
+ * says otherwise) once `..` is resolved. Paths come from
  * other extensions' commands; only these files are ever read as transcripts.
  */
-export function isTranscriptPath(p: unknown, home: string): p is string {
+export function isTranscriptPath(p: unknown, configDir: string): p is string {
 	if (typeof p !== 'string' || !/\.jsonl$/i.test(p)) {
 		return false;
 	}
 	const file = absoluteNorm(p);
-	const root = absoluteNorm(`${home.replace(/\\/g, '/')}/.claude/projects`);
+	const root = absoluteNorm(`${configDir.replace(/\\/g, '/')}/projects`);
 	if (!file || !root) {
 		return false;
 	}

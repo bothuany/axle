@@ -11,14 +11,7 @@
 
 import * as vscode from 'vscode';
 import type { Agents } from './agents';
-import { attentionKey, attentionKind, type AttentionKind } from './attention';
-
-const SAY: Record<AttentionKind, string> = {
-	approval: 'needs your approval',
-	question: 'asks you',
-	error: 'hit an error',
-	done: 'is done',
-};
+import { attentionKey, notification } from './attention';
 
 export class AttentionNotifier implements vscode.Disposable {
 	/** The attention each session was last notified (or seen) for, so a repeated hook is not news. */
@@ -41,14 +34,14 @@ export class AttentionNotifier implements vscode.Disposable {
 				continue;
 			}
 			this.last.set(s.id, key);
-			const kind = attentionKind(s);
-			if (!kind || !key || config.get<boolean>('quiet', false) || !config.get<boolean>(kind, true) || this.agents.isWatched(s.id)) {
+			const n = notification(s, { quiet: config.get<boolean>('quiet', false), enabled: k => config.get<boolean>(k, true), watched: this.agents.isWatched(s.id) });
+			if (!n) {
 				continue;
 			}
-			const text = s.need?.text;
-			const message = `${s.name} ${SAY[kind]}${text ? `: ${text}` : ''}`;
-			const show = kind === 'error' ? vscode.window.showWarningMessage : vscode.window.showInformationMessage;
-			void show(message, 'Show Terminal').then(pick => pick && this.agents.show(s.id));
+			const show = n.warn ? vscode.window.showWarningMessage : vscode.window.showInformationMessage;
+			// A notification VS Code shows cannot be taken back, so one for a question answered meanwhile stays in the list;
+			// its button then still brings the terminal up, which is harmless.
+			void show(n.message, 'Show Terminal').then(pick => pick && this.agents.show(s.id));
 		}
 		for (const id of this.last.keys()) {
 			if (!this.agents.sessions.has(id)) {

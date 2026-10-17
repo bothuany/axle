@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import type { HarnessItem } from './scan';
 import { arrayAt, objectAt, previewAndWrite } from './settings';
+import { claudeDir } from './dirs';
 
 /** What the hook decided, read from its JSON output or exit code 2. */
 type Verdict = 'allowed' | 'blocked' | 'asked' | 'ok' | 'failed';
@@ -234,7 +235,7 @@ export class HookStudio implements vscode.Disposable {
 		const where = await vscode.window.showQuickPick([
 			{ label: 'This repo, shared', detail: '.claude/settings.json: committed, applies to everyone', file: root && path.join(root, '.claude', 'settings.json') },
 			{ label: 'This repo, just me', detail: '.claude/settings.local.json: not committed', file: root && path.join(root, '.claude', 'settings.local.json') },
-			{ label: 'All my projects', detail: '~/.claude/settings.json', file: path.join(os.homedir(), '.claude', 'settings.json') },
+			{ label: 'All my projects', detail: '~/.claude/settings.json', file: path.join(claudeDir(), 'settings.json') },
 		].filter(x => x.file), { title: 'Add hook (4/4): where should it live?' });
 		if (!where?.file) {
 			return;

@@ -82,15 +82,6 @@ test('the status-line script prints its line and forwards to /status only when t
 	}
 })
 
-test('Compact types only at the prompt: never into a permission menu, a busy agent or a custom CLI', () => {
-	assert.equal(u.compactAllowed({ state: 'idle', cli: 'claude' }), true)
-	assert.equal(u.compactAllowed({ state: 'done', cli: 'codex' }), true)
-	for (const state of ['blocked', 'working', 'starting', 'unknown', 'ended']) {
-		assert.equal(u.compactAllowed({ state, cli: 'claude' }), false, state)
-	}
-	assert.equal(u.compactAllowed({ state: 'idle', cli: 'custom' }), false)
-})
-
 test('usage: repeats are no news, an ended session takes nothing, a read from before the end is dropped', () => {
 	const s = { state: 'done' }
 	assert.equal(u.applyUsage(s, { used: 10, size: 100 }), true)

@@ -74,6 +74,51 @@ export function canType(s: SessionInfo, customs: CustomCli[]): boolean {
 	return s.heard && (s.state === 'idle' || s.state === 'done');
 }
 
+/** What a target is told when a question asks it to plan first, in words, for one that has no /plan of its own. */
+export const PLAN_FIRST = 'Plan this first and wait for my go-ahead before you change any file.';
+
+/**
+ * A question with "plan first" asked: Claude Code takes `/plan <task>` (its documented plan-mode command); every other
+ * target (Codex, a custom CLI, the chat panel, the clipboard) gets the request in words instead of a command it may not know.
+ */
+export function planFirst(line: string, target: AskTarget): string {
+	const claude = (target.kind === 'session' || target.kind === 'new') && target.cli === 'claude';
+	return claude ? `/plan ${line}` : `${PLAN_FIRST} ${line}`;
+}
+
+/** The slash commands another extension may have typed into a session (flow.agents.slash): a kind, never text of its own. */
+export type SlashKind = 'compact' | 'context';
+/** Why a slash command was not typed, or `sent`. */
+export type SlashResult = 'sent' | 'busy' | 'waiting' | 'not-ready' | 'unsupported' | 'no-terminal' | 'unknown';
+
+/** What each CLI types for a kind: both take /compact, only Claude Code has /context. */
+export function slashText(kind: SlashKind, cli: AgentCli): string | undefined {
+	if (kind === 'compact') {
+		return cli === 'custom' ? undefined : '/compact';
+	}
+	return cli === 'claude' ? '/context' : undefined;
+}
+
+/**
+ * Whether `kind` may be typed into the session now, by the same rule as any typed text (canType): only at its prompt,
+ * since the Enter after the command would answer an open permission menu with "Yes". Undefined when it may.
+ */
+export function slashRefusal(s: SessionInfo | undefined, kind: SlashKind): Exclude<SlashResult, 'sent'> | undefined {
+	if (!s) {
+		return 'unknown';
+	}
+	if (!slashText(kind, s.cli)) {
+		return 'unsupported';
+	}
+	if (!s.alive || s.state === 'ended') {
+		return 'no-terminal';
+	}
+	if (canType(s, [])) {
+		return undefined;
+	}
+	return s.state === 'working' ? 'busy' : s.state === 'blocked' ? 'waiting' : 'not-ready';
+}
+
 /** Sessions that can take the question now: those at their prompt first, then custom ones (state unknown), newest first. */
 export function readySessions(sessions: SessionInfo[], customs: CustomCli[]): SessionInfo[] {
 	const rank = (s: SessionInfo) => s.cli === 'custom' ? 1 : 0;

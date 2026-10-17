@@ -62,6 +62,15 @@ export class PolyIndex implements vscode.Disposable {
 			clearTimeout(this.changeTimer);
 			this.changeTimer = setTimeout(() => void this.flush(), 400);
 		};
+		// Deleting a folder reports the folder only: its indexed files are dropped by path (a removed agent worktree left
+		// duplicate cards behind otherwise).
+		const deletions = vscode.workspace.createFileSystemWatcher('**/*', true, true, false);
+		const removed = (u: vscode.Uri) => {
+			if (!WATCHED_FILE.test(path.basename(u.fsPath)) && vscode.workspace.getWorkspaceFolder(u)) {
+				void this.request<number>('removedDir', u.fsPath).then(n => n ? this.refreshEntries() : undefined, () => undefined);
+			}
+		};
+		this.disposables.push(deletions, deletions.onDidDelete(removed));
 		this.disposables.push(watcher, watcher.onDidChange(changed), watcher.onDidCreate(changed), watcher.onDidDelete(changed),
 			vscode.workspace.onDidChangeWorkspaceFolders(() => this.restart()));
 		this.entries = context.workspaceState.get<EntryPoint[]>('flow.polyEntries', []);

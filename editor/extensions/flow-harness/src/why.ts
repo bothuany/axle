@@ -9,10 +9,12 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { effectiveSettings, instructionsFor, type SettingsLayer } from './effective';
+import { effectiveSettings, instructionsFor, type Effective, type SettingsLayer } from './effective';
 import { page } from './page';
 import { codexConfig, parseCall, simulate, simulateCodex, type Verdict } from './permmatch';
 import type { Harness, HarnessItem } from './scan';
+import type { Live } from './live';
+import { claudeDir, codexDir } from './dirs';
 
 /** Where an organization's managed settings live, by platform (Claude Code's documented locations). */
 export function managedSettingsFile(): string {
@@ -27,7 +29,7 @@ export async function loadLayers(root: string): Promise<SettingsLayer[]> {
 		['managed', managedSettingsFile()],
 		['local', path.join(root, '.claude', 'settings.local.json')],
 		['project', path.join(root, '.claude', 'settings.json')],
-		['user', path.join(os.homedir(), '.claude', 'settings.json')],
+		['user', path.join(claudeDir(), 'settings.json')],
 	];
 	return Promise.all(files.map(async ([scope, file]) => {
 		const text = await fs.readFile(file, 'utf8').catch(() => undefined);
@@ -54,7 +56,7 @@ export class WhyView implements vscode.Disposable {
 	private openable: string[] = [];
 	private readonly disposables: vscode.Disposable[] = [];
 
-	constructor(private readonly harness: () => Harness | undefined) {
+	constructor(private readonly harness: () => Harness | undefined, private readonly live?: Live) {
 		this.disposables.push(vscode.window.onDidChangeActiveTextEditor(ed => {
 			if (this.panel && !this.picked && ed?.document.uri.scheme === 'file') {
 				void this.render(ed.document.uri.fsPath);
@@ -106,11 +108,28 @@ export class WhyView implements vscode.Disposable {
 		}
 		const ctx = { cwd: h.root, home: os.homedir() };
 		if (agent === 'Codex') {
-			const toml = await fs.readFile(path.join(os.homedir(), '.codex', 'config.toml'), 'utf8').catch(() => '');
+			const toml = await fs.readFile(path.join(codexDir(), 'config.toml'), 'utf8').catch(() => '');
 			return simulateCodex(call, codexConfig(toml), ctx);
 		}
 		const eff = effectiveSettings(await loadLayers(h.root));
-		return simulate(call, eff.rules, { ...ctx, mode: eff.mode, additionalDirs: eff.additionalDirs.map(d => path.resolve(h.root, d)) });
+		const mode = this.mode(eff);
+		const v = simulate(call, eff.rules, { ...ctx, mode: mode.mode, additionalDirs: eff.additionalDirs.map(d => path.resolve(h.root, d)) });
+		return { ...v, notes: [`Permission mode: ${mode.mode} (${mode.from})`, ...v.notes] };
+	}
+
+	/**
+	 * The permission mode to simulate in: the one the newest Claude Code session's hooks reported (a session can start in
+	 * another mode or switch with Shift+Tab), else defaultMode as the settings apply it, else Claude Code's built-in default.
+	 */
+	private mode(eff: Effective): { mode: string; from: string } {
+		const s = [...this.live?.sessions.values() ?? []].filter(x => x.cli === 'claude' && x.mode).sort((a, b) => b.at - a.at)[0];
+		if (s?.mode) {
+			return { mode: s.mode, from: `what ${s.agent} reported last` };
+		}
+		if (eff.mode) {
+			return { mode: eff.mode, from: 'defaultMode in the settings' };
+		}
+		return { mode: 'auto', from: `Claude Code's built-in default since v2.1.283${eff.modeNote ? `; ${eff.modeNote}` : ''}` };
 	}
 
 	private async render(file: string | undefined) {
@@ -140,7 +159,7 @@ export class WhyView implements vscode.Disposable {
 			scalars: eff.scalars.map(s => ({ key: s.key, value: JSON.stringify(s.value), scope: s.scope, overridden: s.overridden.map(o => ({ scope: o.scope, value: JSON.stringify(o.value) })) })),
 			env: eff.env.map(e => ({ key: e.key, scope: e.scope })),
 			rules: { allow: eff.rules.filter(r => r.effect === 'allow').length, ask: eff.rules.filter(r => r.effect === 'ask').length, deny: eff.rules.filter(r => r.effect === 'deny').length },
-			mode: eff.mode ?? 'default',
+			mode: this.mode(eff),
 		});
 	}
 
@@ -179,7 +198,7 @@ function render(d) {
 		d.layers.map(l => el('tr', {}, el('td', {}, l.scope), el('td', { class: 'mono' }, l.open >= 0 ? el('a', { onclick: () => vscode.postMessage({ type: 'open', index: l.open }) }, l.file) : l.file),
 			el('td', { class: l.error ? 'deny' : 'muted' }, l.error ? 'Broken JSON, ignored: ' + l.error : l.exists ? '' : (l.scope === 'managed' ? 'none (checked)' : 'not present'))))));
 	const sc = $('scalars'); sc.replaceChildren();
-	sc.append(el('p', {}, 'Permission mode: ', el('b', {}, d.mode), ' · rules: ', el('span', { class: 'allow' }, d.rules.allow + ' allow'), ', ', el('span', { class: 'ask' }, d.rules.ask + ' ask'), ', ', el('span', { class: 'deny' }, d.rules.deny + ' deny')));
+	sc.append(el('p', {}, 'Permission mode: ', el('b', {}, d.mode.mode), el('span', { class: 'muted' }, ' (' + d.mode.from + ')'), ' · rules: ', el('span', { class: 'allow' }, d.rules.allow + ' allow'), ', ', el('span', { class: 'ask' }, d.rules.ask + ' ask'), ', ', el('span', { class: 'deny' }, d.rules.deny + ' deny')));
 	if (d.scalars.length) sc.append(el('table', {}, el('tr', {}, el('th', {}, 'Setting'), el('th', {}, 'Value'), el('th', {}, 'From'), el('th', {}, 'Overrides')),
 		d.scalars.map(s => el('tr', {}, el('td', { class: 'mono' }, s.key), el('td', { class: 'mono' }, s.value), el('td', {}, s.scope),
 			el('td', {}, s.overridden.map(o => el('div', {}, el('s', { class: 'mono' }, o.value), ' ', el('span', { class: 'muted' }, o.scope))))))));
@@ -201,7 +220,7 @@ $('pick').onclick = () => vscode.postMessage({ type: 'pick' });
 $('follow').onclick = () => vscode.postMessage({ type: 'follow' });
 window.addEventListener('message', e => { const m = e.data; if (m.type === 'data') render(m); else if (m.type === 'verdict' && m.text === $('call').value.trim()) verdict(m.verdict); });
 vscode.postMessage({ type: 'ready' });
-`, 'h3 { font-size: 13px; margin: 12px 0 4px; } .head { flex-wrap: wrap; } .head .grow { min-width: 220px; } h1 { overflow-wrap: anywhere; }');
+`, 'h3 { font-size: 13px; margin: 12px 0 4px; } .head { flex-wrap: wrap; } .card > .row { flex-wrap: wrap; } #call { min-width: 160px; } .head .grow { min-width: 220px; } h1 { overflow-wrap: anywhere; }');
 	}
 
 	dispose() {

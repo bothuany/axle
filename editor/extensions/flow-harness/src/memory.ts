@@ -46,6 +46,21 @@ export function parseIndex(text: string): IndexEntry[] {
 	return out;
 }
 
+/**
+ * MEMORY.md without the index line that points at `fileName`, or undefined when no line does. `hint` is the line the
+ * scan saw it on; MEMORY.md may have changed since (the agent added a memory), so the link decides, not the number.
+ */
+export function withoutIndexLine(text: string, fileName: string, hint?: number): string | undefined {
+	const entries = parseIndex(text).filter(e => e.target.replace(/^\.\//, '') === fileName);
+	const entry = entries.find(e => e.line === hint) ?? entries[0];
+	if (!entry) {
+		return undefined;
+	}
+	const lines = text.split(/\r?\n/);
+	lines.splice(entry.line, 1);
+	return lines.join(text.includes('\r\n') ? '\r\n' : '\n');
+}
+
 /** A topic file: frontmatter (top-level keys and one level under metadata:) and the body after it. */
 export function parseMemory(file: string, text: string): Memory {
 	const lines = text.split(/\r?\n/);

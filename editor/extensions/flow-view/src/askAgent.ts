@@ -12,10 +12,10 @@ import * as vscode from 'vscode';
  * attached the way the target reads them (an @-mention for Claude, a path for the others, attachments in the chat).
  * True when flow-agent dealt with it (also when the user closed its picker); false: flow-agent is not there, use the chat panel.
  */
-export async function askInDock(text: string, submit: boolean, origin: string, files: string[] = []): Promise<boolean> {
+export async function askInDock(text: string, submit: boolean, origin: string, files: string[] = [], options: { plan?: boolean } = {}): Promise<boolean> {
 	const commands = await vscode.commands.getCommands(true);
 	if (!commands.includes('flow.agents.ask')) {
 		return false;
 	}
-	return (await vscode.commands.executeCommand<boolean>('flow.agents.ask', text, submit, origin, files)) === true;
+	return (await vscode.commands.executeCommand<boolean>('flow.agents.ask', text, submit, origin, files, options)) === true;
 }

@@ -103,53 +103,82 @@ async function writeAtomic(file: string, text: string) {
 	}
 }
 
-/** Closes the preview diff, and only that: the user may have switched tabs while the dialog was open. */
-async function closeDiff() {
-	const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
-	if (input instanceof vscode.TabInputTextDiff && input.modified.scheme === SCHEME) {
-		await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+/** Closes the preview diffs this opened, and only those: the user may have switched tabs while the dialog was open. */
+async function closeDiffs(keys: Set<string>) {
+	const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs).filter(tab => tab.input instanceof vscode.TabInputTextDiff && tab.input.modified.scheme === SCHEME && keys.has(tab.input.modified.path));
+	if (tabs.length) {
+		await vscode.window.tabGroups.close(tabs);
 	}
+}
+
+/** One file's change: `change` turns its current text (empty when it does not exist) into the new text, or undefined after saying why not. */
+export interface FileChange {
+	file: string;
+	change: (text: string) => string | undefined;
+}
+
+/**
+ * Opens a diff of every change, and writes them all when the user confirms in one dialog. Returns whether they were
+ * written. Each change is applied again to the file as it is when the user says yes, so an edit made while the dialog
+ * was open (Claude Code adding an "always allow" rule, say) is kept.
+ */
+export async function previewAndWriteFiles(title: string, changes: FileChange[], button = 'Write'): Promise<boolean> {
+	const planned: { c: FileChange; before: string; after: string; key: string }[] = [];
+	for (const c of changes) {
+		const before = await load(c.file);
+		const after = before === undefined ? undefined : c.change(before);
+		if (before === undefined || after === undefined) {
+			return false;
+		}
+		if (after !== before) {
+			planned.push({ c, before, after, key: `/${Date.now()}-${planned.length}/${path.basename(c.file)}` });
+		}
+	}
+	if (!planned.length) {
+		void vscode.window.showInformationMessage(`${title}: nothing to change, it is there already.`);
+		return true;
+	}
+	for (const p of planned) {
+		previews.set(p.key, p.after);
+		const left = p.before ? vscode.Uri.file(p.c.file) : vscode.Uri.from({ scheme: SCHEME, path: `${p.key}.empty` });
+		await vscode.commands.executeCommand('vscode.diff', left, vscode.Uri.from({ scheme: SCHEME, path: p.key }), `${title}: ${vscode.workspace.asRelativePath(p.c.file)}`, { preview: planned.length === 1 });
+	}
+	const files = planned.map(p => `${p.before ? 'Changes' : 'Creates'} ${vscode.workspace.asRelativePath(p.c.file)}`).join('\n');
+	const ok = await vscode.window.showInformationMessage(`${title}?`, { modal: true, detail: `${files}\n\nThe ${planned.length > 1 ? 'diffs are' : 'diff is'} open behind this dialog.` }, button);
+	const keys = new Set(planned.map(p => p.key));
+	planned.forEach(p => previews.delete(p.key));
+	await closeDiffs(keys);
+	if (ok !== button) {
+		return false;
+	}
+	const finals: { file: string; text: string }[] = [];
+	for (const p of planned) {
+		const latest = await load(p.c.file);
+		const final = latest === undefined ? undefined : latest === p.before ? p.after : p.c.change(latest);
+		if (final === undefined) {
+			return false;
+		}
+		finals.push({ file: p.c.file, text: final });
+	}
+	for (const f of finals) {
+		try {
+			await writeAtomic(f.file, f.text);
+		} catch (e) {
+			void vscode.window.showErrorMessage(`Could not write ${f.file} (${(e as Error).message}).${finals.length > 1 ? ' The other files may have been written.' : ' Nothing was changed.'}`);
+			return false;
+		}
+	}
+	vscode.window.setStatusBarMessage(`$(check) ${title}: written`, 4000);
+	return true;
 }
 
 /**
  * Applies `mutate` to the JSON in `file` (an empty object when it does not exist yet), opens a diff of
  * the result, and writes it when the user confirms. Returns whether the file was written.
  */
-export async function previewAndWrite<T extends object>(file: string, title: string, mutate: (settings: T) => void): Promise<boolean> {
-	const before = await load(file);
-	if (before === undefined) {
-		return false;
-	}
-	const after = apply(file, before, mutate);
-	if (after === undefined) {
-		return false;
-	}
-	const key = `/${Date.now()}/${path.basename(file)}`;
-	previews.set(key, after);
-	const left = before ? vscode.Uri.file(file) : vscode.Uri.from({ scheme: SCHEME, path: `${key}.empty` });
-	await vscode.commands.executeCommand('vscode.diff', left, vscode.Uri.from({ scheme: SCHEME, path: key }), `${title}: ${vscode.workspace.asRelativePath(file)}`, { preview: true });
-	const ok = await vscode.window.showInformationMessage(`${title}?`, { modal: true, detail: `Writes ${file}. The diff is open behind this dialog.` }, 'Write Settings');
-	previews.delete(key);
-	await closeDiff();
-	if (ok !== 'Write Settings') {
-		return false;
-	}
-	// The dialog may have stayed open for minutes: apply the same change to the file as it is now, so an
-	// edit made meanwhile (Claude Code adding an "always allow" rule, say) is kept.
-	const latest = await load(file);
-	if (latest === undefined) {
-		return false;
-	}
-	const final = latest === before ? after : apply(file, latest, mutate);
-	if (final === undefined) {
-		return false;
-	}
-	try {
-		await writeAtomic(file, final);
-	} catch (e) {
-		void vscode.window.showErrorMessage(`Could not write ${file} (${(e as Error).message}). Nothing was changed.`);
-		return false;
-	}
-	vscode.window.setStatusBarMessage(`$(check) ${title}: written`, 4000);
-	return true;
+export function previewAndWrite<T extends object>(file: string, title: string, mutate: (settings: T) => void): Promise<boolean> {
+	return previewAndWriteFiles(title, [{ file, change: text => apply(file, text, mutate) }], 'Write Settings');
 }
+
+/** A JSON settings change for previewAndWriteFiles. */
+export const jsonChange = <T extends object>(file: string, mutate: (settings: T) => void): FileChange => ({ file, change: text => apply(file, text, mutate) });

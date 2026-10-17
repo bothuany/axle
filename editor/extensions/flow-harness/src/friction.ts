@@ -165,15 +165,23 @@ export function errorShape(error: string): string {
 		.slice(0, 120);
 }
 
-/** The words of a command that say what it is: `npm test`, `git push`, `dotnet build`. */
+/** Shell operators that end one command and start the next: `a|b`, `a && b`, `a; b`. */
+const OPERATOR = /\|\||&&|[|;&\n]/;
+
+/**
+ * The words of a command that say what it is: `npm test`, `git push`, `dotnet build`. Only the first command of a
+ * pipeline or list counts, and the second word only when it is a plain word (a subcommand), never an argument with
+ * an operator, a path or a quote in it: `cat foo|grep x` is `cat foo`, never `cat foo|grep`.
+ */
 export function commandHead(command: string): string {
-	const words = command.trim().replace(/^(?:\w+=\S*\s+)+/, '').split(/\s+/);
+	const first = command.trim().replace(/^(?:\w+=\S*\s+)+/, '').split(OPERATOR)[0].trim();
+	const words = first.split(/\s+/);
 	const program = (words[0] ?? '').replace(/^.*[\\/]/, '');
 	// A loop or a condition is not a command a guard could stop: `for n in …` has no head.
-	if (/^(?:for|while|until|if|case|do|then|select|function|\{|\(|\[\[?)$/.test(program)) {
+	if (!/^[\w.+-]+$/.test(program) || /^(?:for|while|until|if|case|do|then|select|function)$/.test(program)) {
 		return '';
 	}
-	const second = words[1] && !words[1].startsWith('-') && !/[\\/.]/.test(words[1]) ? ` ${words[1]}` : '';
+	const second = words[1] && /^[a-z][\w-]*$/i.test(words[1]) ? ` ${words[1]}` : '';
 	return `${program}${second}`.trim();
 }
 
@@ -188,7 +196,8 @@ export function failureProposals(failures: readonly FailureRecord[], min = 3): P
 			continue;
 		}
 		const head = f.tool === 'Bash' ? commandHead(f.subject) : '';
-		const key = `${f.tool}|${head}|${errorShape(f.error)}`;
+		// JSON, not a joined string: a head may hold any character, a `|` included.
+		const key = JSON.stringify([f.tool, head, errorShape(f.error)]);
 		groups.set(key, [...(groups.get(key) ?? []), f]);
 	}
 	const out: Proposal[] = [];
@@ -196,11 +205,13 @@ export function failureProposals(failures: readonly FailureRecord[], min = 3): P
 		if (list.length < min) {
 			continue;
 		}
-		const [tool, head] = key.split('|');
+		const [tool, head] = JSON.parse(key) as [string, string];
 		const sample = list[list.length - 1].error.split(/\r?\n/).map(l => l.trim()).find(l => l && !/^exit code \d+$/i.test(l)) ?? list[0].error;
 		const short = sample.length > 140 ? `${sample.slice(0, 137)}…` : sample;
 		const evidence = list.map(f => ({ text: `${f.subject ? `${f.subject.slice(0, 200)}\n` : ''}${f.error.slice(0, 300)}`, at: f.at, session: f.session })).sort((a, b) => b.at - a.at);
-		if (tool === 'Bash' && head) {
+		// A one-word head would stop every use of the program (`cat`, `ls -la`): a guard only when it failed run bare.
+		const narrow = head.includes(' ') || list.every(f => f.subject.trim() === head);
+		if (tool === 'Bash' && head && narrow) {
 			out.push({
 				id: `hook:${hash(key)}`, kind: 'hook', tool, prefix: head,
 				title: `\`${head}\` failed ${list.length} times with the same error`,
@@ -225,14 +236,50 @@ export function guardScript(prefix: string, reason: string): string {
 let input = ''
 process.stdin.on('data', d => input += d)
 process.stdin.on('end', () => {
-	const command = String(JSON.parse(input || '{}').tool_input?.command ?? '').trim()
+	const command = String(JSON.parse(input || '{}').tool_input?.command ?? '')
 	const prefix = ${JSON.stringify(prefix)}
-	if (command === prefix || command.startsWith(prefix + ' ')) {
+	// Every command of a pipeline or list, its leading VAR=value assignments taken off.
+	const parts = command.split(/\\|\\||&&|[|;&\\n]/).map(p => p.trim().replace(/^(?:\\w+=\\S*\\s+)+/, ''))
+	if (parts.some(p => p === prefix || p.startsWith(prefix + ' '))) {
 		process.stderr.write(${JSON.stringify(reason)} + '\\n')
 		process.exit(2)
 	}
 })
 `;
+}
+
+/** The command line that runs a guard script from the project's settings. */
+export const guardCommand = (fileName: string) => `node "$CLAUDE_PROJECT_DIR/.claude/hooks/${fileName}"`;
+
+/**
+ * Adds a PreToolUse Bash entry that runs `command` to `settings`, unless one runs it already: a second guard for the
+ * same command replaces the script and keeps one entry. Throws, so the user is told, when `hooks` has another shape.
+ */
+export function addGuardHook(settings: Record<string, unknown>, command: string): void {
+	const hooks = settings.hooks ?? (settings.hooks = {});
+	if (!hooks || typeof hooks !== 'object' || Array.isArray(hooks)) {
+		throw new Error('"hooks" is not an object');
+	}
+	const h = hooks as Record<string, unknown>;
+	const pre = h.PreToolUse ?? (h.PreToolUse = []);
+	if (!Array.isArray(pre)) {
+		throw new Error('"hooks.PreToolUse" is not a list');
+	}
+	const runs = pre.some(e => {
+		const list = (e as { hooks?: unknown } | null)?.hooks;
+		return Array.isArray(list) && list.some(x => (x as { command?: unknown } | null)?.command === command);
+	});
+	if (!runs) {
+		pre.push({ matcher: 'Bash', hooks: [{ type: 'command', command, timeout: 10 }] });
+	}
+}
+
+/** `text` (an instruction file, empty when it does not exist yet) with `line` added at its end; a new file starts with a heading. */
+export function appendInstruction(text: string, line: string): string {
+	if (!text) {
+		return `# Project instructions\n\n${line}\n`;
+	}
+	return `${text}${text.endsWith('\n') ? '' : '\n'}${line}\n`;
 }
 
 /** A file name for a guard script: `axle-guard-npm-test.mjs`. */

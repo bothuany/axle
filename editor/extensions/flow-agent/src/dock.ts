@@ -8,7 +8,8 @@ import * as vscode from 'vscode';
 import type { Agents } from './agents';
 import { attentionKind, rank } from './attention';
 import { conflictText } from './conflicts';
-import { WORKTREE_ACTIONS, type WorktreeAction, type WorktreeRows } from './worktreeActions';
+import { dockAction } from './dockMessage';
+import type { WorktreeRows } from './worktreeActions';
 
 /** The real marks: Claude's spark (from the Claude Code extension) and the Codex cloud (lobe-icons). */
 const ICON = {
@@ -34,38 +35,24 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 		this.view = view;
 		view.webview.options = { enableScripts: true };
 		view.webview.html = this.html();
-		view.webview.onDidReceiveMessage(m => {
-			if (m.type === 'ready') {
-				this.post();
-			} else if (m.type === 'new') {
-				// The page is not trusted with what to run: only the two built-in agents start from here
-				// (your own commands go through "Start an Agent…", which reads them from your settings).
+		// The page is not trusted: dockAction checks each message's shape and turns it into one known action, or nothing.
+		view.webview.onDidReceiveMessage(raw => {
+			const m = dockAction(raw);
+			switch (m?.type) {
+				case 'ready': return this.post();
 				// The button offers a new session or one of the earlier ones to resume.
-				if (m.cli === 'claude' || m.cli === 'codex') {
-					void vscode.commands.executeCommand('flow.agents.start', m.cli);
-				}
-			} else if (m.type === 'show' && typeof m.id === 'string') {
-				this.agents.show(m.id);
-			} else if (m.type === 'flow' && typeof m.id === 'string' && Number.isInteger(m.index)) {
-				// An index into the list the host sent: the page never names a flow itself.
-				this.agents.openImpactFlow(m.id, m.index);
-			} else if (m.type === 'pr' && typeof m.id === 'string') {
-				this.agents.openPr(m.id);
-			} else if (m.type === 'xray' && typeof m.id === 'string') {
-				this.agents.xray(m.id);
-			} else if (m.type === 'forget' && typeof m.id === 'string') {
-				this.agents.forget(m.id);
-			} else if (m.type === 'compact' && typeof m.id === 'string') {
-				this.agents.compact(m.id);
-			} else if (m.type === 'rename' && typeof m.id === 'string') {
-				void this.rename(m.id);
-			} else if (m.type === 'wt' && typeof m.id === 'string' && WORKTREE_ACTIONS.includes(m.action)) {
-				// The page names the row and one of four actions; the folder and branches come from the host's own record.
-				void this.worktrees?.act(m.id, m.action as WorktreeAction);
-			} else if (m.type === 'pick') {
-				void vscode.commands.executeCommand('flow.agents.new');
-			} else if (m.type === 'chat') {
-				void vscode.commands.executeCommand('workbench.action.openSettings', 'flow.agents.showChat');
+				case 'new': return void vscode.commands.executeCommand('flow.agents.start', m.cli);
+				case 'show': return this.agents.show(m.id);
+				case 'flow': return this.agents.openImpactFlow(m.id, m.index);
+				case 'pr': return this.agents.openPr(m.id);
+				case 'xray': return this.agents.xray(m.id);
+				// Through the worktree rows: an agent's worktree must not drop out of sight with its row.
+				case 'forget': return void (this.worktrees ? this.worktrees.forget(m.id) : this.agents.forget(m.id));
+				case 'compact': return this.agents.compact(m.id);
+				case 'rename': return void this.rename(m.id);
+				case 'wt': return void this.worktrees?.act(m.id, m.action);
+				case 'pick': return void vscode.commands.executeCommand('flow.agents.new');
+				case 'chat': return void vscode.commands.executeCommand('workbench.action.openSettings', 'flow.agents.showChat');
 			}
 		});
 		view.onDidChangeVisibility(() => view.visible && this.post());
@@ -257,7 +244,9 @@ function render() {
 		const sized = !!(s.usage && s.usage.size);
 		// Codex counts its share its own way (it leaves out a fixed baseline): the dock shows the figure the CLI shows.
 		const pct = sized ? Math.min(100, s.usage.percent ?? Math.round(s.usage.used / s.usage.size * 100)) : 0;
-		const state = s.state === 'working' || s.state === 'blocked' ? LABEL[s.state] + ' · ' + ago(s.since, Date.now()) : s.state === 'done' ? 'Done ' + ago(s.since, Date.now()) + ' ago' : LABEL[s.state];
+		// A question or approval it waits on says "Needs you" whatever the state (a startup prompt comes before any hook).
+		const waits = (s.attention === 'question' || s.attention === 'approval') && s.state !== 'ended';
+		const state = waits && s.state !== 'blocked' ? LABEL.blocked : s.state === 'working' || s.state === 'blocked' ? LABEL[s.state] + ' · ' + ago(s.since, Date.now()) : s.state === 'done' ? 'Done ' + ago(s.since, Date.now()) + ' ago' : LABEL[s.state];
 		const todos = s.todos.length ? '<div class="todos"><span class="segs">' + s.todos.slice(0, 12).map(t => '<span class="seg ' + esc(t.status) + '"></span>').join('') + '</span><span class="count">' + s.done + '/' + s.todos.length + '</span>' + (s.current ? '<span class="now">' + esc(s.current) + '</span>' : '') + '</div>' : '';
 		const impact = s.impact && s.impact.flows.length ? '<div class="impact"><b>This turn touched ' + (s.impact.flows.length + s.impact.more) + (s.impact.flows.length + s.impact.more === 1 ? ' flow' : ' flows') + ':</b> ' + s.impact.flows.map((f, i) => '<span class="flow" role="button" tabindex="0" data-flow="' + i + '" title="' + esc((f.via && f.via.length ? 'Through ' + f.via.join(', ') + '. ' : '') + 'Open this flow') + '">' + esc(f.label) + '</span>').join('') + (s.impact.more ? '<span>+' + s.impact.more + ' more</span>' : '') + '</div>' : '';
 		const kind = s.attention;
@@ -266,8 +255,11 @@ function render() {
 		const needText = s.need ? s.need.text : kind === 'approval' ? s.activity : '';
 		const need = chip ? '<div class="need ' + esc(chip) + '"><span class="chip">' + esc(NEED[chip]) + '</span>' + (needText ? '<span class="t">' + esc(needText) + '</span>' : '') + '</div>' : '';
 		const c = s.cost;
-		const cost = c ? '<span class="cost" title="' + esc((c.prompt ? spendTip('This prompt', c.prompt) + '\\n' : '') + spendTip('Session', c.session) + '\\nTokens of the ' + c.scope + '.' + (c.usdSource ? ' Dollars: ' + c.usdSource + '.' : ' No dollar figure: the CLI does not report one.')) + '">'
-			+ (c.prompt ? '<span class="sp">' + esc(spendLine('prompt', c.prompt)) + '</span>' : '') + '<span class="sp">' + esc(spendLine('session', c.session)) + (c.session.usd !== undefined ? ' <span class="est">est.</span>' : '') + '</span></span>' : '';
+		// Both lines are the same kind of estimate, so both say so. A resumed conversation counts from this CLI's start, as its dollars do.
+		const est = x => x.usd !== undefined ? ' <span class="est">est.</span>' : '';
+		const earlier = c && c.earlier ? '\\n' + tok(sum(c.earlier)) + ' tokens from before this CLI started (the conversation was resumed) are not counted here.' : '';
+		const cost = c ? '<span class="cost" title="' + esc((c.prompt ? spendTip('This prompt', c.prompt) + '\\n' : '') + spendTip(c.earlier ? 'Since this CLI started' : 'Session', c.session) + '\\nTokens of the ' + c.scope + '.' + (c.usdSource ? ' Dollars: ' + c.usdSource + '.' : ' No dollar figure: the CLI does not report one.') + earlier) + '">'
+			+ (c.prompt ? '<span class="sp">' + esc(spendLine('prompt', c.prompt)) + est(c.prompt) + '</span>' : '') + '<span class="sp">' + esc(spendLine(c.earlier ? 'since resume' : 'session', c.session)) + est(c.session) + '</span></span>' : '';
 		const p = s.pr;
 		const checks = p && p.checks !== 'none' ? ' <span class="ck ' + esc(p.checks) + '">' + esc(CHECK[p.checks]) + '</span>' : '';
 		const prTip = p ? p.title + ' (' + PRSTATE[p.state] + ')' + (p.checks !== 'none' ? '\\nChecks: ' + p.counts.pass + ' passed, ' + p.counts.fail + ' failed, ' + p.counts.pending + ' pending' + (p.failing.length ? '\\nFailing: ' + p.failing.join(', ') : '') : '') + '\\nOpen on GitHub' : '';
@@ -282,7 +274,7 @@ function render() {
 		const clash = (s.clash || []).map(c => '<div class="clash' + (c.same ? ' same' : '') + '" title="' + esc(c.files.join(', ')) + '">⚠ ' + esc(c.text)
 			+ (c.same ? '<small>Same checkout: each writes over the edits of the other. Start agents that work in parallel in a worktree (Other… → in a worktree).</small>' : '') + '</div>').join('');
 		const level = pct >= 90 ? ' full' : pct >= 70 ? ' warn' : '';
-		// Only at the prompt: while the agent asks for permission, the Enter after /compact would answer its menu (compactAllowed).
+		// Only at the prompt: while the agent asks for permission, the Enter after /compact would answer its menu (slashRefusal in askTarget.ts, checked again in Agents.slash).
 		const canCompact = s.usage && s.cli !== 'custom' && (s.state === 'idle' || s.state === 'done');
 		const ctx = s.usage ? '<div class="ctxline' + level + '" title="' + esc(sized ? s.usage.used.toLocaleString() + ' of ' + s.usage.size.toLocaleString() + ' tokens in the context window' : s.usage.used.toLocaleString() + ' tokens in context; the agent has not said how large its window is') + '">'
 			+ (s.usage.model ? '<span class="model">' + esc(s.usage.model) + '</span><span>·</span>' : '')

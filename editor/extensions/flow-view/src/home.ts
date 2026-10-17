@@ -5,6 +5,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { execFile } from 'child_process';
+import { existsSync } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { askInDock } from './askAgent';
@@ -16,6 +17,8 @@ import { entryName, type Endpoints, type Source } from './backends';
 const HOME_COMMANDS = new Set(['flow.showAtCursor', 'flow.pickEndpoint', 'workbench.action.quickOpen', 'workbench.view.extension.flowHarness', 'flow.agents.chooseAskTarget']);
 
 const RECENT_FILES = 'flow.home.recentFiles';
+/** "Plan first" in words, for the chat panel when flow-agent is not there (flow-agent's planFirst says it the same way). */
+const PLAN_FIRST = 'Plan this first and wait for my go-ahead before you change any file.';
 const RECENT_FLOWS = 'flow.home.recentFlows';
 
 interface Recent { path: string; at: number }
@@ -74,10 +77,11 @@ export class FlowHome implements vscode.Disposable {
 		panel.onDidChangeViewState(e => e.webviewPanel.visible && void this.post());
 	}
 
-	private async onMessage(m: { type: string; text?: string; path?: string; id?: string; label?: string; source?: Source; command?: string; line?: number }) {
+	private async onMessage(m: { type: string; text?: string; plan?: boolean; path?: string; id?: string; label?: string; source?: Source; command?: string; line?: number }) {
 		switch (m.type) {
 			case 'ready': return this.post();
-			case 'ask': return await askInDock(m.text ?? '', true, 'Home') || vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: false });
+			// "Plan first" goes as an option: flow-agent says it the way the chosen agent understands (/plan is Claude Code's).
+			case 'ask': return await askInDock(m.text ?? '', true, 'Home', [], { plan: m.plan === true }) || vscode.commands.executeCommand('workbench.action.chat.open', { query: m.plan === true ? `${PLAN_FIRST} ${m.text ?? ''}` : m.text, isPartialQuery: false });
 			case 'draft': return await askInDock(m.text ?? '', false, 'Home') || vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: true });
 			case 'open': return vscode.window.showTextDocument(vscode.Uri.file(m.path!), { selection: m.line !== undefined ? new vscode.Range(m.line, 0, m.line, 0) : undefined });
 			case 'flow': return vscode.commands.executeCommand(Command.showEntry, m.id, m.label, m.source);
@@ -124,7 +128,8 @@ export class FlowHome implements vscode.Disposable {
 		const folder = vscode.workspace.workspaceFolders?.[0];
 		const root = folder?.uri.fsPath ?? '';
 		const health = await Promise.resolve(vscode.commands.executeCommand<Health | undefined>('flowHarness.health')).catch(() => undefined);
-		const files = this.context.workspaceState.get<Recent[]>(RECENT_FILES, []).slice(0, 7)
+		// A file that is gone (in a removed agent worktree, say) is no place to go back to.
+		const files = this.context.workspaceState.get<Recent[]>(RECENT_FILES, []).filter(r => existsSync(r.path)).slice(0, 7)
 			.map(r => ({ path: r.path, name: path.basename(r.path), dir: path.relative(root, path.dirname(r.path)), at: r.at }));
 		const flows = this.context.workspaceState.get<RecentFlow[]>(RECENT_FLOWS, []).slice(0, 7);
 		const all = this.endpoints.cached();
@@ -241,7 +246,7 @@ kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); bor
 	<form class="ask" id="ask">
 		<textarea id="q" placeholder="Describe a change, ask about the code, or type / for a skill" rows="2" aria-label="Ask the agent"></textarea>
 		<div class="ask-bar">
-			<button type="button" class="chip plan" data-prefix="/plan " title="Start with /plan: Claude Code and Codex plan before they edit"><i></i>Plan first</button>
+			<button type="button" class="chip plan" data-plan="1" title="Ask the agent to plan before it edits (Claude Code gets /plan)"><i></i>Plan first</button>
 			<button type="button" class="chip" data-draft="Review my uncommitted changes and list risks, most serious first." title="Put this prompt in the agent's prompt to finish or send">Review my changes</button>
 			<button type="button" class="chip" data-draft="Explain how this repo is laid out and where the main flows start." title="Put this prompt in the agent's prompt to finish or send">Explain this repo</button>
 			<span class="spacer"></span>
@@ -280,13 +285,13 @@ const applyKeys = () => document.querySelectorAll('kbd[data-k]').forEach(el => {
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'now' : m < 60 ? m + ' min' : m < 1440 ? Math.round(m / 60) + ' h' : Math.round(m / 1440) + ' d'; };
 const q = $('q');
-let prefix = '';
+let plan = false;
 q.addEventListener('input', () => { $('send').disabled = !q.value.trim(); });
 q.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); submit(); } });
 $('ask').addEventListener('submit', e => { e.preventDefault(); submit(); });
-function submit() { const t = q.value.trim(); if (!t) return; vscode.postMessage({ type: 'ask', text: prefix + t }); q.value = ''; $('send').disabled = true; }
+function submit() { const t = q.value.trim(); if (!t) return; vscode.postMessage({ type: 'ask', text: t, plan }); q.value = ''; $('send').disabled = true; }
 document.querySelectorAll('[data-draft]').forEach(b => b.addEventListener('click', () => vscode.postMessage({ type: 'draft', text: b.dataset.draft })));
-document.querySelectorAll('[data-prefix]').forEach(b => b.addEventListener('click', () => { prefix = prefix ? '' : b.dataset.prefix; b.setAttribute('aria-pressed', String(!!prefix)); b.style.background = prefix ? 'color-mix(in srgb, var(--plan) 14%, transparent)' : ''; q.focus(); }));
+document.querySelectorAll('[data-plan]').forEach(b => b.addEventListener('click', () => { plan = !plan; b.setAttribute('aria-pressed', String(plan)); b.style.background = plan ? 'color-mix(in srgb, var(--plan) 14%, transparent)' : ''; q.focus(); }));
 document.querySelectorAll('[data-run]').forEach(b => b.addEventListener('click', () => vscode.postMessage({ type: 'run', command: b.dataset.run })));
 window.addEventListener('message', e => {
 	const d = e.data; if (d.type !== 'data') return;

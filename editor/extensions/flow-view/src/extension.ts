@@ -328,7 +328,7 @@ function wireClaudeCode({ context, log, panel, changes }: Flow) {
 		}),
 		vscode.commands.registerCommand('flow.ide.howTo', async () => {
 			const pick = await vscode.window.showQuickPick([
-				{ label: '$(terminal) Run claude in a Axle terminal', detail: 'Connects automatically: diffs open in Axle, your selection is shared', run: 'term' },
+				{ label: '$(terminal) Run claude in an Axle terminal', detail: 'Connects automatically: diffs open in Axle, your selection is shared', run: 'term' },
 				{ label: '$(plug) Already running claude elsewhere?', detail: 'Type /ide in it and pick "Axle"', run: '' },
 				{ label: '$(tools) Give every claude the Axle tools (MCP)', detail: 'So it can open files and flows here and draw diagrams. Asks before changing anything', run: 'mcp' },
 			], { title: bridge.isConnected ? 'Claude Code is connected' : 'Connect Claude Code to Axle' });

@@ -13,7 +13,7 @@ import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { crashNeed, nextAttention, attentionKind, type Attention, type Need } from './attention';
+import { crashNeed, nextAttention, attentionKind, startupNeed, type Attention, type Need } from './attention';
 import { findConflicts, key, type Conflict, type SessionEdits } from './conflicts';
 import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexProfile, codexProfileFile } from './codexHooks';
 import { agentProcessEnv, inheritedAgentEnv } from './env';
@@ -21,9 +21,9 @@ import { CostTracker, statusUsd, type SessionCost } from './cost';
 import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
-import { canType, type AgentCli, type AgentState, type CustomCli, type SessionInfo } from './askTarget';
-import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, compactAllowed, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
-import { createWorktree, validBranch, worktreeSlug, type Worktree } from './worktrees';
+import { canType, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
+import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
+import { createWorktree, sameDir, validBranch, worktreeSlug, type Worktree } from './worktrees';
 
 // Declared with the ask rules, which must not import this file (it needs vscode); every other file takes them from here.
 export type { AgentCli, AgentState } from './askTarget';
@@ -92,6 +92,13 @@ export interface CustomAgent {
 interface Saved {
 	token: string;
 	sessions: Pick<AgentSession, 'id' | 'cli' | 'name' | 'pid' | 'prompt' | 'transcript' | 'command' | 'agentId' | 'worktree'>[];
+	/** Worktrees of agents taken off the list whose folder the user kept: the only record of where they are. */
+	kept?: KeptWorktree[];
+}
+
+/** A worktree kept after its agent left the dock, with the agent's name for the list. */
+export interface KeptWorktree extends Worktree {
+	agent: string;
 }
 
 interface HookPayload {
@@ -114,6 +121,8 @@ interface HookPayload {
 	duration_ms?: number;
 	/** SubagentStop: which subagent finished. */
 	agent_type?: string;
+	/** The session's permission mode, on the events that carry it (default, plan, acceptEdits, auto, dontAsk, bypassPermissions). */
+	permission_mode?: string;
 }
 
 const AGENT = 'Claude Code (terminal)';
@@ -183,7 +192,14 @@ function parseSaved(raw: unknown): Saved | undefined {
 			sessions.push({ id: e.id, cli: e.cli, name: str(e.name) ?? e.id, pid: typeof e.pid === 'number' ? e.pid : undefined, prompt: str(e.prompt), transcript: str(e.transcript), command: str(e.command), agentId: str(e.agentId), worktree: parseWorktree(e.worktree) });
 		}
 	}
-	return { token: str(o.token) ?? '', sessions };
+	const kept: KeptWorktree[] = [];
+	for (const k of Array.isArray((o as { kept?: unknown }).kept) ? (o as { kept: Record<string, unknown>[] }).kept : []) {
+		const wt = k && typeof k === 'object' ? parseWorktree(k) : undefined;
+		if (wt) {
+			kept.push({ ...wt, agent: str(k.agent) ?? wt.branch });
+		}
+	}
+	return { token: str(o.token) ?? '', sessions, kept };
 }
 
 /** A saved worktree, taken only when every part has the right shape: its branch names reach git when it is merged or removed. */
@@ -258,6 +274,8 @@ export class Agents implements vscode.Disposable {
 	private readonly disposables: vscode.Disposable[] = [];
 	/** Agents from before a reload, waiting for their terminal to come back. */
 	private readonly orphans = new Map<number, Saved['sessions'][number]>();
+	/** Worktrees kept after their agents were taken off the list (Agents: Kept Worktrees…). */
+	private kept: KeptWorktree[] = [];
 	private orphanTimer: NodeJS.Timeout | undefined;
 	/** Claude session ids that continue a Axle agent after /clear or /resume gave the conversation a new one. */
 	private readonly aliases = new Map<string, string>();
@@ -312,6 +330,7 @@ export class Agents implements vscode.Disposable {
 		this.dir = path.join(this.context.globalStorageUri.fsPath, 'agents', (folder ? '' : 'empty-') + createHash('sha1').update(key).digest('hex').slice(0, 12));
 		const saved = await fs.readFile(path.join(this.dir, 'sessions.json'), 'utf8').then(t => parseSaved(JSON.parse(t))).catch(() => undefined);
 		this.token = saved?.token || randomBytes(16).toString('hex');
+		this.kept = saved?.kept ?? [];
 		try {
 			await this.listen();
 		} catch (e) {
@@ -540,6 +559,7 @@ export class Agents implements vscode.Disposable {
 		const saved: Saved = {
 			token: this.token,
 			sessions: [...[...this.sessions.values()].map(({ id, cli, name, pid, prompt, transcript, command, agentId, worktree }) => ({ id, cli, name, pid, prompt, transcript, command, agentId, worktree })), ...this.orphans.values()],
+			kept: this.kept,
 		};
 		// One write at a time, through a temp file: overlapping writes could interleave and lose every saved session.
 		const file = path.join(this.dir, 'sessions.json');
@@ -643,11 +663,22 @@ export class Agents implements vscode.Disposable {
 		};
 		this.sessions.set(id, session);
 		this.terminals.set(id, terminal);
+		// The dollars Claude Code reports count from this start; a resumed transcript's earlier turns are kept apart.
+		this.costs.delete(id);
+		this.tracker(session)?.started(Date.now());
 		this.watchTranscript(session);
-		// If SessionStart does not reach us (no Node on the hook path, slow boot), call it ready once it had time to start.
+		// No SessionStart yet: Claude runs no hook before the folder is trusted, so it likely waits on that question (or on
+		// approving MCP servers). Say it may need you, rather than "Ready"; the first hook event clears it. (A missing Node
+		// on the hook path looks the same, which is why the text says "may".)
 		setTimeout(() => {
 			if (session.state === 'starting') {
 				session.state = 'idle';
+				// Only when its hooks are wired: without them no event ever comes, and every session would say it needs you.
+				if (cli === 'claude' && this.server && this.settingsOk && !this.heard.has(id)) {
+					const need = startupNeed(Date.now());
+					this.attention.set(id, { failures: 0, need });
+					session.need = need;
+				}
 				this.changed.fire();
 			}
 		}, 8000);
@@ -714,14 +745,37 @@ export class Agents implements vscode.Disposable {
 
 	/** Types /compact into the agent's terminal (both CLIs take it): keeps a summary, frees most of the window. */
 	compact(id: string) {
-		const s = this.sessions.get(id);
-		const t = this.terminals.get(id);
-		// Checked here, not only in the page: the row may be older than the state (a permission prompt that just came up).
-		if (!s || !t || !compactAllowed(s)) {
-			return;
+		const r = this.slash(id, 'compact', false, false);
+		// The row may be older than the state, or a reloaded window has not heard from the session yet: say why nothing was typed.
+		const name = this.sessions.get(id)?.name ?? 'The agent';
+		const why: Partial<Record<SlashResult, string>> = {
+			waiting: `${name} is waiting for your answer in its terminal: answer it first.`,
+			busy: `${name} is working: compact when it is back at its prompt.`,
+			'not-ready': `${name} has not said it is at its prompt since this window opened: type /compact in its terminal yourself.`,
+		};
+		if (why[r]) {
+			void vscode.window.showInformationMessage(why[r]!);
 		}
-		t.show();
-		t.sendText('/compact');
+	}
+
+	/**
+	 * Types a known slash command into one session, found by id (a name can be renamed or shared by a user's shell).
+	 * Checked here, at the moment of typing, not only in the page that asked: the row or the X-ray may be older than the
+	 * state, and the Enter would answer a permission prompt that just came up. `check` only says whether it would be typed.
+	 */
+	slash(id: string, kind: SlashKind, check: boolean, preserveFocus = true): SlashResult {
+		const t = this.terminals.get(id);
+		const s = this.askSessions().find(x => x.id === id);
+		const refused = slashRefusal(s && { ...s, alive: !!t }, kind);
+		const text = s && slashText(kind, s.cli);
+		if (refused || !t || !text) {
+			return refused ?? 'no-terminal';
+		}
+		if (!check) {
+			t.show(preserveFocus);
+			t.sendText(text);
+		}
+		return 'sent';
 	}
 
 	show(id: string) {
@@ -771,6 +825,20 @@ export class Agents implements vscode.Disposable {
 				this.log.warn(`Agents: could not write the new name to the transcript (${(e as Error).message})`);
 			}
 		}
+	}
+
+	/** The worktrees kept after their agents left the list. */
+	get keptWorktrees(): readonly KeptWorktree[] {
+		return this.kept;
+	}
+
+	/** Keeps a record of a worktree whose agent leaves the list, or (`keep` false) drops it once it is merged or removed. */
+	keepWorktree(wt: KeptWorktree, keep: boolean) {
+		this.kept = this.kept.filter(k => !sameDir(k.path, wt.path));
+		if (keep) {
+			this.kept.push(wt);
+		}
+		this.save();
 	}
 
 	/** Removes a finished agent from the list (its terminal, if any, closes too). */
@@ -1206,7 +1274,7 @@ export class Agents implements vscode.Disposable {
 			at: Date.now(), agent: s.name, cli: s.cli, session: p.session_id, event: p.hook_event_name, tool: p.tool_name, input,
 			error: typeof p.error === 'string' ? p.error.slice(0, 1000) : undefined, durationMs: p.duration_ms,
 			prompt: p.hook_event_name === 'UserPromptSubmit' ? p.prompt?.slice(0, 2000) : undefined,
-			agentType: p.agent_type, transcript: s.transcript,
+			agentType: p.agent_type, transcript: s.transcript, id: s.id, mode: p.permission_mode,
 		})).catch(() => undefined);
 	}
 
@@ -1215,7 +1283,7 @@ export class Agents implements vscode.Disposable {
 		const s = this.sessions.get(id);
 		if (s) {
 			// A click asked for it: if the harness map cannot answer, say so instead of doing nothing.
-			void Promise.resolve(vscode.commands.executeCommand('flowHarness.contextXray', { agent: s.name, cli: s.cli, transcript: s.transcript, usage: s.usage }))
+			void Promise.resolve(vscode.commands.executeCommand('flowHarness.contextXray', { id: s.id, agent: s.name, cli: s.cli, transcript: s.transcript, usage: s.usage }))
 				.catch(e => void vscode.window.showWarningMessage(`The context X-ray is not available: ${(e as Error).message ?? e}`));
 		}
 	}

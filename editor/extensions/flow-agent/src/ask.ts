@@ -8,7 +8,7 @@
 
 import * as vscode from 'vscode';
 import type { Agents } from './agents';
-import { choices, isTarget, notReady, oneLine, parseSetting, resolve, sameTarget, targetName, withFiles, type AskTarget, type Choice, type CustomCli } from './askTarget';
+import { choices, isTarget, notReady, oneLine, parseSetting, planFirst, resolve, sameTarget, targetName, withFiles, type AskTarget, type Choice, type CustomCli } from './askTarget';
 import { savedAgents } from './pick';
 
 const REMEMBERED = 'flow.agents.askTarget';
@@ -37,8 +37,9 @@ export class AskRouter implements vscode.Disposable {
 	 * Sends `text` (and `files`, referred to the way the target reads them) to the chosen agent. `submit` sends it; without
 	 * it the text waits in the prompt to be finished. Resolves true whenever the question was dealt with here, including
 	 * when the user closed the picker, so the caller never opens a chat panel on top; false only for nothing to send.
+	 * `plan` asks the agent to plan before it edits, said the way the chosen target understands it (planFirst).
 	 */
-	async ask(text: string, submit: boolean, origin?: string, files: string[] = []): Promise<boolean> {
+	async ask(text: string, submit: boolean, origin?: string, files: string[] = [], plan = false): Promise<boolean> {
 		const line = oneLine(text);
 		if (!line && !files.length) {
 			return false;
@@ -57,7 +58,7 @@ export class AskRouter implements vscode.Disposable {
 				return true;
 			}
 		}
-		const sent = await this.send(target, line, submit, files, customs);
+		const sent = await this.send(target, plan ? planFirst(line, target) : line, submit, files, customs);
 		// Only "remember" learns from use; a fixed setting or "ask" keeps its own rule.
 		if (setting === 'remember' && sent) {
 			await this.context.workspaceState.update(REMEMBERED, sent);

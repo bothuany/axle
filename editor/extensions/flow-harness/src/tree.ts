@@ -104,7 +104,9 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 		const sev = worst(i);
 		const used = this.usage?.(i);
 		const cost = this.cost?.(i);
-		t.description = [SCOPE_LABEL[i.scope], i.kind === 'hooks' || i.kind === 'permissions' ? i.detail : cost?.label ?? tok(i.tokens), used?.label].filter(Boolean).join('  ');
+		// The same name for two agents (a skill in .claude/skills and in .agents/skills) says whose each one is.
+		const twin = this.harness!.items.some(x => x !== i && x.kind === i.kind && x.label === i.label && x.agents.join() !== i.agents.join());
+		t.description = [twin ? i.agents.join(' + ') : '', SCOPE_LABEL[i.scope], i.kind === 'hooks' || i.kind === 'permissions' ? i.detail : cost?.label ?? tok(i.tokens), used?.label].filter(Boolean).join('  ');
 		const tip = new vscode.MarkdownString(`**${i.label}**  \n${i.detail}\n\n${i.agents.join(', ')} · ${i.scope} scope${!cost && i.tokens ? ` · about ${i.tokens.toLocaleString()} tokens per session` : ''}\n\n\`${i.file}\``);
 		if (i.hook) {
 			tip.appendMarkdown(`\n\n\`\`\`sh\n${i.hook.command}\n\`\`\``);

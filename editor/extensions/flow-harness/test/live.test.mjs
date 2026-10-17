@@ -282,7 +282,7 @@ test('the X-ray labels what it knows: /context categories, else the first reques
 	assert.equal(rest.how, 'derived')
 	assert.equal(noContext.segments.find(s => s.label.startsWith('Memory')).tokens, 110, '440 characters, about 4 per token')
 	assert.equal(noContext.segments.find(s => s.label.startsWith('Memory')).how, 'estimate')
-	assert.match(noContext.waste.find(w => w.id === 'mcp:github').title, /instructions, never called in 5 days$/, 'never claims 30 days it has not seen')
+	assert.match(noContext.waste.find(w => w.id === 'mcp:github').title, /instructions, never called in 5 days in this project$/, 'never claims 30 days it has not seen')
 	const oneSession = x.xray({ agent: 'a', cli: 'claude', facts: t.parseTranscript(LINES.slice(0, -1)), items, usesOf, covered: 40, sessions: 1 })
 	assert.match(oneSession.waste.find(w => w.id === 'skills').title, /not used in 1 session:/, 'one session does not speak for a month')
 	assert.ok(!oneSession.waste.some(w => w.id === 'skills' && /probe/.test(w.detail)), 'a skill this session called is not idle')
@@ -293,17 +293,17 @@ test('the X-ray labels what it knows: /context categories, else the first reques
 	assert.equal(x.xray({ agent: 'a', cli: 'claude', reported: { used: 180000, size: 200000 }, items: [], usesOf, covered: 0 }).waste[0].action.kind, 'compact')
 })
 
-test('only Claude Code transcripts are read: a .jsonl inside ~/.claude/projects, with .. resolved', () => {
+test('only Claude Code transcripts are read: a .jsonl inside projects/ of the config folder, with .. resolved', () => {
 	const home = String.raw`C:\Users\me`
-	assert.ok(t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\C--w\a.jsonl`, home))
-	assert.ok(t.isTranscriptPath('c:/users/ME/.claude/projects/x/b.jsonl', home), 'Windows paths compare without case')
-	assert.ok(!t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\..\..\secret.jsonl`, home), '.. out of the folder')
-	assert.ok(!t.isTranscriptPath(String.raw`D:\x\.claude\projects\a.jsonl`, home), 'another .claude/projects')
-	assert.ok(!t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\a.txt`, home))
-	assert.ok(!t.isTranscriptPath('.claude/projects/a.jsonl', home), 'a relative path')
-	assert.ok(!t.isTranscriptPath(42, home))
-	assert.ok(t.isTranscriptPath('/home/me/.claude/projects/p/s.jsonl', '/home/me'))
-	assert.ok(!t.isTranscriptPath('/home/ME/.claude/projects/p/s.jsonl', '/home/me'), 'POSIX paths keep their case')
+	assert.ok(t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\C--w\a.jsonl`, home + '/.claude'))
+	assert.ok(t.isTranscriptPath('c:/users/ME/.claude/projects/x/b.jsonl', home + '/.claude'), 'Windows paths compare without case')
+	assert.ok(!t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\..\..\secret.jsonl`, home + '/.claude'), '.. out of the folder')
+	assert.ok(!t.isTranscriptPath(String.raw`D:\x\.claude\projects\a.jsonl`, home + '/.claude'), 'another .claude/projects')
+	assert.ok(!t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\a.txt`, home + '/.claude'))
+	assert.ok(!t.isTranscriptPath('.claude/projects/a.jsonl', home + '/.claude'), 'a relative path')
+	assert.ok(!t.isTranscriptPath(42, home + '/.claude'))
+	assert.ok(t.isTranscriptPath('/home/me/.claude/projects/p/s.jsonl', '/home/me/.claude'))
+	assert.ok(!t.isTranscriptPath('/home/ME/.claude/projects/p/s.jsonl', '/home/me/.claude'), 'POSIX paths keep their case')
 })
 
 test('secrets are blanked before a prompt or a command is stored', () => {
@@ -353,4 +353,18 @@ test('reading a memory file counts as recalling it, from an event or a past tran
 	assert.equal(Object.keys(d.keys).length, 1, 'other reads are not memory')
 	assert.ok(a.isTracked({ kind: 'memory', scope: 'user', memory: {} }))
 	assert.ok(!a.isTracked({ kind: 'memory', scope: 'user' }), 'MEMORY.md is read every session; a count says nothing')
+})
+
+test('usage counts read the sessions of agent worktrees too', async () => {
+	const outfile = join(tmp, 'dirs.mjs')
+	await build({ entryPoints: [join(ROOT, 'src', 'dirs.ts')], bundle: true, platform: 'node', format: 'esm', outfile, logLevel: 'silent' })
+	const d = await import(pathToFileURL(outfile).href)
+	const root = String.raw`c:\development\harness-flow`
+	assert.ok(d.isProjectTranscriptDir('C--development-harness-flow', root, 'win32'), 'the drive letter in either case')
+	assert.ok(d.isProjectTranscriptDir('C--development-harness-flow--claude-worktrees-happy-vaughan-1a2b', root, 'win32'))
+	assert.ok(d.isProjectTranscriptDir('C--development-harness-flow--axle-worktrees-claude-aae3', root, 'win32'))
+	assert.ok(!d.isProjectTranscriptDir('C--development-harness-flow-other', root, 'win32'), 'another project with the same start')
+	assert.ok(!d.isProjectTranscriptDir('C--development-harness-flow-src', root, 'win32'))
+	assert.ok(!d.isProjectTranscriptDir('-Home-me-app', '/home/me/app', 'linux'), 'POSIX keeps case')
+	assert.ok(d.isProjectTranscriptDir('-home-me-app--claude-worktrees-x', '/home/me/app', 'linux'))
 })

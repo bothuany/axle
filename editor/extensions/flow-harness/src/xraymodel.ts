@@ -152,7 +152,7 @@ export function xray(input: XrayInput): XrayModel {
 			const fromMcpJson = !!item && /\.mcp\.json$/i.test(item.file) && item.scope === 'project';
 			model.waste.push({
 				id: `mcp:${server}`,
-				title: `MCP server ${server}: ${tokens === undefined ? 'cost unknown' : measuredTools.length ? `~${tok(tokens)} tokens of tool schemas` : `~${tok(tokens)} tokens of instructions`}, never called ${span}`,
+				title: `MCP server ${server}: ${tokens === undefined ? 'cost unknown' : measuredTools.length ? `~${tok(tokens)} tokens of tool schemas` : `~${tok(tokens)} tokens of instructions`}, never called ${span} in this project`,
 				detail: [
 					measuredTools.length ? `${measuredTools.length} tool schemas, as /context counted them` : toolCount ? `${toolCount} tools listed (names only while tool search defers them)` : '',
 					instr && !measuredTools.length ? 'its server instructions' : '',

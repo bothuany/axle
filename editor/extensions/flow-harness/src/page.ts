@@ -59,7 +59,8 @@ function el(tag, attrs, ...kids) {
 	for (const k of kids.flat()) if (k !== undefined && k !== null && k !== false) n.append(k instanceof Node ? k : String(k));
 	return n;
 }
-const fmt = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(Math.round(n));
+// Millions as M, as the Agents dock writes a context window (1M, not 1000k).
+const fmt = n => n >= 1e6 ? +(n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M' : n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : String(Math.round(n));
 ${script}
 </script></body></html>`;
 }

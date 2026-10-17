@@ -3,10 +3,10 @@
  *  was answered; any of them can become a standing rule so it is never asked again.
  *--------------------------------------------------------------------------------------------*/
 
-import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { arrayAt, objectAt, previewAndWrite } from './settings';
+import { claudeDir } from './dirs';
 
 export interface PermissionRequest {
 	at: number;
@@ -160,7 +160,7 @@ export class PermissionInbox implements vscode.TreeDataProvider<Row> {
 		const where = await vscode.window.showQuickPick([
 			{ label: 'This repo, just me', detail: '.claude/settings.local.json', file: root && path.join(root, '.claude', 'settings.local.json') },
 			{ label: 'This repo, shared', detail: '.claude/settings.json (committed)', file: root && path.join(root, '.claude', 'settings.json') },
-			{ label: 'All my projects', detail: '~/.claude/settings.json', file: path.join(os.homedir(), '.claude', 'settings.json') },
+			{ label: 'All my projects', detail: '~/.claude/settings.json', file: path.join(claudeDir(), 'settings.json') },
 		].filter(x => x.file), { title: `Where should "${rule}" live?` });
 		if (!where?.file) {
 			return;

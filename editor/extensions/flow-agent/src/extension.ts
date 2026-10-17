@@ -55,11 +55,18 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('flow.agents.resume', () => startOrResume(agents, 'claude', false)),
 		vscode.commands.registerCommand('flow.agents.start', (cli: unknown) => cli === 'claude' || cli === 'codex' ? startOrResume(agents, cli) : undefined),
 		// Called by flow-view (Home, "Ask about this flow") and any other extension with text for "the agent": the user's
-		// chosen agent gets it (ask.ts). `origin` names the feature for the picker; `files` are referred to as each target reads them.
-		vscode.commands.registerCommand('flow.agents.ask', (text: unknown, submit: unknown, origin: unknown, files: unknown) => typeof text === 'string'
-			? router.ask(text, submit === true, typeof origin === 'string' ? origin : undefined, Array.isArray(files) ? files.filter((f): f is string => typeof f === 'string') : [])
+		// chosen agent gets it (ask.ts). `origin` names the feature for the picker; `files` are referred to as each target reads them;
+		// `options.plan` asks it to plan first, in the form that target understands.
+		vscode.commands.registerCommand('flow.agents.ask', (text: unknown, submit: unknown, origin: unknown, files: unknown, options: unknown) => typeof text === 'string'
+			? router.ask(text, submit === true, typeof origin === 'string' ? origin : undefined, Array.isArray(files) ? files.filter((f): f is string => typeof f === 'string') : [], (options as { plan?: unknown } | undefined)?.plan === true)
 			: false),
 		vscode.commands.registerCommand('flow.agents.chooseAskTarget', () => router.choose()),
+		vscode.commands.registerCommand('flow.agents.keptWorktrees', () => worktrees.showKept()),
+		// Called by the harness map's context X-ray (Compact, Measure): it names a session by id and a kind, never text, and
+		// the session's own state decides (Agents.slash), so an Enter never lands on a permission prompt. `check` types nothing.
+		vscode.commands.registerCommand('flow.agents.slash', (id: unknown, kind: unknown, check: unknown) => typeof id === 'string' && (kind === 'compact' || kind === 'context')
+			? agents.slash(id, kind, check === true)
+			: 'unknown'),
 	);
 	// The dock is where Axle's agents live: on the first start, show it rather than the chat panel (which needs ACP to reach them).
 	if (!showChat() && !context.globalState.get<boolean>('flow.agents.dockShown')) {
