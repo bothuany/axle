@@ -178,6 +178,12 @@
         "icon": "$(git-branch)"
       },
       {
+        "command": "flow.agents.keptWorktrees",
+        "title": "Kept Agent Worktrees…",
+        "category": "Axle",
+        "icon": "$(git-branch)"
+      },
+      {
         "command": "flow.agents.resume",
         "title": "Resume a Claude Session…",
         "category": "Axle",

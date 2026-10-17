@@ -5,6 +5,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { execFile } from 'child_process';
+import { existsSync } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { askInDock } from './askAgent';
@@ -124,7 +125,8 @@ export class FlowHome implements vscode.Disposable {
 		const folder = vscode.workspace.workspaceFolders?.[0];
 		const root = folder?.uri.fsPath ?? '';
 		const health = await Promise.resolve(vscode.commands.executeCommand<Health | undefined>('flowHarness.health')).catch(() => undefined);
-		const files = this.context.workspaceState.get<Recent[]>(RECENT_FILES, []).slice(0, 7)
+		// A file that is gone (in a removed agent worktree, say) is no place to go back to.
+		const files = this.context.workspaceState.get<Recent[]>(RECENT_FILES, []).filter(r => existsSync(r.path)).slice(0, 7)
 			.map(r => ({ path: r.path, name: path.basename(r.path), dir: path.relative(root, path.dirname(r.path)), at: r.at }));
 		const flows = this.context.workspaceState.get<RecentFlow[]>(RECENT_FLOWS, []).slice(0, 7);
 		const all = this.endpoints.cached();

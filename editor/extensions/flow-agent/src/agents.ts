@@ -23,7 +23,7 @@ import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
 import { canType, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
-import { createWorktree, validBranch, worktreeSlug, type Worktree } from './worktrees';
+import { createWorktree, sameDir, validBranch, worktreeSlug, type Worktree } from './worktrees';
 
 // Declared with the ask rules, which must not import this file (it needs vscode); every other file takes them from here.
 export type { AgentCli, AgentState } from './askTarget';
@@ -92,6 +92,13 @@ export interface CustomAgent {
 interface Saved {
 	token: string;
 	sessions: Pick<AgentSession, 'id' | 'cli' | 'name' | 'pid' | 'prompt' | 'transcript' | 'command' | 'agentId' | 'worktree'>[];
+	/** Worktrees of agents taken off the list whose folder the user kept: the only record of where they are. */
+	kept?: KeptWorktree[];
+}
+
+/** A worktree kept after its agent left the dock, with the agent's name for the list. */
+export interface KeptWorktree extends Worktree {
+	agent: string;
 }
 
 interface HookPayload {
@@ -185,7 +192,14 @@ function parseSaved(raw: unknown): Saved | undefined {
 			sessions.push({ id: e.id, cli: e.cli, name: str(e.name) ?? e.id, pid: typeof e.pid === 'number' ? e.pid : undefined, prompt: str(e.prompt), transcript: str(e.transcript), command: str(e.command), agentId: str(e.agentId), worktree: parseWorktree(e.worktree) });
 		}
 	}
-	return { token: str(o.token) ?? '', sessions };
+	const kept: KeptWorktree[] = [];
+	for (const k of Array.isArray((o as { kept?: unknown }).kept) ? (o as { kept: Record<string, unknown>[] }).kept : []) {
+		const wt = k && typeof k === 'object' ? parseWorktree(k) : undefined;
+		if (wt) {
+			kept.push({ ...wt, agent: str(k.agent) ?? wt.branch });
+		}
+	}
+	return { token: str(o.token) ?? '', sessions, kept };
 }
 
 /** A saved worktree, taken only when every part has the right shape: its branch names reach git when it is merged or removed. */
@@ -260,6 +274,8 @@ export class Agents implements vscode.Disposable {
 	private readonly disposables: vscode.Disposable[] = [];
 	/** Agents from before a reload, waiting for their terminal to come back. */
 	private readonly orphans = new Map<number, Saved['sessions'][number]>();
+	/** Worktrees kept after their agents were taken off the list (Agents: Kept Worktrees…). */
+	private kept: KeptWorktree[] = [];
 	private orphanTimer: NodeJS.Timeout | undefined;
 	/** Claude session ids that continue a Axle agent after /clear or /resume gave the conversation a new one. */
 	private readonly aliases = new Map<string, string>();
@@ -314,6 +330,7 @@ export class Agents implements vscode.Disposable {
 		this.dir = path.join(this.context.globalStorageUri.fsPath, 'agents', (folder ? '' : 'empty-') + createHash('sha1').update(key).digest('hex').slice(0, 12));
 		const saved = await fs.readFile(path.join(this.dir, 'sessions.json'), 'utf8').then(t => parseSaved(JSON.parse(t))).catch(() => undefined);
 		this.token = saved?.token || randomBytes(16).toString('hex');
+		this.kept = saved?.kept ?? [];
 		try {
 			await this.listen();
 		} catch (e) {
@@ -542,6 +559,7 @@ export class Agents implements vscode.Disposable {
 		const saved: Saved = {
 			token: this.token,
 			sessions: [...[...this.sessions.values()].map(({ id, cli, name, pid, prompt, transcript, command, agentId, worktree }) => ({ id, cli, name, pid, prompt, transcript, command, agentId, worktree })), ...this.orphans.values()],
+			kept: this.kept,
 		};
 		// One write at a time, through a temp file: overlapping writes could interleave and lose every saved session.
 		const file = path.join(this.dir, 'sessions.json');
@@ -786,6 +804,20 @@ export class Agents implements vscode.Disposable {
 				this.log.warn(`Agents: could not write the new name to the transcript (${(e as Error).message})`);
 			}
 		}
+	}
+
+	/** The worktrees kept after their agents left the list. */
+	get keptWorktrees(): readonly KeptWorktree[] {
+		return this.kept;
+	}
+
+	/** Keeps a record of a worktree whose agent leaves the list, or (`keep` false) drops it once it is merged or removed. */
+	keepWorktree(wt: KeptWorktree, keep: boolean) {
+		this.kept = this.kept.filter(k => !sameDir(k.path, wt.path));
+		if (keep) {
+			this.kept.push(wt);
+		}
+		this.save();
 	}
 
 	/** Removes a finished agent from the list (its terminal, if any, closes too). */

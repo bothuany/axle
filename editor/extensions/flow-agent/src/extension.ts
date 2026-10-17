@@ -60,6 +60,7 @@ export function activate(context: vscode.ExtensionContext) {
 			? router.ask(text, submit === true, typeof origin === 'string' ? origin : undefined, Array.isArray(files) ? files.filter((f): f is string => typeof f === 'string') : [])
 			: false),
 		vscode.commands.registerCommand('flow.agents.chooseAskTarget', () => router.choose()),
+		vscode.commands.registerCommand('flow.agents.keptWorktrees', () => worktrees.showKept()),
 		// Called by the harness map's context X-ray (Compact, Measure): it names a session by id and a kind, never text, and
 		// the session's own state decides (Agents.slash), so an Enter never lands on a permission prompt. `check` types nothing.
 		vscode.commands.registerCommand('flow.agents.slash', (id: unknown, kind: unknown, check: unknown) => typeof id === 'string' && (kind === 'compact' || kind === 'context')

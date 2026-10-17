@@ -363,7 +363,7 @@ async function lintItems(items: HarnessItem[], root: string) {
 	// Listing the project is only worth it when some rule is scoped to globs.
 	const scoped = files.some(f => (f.kind === 'claude-rule' || f.kind === 'cursor-rule') && ruleGlobs(f).length);
 	const limit = 20_000;
-	const listed = scoped ? await vscode.workspace.findFiles('**/*', '{**/node_modules/**,**/.git/**,**/.claude/worktrees/**}', limit) : [];
+	const listed = scoped ? await vscode.workspace.findFiles('**/*', '{**/node_modules/**,**/.git/**,**/.claude/worktrees/**,**/.axle/worktrees/**}', limit) : [];
 	const findings = lint({
 		files,
 		hooks: items.filter(i => i.hook).map(i => ({ ...i.hook!, line: i.line ?? 0 })),
@@ -444,7 +444,7 @@ export async function scan(): Promise<Harness | undefined> {
 	await memoryFile(items, root, path.join(root, 'CLAUDE.local.md'), 'local', ['Claude'], 'Yours only, not committed');
 	await memoryFile(items, root, path.join(root, 'AGENTS.md'), 'project', ['Codex', 'Cursor'], 'Loaded in every session');
 	await memoryFile(items, root, path.join(root, '.github', 'copilot-instructions.md'), 'project', ['Copilot'], 'Copilot reads it in every chat');
-	const found = await vscode.workspace.findFiles('**/{CLAUDE,AGENTS}.md', '{**/node_modules/**,**/.git/**,**/bin/**,**/obj/**,**/.claude/worktrees/**}', 200);
+	const found = await vscode.workspace.findFiles('**/{CLAUDE,AGENTS}.md', '{**/node_modules/**,**/.git/**,**/bin/**,**/obj/**,**/.claude/worktrees/**,**/.axle/worktrees/**}', 200);
 	// Git answers with the paths as it was given them.
 	const ignored = await gitIgnoredOf(root, found.map(u => u.fsPath));
 	const nested = found.filter(u => !ignored.has(u.fsPath));

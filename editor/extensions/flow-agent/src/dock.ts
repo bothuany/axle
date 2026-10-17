@@ -54,7 +54,8 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 			} else if (m.type === 'xray' && typeof m.id === 'string') {
 				this.agents.xray(m.id);
 			} else if (m.type === 'forget' && typeof m.id === 'string') {
-				this.agents.forget(m.id);
+				// Through the worktree rows: an agent's worktree must not drop out of sight with its row.
+				void (this.worktrees ? this.worktrees.forget(m.id) : this.agents.forget(m.id));
 			} else if (m.type === 'compact' && typeof m.id === 'string') {
 				this.agents.compact(m.id);
 			} else if (m.type === 'rename' && typeof m.id === 'string') {
