@@ -15,11 +15,7 @@
   <img src="https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20any%20CLI-6f86ff" alt="Agents: Claude Code, Codex and any CLI">
 </p>
 
-<p align="center">
-  <a href="docs/media/axle-demo.mp4">
-    <img src="docs/media/axle-preview.webp" width="100%" alt="Axle demo: three agents at once. What the code runs across services, what an agent changed on the flow, who needs you, and what each agent is allowed to do">
-  </a>
-</p>
+https://github.com/user-attachments/assets/2659c972-8d4a-40d3-bbe0-6f4442d24aa5
 
 ## See how your code runs
 
