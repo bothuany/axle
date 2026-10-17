@@ -8,7 +8,8 @@ import * as vscode from 'vscode';
 import type { Agents } from './agents';
 import { attentionKind, rank } from './attention';
 import { conflictText } from './conflicts';
-import { WORKTREE_ACTIONS, type WorktreeAction, type WorktreeRows } from './worktreeActions';
+import { dockAction } from './dockMessage';
+import type { WorktreeRows } from './worktreeActions';
 
 /** The real marks: Claude's spark (from the Claude Code extension) and the Codex cloud (lobe-icons). */
 const ICON = {
@@ -34,39 +35,24 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 		this.view = view;
 		view.webview.options = { enableScripts: true };
 		view.webview.html = this.html();
-		view.webview.onDidReceiveMessage(m => {
-			if (m.type === 'ready') {
-				this.post();
-			} else if (m.type === 'new') {
-				// The page is not trusted with what to run: only the two built-in agents start from here
-				// (your own commands go through "Start an Agent…", which reads them from your settings).
+		// The page is not trusted: dockAction checks each message's shape and turns it into one known action, or nothing.
+		view.webview.onDidReceiveMessage(raw => {
+			const m = dockAction(raw);
+			switch (m?.type) {
+				case 'ready': return this.post();
 				// The button offers a new session or one of the earlier ones to resume.
-				if (m.cli === 'claude' || m.cli === 'codex') {
-					void vscode.commands.executeCommand('flow.agents.start', m.cli);
-				}
-			} else if (m.type === 'show' && typeof m.id === 'string') {
-				this.agents.show(m.id);
-			} else if (m.type === 'flow' && typeof m.id === 'string' && Number.isInteger(m.index)) {
-				// An index into the list the host sent: the page never names a flow itself.
-				this.agents.openImpactFlow(m.id, m.index);
-			} else if (m.type === 'pr' && typeof m.id === 'string') {
-				this.agents.openPr(m.id);
-			} else if (m.type === 'xray' && typeof m.id === 'string') {
-				this.agents.xray(m.id);
-			} else if (m.type === 'forget' && typeof m.id === 'string') {
+				case 'new': return void vscode.commands.executeCommand('flow.agents.start', m.cli);
+				case 'show': return this.agents.show(m.id);
+				case 'flow': return this.agents.openImpactFlow(m.id, m.index);
+				case 'pr': return this.agents.openPr(m.id);
+				case 'xray': return this.agents.xray(m.id);
 				// Through the worktree rows: an agent's worktree must not drop out of sight with its row.
-				void (this.worktrees ? this.worktrees.forget(m.id) : this.agents.forget(m.id));
-			} else if (m.type === 'compact' && typeof m.id === 'string') {
-				this.agents.compact(m.id);
-			} else if (m.type === 'rename' && typeof m.id === 'string') {
-				void this.rename(m.id);
-			} else if (m.type === 'wt' && typeof m.id === 'string' && WORKTREE_ACTIONS.includes(m.action)) {
-				// The page names the row and one of four actions; the folder and branches come from the host's own record.
-				void this.worktrees?.act(m.id, m.action as WorktreeAction);
-			} else if (m.type === 'pick') {
-				void vscode.commands.executeCommand('flow.agents.new');
-			} else if (m.type === 'chat') {
-				void vscode.commands.executeCommand('workbench.action.openSettings', 'flow.agents.showChat');
+				case 'forget': return void (this.worktrees ? this.worktrees.forget(m.id) : this.agents.forget(m.id));
+				case 'compact': return this.agents.compact(m.id);
+				case 'rename': return void this.rename(m.id);
+				case 'wt': return void this.worktrees?.act(m.id, m.action);
+				case 'pick': return void vscode.commands.executeCommand('flow.agents.new');
+				case 'chat': return void vscode.commands.executeCommand('workbench.action.openSettings', 'flow.agents.showChat');
 			}
 		});
 		view.onDidChangeVisibility(() => view.visible && this.post());

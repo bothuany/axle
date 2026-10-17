@@ -11,7 +11,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { appendLineReviewed } from './edits';
-import { mentions, promotedLine, type Memory } from './memory';
+import { mentions, promotedLine, withoutIndexLine, type Memory } from './memory';
 import type { Harness, HarnessItem } from './scan';
 import { itemOf } from './tree';
 
@@ -58,12 +58,10 @@ export class MemoryActions {
 		try {
 			await vscode.workspace.fs.delete(vscode.Uri.file(item.file), { useTrash: true });
 			if (line !== undefined) {
-				const text = await fs.readFile(index, 'utf8');
-				const lines = text.split(/\r?\n/);
-				// Only the line still pointing at this file: MEMORY.md may have changed since the scan.
-				if (lines[line]?.includes(path.basename(item.file))) {
-					lines.splice(line, 1);
-					await fs.writeFile(index, lines.join(text.includes('\r\n') ? '\r\n' : '\n'));
+				// The line that still links this file, wherever it is now: MEMORY.md may have changed since the scan.
+				const after = withoutIndexLine(await fs.readFile(index, 'utf8'), path.basename(item.file), line);
+				if (after !== undefined) {
+					await fs.writeFile(index, after);
 				}
 			}
 		} catch (e) {

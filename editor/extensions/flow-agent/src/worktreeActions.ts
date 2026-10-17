@@ -8,12 +8,10 @@
 import { promises as fs } from 'fs';
 import * as vscode from 'vscode';
 import type { Agents, AgentSession, KeptWorktree } from './agents';
+import type { WorktreeAction } from './dockMessage';
 import { forgetFlow, mergeFlow, removeFlow, type FlowGit, type FlowUi } from './worktreeFlow';
 import { aheadBehind, changedFiles, merge, planMerge, removeWorktree, type Worktree } from './worktrees';
 
-/** What the page may ask for on a worktree row; anything else is ignored. */
-export const WORKTREE_ACTIONS = ['open', 'diff', 'merge', 'remove'] as const;
-export type WorktreeAction = typeof WORKTREE_ACTIONS[number];
 
 /** The worktree as a row shows it. */
 export interface WorktreeView {

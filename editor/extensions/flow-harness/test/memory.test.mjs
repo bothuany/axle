@@ -59,3 +59,12 @@ test('promoting a memory gives one CLAUDE.md line with its why', () => {
 	assert.equal(m.promotedLine(x), '- Do app work in the background. (Why: the user watches videos.)')
 	assert.equal(m.promotedLine(m.parseMemory('/mem/g.md', '---\ndescription: Prefer npm over yarn.\n---\n')), '- Prefer npm over yarn.')
 })
+
+test('deleting a memory drops the MEMORY.md line that links it, wherever that line is now', () => {
+	const text = '# Memory\n- [A](a.md) — first\n- [B](b.md) — second\n'
+	assert.equal(m.withoutIndexLine(text, 'b.md', 2), '# Memory\n- [A](a.md) — first\n')
+	assert.equal(m.withoutIndexLine('- [New](n.md) — added since\n' + text, 'b.md', 2), '- [New](n.md) — added since\n# Memory\n- [A](a.md) — first\n', 'the line moved down')
+	assert.equal(m.withoutIndexLine(text, 'c.md', 1), undefined, 'no line links it')
+	assert.equal(m.withoutIndexLine('- [A](./a.md)\r\n- [B](b.md)\r\n', 'a.md', 0), '- [B](b.md)\r\n', 'CRLF kept')
+	assert.equal(m.withoutIndexLine('- [Bb](bb.md)\n- [B](b.md)\n', 'b.md'), '- [Bb](bb.md)\n', 'the link, not a substring of the name')
+})

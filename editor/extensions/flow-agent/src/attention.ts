@@ -223,3 +223,23 @@ export function attentionKey(s: Rankable): string | undefined {
 	const kind = attentionKind(s);
 	return kind && `${kind}:${s.need?.at ?? s.since}`;
 }
+
+const SAY: Record<AttentionKind, string> = {
+	approval: 'needs your approval',
+	question: 'asks you',
+	error: 'hit an error',
+	done: 'is done',
+};
+
+/**
+ * The notification for a session that starts needing you anew (attentionKey changed), or undefined: none while the
+ * user looks at it, with flow.agents.notify.quiet on, or with that kind turned off. Errors come as warnings.
+ */
+export function notification(s: Rankable & { name: string }, o: { quiet: boolean; enabled: (kind: AttentionKind) => boolean; watched: boolean }): { message: string; warn: boolean } | undefined {
+	const kind = attentionKind(s);
+	if (!kind || o.quiet || !o.enabled(kind) || o.watched) {
+		return undefined;
+	}
+	const text = s.need?.text;
+	return { message: `${s.name} ${SAY[kind]}${text ? `: ${text}` : ''}`, warn: kind === 'error' };
+}

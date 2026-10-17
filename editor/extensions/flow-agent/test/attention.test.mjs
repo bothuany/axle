@@ -154,3 +154,18 @@ test('a session silent since its start may be waiting on a startup question; any
 	}
 	assert.equal(a.nextAttention({ failures: 0, need }, { event: 'PermissionRequest', tool: 'Bash', described: 'Running ls' }, 9).need.source, 'permission', 'a real question replaces it')
 })
+
+test('notifications: once per new need, never while you look at the agent or with the kind turned off', () => {
+	const on = { quiet: false, enabled: () => true, watched: false }
+	const asking = { name: 'Claude 2', state: 'blocked', need: { kind: 'question', source: 'ask', text: 'Tea or coffee?', at: 3 }, unread: false, since: 1 }
+	assert.deepEqual(a.notification(asking, on), { message: 'Claude 2 asks you: Tea or coffee?', warn: false })
+	assert.equal(a.notification(asking, { ...on, watched: true }), undefined, 'its terminal is the active one')
+	assert.equal(a.notification(asking, { ...on, quiet: true }), undefined)
+	assert.equal(a.notification(asking, { ...on, enabled: k => k !== 'question' }), undefined)
+	const failed = { ...asking, state: 'done', need: { kind: 'error', source: 'stop', text: 'Rate limited', at: 4 }, unread: true }
+	assert.deepEqual(a.notification(failed, on), { message: 'Claude 2 hit an error: Rate limited', warn: true })
+	assert.equal(a.notification({ ...failed, unread: false }, on), undefined, 'an error you have seen is not news')
+	assert.deepEqual(a.notification({ name: 'C', state: 'done', unread: true, since: 5 }, on), { message: 'C is done', warn: false })
+	assert.notEqual(a.attentionKey(asking), a.attentionKey({ ...asking, need: { ...asking.need, at: 9 } }), 'a new question is a new key')
+	assert.equal(a.attentionKey({ ...asking, state: 'working', need: undefined }), undefined, 'answered: nothing to notify')
+})
