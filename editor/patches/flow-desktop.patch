@@ -1,0 +1,759 @@
+diff --git a/src/vs/code/electron-main/app.ts b/src/vs/code/electron-main/app.ts
+--- a/src/vs/code/electron-main/app.ts
++++ b/src/vs/code/electron-main/app.ts
+@@ -60,6 +60,8 @@ import { IInstantiationService, ServicesAccessor } from '../../platform/instanti
+ import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
+ import { ProcessMainService } from '../../platform/process/electron-main/processMainService.js';
+ import { IKeyboardLayoutMainService, KeyboardLayoutMainService } from '../../platform/keyboardLayout/electron-main/keyboardLayoutMainService.js';
++import { AXLE_OVERLAY_CHANNEL, IAxleOverlayService } from '../../platform/axleDesktop/common/axleDesktop.js';
++import { AxleOverlayMainService } from '../../platform/axleDesktop/electron-main/axleOverlayMainService.js';
+ import { ILaunchMainService, LaunchMainService } from '../../platform/launch/electron-main/launchMainService.js';
+ import { ILifecycleMainService, LifecycleMainPhase, ShutdownReason } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
+ import { ILoggerService, ILogService } from '../../platform/log/common/log.js';
+@@ -1264,6 +1266,9 @@ export class CodeApplication extends Disposable {
+ 		// Keyboard Layout
+ 		services.set(IKeyboardLayoutMainService, new SyncDescriptor(KeyboardLayoutMainService));
+ 
++		// Axle: the desktop agent status overlay
++		services.set(IAxleOverlayService, new SyncDescriptor(AxleOverlayMainService));
++
+ 		// Native Host
+ 		services.set(INativeHostMainService, new SyncDescriptor(NativeHostMainService, undefined, false /* proxied to other processes */));
+ 
+@@ -1449,6 +1454,10 @@ export class CodeApplication extends Disposable {
+ 		const keyboardLayoutChannel = ProxyChannel.fromService(accessor.get(IKeyboardLayoutMainService), disposables);
+ 		mainProcessElectronServer.registerChannel('keyboardLayout', keyboardLayoutChannel);
+ 
++		// Axle: the desktop agent status overlay
++		const axleOverlayChannel = ProxyChannel.fromService(accessor.get(IAxleOverlayService), disposables);
++		mainProcessElectronServer.registerChannel(AXLE_OVERLAY_CHANNEL, axleOverlayChannel);
++
+ 		// Native host (main & shared process)
+ 		this.nativeHostMainService = accessor.get(INativeHostMainService);
+ 		const nativeHostChannel = ProxyChannel.fromService(this.nativeHostMainService, disposables, {
+diff --git a/src/vs/platform/axleDesktop/common/axleDesktop.ts b/src/vs/platform/axleDesktop/common/axleDesktop.ts
+new file mode 100644
+--- /dev/null
++++ b/src/vs/platform/axleDesktop/common/axleDesktop.ts
+@@ -0,0 +1,66 @@
++/*---------------------------------------------------------------------------------------------
++ *  Axle: the desktop agent status overlay, shared by the main process (which owns the window) and
++ *  the workbench (which pushes each window's agents). Axle's Agents extension builds the model
++ *  (editor/extensions/flow-agent/src/desktopModel.ts); every string in it is drawn as text.
++ *--------------------------------------------------------------------------------------------*/
++
++import { Event } from '../../../base/common/event.js';
++import { createDecorator } from '../../instantiation/common/instantiation.js';
++
++export const AXLE_OVERLAY_CHANNEL = 'axleOverlay';
++
++export type AxleOverlayItemState = 'working' | 'needs' | 'done' | 'idle';
++export type AxleOverlayAttention = 'approval' | 'question' | 'error' | 'done';
++
++export interface IAxleOverlayItem {
++	readonly id: string;
++	readonly name: string;
++	readonly cli: string;
++	readonly state: AxleOverlayItemState;
++	readonly attention?: AxleOverlayAttention;
++	readonly activity?: string;
++	readonly context?: number;
++	readonly usd?: number;
++}
++
++export interface IAxleOverlayOptions {
++	readonly position: 'top-center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
++	readonly display: 'axle' | 'primary' | 'secondary';
++	readonly style: 'pill' | 'dots' | 'list';
++	readonly size: 'small' | 'medium' | 'large';
++	readonly opacity: number;
++	readonly theme: 'editor' | 'dark' | 'light';
++	readonly autoHide: { readonly noAgents: boolean; readonly axleFocused: boolean };
++}
++
++/** CSS colours, resolved from the window's colour theme when the overlay follows it. */
++export interface IAxleOverlayColors {
++	readonly background: string;
++	readonly foreground: string;
++	readonly muted: string;
++	readonly border: string;
++	readonly working: string;
++	readonly approval: string;
++	readonly question: string;
++	readonly error: string;
++	readonly done: string;
++	readonly idle: string;
++}
++
++export interface IAxleOverlayState {
++	readonly items: readonly IAxleOverlayItem[];
++	readonly counts?: { readonly needs: number; readonly working: number; readonly done: number };
++	readonly options: IAxleOverlayOptions;
++}
++
++export const IAxleOverlayService = createDecorator<IAxleOverlayService>('axleOverlayService');
++
++export interface IAxleOverlayService {
++	readonly _serviceBrand: undefined;
++
++	/** The user clicked an agent in the overlay: the window that pushed it shows it. */
++	readonly onDidClickAgent: Event<{ readonly windowId: number; readonly id: string }>;
++
++	/** This window's agents, or undefined when it has none to show (the overlay is off, or the window goes away). */
++	update(windowId: number, state: IAxleOverlayState | undefined, colors: IAxleOverlayColors | undefined): Promise<void>;
++}
+diff --git a/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts b/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts
+new file mode 100644
+--- /dev/null
++++ b/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts
+@@ -0,0 +1,465 @@
++/*---------------------------------------------------------------------------------------------
++ *  Axle: the desktop agent status overlay. One small always-on-top window for the whole app that
++ *  draws the agents every Axle window pushes (merged per window, like the Dock badge).
++ *
++ *  It never takes focus: it is created hidden and not focusable (an NSPanel on macOS), it appears
++ *  with showInactive() only, and nothing here focuses or shows any window. A click on an agent is
++ *  sent back to the window that owns it, which brings itself forward: that is the user's gesture.
++ *  test/arch/desktop-focus.test.mjs holds this file to that.
++ *
++ *  The page has no Node, no preload and no network (sandbox, CSP default-src 'none'). Everything
++ *  it shows arrives as data and is set as text. It talks back over console messages with a marker,
++ *  and every navigation and popup is refused.
++ *--------------------------------------------------------------------------------------------*/
++
++import { app, BrowserWindow, Display, screen } from 'electron';
++import { Emitter } from '../../../base/common/event.js';
++import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
++import { isMacintosh } from '../../../base/common/platform.js';
++import { ILogService } from '../../log/common/log.js';
++import { IAxleOverlayColors, IAxleOverlayItem, IAxleOverlayOptions, IAxleOverlayService, IAxleOverlayState } from '../common/axleDesktop.js';
++
++/** What the page prefixes its messages with, so an unrelated console line is never taken for one. */
++const MARKER = '\u0001axle-overlay:';
++const MAX_ITEMS = 40;
++
++const PALETTES: Record<'dark' | 'light', IAxleOverlayColors> = {
++	dark: { background: 'rgba(28, 29, 35, 0.94)', foreground: '#e8e9ee', muted: '#a3a7b5', border: 'rgba(255, 255, 255, 0.12)', working: '#6f86ff', approval: '#ffb454', question: '#c58cff', error: '#ff6b6b', done: '#5fe0a1', idle: '#7d8293' },
++	light: { background: 'rgba(250, 250, 252, 0.96)', foreground: '#1f2128', muted: '#5d6170', border: 'rgba(0, 0, 0, 0.12)', working: '#3b5bdb', approval: '#d9480f', question: '#8e44ad', error: '#d63031', done: '#2b8a3e', idle: '#868e96' },
++};
++
++const DEFAULT_OPTIONS: IAxleOverlayOptions = { position: 'top-center', display: 'axle', style: 'pill', size: 'medium', opacity: 0.95, theme: 'editor', autoHide: { noAgents: true, axleFocused: false } };
++
++interface IWindowAgents {
++	readonly state: IAxleOverlayState;
++	readonly colors: IAxleOverlayColors | undefined;
++	readonly at: number;
++}
++
++const text = (v: unknown, max: number) => typeof v === 'string' ? v.slice(0, max) : undefined;
++const oneOf = <T extends string>(v: unknown, values: readonly T[], fallback: T): T => values.includes(v as T) ? v as T : fallback;
++const finite = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? v : undefined;
++const COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d.,\s%]+\))$/i;
++
++/** The model comes from an extension through the renderer: keep only what has the right shape. */
++function sanitizeState(raw: IAxleOverlayState): IAxleOverlayState {
++	const items: IAxleOverlayItem[] = [];
++	for (const i of Array.isArray(raw?.items) ? raw.items.slice(0, MAX_ITEMS) : []) {
++		const id = text(i?.id, 200);
++		const name = text(i?.name, 60);
++		if (!id || !name) {
++			continue;
++		}
++		const attention = i.attention ? oneOf(i.attention, ['approval', 'question', 'error', 'done'], 'done') : undefined;
++		items.push({
++			id, name, cli: text(i.cli, 30) ?? '', state: oneOf(i.state, ['working', 'needs', 'done', 'idle'], 'idle'),
++			attention, activity: text(i.activity, 120), context: finite(i.context), usd: finite(i.usd),
++		});
++	}
++	const o = raw?.options;
++	const options: IAxleOverlayOptions = {
++		position: oneOf(o?.position, ['top-center', 'top-left', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'], DEFAULT_OPTIONS.position),
++		display: oneOf(o?.display, ['axle', 'primary', 'secondary'], DEFAULT_OPTIONS.display),
++		style: oneOf(o?.style, ['pill', 'dots', 'list'], DEFAULT_OPTIONS.style),
++		size: oneOf(o?.size, ['small', 'medium', 'large'], DEFAULT_OPTIONS.size),
++		opacity: Math.min(1, Math.max(0.3, finite(o?.opacity) ?? DEFAULT_OPTIONS.opacity)),
++		theme: oneOf(o?.theme, ['editor', 'dark', 'light'], DEFAULT_OPTIONS.theme),
++		autoHide: { noAgents: o?.autoHide?.noAgents !== false, axleFocused: o?.autoHide?.axleFocused === true },
++	};
++	const c = raw?.counts;
++	const counts = c && { needs: finite(c.needs) ?? 0, working: finite(c.working) ?? 0, done: finite(c.done) ?? 0 };
++	return { items, options, ...(counts ? { counts } : {}) };
++}
++
++function sanitizeColors(raw: IAxleOverlayColors | undefined): IAxleOverlayColors | undefined {
++	if (!raw) {
++		return undefined;
++	}
++	const out: Record<string, string> = {};
++	for (const key of Object.keys(PALETTES.dark) as (keyof IAxleOverlayColors)[]) {
++		const v = raw[key];
++		if (typeof v !== 'string' || !COLOR.test(v)) {
++			return undefined;
++		}
++		out[key] = v;
++	}
++	return out as unknown as IAxleOverlayColors;
++}
++
++export class AxleOverlayMainService extends Disposable implements IAxleOverlayService {
++
++	declare readonly _serviceBrand: undefined;
++
++	private readonly _onDidClickAgent = this._register(new Emitter<{ readonly windowId: number; readonly id: string }>());
++	readonly onDidClickAgent = this._onDidClickAgent.event;
++
++	private readonly windows = new Map<number, IWindowAgents>();
++	/** Windows whose `closed` event is already watched. */
++	private readonly watched = new Set<number>();
++	/** Item keys of the page's last model, back to the window and agent they stand for. */
++	private keys = new Map<string, { windowId: number; id: string }>();
++	private overlay: BrowserWindow | undefined;
++	private loaded = false;
++	private size = { width: 0, height: 0 };
++	private placement: { display: Display; notch: number; options: IAxleOverlayOptions } | undefined;
++	private focusTimer: Timeout | undefined;
++
++	constructor(@ILogService private readonly logService: ILogService) {
++		super();
++		// Focus moves between windows as a blur then a focus: decide once it has settled.
++		const onFocus = () => {
++			clearTimeout(this.focusTimer);
++			this.focusTimer = setTimeout(() => this.render(), 80);
++		};
++		const onDisplays = () => this.render();
++		app.on('browser-window-focus', onFocus);
++		app.on('browser-window-blur', onFocus);
++		app.whenReady().then(() => {
++			if (!this._store.isDisposed) {
++				screen.on('display-metrics-changed', onDisplays);
++				screen.on('display-removed', onDisplays);
++			}
++		});
++		this._register(toDisposable(() => {
++			clearTimeout(this.focusTimer);
++			app.off('browser-window-focus', onFocus);
++			app.off('browser-window-blur', onFocus);
++			screen.off('display-metrics-changed', onDisplays);
++			screen.off('display-removed', onDisplays);
++			this.overlay?.destroy();
++			this.overlay = undefined;
++		}));
++	}
++
++	async update(windowId: number, state: IAxleOverlayState | undefined, colors: IAxleOverlayColors | undefined): Promise<void> {
++		if (!state) {
++			this.windows.delete(windowId);
++		} else {
++			this.windows.set(windowId, { state: sanitizeState(state), colors: sanitizeColors(colors), at: Date.now() });
++			if (!this.watched.has(windowId)) {
++				const win = BrowserWindow.fromId(windowId);
++				if (win) {
++					this.watched.add(windowId);
++					// A window that closes (or crashes) without saying so must not leave its agents on screen.
++					win.once('closed', () => {
++						this.watched.delete(windowId);
++						this.windows.delete(windowId);
++						this.render();
++					});
++				}
++			}
++		}
++		this.render();
++	}
++
++	/** The window that pushed last decides the options; the agents of all windows are shown together. */
++	private render(): void {
++		if (this._store.isDisposed) {
++			return;
++		}
++		const latest = [...this.windows.entries()].sort((a, b) => b[1].at - a[1].at)[0];
++		if (!latest) {
++			// No window wants the overlay: free it rather than keep a hidden window around.
++			this.overlay?.destroy();
++			this.overlay = undefined;
++			this.loaded = false;
++			return;
++		}
++		const [ownerId, owner] = latest;
++		const options = owner.state.options;
++		this.keys = new Map();
++		const items: (IAxleOverlayItem & { key: string })[] = [];
++		const counts = { needs: 0, working: 0, done: 0 };
++		let showCounts = false;
++		for (const [windowId, agents] of this.windows) {
++			for (const item of agents.state.items) {
++				const key = `k${this.keys.size}`;
++				this.keys.set(key, { windowId, id: item.id });
++				items.push({ ...item, key });
++			}
++			if (agents.state.counts) {
++				showCounts = true;
++				counts.needs += agents.state.counts.needs;
++				counts.working += agents.state.counts.working;
++				counts.done += agents.state.counts.done;
++			}
++		}
++		const hidden = (options.autoHide.noAgents && items.length === 0) || (options.autoHide.axleFocused && this.axleFocused());
++		if (hidden) {
++			this.overlay?.hide();
++			return;
++		}
++		const display = this.display(options.display, ownerId);
++		// A Mac with a notch has a taller menu bar: the island then covers the notch, top-center only.
++		const menuBar = display.workArea.y - display.bounds.y;
++		const notch = isMacintosh && options.position === 'top-center' && menuBar >= 32 ? menuBar : 0;
++		this.placement = { display, notch, options };
++		const colors = options.theme === 'editor' ? owner.colors ?? PALETTES.dark : PALETTES[options.theme];
++		const overlay = this.ensureOverlay();
++		if (!this.loaded) {
++			return; // did-finish-load renders again
++		}
++		const model = { items, counts: showCounts ? counts : undefined, style: options.style, size: options.size, opacity: options.opacity, colors, notch };
++		// JSON is a JavaScript expression: the model arrives as data, never as code.
++		overlay.webContents.executeJavaScript(`window.axleRender(${JSON.stringify(model)})`).catch(e => this.logService.warn(`[axle overlay] render failed: ${e}`));
++		this.place();
++	}
++
++	private axleFocused(): boolean {
++		const focused = BrowserWindow.getFocusedWindow();
++		return !!focused && focused !== this.overlay;
++	}
++
++	private display(which: IAxleOverlayOptions['display'], ownerId: number): Display {
++		const primary = screen.getPrimaryDisplay();
++		if (which === 'primary') {
++			return primary;
++		}
++		if (which === 'secondary') {
++			return screen.getAllDisplays().find(d => d.id !== primary.id) ?? primary;
++		}
++		const focused = BrowserWindow.getFocusedWindow();
++		const win = focused && focused !== this.overlay ? focused : BrowserWindow.fromId(ownerId);
++		return win && !win.isDestroyed() ? screen.getDisplayMatching(win.getBounds()) : primary;
++	}
++
++	private ensureOverlay(): BrowserWindow {
++		if (this.overlay && !this.overlay.isDestroyed()) {
++			return this.overlay;
++		}
++		const overlay = new BrowserWindow({
++			show: false,
++			focusable: false,
++			// On macOS a panel never activates the app when clicked.
++			...(isMacintosh ? { type: 'panel' } : {}),
++			frame: false,
++			transparent: true,
++			backgroundColor: '#00000000',
++			hasShadow: false,
++			resizable: false,
++			movable: false,
++			minimizable: false,
++			maximizable: false,
++			fullscreenable: false,
++			skipTaskbar: true,
++			alwaysOnTop: true,
++			width: 160,
++			height: 40,
++			title: 'Axle Agents',
++			webPreferences: {
++				sandbox: true,
++				contextIsolation: true,
++				nodeIntegration: false,
++				webSecurity: true,
++				spellcheck: false,
++				devTools: false,
++				backgroundThrottling: false,
++				partition: 'axle-overlay',
++			},
++		});
++		overlay.setAlwaysOnTop(true, 'screen-saver');
++		if (isMacintosh) {
++			overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
++		}
++		const contents = overlay.webContents;
++		contents.on('will-navigate', event => event.preventDefault());
++		contents.setWindowOpenHandler(() => ({ action: 'deny' }));
++		contents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
++		contents.on('console-message', details => {
++			if (details.message.startsWith(MARKER)) {
++				this.onMessage(details.message.slice(MARKER.length));
++			}
++		});
++		contents.on('did-finish-load', () => {
++			if (this.overlay === overlay) {
++				this.loaded = true;
++				this.render();
++			}
++		});
++		contents.on('render-process-gone', () => {
++			if (this.overlay === overlay) {
++				this.overlay = undefined;
++				this.loaded = false;
++				overlay.destroy();
++			}
++		});
++		overlay.on('closed', () => {
++			if (this.overlay === overlay) {
++				this.overlay = undefined;
++				this.loaded = false;
++			}
++		});
++		this.overlay = overlay;
++		this.loaded = false;
++		this.size = { width: 0, height: 0 };
++		overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(PAGE)}`).catch(e => this.logService.warn(`[axle overlay] load failed: ${e}`));
++		return overlay;
++	}
++
++	private onMessage(raw: string): void {
++		let message: { type?: unknown; width?: unknown; height?: unknown; key?: unknown };
++		try {
++			message = JSON.parse(raw);
++		} catch {
++			return;
++		}
++		if (message.type === 'size') {
++			const width = finite(message.width);
++			const height = finite(message.height);
++			if (width && height) {
++				this.size = { width: Math.min(800, Math.ceil(width)), height: Math.min(900, Math.ceil(height)) };
++				this.place();
++			}
++		} else if (message.type === 'click' && typeof message.key === 'string') {
++			// Only an agent the page was given: the key maps back to the window that pushed it.
++			const target = this.keys.get(message.key);
++			if (target && this.windows.get(target.windowId)?.state.items.some(i => i.id === target.id)) {
++				this._onDidClickAgent.fire(target);
++			}
++		}
++	}
++
++	/** Puts the overlay where the settings say, at the size the page asked for, and shows it without activating it. */
++	private place(): void {
++		const overlay = this.overlay;
++		const placement = this.placement;
++		if (!overlay || overlay.isDestroyed() || !placement || !this.size.width) {
++			return;
++		}
++		const { display, notch, options } = placement;
++		const area = notch ? display.bounds : display.workArea;
++		const margin = notch ? 0 : 10;
++		const { width, height } = this.size;
++		const [vertical, horizontal] = options.position.split('-');
++		const x = horizontal === 'left' ? area.x + margin : horizontal === 'right' ? area.x + area.width - width - margin : area.x + (area.width - width) / 2;
++		const y = vertical === 'top' ? area.y + margin : area.y + area.height - height - margin;
++		overlay.setBounds({ x: Math.round(x), y: Math.round(y), width, height });
++		if (!overlay.isVisible()) {
++			overlay.showInactive();
++		}
++		// Windows can drop a hidden window out of the topmost band: set it again each time it appears.
++		overlay.setAlwaysOnTop(true, 'screen-saver');
++	}
++}
++
++type Timeout = ReturnType<typeof setTimeout>;
++
++/**
++ * The overlay page. It reports the size it needs (the main process moves and sizes the window to it), expands to the
++ * agent list while the pointer is over it, and reports a click on an agent by the key it was given. All text is set
++ * with textContent.
++ */
++const PAGE = /* html */ `<!doctype html><html><head><meta charset="utf-8">
++<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
++<title>Axle Agents</title>
++<style>
++html, body { margin: 0; background: transparent; overflow: hidden; cursor: default; -webkit-user-select: none; user-select: none; }
++body { font: 12px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: var(--foreground); --dot: 8px; }
++body.size-small { font-size: 11px; --dot: 7px; }
++body.size-large { font-size: 14px; --dot: 10px; }
++#root { position: absolute; top: 0; left: 0; width: max-content; padding: 6px 8px 10px; }
++.box { display: flex; align-items: center; gap: 0.7em; padding: 0.45em 1em; background: var(--background); color: var(--foreground); border: 1px solid var(--border); border-radius: 999px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28); }
++.box.list { flex-direction: column; align-items: stretch; gap: 1px; padding: 0.4em; border-radius: 12px; min-width: 15em; }
++body.notch #root { padding-top: 0; }
++body.notch .box { background: #000; color: #f2f2f2; border: none; border-radius: 0 0 16px 16px; box-shadow: none; }
++body.notch .box.list { border-radius: 0 0 16px 16px; }
++.notch-gap { width: 190px; flex: none; }
++.dots { display: flex; gap: 0.35em; align-items: center; }
++.dot { width: var(--dot); height: var(--dot); border-radius: 50%; flex: none; background: var(--idle); }
++.dot.working { background: var(--working); animation: pulse 1.6s ease-in-out infinite; }
++.dot.approval { background: var(--approval); }
++.dot.question { background: var(--question); }
++.dot.error { background: var(--error); }
++.dot.done { background: var(--done); }
++@keyframes pulse { 50% { opacity: 0.4; } }
++@media (prefers-reduced-motion: reduce) { .dot.working { animation: none; } }
++.counts { display: flex; gap: 0.7em; color: var(--muted); font-variant-numeric: tabular-nums; }
++body.notch .counts, body.notch .act, body.notch .meta { color: #b9bcc6; }
++.count { display: flex; align-items: center; gap: 0.3em; }
++.row { display: flex; align-items: center; gap: 0.6em; padding: 0.4em 0.6em; border-radius: 8px; cursor: pointer; }
++.row:hover { background: color-mix(in srgb, var(--foreground) 10%, transparent); }
++.row.empty { cursor: default; color: var(--muted); }
++.name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 14em; }
++.act { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 16em; }
++.meta { margin-left: auto; padding-left: 0.6em; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
++</style></head><body><div id="root"></div><script>
++'use strict';
++const MARKER = ${JSON.stringify(MARKER)};
++const root = document.getElementById('root');
++const KIND = { approval: 'Needs approval', question: 'Asks you', error: 'Error', done: 'Done' };
++let data;
++let hover = false;
++let reported = '';
++const say = message => console.info(MARKER + JSON.stringify(message));
++const el = (tag, cls, text) => {
++	const e = document.createElement(tag);
++	if (cls) { e.className = cls; }
++	if (text !== undefined) { e.textContent = String(text); }
++	return e;
++};
++const kind = i => i.attention || i.state;
++const label = i => i.activity || (i.attention ? KIND[i.attention] : i.state === 'working' ? 'Working' : 'Idle');
++function row(i) {
++	const r = el('div', 'row');
++	r.append(el('span', 'dot ' + kind(i)), el('span', 'name', i.name), el('span', 'act', label(i)));
++	const meta = [];
++	if (typeof i.context === 'number') { meta.push(i.context + '%'); }
++	if (typeof i.usd === 'number') { meta.push('$' + i.usd.toFixed(2)); }
++	if (meta.length) { r.append(el('span', 'meta', meta.join(' · '))); }
++	r.addEventListener('click', () => say({ type: 'click', key: i.key }));
++	return r;
++}
++function render() {
++	if (!data) { return; }
++	for (const [k, v] of Object.entries(data.colors)) { document.documentElement.style.setProperty('--' + k, v); }
++	document.body.className = 'size-' + data.size + (data.notch ? ' notch' : '');
++	root.style.opacity = String(data.opacity);
++	const list = data.style === 'list' || hover;
++	const box = el('div', 'box' + (list ? ' list' : ''));
++	if (data.notch) { box.style.minHeight = data.notch + 'px'; }
++	if (list) {
++		if (data.notch) { box.style.paddingTop = data.notch + 'px'; }
++		if (!data.items.length) { box.append(el('div', 'row empty', 'No agents')); }
++		data.items.forEach(i => box.append(row(i)));
++	} else {
++		const dots = el('div', 'dots');
++		data.items.slice(0, 12).forEach(i => dots.append(el('span', 'dot ' + kind(i))));
++		if (!data.items.length) { dots.append(el('span', 'dot idle')); }
++		box.append(dots);
++		if (data.notch) { box.append(el('span', 'notch-gap')); }
++		if (data.style === 'pill') {
++			if (data.counts) {
++				const counts = el('div', 'counts');
++				const add = (cls, n, title) => {
++					if (!n) { return; }
++					const c = el('span', 'count');
++					c.title = title;
++					c.append(el('span', 'dot ' + cls), el('span', '', n));
++					counts.append(c);
++				};
++				add('approval', data.counts.needs, 'Need you');
++				add('working', data.counts.working, 'Working');
++				add('done', data.counts.done, 'Done');
++				if (!counts.childElementCount) { counts.append(el('span', '', data.items.length ? data.items.length + ' agents' : 'No agents')); }
++				box.append(counts);
++			} else if (data.items.length === 1) {
++				box.append(el('span', 'act', data.items[0].name + ' · ' + label(data.items[0])));
++			}
++		}
++	}
++	root.replaceChildren(box);
++	requestAnimationFrame(report);
++}
++function report() {
++	const r = root.getBoundingClientRect();
++	const size = { type: 'size', width: Math.ceil(r.width), height: Math.ceil(r.height) };
++	const key = size.width + 'x' + size.height;
++	if (key !== reported) {
++		reported = key;
++		say(size);
++	}
++}
++root.addEventListener('mouseenter', () => { if (!hover) { hover = true; render(); } });
++root.addEventListener('mouseleave', () => { if (hover) { hover = false; render(); } });
++window.axleRender = model => { data = model; render(); };
++</script></body></html>`;
+diff --git a/src/vs/workbench/contrib/axleDesktop/electron-browser/axleDesktop.contribution.ts b/src/vs/workbench/contrib/axleDesktop/electron-browser/axleDesktop.contribution.ts
+new file mode 100644
+--- /dev/null
++++ b/src/vs/workbench/contrib/axleDesktop/electron-browser/axleDesktop.contribution.ts
+@@ -0,0 +1,167 @@
++/*---------------------------------------------------------------------------------------------
++ *  Axle: agent status outside the window, for Axle's Agents extension (flow-agent, src/desktop.ts).
++ *
++ *  - `flow.desktop.setBadge(count)`: the number of agents that need you on the app icon (Dock on
++ *    macOS, taskbar overlay icon on Windows, launcher on Linux), through the same native call as
++ *    the Sessions badge. 0 clears it.
++ *  - `flow.desktop.setOverlay(state | undefined)`: this window's agents for the status overlay the
++ *    main process draws (platform/axleDesktop), with the colours of this window's theme.
++ *
++ *  Both commands exist only in the desktop app, so the extension finds them missing in the browser
++ *  and does nothing. A click on an agent in the overlay is the user's gesture: the agent's terminal
++ *  is shown and this window comes forward. That is the one place where the overlay leads to focus.
++ *--------------------------------------------------------------------------------------------*/
++
++import { mainWindow } from '../../../../base/browser/window.js';
++import { Color } from '../../../../base/common/color.js';
++import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
++import { isWindows } from '../../../../base/common/platform.js';
++import { localize } from '../../../../nls.js';
++import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
++import { registerMainProcessRemoteService } from '../../../../platform/ipc/electron-browser/services.js';
++import { ILogService } from '../../../../platform/log/common/log.js';
++import { FocusMode, IApplicationBadge, INativeHostService } from '../../../../platform/native/common/native.js';
++import { IColorTheme, IThemeService } from '../../../../platform/theme/common/themeService.js';
++import { AXLE_OVERLAY_CHANNEL, IAxleOverlayColors, IAxleOverlayService, IAxleOverlayState } from '../../../../platform/axleDesktop/common/axleDesktop.js';
++import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
++import { ACTIVITY_BAR_BADGE_BACKGROUND, ACTIVITY_BAR_BADGE_FOREGROUND } from '../../../common/theme.js';
++
++registerMainProcessRemoteService(IAxleOverlayService, AXLE_OVERLAY_CHANNEL);
++
++/** flow-agent registers this: it shows a live agent's terminal and ignores an id it does not know. */
++const REVEAL_AGENT = 'flow.agents.reveal';
++
++class AxleDesktopContribution extends Disposable implements IWorkbenchContribution {
++
++	static readonly ID = 'workbench.contrib.axleDesktop';
++
++	/** Windows renders the taskbar overlay small, so draw at 2x for HiDPI. */
++	private static readonly ICON_SIZE = 32;
++	/** Beyond this the label no longer fits into a 16x16 overlay. */
++	private static readonly MAX_ICON_COUNT = 9;
++
++	private badgeCount = 0;
++	private overlay: IAxleOverlayState | undefined;
++
++	constructor(
++		@INativeHostService private readonly nativeHostService: INativeHostService,
++		@IThemeService private readonly themeService: IThemeService,
++		@IAxleOverlayService private readonly overlayService: IAxleOverlayService,
++		@ICommandService commandService: ICommandService,
++		@ILogService private readonly logService: ILogService,
++	) {
++		super();
++
++		this._register(CommandsRegistry.registerCommand('flow.desktop.setBadge', (_accessor, count: unknown) => {
++			this.setBadge(typeof count === 'number' && Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0);
++		}));
++		this._register(CommandsRegistry.registerCommand('flow.desktop.setOverlay', (_accessor, state: unknown) => {
++			this.overlay = state && typeof state === 'object' ? state as IAxleOverlayState : undefined;
++			this.pushOverlay();
++		}));
++
++		this._register(this.themeService.onDidColorThemeChange(theme => {
++			// The Windows overlay icon and the overlay's colours are drawn from the theme.
++			if (this.badgeCount && isWindows) {
++				this.sendBadge(this.badgeCount, theme);
++			}
++			if (this.overlay) {
++				this.pushOverlay();
++			}
++		}));
++
++		this._register(this.overlayService.onDidClickAgent(e => {
++			if (e.windowId !== this.nativeHostService.windowId) {
++				return;
++			}
++			commandService.executeCommand(REVEAL_AGENT, e.id).catch(err => this.logService.warn(`[axle desktop] ${REVEAL_AGENT} failed: ${err}`));
++			this.nativeHostService.focusWindow({ mode: FocusMode.Force });
++		}));
++
++		// The badge is application wide on macOS and Linux and the overlay outlives this window: clear both with it.
++		this._register(toDisposable(() => {
++			this.setBadge(0);
++			if (this.overlay) {
++				this.overlay = undefined;
++				this.pushOverlay();
++			}
++		}));
++	}
++
++	private setBadge(count: number): void {
++		if (count === this.badgeCount) {
++			return;
++		}
++		this.badgeCount = count;
++		this.sendBadge(count, isWindows ? this.themeService.getColorTheme() : undefined);
++	}
++
++	private sendBadge(count: number, colorTheme: IColorTheme | undefined): void {
++		let badge: IApplicationBadge | undefined;
++		if (count > 0) {
++			const description = count === 1
++				? localize('axle.desktop.badge.single', "1 agent needs you")
++				: localize('axle.desktop.badge.multiple', "{0} agents need you", count);
++			// Leave `iconDataURL` out rather than undefined: the IPC drops undefined properties (see SessionsApplicationBadge).
++			const iconDataURL = colorTheme ? this.renderIcon(count, colorTheme) : undefined;
++			badge = iconDataURL ? { count, description, iconDataURL } : { count, description };
++		}
++		this.nativeHostService.setApplicationBadge(badge).catch(err => this.logService.warn(`[axle desktop] badge failed: ${err}`));
++	}
++
++	/** The taskbar overlay icon on Windows: a badge-coloured disc with the count, drawn like the Sessions badge. */
++	private renderIcon(count: number, colorTheme: IColorTheme): string | undefined {
++		const size = AxleDesktopContribution.ICON_SIZE;
++		const canvas = mainWindow.document.createElement('canvas');
++		canvas.width = size;
++		canvas.height = size;
++		const context = canvas.getContext('2d');
++		if (!context) {
++			return undefined;
++		}
++		context.fillStyle = (colorTheme.getColor(ACTIVITY_BAR_BADGE_BACKGROUND) ?? Color.blue).toString();
++		context.beginPath();
++		context.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI);
++		context.fill();
++		const label = count > AxleDesktopContribution.MAX_ICON_COUNT ? `${AxleDesktopContribution.MAX_ICON_COUNT}+` : String(count);
++		context.fillStyle = (colorTheme.getColor(ACTIVITY_BAR_BADGE_FOREGROUND) ?? Color.white).toString();
++		context.font = `600 ${label.length > 1 ? 17 : 21}px "Segoe UI", sans-serif`;
++		context.textAlign = 'center';
++		context.textBaseline = 'middle';
++		context.fillText(label, size / 2, size / 2 + 1);
++		return canvas.toDataURL('image/png');
++	}
++
++	private pushOverlay(): void {
++		const colors = this.overlay ? this.overlayColors(this.themeService.getColorTheme()) : undefined;
++		this.overlayService.update(this.nativeHostService.windowId, this.overlay, colors).catch(err => this.logService.warn(`[axle desktop] overlay failed: ${err}`));
++	}
++
++	/** The overlay in this theme's colours: a widget's background and text, the chart colours for the states. */
++	private overlayColors(theme: IColorTheme): IAxleOverlayColors {
++		const pick = (fallback: string, ...ids: string[]) => {
++			for (const id of ids) {
++				const c = theme.getColor(id);
++				if (c) {
++					return c.toString();
++				}
++			}
++			return fallback;
++		};
++		const dark = theme.type !== 'light' && theme.type !== 'hcLight';
++		return {
++			background: pick(dark ? '#1c1d23' : '#fafafc', 'editorWidget.background', 'editor.background'),
++			foreground: pick(dark ? '#e8e9ee' : '#1f2128', 'editorWidget.foreground', 'foreground'),
++			muted: pick(dark ? '#a3a7b5' : '#5d6170', 'descriptionForeground'),
++			border: pick(dark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)', 'editorWidget.border', 'widget.border', 'contrastBorder'),
++			working: pick('#6f86ff', 'charts.blue'),
++			approval: pick('#ffb454', 'charts.yellow', 'editorWarning.foreground'),
++			question: pick('#c58cff', 'charts.purple'),
++			error: pick('#ff6b6b', 'charts.red', 'errorForeground'),
++			done: pick('#5fe0a1', 'charts.green'),
++			idle: pick('#7d8293', 'disabledForeground', 'descriptionForeground'),
++		};
++	}
++}
++
++registerWorkbenchContribution2(AxleDesktopContribution.ID, AxleDesktopContribution, WorkbenchPhase.BlockRestore);
+diff --git a/src/vs/workbench/workbench.desktop.main.ts b/src/vs/workbench/workbench.desktop.main.ts
+--- a/src/vs/workbench/workbench.desktop.main.ts
++++ b/src/vs/workbench/workbench.desktop.main.ts
+@@ -219,6 +219,9 @@ import './contrib/keybindingsExport/electron-browser/keybindingsExport.contribut
+ // System-wide (OS global) Keybindings
+ import './contrib/keybindings/electron-browser/systemWideKeybindings.contribution.js';
+ 
++// Axle: agent status on the app icon and in the desktop overlay
++import './contrib/axleDesktop/electron-browser/axleDesktop.contribution.js';
++
+ //#endregion
+ 
+ 
