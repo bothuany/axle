@@ -1,0 +1,25 @@
+JOB shared_task   tasks.build_report
+JOB shared_task   tasks.send_email
+MSG ${app.audit-topic}Listeners.onAudit
+MSG Topics.REFUNDSListeners.onRefund
+MSG cart.checked-outStockController.reserve
+MSG mail.queue    Listeners.onMail
+MSG orders        Listeners.onOrder
+  call: Listeners.charge [method]
+MSG shipping      Listeners.onShip
+POST /carts/checkoutCartsController.checkout
+  (guess) message: StockController.reserve [controller]
+POST /orders/auditOrderController.audit
+POST /orders/mail OrderController.mail
+  (guess) message: Listeners.onMail [controller]
+POST /orders/refundOrderController.refund
+  (guess) message: Listeners.onRefund [controller]
+POST /orders/ship OrderController.ship
+  (guess) message: Listeners.onShip [controller]
+POST /orders      OrderController.place
+  (guess) message: Listeners.onOrder [controller]
+    call: Listeners.charge [method]
+POST /reports     views.reports
+  (guess) message: build_report [controller]
+POST /signup      views.signup
+  (guess) message: send_email [controller]

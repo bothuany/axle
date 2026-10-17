@@ -1,0 +1,13 @@
+GET /api/invoices/:idmain.getInvoice
+  ? JSON
+GET /orders/:id   main.showOrder
+  (guess) http: getInvoice [controller]
+    ? JSON
+  ? New, Get, Param
+GET /ping         main.ping
+  ? Get
+POST /api/invoicesmain.createInvoice
+  ? JSON
+POST /orders      main.placeOrder
+  (guess) http: createInvoice [controller]
+    ? JSON

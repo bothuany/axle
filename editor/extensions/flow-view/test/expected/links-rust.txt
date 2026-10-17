@@ -1,0 +1,6 @@
+GET /api/invoices/:idmain.get_invoice
+GET /orders/:id   main.show_order
+  (guess) http: get_invoice [controller]
+POST /api/invoicesmain.create_invoice
+POST /orders      main.place_order
+  (guess) http: create_invoice [controller]

@@ -1,0 +1,7 @@
+GET /api/invoices/{id}InvoiceController.show
+GET /orders/{id}  OrderController.show
+  (guess) http: InvoiceController.show [controller]
+POST /api/invoicesInvoiceController.store
+POST /orders      OrderController.store
+  (guess) http: InvoiceController.store [controller]
+  ? post, config

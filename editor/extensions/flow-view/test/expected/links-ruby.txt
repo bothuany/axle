@@ -1,0 +1,11 @@
+GET /api/invoices/:idapp./api/invoices/:id
+  ? load_invoice
+GET /orders/:id   app./orders/:id
+  (guess) http: GET /api/invoices/:id [controller]
+    ? load_invoice
+  ? headers
+POST /api/invoicesapp./api/invoices
+  ? save_invoice
+POST /orders      app./orders
+  (guess) http: POST /api/invoices [controller]
+    ? save_invoice
