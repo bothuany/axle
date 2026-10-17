@@ -9,6 +9,8 @@
 
 /** One agent's context, as its CLI last reported it. */
 export interface AgentUsage {
+	/** The session's own id when the agent has one: a renamed agent stays one row. Else the name stands in. */
+	key: string;
 	agent: string;
 	harness?: string;
 	model?: string;
@@ -31,18 +33,25 @@ export interface HarnessLimits {
 const num = (v: unknown): number | undefined => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined;
 const str = (v: unknown, max = 80): string | undefined => typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined;
 
-/** A usage report from another extension, or undefined when it is not one. A size of 0 or none means "not known". */
-export function toUsage(arg: unknown): AgentUsage | undefined {
+/**
+ * A usage report from another extension, or undefined when it is not one. A size of 0 or none means "not known".
+ * `{ id, ended: true }` says the session is over: `{ ended }` with only its key.
+ */
+export function toUsage(arg: unknown): AgentUsage | { key: string; ended: true } | undefined {
 	const a = arg as Record<string, unknown> | undefined;
 	const agent = str(a?.agent, 200);
+	const key = str(a?.id, 200) ?? agent;
+	if (key && a?.ended === true) {
+		return { key, ended: true };
+	}
 	const used = num(a?.used);
-	if (!agent || used === undefined) {
+	if (!agent || !key || used === undefined) {
 		return undefined;
 	}
 	const size = num(a?.size) || undefined;
 	const harness = str(a?.harness);
 	const model = str(a?.model);
-	return { agent, used, ...(size ? { size } : {}), ...(harness ? { harness } : {}), ...(model ? { model } : {}) };
+	return { key, agent, used, ...(size ? { size } : {}), ...(harness ? { harness } : {}), ...(model ? { model } : {}) };
 }
 
 /** A limits report from another extension, or undefined when it holds no usable window. */

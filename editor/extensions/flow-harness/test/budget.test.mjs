@@ -29,6 +29,12 @@ test('an unknown window shows the tokens and no percentage, never a 200k guess',
 	assert.equal(b.share(b.toUsage({ agent: 'a', used: 5 })), undefined)
 })
 
+test('a row is keyed by the session id, so a renamed agent stays one row; an ended report carries only the key', () => {
+	assert.equal(b.toUsage({ id: 's1', agent: 'Claude 1', used: 5 }).key, 's1')
+	assert.equal(b.toUsage({ agent: 'Claude (ACP)', used: 5 }).key, 'Claude (ACP)')
+	assert.deepEqual(b.toUsage({ id: 's1', agent: 'Claude 1', ended: true }), { key: 's1', ended: true })
+})
+
 test('reports that are not reports are dropped', () => {
 	assert.equal(b.toUsage(undefined), undefined)
 	assert.equal(b.toUsage({ agent: '', used: 1 }), undefined)

@@ -10,7 +10,7 @@ import { fmtTokens, limitLevel, limitLines, limitsText, toLimits, toUsage, type 
 import type { Harness } from './scan';
 
 export class ContextBudget implements vscode.Disposable {
-	/** The last report of each agent, by its name (the name of its terminal, too). Insertion order is report order. */
+	/** The last report of each agent, by its session id (or its name). Insertion order is report order. */
 	private readonly usages = new Map<string, AgentUsage>();
 	private harness: Harness | undefined;
 	private readonly changed = new vscode.EventEmitter<void>();
@@ -20,7 +20,9 @@ export class ContextBudget implements vscode.Disposable {
 	constructor() {
 		// An agent whose terminal is closed is gone: its numbers must not stay on show.
 		this.closeListener = vscode.window.onDidCloseTerminal(t => {
-			if (this.usages.delete(t.name)) {
+			const gone = [...this.usages.values()].filter(u => u.agent === t.name);
+			gone.forEach(u => this.usages.delete(u.key));
+			if (gone.length) {
 				this.changed.fire();
 			}
 		});
@@ -45,8 +47,10 @@ export class ContextBudget implements vscode.Disposable {
 		if (!u) {
 			return;
 		}
-		this.usages.delete(u.agent);
-		this.usages.set(u.agent, u);
+		this.usages.delete(u.key);
+		if (!('ended' in u)) {
+			this.usages.set(u.key, u);
+		}
 		this.changed.fire();
 	}
 

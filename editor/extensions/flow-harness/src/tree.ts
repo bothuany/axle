@@ -81,7 +81,7 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 			const u = node.usage;
 			const s = share(u);
 			const t = new vscode.TreeItem(u.agent);
-			t.id = `agent:${u.agent}`;
+			t.id = `agent:${u.key}`;
 			t.description = usageLine(u);
 			t.iconPath = new vscode.ThemeIcon('pulse', s === undefined ? undefined : new vscode.ThemeColor(s > 0.85 ? 'flowHarness.deny' : s > 0.6 ? 'flowHarness.ask' : 'flowHarness.allow'));
 			const tip = new vscode.MarkdownString(`**${u.agent}**${u.harness ? ` · ${u.harness}` : ''}${u.model ? ` · ${u.model}` : ''}\n\n`);

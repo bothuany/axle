@@ -720,6 +720,7 @@ export class Agents implements vscode.Disposable {
 					s.state = 'ended';
 					s.activity = s.cli === 'claude' ? 'Closed · click to resume' : undefined;
 					s.since = Date.now();
+					this.usageEnded(s);
 				}
 				this.unwatch(id);
 				// No save here: a window being reloaded closes its terminals too (they live on in the
@@ -878,6 +879,7 @@ export class Agents implements vscode.Disposable {
 				break;
 			case 'SessionEnd':
 				set('ended', undefined);
+				this.usageEnded(s);
 				break;
 		}
 		const active = vscode.window.activeTerminal === this.terminals.get(s.id) && vscode.window.state.focused;
@@ -1133,8 +1135,17 @@ export class Agents implements vscode.Disposable {
 			return; // the status line refreshes often: only a change is news
 		}
 		s.usage = usage;
-		void Promise.resolve(vscode.commands.executeCommand('flowHarness.reportUsage', { agent: s.name, harness: s.cli === 'codex' ? 'Codex' : 'Claude Code', ...usage })).catch(() => undefined);
+		void Promise.resolve(vscode.commands.executeCommand('flowHarness.reportUsage', { id: s.id, agent: s.name, harness: s.cli === 'codex' ? 'Codex' : 'Claude Code', ...usage })).catch(() => undefined);
 		this.changed.fire();
+	}
+
+	/** The CLI exited or its terminal closed: its context is no longer worth a row in the Harness view. */
+	private usageEnded(s: AgentSession) {
+		if (s.usage) {
+			void Promise.resolve(vscode.commands.executeCommand('flowHarness.reportUsage', { id: s.id, agent: s.name, ended: true })).catch(() => undefined);
+			// Forgotten here too, so a resumed session reports afresh instead of matching numbers that were dropped.
+			s.usage = undefined;
+		}
 	}
 
 	/** The limits last sent per harness: the status line repeats them on every refresh. */
