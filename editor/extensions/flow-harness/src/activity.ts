@@ -6,7 +6,7 @@
  *  storage and stays bounded (30 days, a fixed number of keys). Pure (no vscode).
  *--------------------------------------------------------------------------------------------*/
 
-import { isAxleHook, mcpServerOf, type TranscriptFacts } from './transcript';
+import { isAxleHook, mcpServerOf, mcpToolPrefix, type TranscriptFacts } from './transcript';
 
 export const WINDOW_DAYS = 30;
 export const MAX_KEYS = 400;
@@ -26,20 +26,21 @@ export interface Counter {
 }
 
 export interface ActivityData {
-	version: 1;
+	version: 2;
+	// Version 2: coverage counts only what was read in full (version 1 claimed the whole window).
 	/** When counting began here: "never used" means nothing until the window is covered. */
 	since: number;
 	keys: Record<string, Counter>;
 	/** Transcripts read so far, with how far, and whether hook events cover their tool calls (sessions Axle started). */
-	transcripts: Record<string, { offset: number; live: boolean; at: number }>;
+	transcripts: Record<string, { offset: number; live: boolean; at: number; from?: number }>;
 }
 
-export const emptyActivity = (now: number): ActivityData => ({ version: 1, since: now, keys: {}, transcripts: {} });
+export const emptyActivity = (now: number): ActivityData => ({ version: 2, since: now, keys: {}, transcripts: {} });
 
 /** A stored value of the wrong shape (an older version, a hand edit) starts over rather than breaking the map. */
 export function loadActivity(raw: unknown, now: number): ActivityData {
 	const d = raw as Partial<ActivityData> | undefined;
-	if (!d || d.version !== 1 || typeof d.since !== 'number' || !d.keys || typeof d.keys !== 'object' || !d.transcripts || typeof d.transcripts !== 'object') {
+	if (!d || d.version !== 2 || typeof d.since !== 'number' || !d.keys || typeof d.keys !== 'object' || !d.transcripts || typeof d.transcripts !== 'object') {
 		return emptyActivity(now);
 	}
 	return d as ActivityData;
@@ -69,8 +70,6 @@ export function bump(data: ActivityData, key: string, at: number, opts: Bump = {
 	if (opts.inferred) {
 		c.inferred = true;
 	}
-	// Counting started at the earliest thing seen: a backfilled transcript from last week moves it back.
-	data.since = Math.min(data.since, at);
 }
 
 /** Drops days older than the window, then the least recently used keys and transcripts past their caps. */
@@ -123,6 +122,14 @@ export function summary(data: ActivityData, key: string, now: number): Summary {
 		}
 	}
 	return { week, month, last: c.last, failures: c.failures ?? 0, avgMs: c.durCount ? Math.round((c.durTotal ?? 0) / c.durCount) : undefined, inferred: !!c.inferred };
+}
+
+/**
+ * Where the counts start after reading a window's transcripts: at the window's start (`cutoff`), unless a transcript was
+ * read only from `partial` on, or older transcripts (the newest of them last written at `skipped`) were left out.
+ */
+export function coveredFrom(cutoff: number, partial: readonly number[], skipped?: number): number {
+	return Math.max(cutoff, ...partial, ...(skipped !== undefined ? [skipped] : []));
 }
 
 /** How many days the counts cover. */
@@ -181,7 +188,8 @@ export function itemKey(i: { kind: string; label: string; file: string; hook?: H
 		case 'agents':
 			return agentKey(i.label);
 		case 'mcp':
-			return mcpKey(i.label);
+			// Tool names carry the server's name with `.` and spaces as `_`: count it under that spelling.
+			return mcpKey(mcpToolPrefix(i.label));
 		case 'hooks':
 			return i.hook ? hookKey(i.hook) : `hook:${i.file}`;
 		default:
@@ -238,6 +246,10 @@ export interface AgentEvent {
 
 /** Counts one hook event: the skill, subagent or MCP server a tool call used, and the user's hooks its event and tool fire. */
 export function countEvent(data: ActivityData, ev: AgentEvent, hooks: readonly HookLike[]) {
+	// The hooks here are Claude Code's settings: a Codex event fires none of them.
+	if (ev.cli !== 'claude') {
+		hooks = [];
+	}
 	const tool = ev.tool ?? '';
 	const failed = ev.event === 'PostToolUseFailure';
 	if (ev.event === 'PostToolUse' || failed) {

@@ -10,7 +10,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { countEvent, countTranscript, coveredDays, loadActivity, prune, summary, WINDOW_DAYS, type ActivityData, type AgentEvent, type HookLike, type Summary } from './activity';
+import { countEvent, countTranscript, coveredDays, coveredFrom, loadActivity, prune, summary, WINDOW_DAYS, type ActivityData, type AgentEvent, type HookLike, type Summary } from './activity';
 import { redact, type FailureRecord, type PromptRecord } from './friction';
 import { isTranscriptPath, parseTranscript, type TranscriptFacts } from './transcript';
 
@@ -18,9 +18,11 @@ const ACTIVITY = 'flowHarness.activity';
 const FRICTION = 'flowHarness.friction';
 const MAX_PROMPTS = 300;
 const MAX_FAILURES = 300;
-/** The most of one transcript read in one go: transcripts reach hundreds of MB, and the newest part is what matters. */
-const MAX_READ = 4 << 20;
-const BACKFILL_FILES = 60;
+/** Transcripts are read in pieces of this size, so memory stays bounded. */
+const CHUNK = 4 << 20;
+/** Past this only a transcript's newest part is read (they reach hundreds of MB), and the counts say they start there. */
+const MAX_FILE = 256 << 20;
+const BACKFILL_FILES = 200;
 const DAY = 86_400_000;
 /** Agents remembered by name, for the X-ray's session list. */
 const MAX_SESSIONS = 50;
@@ -67,25 +69,50 @@ export function eventOf(raw: unknown): AgentEvent | undefined {
 	};
 }
 
-async function readFrom(file: string, offset: number): Promise<{ lines: string[]; end: number; size: number }> {
+/**
+ * Reads a transcript from `offset` to its end in chunks, handing over whole lines only (the last one may still be being
+ * written), so memory stays bounded however large the file. Past MAX_FILE only the newest part is read: `from` then
+ * says when that part begins, since nothing before it was seen.
+ */
+async function readLines(file: string, offset: number, each: (lines: string[]) => void): Promise<{ end: number; from?: number }> {
 	const h = await fs.open(file, 'r');
 	try {
 		const size = (await h.stat()).size;
-		let start = offset > size ? 0 : offset; // a shorter file was rewritten: read it again
-		if (size - start > MAX_READ) {
-			start = size - MAX_READ;
+		let pos = offset > size ? 0 : offset; // a shorter file was rewritten: read it again
+		const truncated = size - pos > MAX_FILE;
+		if (truncated) {
+			pos = size - MAX_FILE;
 		}
-		const buf = Buffer.alloc(size - start);
-		await h.read(buf, 0, buf.length, start);
-		const text = buf.toString('utf8');
-		// Only whole lines: the last one may still be being written. A read that started mid-file drops its first, partial line.
-		const lastNl = text.lastIndexOf('\n');
-		const body = lastNl < 0 ? '' : text.slice(0, lastNl);
-		const lines = body.split('\n');
-		if (start > offset && start > 0) {
-			lines.shift();
+		let from: number | undefined;
+		let skipPartial = truncated;
+		const buf = Buffer.alloc(CHUNK);
+		while (pos < size) {
+			const { bytesRead } = await h.read(buf, 0, Math.min(CHUNK, size - pos), pos);
+			if (!bytesRead) {
+				break;
+			}
+			const lastNl = buf.lastIndexOf(0x0a, bytesRead - 1);
+			if (lastNl < 0) {
+				// One line longer than a chunk (a huge pasted log): skip it rather than read it whole.
+				pos += bytesRead;
+				skipPartial = true;
+				continue;
+			}
+			const lines = buf.toString('utf8', 0, lastNl).split('\n');
+			if (skipPartial) {
+				lines.shift();
+				skipPartial = false;
+			}
+			if (truncated && from === undefined) {
+				from = lines.map(l => /"timestamp":"([^"]+)"/.exec(l)?.[1]).map(t => t ? Date.parse(t) : NaN).find(Number.isFinite) ?? Date.now();
+			}
+			each(lines);
+			pos += lastNl + 1;
+			if (bytesRead < CHUNK && lastNl + 1 < bytesRead) {
+				break; // the rest is a line still being written
+			}
 		}
-		return { lines, end: start + (lastNl < 0 ? 0 : Buffer.byteLength(body, 'utf8') + 1), size };
+		return { end: pos, from };
 	} finally {
 		await h.close();
 	}
@@ -150,6 +177,10 @@ export class Live implements vscode.Disposable {
 	}
 
 	private addPrompt(p: PromptRecord) {
+		// A prompt seen as an event and again in its transcript (or in a resumed one) is one prompt.
+		if (this.friction.prompts.some(x => x.text === redact(p.text.slice(0, 1000)) && Math.abs(x.at - p.at) < 5000)) {
+			return;
+		}
 		this.friction.prompts.push({ ...p, text: redact(p.text.slice(0, 1000)) });
 		this.friction.prompts.splice(0, Math.max(0, this.friction.prompts.length - MAX_PROMPTS));
 	}
@@ -187,31 +218,35 @@ export class Live implements vscode.Disposable {
 		}
 		const job = (async () => {
 			const seen = this.data.transcripts[file];
-			const { lines, end } = await readFrom(file, seen?.offset ?? 0);
 			const isLive = live || !!seen?.live;
-			const facts = parseTranscript(lines);
-			countTranscript(this.data, facts, this.hooks(), Date.now(), !isLive);
-			if (!isLive) {
-				const cutoff = Date.now() - WINDOW_DAYS * DAY;
-				for (const p of facts.prompts) {
-					const at = Date.parse(p.at ?? '') || Date.now();
-					if (at >= cutoff) {
-						this.addPrompt({ text: p.text, at, cli: 'claude', session: path.basename(file, '.jsonl') });
-					}
-				}
-				for (const e of facts.toolErrors) {
-					const at = Date.parse(e.at ?? '') || Date.now();
-					const subject = typeof e.input.command === 'string' ? e.input.command : typeof e.input.file_path === 'string' ? e.input.file_path : '';
-					if (at >= cutoff) {
-						this.addFailure({ tool: e.tool, subject, error: e.error, at, cli: 'claude', session: path.basename(file, '.jsonl') });
-					}
-				}
-			}
-			this.data.transcripts[file] = { offset: end, live: isLive, at: Date.now() };
+			const { end, from } = await readLines(file, seen?.offset ?? 0, lines => this.take(file, parseTranscript(lines), isLive));
+			this.data.transcripts[file] = { offset: end, live: isLive, at: Date.now(), from: from ?? seen?.from };
 			this.touch();
 		})().catch(e => console.warn(`flow-harness: could not read ${file}: ${(e as Error).message}`)).finally(() => this.reading.delete(file));
 		this.reading.set(file, job);
 		return job;
+	}
+
+	/** Counts one stretch of a transcript; for a past session also its prompts and failures. */
+	private take(file: string, facts: TranscriptFacts, isLive: boolean) {
+		countTranscript(this.data, facts, this.hooks(), Date.now(), !isLive);
+		if (isLive) {
+			return;
+		}
+		const cutoff = Date.now() - WINDOW_DAYS * DAY;
+		for (const p of facts.prompts) {
+			const at = Date.parse(p.at ?? '') || Date.now();
+			if (at >= cutoff) {
+				this.addPrompt({ text: p.text, at, cli: 'claude', session: path.basename(file, '.jsonl') });
+			}
+		}
+		for (const e of facts.toolErrors) {
+			const at = Date.parse(e.at ?? '') || Date.now();
+			const subject = typeof e.input.command === 'string' ? e.input.command : typeof e.input.file_path === 'string' ? e.input.file_path : '';
+			if (at >= cutoff) {
+				this.addFailure({ tool: e.tool, subject, error: e.error, at, cli: 'claude', session: path.basename(file, '.jsonl') });
+			}
+		}
 	}
 
 	/** Once per window: the last 30 days of this folder's transcripts, newest first and bounded, read in the background. */
@@ -223,19 +258,24 @@ export class Live implements vscode.Disposable {
 		const dir = projectTranscriptDir(root);
 		const names = await fs.readdir(dir).catch(() => [] as string[]);
 		const cutoff = Date.now() - WINDOW_DAYS * DAY;
-		const files = (await Promise.all(names.filter(n => n.endsWith('.jsonl')).map(async n => {
+		const inWindow = (await Promise.all(names.filter(n => n.endsWith('.jsonl')).map(async n => {
 			const file = path.join(dir, n);
 			const st = await fs.stat(file).catch(() => undefined);
 			return st && st.mtimeMs >= cutoff ? { file, mtime: st.mtimeMs, size: st.size } : undefined;
-		}))).filter((x): x is { file: string; mtime: number; size: number } => !!x).sort((a, b) => b.mtime - a.mtime).slice(0, BACKFILL_FILES);
+		}))).filter((x): x is { file: string; mtime: number; size: number } => !!x).sort((a, b) => b.mtime - a.mtime);
+		const files = inWindow.slice(0, BACKFILL_FILES);
 		for (const f of files) {
 			// A transcript read before and unchanged since needs no second look.
 			if (this.data.transcripts[f.file]?.offset !== f.size) {
 				await this.ingest(f.file, false);
 			}
 		}
-		// Every transcript of the window was read: from here on "never used in 30 days" is a fact about this project's sessions.
-		this.data.since = Math.min(this.data.since, cutoff);
+		// The counts speak for the stretch that was read in full: the whole window, unless a transcript was too large to read
+		// from its start or older ones were left out, in which case they begin where what was read begins.
+		const partial = files.map(f => this.data.transcripts[f.file]?.from).filter((t): t is number => t !== undefined);
+		const skipped = inWindow.length > files.length ? inWindow[files.length].mtime : undefined;
+		const from = coveredFrom(cutoff, partial, skipped);
+		this.data.since = Math.min(Math.max(this.data.since, cutoff), from);
 		this.touch();
 	}
 
@@ -248,8 +288,10 @@ export class Live implements vscode.Disposable {
 			const h = await fs.open(file, 'r');
 			let head: string;
 			let tail = '';
+			let partial = false;
 			try {
 				const size = (await h.stat()).size;
+				partial = size > 4 << 20;
 				const headLen = Math.min(size, 2 << 20);
 				const hb = Buffer.alloc(headLen);
 				await h.read(hb, 0, headLen, 0);
@@ -266,7 +308,8 @@ export class Live implements vscode.Disposable {
 			const headLines = head.split('\n');
 			headLines.pop();
 			const tailLines = tail ? tail.split('\n').slice(1) : [];
-			return parseTranscript([...headLines, ...tailLines]);
+			// The middle of a large transcript is not read: what is counted there (compactions) is a lower bound.
+			return { ...parseTranscript([...headLines, ...tailLines]), partial };
 		} catch {
 			return undefined;
 		}

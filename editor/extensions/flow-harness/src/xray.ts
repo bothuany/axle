@@ -179,7 +179,7 @@ function render(d) {
 		: m.source === 'baseline' ? 'Breakdown from the transcript' + (d.transcript ? ' (' + d.transcript + ')' : '') + '. Run /context in the session for Claude Code\\'s own numbers.'
 		: 'No transcript: what the harness loads, estimated from its files.';
 	const total = $('total'); total.replaceChildren();
-	if (m.used !== undefined) total.append(el('p', {}, el('b', {}, fmt(m.used) + ' of ' + fmt(m.size) + ' tokens in use'), ' (' + Math.round(m.used / m.size * 100) + '%) ', howTag(m.usedHow), m.compactions ? el('span', { class: 'muted' }, ' · compacted ' + m.compactions + '×') : null));
+	if (m.used !== undefined) total.append(el('p', {}, el('b', {}, fmt(m.used) + ' of ' + fmt(m.size) + ' tokens in use'), ' (' + Math.round(m.used / m.size * 100) + '%) ', howTag(m.usedHow), m.compactions ? el('span', { class: 'muted' }, ' · compacted ' + (m.partial ? 'at least ' : '') + m.compactions + '×') : null));
 	const bar = $('bar'); bar.replaceChildren();
 	const whole = Math.max(m.size, m.segments.reduce((a, s) => a + s.tokens, 0));
 	m.segments.forEach((s, i) => bar.append(el('i', { style: 'width:' + (s.tokens / whole * 100).toFixed(2) + '%;background:' + COLORS[i % COLORS.length], title: s.label + ': ' + fmt(s.tokens) })));

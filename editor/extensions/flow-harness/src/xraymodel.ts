@@ -42,6 +42,8 @@ export interface XrayModel {
 	segments: Segment[];
 	waste: Waste[];
 	compactions: number;
+	/** The transcript was read only in part, so `compactions` is at least this many. */
+	partial: boolean;
 }
 
 /** About four characters per token: Axle's estimate wherever no tokenizer count exists. */
@@ -80,7 +82,7 @@ export function xray(input: XrayInput): XrayModel {
 	const last = f?.lastUsage;
 	const size = f?.context?.size ?? (last && (last.used > 200_000 || /\[1m\]/.test(last.model ?? '')) ? 1_000_000 : input.reported?.size ?? input.defaultSize ?? 200_000);
 	const model: XrayModel = {
-		agent: input.agent, size, source: 'harness', segments: [], waste: [], compactions: f?.compactions ?? 0,
+		agent: input.agent, size, source: 'harness', segments: [], waste: [], compactions: f?.compactions ?? 0, partial: !!f?.partial,
 		used: last?.used ?? input.reported?.used, usedHow: last || input.reported ? 'measured' : undefined, usedAt: last?.at,
 	};
 	const mine = input.items.filter(i => i.agents.includes(isClaude ? 'Claude' : 'Codex'));

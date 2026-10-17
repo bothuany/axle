@@ -313,3 +313,30 @@ test('secrets are blanked before a prompt or a command is stored', () => {
 	assert.equal(f.redact('login with password: hunter22'), 'login with password=<secret>')
 	assert.equal(f.redact("Don't use yarn, use npm."), "Don't use yarn, use npm.", 'ordinary text is untouched')
 })
+
+test('coverage starts where reading did: a partly read or a left-out transcript moves it forward', () => {
+	const cutoff = 1000
+	assert.equal(a.coveredFrom(cutoff, []), 1000)
+	assert.equal(a.coveredFrom(cutoff, [5000, 3000]), 5000, 'a transcript read only from 5000 on')
+	assert.equal(a.coveredFrom(cutoff, [], 4000), 4000, 'older transcripts left out, the newest of them written at 4000')
+	assert.equal(a.coveredFrom(cutoff, [500]), 1000, 'never before the window')
+})
+
+test("a Codex event fires none of Claude Code's hooks, but still counts its MCP server", () => {
+	const d = a.emptyActivity(NOW)
+	a.countEvent(d, { at: NOW, agent: 'x', cli: 'codex', event: 'PostToolUse', tool: 'mcp__github__get', input: {} }, [{ event: 'PreToolUse', matcher: '*', command: 'node a.mjs' }])
+	a.countEvent(d, { at: NOW, agent: 'x', cli: 'codex', event: 'UserPromptSubmit', prompt: 'hi' }, [{ event: 'UserPromptSubmit', command: 'node b.mjs' }])
+	assert.deepEqual(Object.keys(d.keys), ['mcp:github'])
+})
+
+test('an MCP server named with a dot is counted under the name its tools carry', () => {
+	const d = a.emptyActivity(NOW)
+	a.countEvent(d, { at: NOW, agent: 'c', cli: 'claude', event: 'PostToolUse', tool: 'mcp__my_server__go' }, [])
+	assert.equal(a.summary(d, a.itemKey({ kind: 'mcp', label: 'my.server', file: '' }), NOW).week, 1)
+})
+
+test('the same prompt seen twice (an event and its transcript) is one prompt, not a repeat', () => {
+	const twice = [P("Don't use yarn, use npm.", 1000), P("Don't use yarn, use npm.", 1500)]
+	assert.equal(f.correctionProposals(twice).length, 0)
+	assert.equal(f.correctionProposals([...twice, P("Don't use yarn, use npm.", 90000)]).length, 1)
+})

@@ -117,7 +117,9 @@ export function asInstruction(sentence: string): string {
 export function correctionProposals(prompts: readonly PromptRecord[], instructions = '', min = 2): Proposal[] {
 	type Cluster = { sig: string[]; items: (Evidence & { sentence: string; cli: string; prompt: number })[] };
 	const clusters: Cluster[] = [];
-	prompts.forEach((p, index) => {
+	// The same prompt twice (an event and its transcript, a resumed session) is one prompt, not a repeat.
+	const unique = prompts.filter((p, i) => !prompts.slice(0, i).some(q => q.text === p.text && Math.abs(q.at - p.at) < 5000));
+	unique.forEach((p, index) => {
 		for (const sentence of corrections(p.text)) {
 			const sig = signature(sentence);
 			const home = clusters.find(c => jaccard(c.sig, sig) >= 0.5);

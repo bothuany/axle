@@ -56,6 +56,8 @@ export interface TranscriptFacts {
 	context?: ContextReport;
 	/** Skills Claude Code reports as invoked (from the Skill tool or a /slash command). */
 	invokedSkills: string[];
+	/** Set when only the start and the end of the transcript were read: counts over the whole of it are lower bounds. */
+	partial?: boolean;
 }
 
 type Entry = {
