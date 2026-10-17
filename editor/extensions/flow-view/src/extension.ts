@@ -271,15 +271,15 @@ function registerAgentCommands({ context, panel, changes }: Flow) {
 		vscode.commands.registerCommand('flow.agentProposalDone', () => panel.proposalDone()),
 		vscode.commands.registerCommand('flow.agentTurn', (prompt: string, agent: string) => changes.startTurn(prompt, agent)),
 
-		// "Ask the agent about this flow": the flow as a markdown file attached to the chat, so the agent reads
+		// "Ask the agent about this flow": the flow as a markdown file handed to the chosen agent, so it reads
 		// exact file:line spans instead of searching for them.
 		vscode.commands.registerCommand(Command.askAgent, async (label: string, flowText: string) => {
 			const dir = vscode.Uri.joinPath(context.globalStorageUri, 'flows');
 			await vscode.workspace.fs.createDirectory(dir);
 			const file = vscode.Uri.joinPath(dir, `${label.replace(/[^\w.-]+/g, '_')}.flow.md`);
 			await vscode.workspace.fs.writeFile(file, Buffer.from(flowText, 'utf8'));
-			// Claude Code reads an @-mentioned file itself; the question is left for the user to finish.
-			if (await askInDock(`About the flow in @${file.fsPath} (${label}): `, false)) {
+			// The file goes separately: flow-agent refers to it the way the chosen agent reads it. The question is left for the user to finish.
+			if (await askInDock(`About this flow (${label}): `, false, 'Ask about this flow', [file.fsPath])) {
 				return;
 			}
 			await vscode.commands.executeCommand('workbench.action.chat.open', {

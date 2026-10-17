@@ -13,7 +13,7 @@ import { Command } from './commands';
 import { entryName, type Endpoints, type Source } from './backends';
 
 /** The commands the shortcut row of the Home page can run. */
-const HOME_COMMANDS = new Set(['flow.showAtCursor', 'flow.pickEndpoint', 'workbench.action.quickOpen', 'workbench.view.extension.flowHarness']);
+const HOME_COMMANDS = new Set(['flow.showAtCursor', 'flow.pickEndpoint', 'workbench.action.quickOpen', 'workbench.view.extension.flowHarness', 'flow.agents.chooseAskTarget']);
 
 const RECENT_FILES = 'flow.home.recentFiles';
 const RECENT_FLOWS = 'flow.home.recentFlows';
@@ -77,8 +77,8 @@ export class FlowHome implements vscode.Disposable {
 	private async onMessage(m: { type: string; text?: string; path?: string; id?: string; label?: string; source?: Source; command?: string; line?: number }) {
 		switch (m.type) {
 			case 'ready': return this.post();
-			case 'ask': return await askInDock(m.text ?? '', true) || vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: false });
-			case 'draft': return await askInDock(m.text ?? '', false) || vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: true });
+			case 'ask': return await askInDock(m.text ?? '', true, 'Home') || vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: false });
+			case 'draft': return await askInDock(m.text ?? '', false, 'Home') || vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: true });
 			case 'open': return vscode.window.showTextDocument(vscode.Uri.file(m.path!), { selection: m.line !== undefined ? new vscode.Range(m.line, 0, m.line, 0) : undefined });
 			case 'flow': return vscode.commands.executeCommand(Command.showEntry, m.id, m.label, m.source);
 			// Only the shortcuts this page shows: a message is not a licence to run any command.
@@ -184,6 +184,8 @@ h1 { margin: 18px 0 18px; font-size: clamp(26px, 3.2vw, 34px); line-height: 1.15
 .send { width: 30px; height: 30px; border-radius: 50%; border: 0; background: var(--text); color: var(--bg); cursor: pointer; display: grid; place-items: center; }
 .send:disabled { opacity: .3; cursor: default; }
 .hint { margin: 10px 4px 0; color: var(--muted); font-size: 12px; }
+.hint .link { background: none; border: 0; padding: 0; color: var(--vscode-textLink-foreground); font: inherit; cursor: pointer; }
+.hint .link:hover { text-decoration: underline; }
 kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; color: var(--text); }
 
 /* Where you left off: the last flow you opened, one click back onto its canvas. */
@@ -239,14 +241,14 @@ kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); bor
 	<form class="ask" id="ask">
 		<textarea id="q" placeholder="Describe a change, ask about the code, or type / for a skill" rows="2" aria-label="Ask the agent"></textarea>
 		<div class="ask-bar">
-			<button type="button" class="chip plan" data-prefix="/plan " title="Switch the chat to Plan mode first"><i></i>Plan first</button>
-			<button type="button" class="chip" data-draft="Review my uncommitted changes and list risks, most serious first." title="Put this prompt in the chat">Review my changes</button>
-			<button type="button" class="chip" data-draft="Explain how this repo is laid out and where the main flows start." title="Put this prompt in the chat">Explain this repo</button>
+			<button type="button" class="chip plan" data-prefix="/plan " title="Start with /plan: Claude Code and Codex plan before they edit"><i></i>Plan first</button>
+			<button type="button" class="chip" data-draft="Review my uncommitted changes and list risks, most serious first." title="Put this prompt in the agent's prompt to finish or send">Review my changes</button>
+			<button type="button" class="chip" data-draft="Explain how this repo is laid out and where the main flows start." title="Put this prompt in the agent's prompt to finish or send">Explain this repo</button>
 			<span class="spacer"></span>
-			<button class="send" id="send" disabled aria-label="Send to chat"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+			<button class="send" id="send" disabled aria-label="Send to the agent"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 		</div>
 	</form>
-	<p class="hint"><kbd>Enter</kbd> sends to the agent (Claude Code in the Agents dock), <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</p>
+	<p class="hint"><kbd>Enter</kbd> sends to the agent you chose (<button class="link" data-run="flow.agents.chooseAskTarget">change</button>), <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</p>
 
 	<div id="resume"></div>
 

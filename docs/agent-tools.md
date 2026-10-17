@@ -30,7 +30,7 @@ Claude Code over `/ide` only shows its model the `getDiagnostics` tool, so Axle 
 
 A branch or last-commit card says "Changed since main" and has no Undo, because Axle does not undo commits.
 
-Home's prompt and **Ask about this flow** put the question into Claude Code in the Agents dock (the newest waiting session, or a new one once it is up); with the chat panel on (`flow.agents.showChat`) they go to the chat panel instead. **Axle: Pin Flow as Board** keeps the flow on the canvas as a board, so boards do not need an agent.
+Home's prompt and **Ask about this flow** send the question to the agent you choose. The first time, a picker offers the running sessions that are waiting at their prompt (Claude Code, Codex, or a custom agent marked `acceptsInput`), a new Claude Code, Codex or custom session, the chat panel when a chat provider is installed, and the clipboard. Later questions go to the same place without asking; a note in the status bar says where each one went, and clicking it (or **Axle: Change Agent for Questions…**, or *change* under Home's prompt) picks again. If the session you chose has closed, the question goes to another waiting session of the same CLI, else a new one. Text is only typed into a session that is at its prompt, never into one that is working or waiting on a permission question: then the question goes to the clipboard. The setting `flow.agents.askTarget` makes it `ask` every time, or fixes it to `claude`, `codex`, `custom:<name>`, `chat` or `clipboard`. **Axle: Pin Flow as Board** keeps the flow on the canvas as a board, so boards do not need an agent.
 
 ## How agent status works
 
