@@ -48,6 +48,8 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 			} else if (m.type === 'flow' && typeof m.id === 'string' && Number.isInteger(m.index)) {
 				// An index into the list the host sent: the page never names a flow itself.
 				this.agents.openImpactFlow(m.id, m.index);
+			} else if (m.type === 'xray' && typeof m.id === 'string') {
+				this.agents.xray(m.id);
 			} else if (m.type === 'forget' && typeof m.id === 'string') {
 				this.agents.forget(m.id);
 			} else if (m.type === 'rename' && typeof m.id === 'string') {
@@ -158,6 +160,7 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 .ctx { position: absolute; left: 38px; right: 10px; bottom: 0; height: 2px; border-radius: 2px; background: transparent; overflow: hidden; }
 .ctx i { display: block; height: 100%; background: color-mix(in srgb, var(--working) 55%, transparent); }
 .ctx.warn i { background: var(--blocked); } .ctx.full i { background: #ff6b7d; }
+.ctx { cursor: pointer; overflow: visible; } .ctx::before { content: ''; position: absolute; left: 0; right: 0; top: -6px; bottom: -2px; } .ctx:hover i { filter: brightness(1.4); }
 .x { position: absolute; top: 6px; right: 6px; display: none; width: 18px; height: 18px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 18px; }
 .agent.ended:hover .x { display: block; }
 .agent:hover .state { visibility: hidden; }
@@ -208,7 +211,7 @@ function render() {
 			+ (s.activity ? '<div class="activity">' + esc(s.activity) + '</div>' : '')
 			+ todos
 			+ impact
-			+ (s.usage ? '<div class="ctx' + (pct >= 90 ? ' full' : pct >= 70 ? ' warn' : '') + '"><i style="width:' + pct + '%"></i></div>' : '')
+			+ (s.usage ? '<div class="ctx' + (pct >= 90 ? ' full' : pct >= 70 ? ' warn' : '') + '" data-xray="1" title="Context ' + pct + '% full: what fills it?"><i style="width:' + pct + '%"></i></div>' : '')
 			+ '<span class="ren" data-rename="' + esc(s.id) + '" title="Rename" role="button">✎</span>'
 			+ (s.state === 'ended' ? '<span class="x"data-forget="' + esc(s.id) + '" title="Remove from list" role="button">×</span>' : '')
 			+ '</button>';
@@ -217,7 +220,8 @@ function render() {
 		const f = e.target.closest('[data-forget]');
 		const fl = e.target.closest('[data-flow]');
 		const rn = e.target.closest('[data-rename]');
-		vscode.postMessage(rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : { type: 'show', id: b.dataset.id });
+		const xr = e.target.closest('[data-xray]');
+		vscode.postMessage(rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : xr ? { type: 'xray', id: b.dataset.id } : { type: 'show', id: b.dataset.id });
 	});
 }
 document.querySelectorAll('.new button').forEach(b => b.onclick = () => vscode.postMessage(b.dataset.cli === 'pick' ? { type: 'pick' } : { type: 'new', cli: b.dataset.cli }));
