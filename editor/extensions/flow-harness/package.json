@@ -154,6 +154,12 @@
         "title": "Delete Memory…",
         "category": "Harness",
         "icon": "$(trash)"
+      },
+      {
+        "command": "flowHarness.manageMcp",
+        "title": "Manage MCP Servers…",
+        "category": "Harness",
+        "icon": "$(settings-gear)"
       }
     ],
     "menus": {
@@ -219,6 +225,11 @@
           "command": "flowHarness.deleteMemory",
           "when": "view == flowHarness.map && viewItem == memory",
           "group": "inline@2"
+        },
+        {
+          "command": "flowHarness.manageMcp",
+          "when": "view == flowHarness.map && viewItem =~ /^(group\\.mcp|mcp)$/",
+          "group": "inline@1"
         }
       ],
       "commandPalette": [

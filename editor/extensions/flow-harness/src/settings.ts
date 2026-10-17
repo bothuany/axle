@@ -115,6 +115,11 @@ async function closeDiffs(keys: Set<string>) {
 export interface FileChange {
 	file: string;
 	change: (text: string) => string | undefined;
+	/**
+	 * What the diff shows instead of the whole file: the part the change is about, with secrets hidden. A change to
+	 * ~/.claude.json must not put the rest of that file (the sign-in, every project's state) or a typed API key on screen.
+	 */
+	show?: (before: string, after: string) => { before: string; after: string };
 }
 
 /**
@@ -139,14 +144,21 @@ export async function previewAndWriteFiles(title: string, changes: FileChange[],
 		return true;
 	}
 	for (const p of planned) {
-		previews.set(p.key, p.after);
-		const left = p.before ? vscode.Uri.file(p.c.file) : vscode.Uri.from({ scheme: SCHEME, path: `${p.key}.empty` });
+		const shown = p.c.show?.(p.before, p.after);
+		previews.set(p.key, shown?.after ?? p.after);
+		if (shown) {
+			previews.set(`${p.key}.before`, shown.before);
+		}
+		const left = shown ? vscode.Uri.from({ scheme: SCHEME, path: `${p.key}.before` }) : p.before ? vscode.Uri.file(p.c.file) : vscode.Uri.from({ scheme: SCHEME, path: `${p.key}.empty` });
 		await vscode.commands.executeCommand('vscode.diff', left, vscode.Uri.from({ scheme: SCHEME, path: p.key }), `${title}: ${vscode.workspace.asRelativePath(p.c.file)}`, { preview: planned.length === 1 });
 	}
 	const files = planned.map(p => `${p.before ? 'Changes' : 'Creates'} ${vscode.workspace.asRelativePath(p.c.file)}`).join('\n');
 	const ok = await vscode.window.showInformationMessage(`${title}?`, { modal: true, detail: `${files}\n\nThe ${planned.length > 1 ? 'diffs are' : 'diff is'} open behind this dialog.` }, button);
 	const keys = new Set(planned.map(p => p.key));
-	planned.forEach(p => previews.delete(p.key));
+	planned.forEach(p => {
+		previews.delete(p.key);
+		previews.delete(`${p.key}.before`);
+	});
 	await closeDiffs(keys);
 	if (ok !== button) {
 		return false;

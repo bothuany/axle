@@ -181,15 +181,15 @@ export interface HookLike {
 }
 
 /** The counter of a harness item (see scan.ts HarnessItem): skills, subagents and MCP servers by name, hooks by what they run, files by path. */
-export function itemKey(i: { kind: string; label: string; file: string; hook?: HookLike }): string {
+export function itemKey(i: { kind: string; label: string; file: string; hook?: HookLike; mcp?: { toolPrefix: string } }): string {
 	switch (i.kind) {
 		case 'skills':
 			return skillKey(i.label);
 		case 'agents':
 			return agentKey(i.label);
 		case 'mcp':
-			// Tool names carry the server's name with `.` and spaces as `_`: count it under that spelling.
-			return mcpKey(mcpToolPrefix(i.label));
+			// Tool names carry the server's name with `.` and spaces as `_` (a plugin's as plugin_<plugin>_<server>): count it under that spelling.
+			return mcpKey(i.mcp?.toolPrefix ?? mcpToolPrefix(i.label));
 		case 'hooks':
 			return i.hook ? hookKey(i.hook) : `hook:${i.file}`;
 		default:

@@ -106,7 +106,8 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 		const cost = this.cost?.(i);
 		// The same name for two agents (a skill in .claude/skills and in .agents/skills) says whose each one is.
 		const twin = this.harness!.items.some(x => x !== i && x.kind === i.kind && x.label === i.label && x.agents.join() !== i.agents.join());
-		t.description = [twin ? i.agents.join(' + ') : '', SCOPE_LABEL[i.scope], i.kind === 'hooks' || i.kind === 'permissions' ? i.detail : cost?.label ?? tok(i.tokens), used?.label].filter(Boolean).join('  ');
+		const mcpState = i.mcp?.state === 'off' ? 'off' : i.mcp?.state === 'pending' ? 'awaiting approval' : '';
+		t.description = [twin ? i.agents.join(' + ') : '', SCOPE_LABEL[i.scope], mcpState, i.kind === 'hooks' || i.kind === 'permissions' ? i.detail : cost?.label ?? tok(i.tokens), used?.label].filter(Boolean).join('  ');
 		const tip = new vscode.MarkdownString(`**${i.label}**  \n${i.detail}\n\n${i.agents.join(', ')} · ${i.scope} scope${!cost && i.tokens ? ` · about ${i.tokens.toLocaleString()} tokens per session` : ''}\n\n\`${i.file}\``);
 		if (i.hook) {
 			tip.appendMarkdown(`\n\n\`\`\`sh\n${i.hook.command}\n\`\`\``);
@@ -125,8 +126,11 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 		} else {
 			t.iconPath = new vscode.ThemeIcon('circle-small-filled', new vscode.ThemeColor(GROUPS.find(g => g.kind === i.kind)!.color));
 		}
-		t.command = { title: 'Open', command: 'vscode.open', arguments: [vscode.Uri.file(i.file)] };
-		t.contextValue = i.hook ? 'hook' : i.memory ? 'memory' : `item.${i.kind}`;
+		// An MCP server opens in the manager, which shows it with its status and offers its edits; the file is one click from there.
+		t.command = i.mcp
+			? { title: 'Manage', command: 'flowHarness.manageMcp', arguments: [{ mcpId: i.mcp.id }] }
+			: { title: 'Open', command: 'vscode.open', arguments: [vscode.Uri.file(i.file)] };
+		t.contextValue = i.hook ? 'hook' : i.memory ? 'memory' : i.mcp ? 'mcp' : `item.${i.kind}`;
 		t.resourceUri = undefined;
 		(t as vscode.TreeItem & { item?: HarnessItem }).item = i;
 		return t;

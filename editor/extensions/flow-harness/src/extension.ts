@@ -5,12 +5,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { isTracked, itemKey, usageLabel, type HookLike } from './activity';
+import { isTracked, itemKey, mcpKey, usageLabel, type HookLike } from './activity';
 import { ContextBudget, UsageLimits } from './context';
 import { costLabel, delta, loadCosts, tok, totals, totalsBefore, trackCosts, type Cost } from './cost';
 import { FrictionView } from './frictionView';
 import { HookStudio } from './hooks';
 import { Live } from './live';
+import { McpManager } from './mcpManager';
 import { MemoryActions } from './memoryActions';
 import { PermissionInbox, type PermissionRequest } from './permissions';
 import { totalsBySource, unusedGap } from './gaps';
@@ -21,7 +22,7 @@ import { WhyView } from './why';
 import { XrayView } from './xray';
 
 /** The files that shape an agent, as watcher globs: instructions, settings, MCP servers, rules, skills, agents, hooks, commands. */
-const WATCHED = ['**/CLAUDE.md', '**/CLAUDE.local.md', '**/AGENTS.md', '**/.mcp.json', '**/.claude/settings*.json', '**/.claude/{rules,skills,agents,hooks,commands}/**', '**/.cursor/rules/**', '**/.agents/skills/**'];
+const WATCHED = ['**/CLAUDE.md', '**/CLAUDE.local.md', '**/AGENTS.md', '**/.mcp.json', '**/.codex/config.toml', '**/.claude/settings*.json', '**/.claude/{rules,skills,agents,hooks,commands}/**', '**/.cursor/rules/**', '**/.agents/skills/**'];
 
 export function activate(context: vscode.ExtensionContext) {
 	let harness: Harness | undefined;
@@ -39,6 +40,32 @@ export function activate(context: vscode.ExtensionContext) {
 	const xray = new XrayView(() => harness, live);
 	const why = new WhyView(() => harness, live);
 	const memories = new MemoryActions(() => harness, () => void refresh());
+	const mcp = new McpManager(context.workspaceState, () => harness?.root ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath, prefix => {
+		const s = live.summary(mcpKey(prefix));
+		return live.sessionsSeen ? { label: usageLabel(s, live.covered, live.sessionsSeen), week: s.week, month: s.month, last: s.last || undefined } : undefined;
+	}, () => refresh());
+	/**
+	 * What the last "Check" of each MCP server found: its tools and what their definitions cost. Claude Code defers MCP tool
+	 * definitions behind tool search (https://code.claude.com/docs/en/mcp#scale-with-mcp-tool-search), so only the names load
+	 * up front and the schemas count as on demand; Codex is given every tool's definition. A server that did not start
+	 * at its last check says so on its row.
+	 */
+	const markChecked = (h: Harness) => {
+		const checks = mcp.checks();
+		for (const i of h.items.filter(x => x.mcp)) {
+			const c = checks[i.mcp!.id];
+			if (!c) {
+				continue;
+			}
+			if (c.ok && c.toolCount !== undefined) {
+				const names = Math.round((c.tools ?? []).reduce((a, t) => a + `mcp__${i.mcp!.toolPrefix}__${t}`.length + 1, 0) / 4);
+				[i.tokens, i.onDemand] = i.agents.includes('Claude') ? [names, c.schemaTokens] : [c.schemaTokens, undefined];
+				i.detail += ` · ${c.toolCount} tools`;
+			} else if (!c.ok && i.mcp!.state !== 'off') {
+				i.issues.push({ severity: 'warning', message: `Did not work at the last check (${new Date(c.at).toLocaleString()}): ${c.status}`, fix: 'Open the MCP manager, fix it and check again' });
+			}
+		}
+	};
 	const usageOf = (i: HarnessItem) => {
 		if (!isTracked(i)) {
 			return undefined;
@@ -131,12 +158,14 @@ export function activate(context: vscode.ExtensionContext) {
 			harness = await scan();
 			if (harness) {
 				markUnused(harness);
+				markChecked(harness);
 				void live.backfill(harness.root);
 				// Looking names up can take seconds (the index, the language servers): the map shows first, the stale marks follow.
 				const scanned = harness;
 				void memories.checkStale(scanned).then(changed => changed && harness === scanned && tree.set(scanned)).catch(e => console.warn('flow-harness: memory check failed', e));
 			}
 			tree.set(harness);
+			void mcp.changed();
 			budget.setHarness(harness);
 			void friction.setHarness(harness);
 			if (harness) {
@@ -212,12 +241,18 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		view, inboxView, limits, studio, diagnostics, ...watchers, registerPreviewProvider(),
-		live, frictionView, why, xray, { dispose: () => clearTimeout(liveTimer) },
+		live, frictionView, why, xray, mcp, { dispose: () => clearTimeout(liveTimer) },
 		...watchers.flatMap(w => [w.onDidChange(soon), w.onDidCreate(soon), w.onDidDelete(soon)]),
 		{ dispose: () => clearTimeout(timer) },
 		vscode.window.onDidChangeWindowState(s => s.focused && ifStale()),
 		view.onDidChangeVisibility(v => v.visible && ifStale()),
 		vscode.commands.registerCommand('flowHarness.refresh', () => refresh()),
+		// From the map: a server row opens the manager on that server; the group's action and the palette open it whole.
+		vscode.commands.registerCommand('flowHarness.manageMcp', (arg?: unknown) => {
+			const a = arg as { mcpId?: unknown; item?: HarnessItem } | undefined;
+			const id = typeof a?.mcpId === 'string' ? a.mcpId : a?.item?.mcp?.id;
+			return mcp.show(id);
+		}),
 		vscode.commands.registerCommand('flowHarness.testHook', (arg: unknown) => {
 			const item = itemOf(arg);
 			return item && studio.test(item);
