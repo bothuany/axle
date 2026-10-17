@@ -3,7 +3,7 @@ import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { build } from 'esbuild'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -101,7 +101,8 @@ test('create a worktree, count ahead and behind, fast-forward back, remove', asy
 	assert.equal(wt.branch, 'axle/claude-1')
 	assert.equal(wt.base, 'main')
 	assert.ok(existsSync(join(wt.path, 'a.txt')))
-	assert.equal(resolve(wt.path), resolve(dir, '.axle', 'worktrees', 'claude-1'))
+	// By real path: the temp folder may be a short 8.3 name (Windows CI) or a link (/var on macOS), git prints the long one.
+	assert.equal(realpathSync.native(wt.path), realpathSync.native(resolve(dir, '.axle', 'worktrees', 'claude-1')))
 	// Ignored through the shared exclude file: the main checkout stays clean.
 	assert.match(readFileSync(join(dir, '.git', 'info', 'exclude'), 'utf8'), /^\/\.axle\/$/m)
 	assert.equal(run(dir, 'status', '--porcelain'), '')

@@ -235,7 +235,10 @@ export async function createWorktree(cwd: string, slug: string): Promise<Worktre
 	}
 	// A folder below the repository's top would put the worktree (a copy of the whole repository) outside this window's
 	// folder, where neither the dock's conflict check nor flow-view's diff can see it: refused, with the reason.
-	if (!sameDir(cwd, info.root)) {
+	// Compared by real path: Windows may hand out a short 8.3 name (C:\Users\RUNNER~1) where git prints the long one, and
+	// macOS's /var is a link to /private/var, so the same folder can be spelled two ways that no string compare equates.
+	const real = (x: string) => fs.realpath(x).catch(() => x);
+	if (!sameDir(await real(cwd), await real(info.root))) {
 		throw new Error(`this folder is inside the repository ${info.root}; open that folder to start agents in worktrees`);
 	}
 	const dir = worktreePath(info.root, slug);
