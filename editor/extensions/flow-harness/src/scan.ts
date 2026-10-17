@@ -9,6 +9,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { globList } from './effective';
+import { lint, ruleGlobs, type InstructionKind, type LintFile } from './lint';
 import { projectGaps, type Gap } from './gaps';
 import { gitIgnoredOf } from './ignored';
 
@@ -21,6 +22,8 @@ export interface Issue {
 	message: string;
 	/** 0-based line in `file`, when the problem is on a line. */
 	line?: number;
+	/** What to do about it, from the lint. */
+	fix?: string;
 }
 
 export interface HarnessItem {
@@ -34,6 +37,8 @@ export interface HarnessItem {
 	issues: Issue[];
 	/** Hooks: what to run and when. */
 	hook?: { event: string; matcher?: string; command: string; settingsFile: string };
+	/** Hooks and permission rules: the 0-based line they are written on in their settings file. */
+	line?: number;
 	/** Permission rules: allow / ask / deny. */
 	rule?: { effect: 'allow' | 'ask' | 'deny'; pattern: string };
 	/** Path-scoped rules: the globs they apply to (empty for an always-on rule). */
@@ -239,13 +244,14 @@ async function settingsFile(items: HarnessItem[], root: string, file: string, sc
 					detail: `${event}${entry.matcher ? ` · ${entry.matcher}` : ''}`,
 					file, issues, agents: ['Claude'],
 					hook: { event, matcher: entry.matcher, command: h.command, settingsFile: file },
+					line: lineOf(h.command.slice(0, 60).replace(/"/g, '\\"')),
 				});
 			}
 		}
 	}
 	for (const effect of ['allow', 'ask', 'deny'] as const) {
 		for (const pattern of s.permissions?.[effect] ?? []) {
-			items.push({ kind: 'permissions', scope, label: pattern, detail: effect, file, issues: [], agents: ['Claude'], rule: { effect, pattern } });
+			items.push({ kind: 'permissions', scope, label: pattern, detail: effect, file, issues: [], agents: ['Claude'], rule: { effect, pattern }, line: lineOf(JSON.stringify(pattern)) });
 		}
 	}
 	for (const name of Object.keys(s.mcpServers ?? {})) {
@@ -321,6 +327,48 @@ function conflicts(items: HarnessItem[]) {
 	}
 }
 
+/** Which lint rules apply to an item's file. */
+function lintKind(i: HarnessItem): InstructionKind | undefined {
+	const base = path.basename(i.file).toLowerCase();
+	if (i.kind === 'instructions') {
+		return base === 'agents.md' ? 'agents-md' : base === 'copilot-instructions.md' ? 'copilot' : 'claude-md';
+	}
+	if (i.kind === 'rules') {
+		return i.agents.includes('Cursor') ? 'cursor-rule' : 'claude-rule';
+	}
+	return i.kind === 'skills' ? 'skill' : i.kind === 'agents' ? 'agent' : undefined;
+}
+
+/** The harness lint (lint.ts) over what the scan found; each finding becomes an issue on the item whose file (and line) it names. */
+async function lintItems(items: HarnessItem[], root: string) {
+	const seen = new Set<string>();
+	const files: LintFile[] = [];
+	for (const i of items) {
+		const kind = lintKind(i);
+		if (kind && !seen.has(i.file)) {
+			seen.add(i.file);
+			files.push({ file: i.file, label: show(root, i.file), kind, text: await read(i.file) ?? '' });
+		}
+	}
+	// Listing the project is only worth it when some rule is scoped to globs.
+	const scoped = files.some(f => (f.kind === 'claude-rule' || f.kind === 'cursor-rule') && ruleGlobs(f).length);
+	const limit = 20_000;
+	const listed = scoped ? await vscode.workspace.findFiles('**/*', '{**/node_modules/**,**/.git/**,**/.claude/worktrees/**}', limit) : [];
+	const findings = lint({
+		files,
+		hooks: items.filter(i => i.hook).map(i => ({ ...i.hook!, line: i.line ?? 0 })),
+		rules: items.filter(i => i.rule).map(i => ({ ...i.rule!, scope: i.scope === 'directory' ? 'project' : i.scope, file: i.file, line: i.line ?? 0 })),
+		projectFiles: scoped ? listed.map(u => path.relative(root, u.fsPath).split(path.sep).join('/')) : undefined,
+		projectFilesTruncated: listed.length >= limit,
+		cwd: root, home,
+	});
+	for (const f of findings) {
+		const here = items.filter(i => i.file === f.file);
+		const item = here.find(i => i.line === f.line) ?? here[0];
+		item?.issues.push({ severity: f.severity, message: f.message, line: f.line, fix: f.fix });
+	}
+}
+
 export async function scan(): Promise<Harness | undefined> {
 	somewhere.clear();
 	const folder = vscode.workspace.workspaceFolders?.[0];
@@ -336,6 +384,7 @@ export async function scan(): Promise<Harness | undefined> {
 	await memoryFile(items, root, path.join(root, 'CLAUDE.md'), 'project', ['Claude'], 'Loaded in every session');
 	await memoryFile(items, root, path.join(root, 'CLAUDE.local.md'), 'local', ['Claude'], 'Yours only, not committed');
 	await memoryFile(items, root, path.join(root, 'AGENTS.md'), 'project', ['Codex', 'Cursor'], 'Loaded in every session');
+	await memoryFile(items, root, path.join(root, '.github', 'copilot-instructions.md'), 'project', ['Copilot'], 'Copilot reads it in every chat');
 	const found = await vscode.workspace.findFiles('**/{CLAUDE,AGENTS}.md', '{**/node_modules/**,**/.git/**,**/bin/**,**/obj/**,**/.claude/worktrees/**}', 200);
 	// Git answers with the paths as it was given them.
 	const ignored = await gitIgnoredOf(root, found.map(u => u.fsPath));
@@ -364,6 +413,7 @@ export async function scan(): Promise<Harness | undefined> {
 	await mcpJson(items, root, path.join(root, '.mcp.json'), 'project');
 
 	conflicts(items);
+	await lintItems(items, root);
 
 	const counts: Record<Severity, number> = { error: 0, warning: 0, info: 0 };
 	items.forEach(i => i.issues.forEach(x => counts[x.severity]++));

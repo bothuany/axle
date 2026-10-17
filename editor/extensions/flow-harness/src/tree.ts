@@ -81,6 +81,9 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 		if (node.type === 'issue') {
 			const issue = node.item.issues[node.index];
 			const t = new vscode.TreeItem(issue.message);
+			if (issue.fix) {
+				t.tooltip = new vscode.MarkdownString(`${issue.message}\n\n**Fix:** ${issue.fix}`);
+			}
 			t.iconPath = new vscode.ThemeIcon(issue.severity === 'error' ? 'error' : issue.severity === 'warning' ? 'warning' : 'info',
 				new vscode.ThemeColor(issue.severity === 'error' ? 'errorForeground' : issue.severity === 'warning' ? 'editorWarning.foreground' : 'descriptionForeground'));
 			t.command = { title: 'Open', command: 'vscode.open', arguments: [vscode.Uri.file(node.item.file), { selection: new vscode.Range(issue.line ?? 0, 0, issue.line ?? 0, 0) }] };

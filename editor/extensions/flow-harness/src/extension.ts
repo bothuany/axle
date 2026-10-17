@@ -110,7 +110,7 @@ export function activate(context: vscode.ExtensionContext) {
 				const byFile = new Map<string, vscode.Diagnostic[]>();
 				for (const i of harness.items) {
 					for (const issue of i.issues.filter(x => x.line !== undefined)) {
-						const d = new vscode.Diagnostic(new vscode.Range(issue.line!, 0, issue.line!, 999), issue.message,
+						const d = new vscode.Diagnostic(new vscode.Range(issue.line!, 0, issue.line!, 999), issue.fix ? `${issue.message}. Fix: ${issue.fix}` : issue.message,
 							issue.severity === 'error' ? vscode.DiagnosticSeverity.Error : issue.severity === 'warning' ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Information);
 						d.source = 'Axle harness';
 						byFile.set(i.file, [...(byFile.get(i.file) ?? []), d]);
