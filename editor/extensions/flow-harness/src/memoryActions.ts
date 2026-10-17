@@ -82,7 +82,7 @@ export class MemoryActions {
 			validateInput: v => v.trim() ? undefined : 'Write something',
 		});
 		if (line) {
-			await appendLineReviewed(h.root, target, line.trim().startsWith('-') ? line.trim() : `- ${line.trim()}`, `Promote a memory to ${target}`, `From ${path.basename(item.file)}`);
+			await appendLineReviewed(h.root, target, line.trim().startsWith('-') ? line.trim() : `- ${line.trim()}`, `Promote a memory to ${target}`);
 		}
 	}
 

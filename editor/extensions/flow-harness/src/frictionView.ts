@@ -1,18 +1,19 @@
 /*---------------------------------------------------------------------------------------------
  *  Axle Harness: the friction inbox view. Corrections you keep typing, tool calls that keep
  *  failing the same way, and permissions you keep granting, each with its evidence and a fix.
- *  A fix is applied only on a click, as an edit shown in the refactor preview (instruction
- *  lines, hook scripts, settings) that you review and accept or discard.
+ *  A fix is applied only on a click, as a diff of every file it changes (instruction lines,
+ *  hook scripts, settings), written when you say yes.
  *--------------------------------------------------------------------------------------------*/
 
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { appendLineReviewed } from './edits';
-import { correctionProposals, failureProposals, guardFileName, guardScript, type Evidence, type Proposal } from './friction';
+import { addGuardHook, correctionProposals, failureProposals, guardCommand, guardFileName, guardScript, type Evidence, type Proposal } from './friction';
 import type { Live } from './live';
 import { ruleFor, type PermissionInbox, type PermissionRequest } from './permissions';
 import type { Harness } from './scan';
+import { jsonChange, previewAndWriteFiles } from './settings';
 
 type Group = 'corrections' | 'failures' | 'grants';
 type Row =
@@ -194,7 +195,7 @@ export class FrictionView implements vscode.TreeDataProvider<Row> {
 			}
 			target = pick.label as typeof target;
 		}
-		return appendLineReviewed(root, target, `- ${line}`, `Add an instruction to ${target}`, 'From the friction inbox');
+		return appendLineReviewed(root, target, `- ${line}`, `Add an instruction to ${target}`);
 	}
 
 	private async applyHook(root: string, p: Proposal, reason: string): Promise<boolean> {
@@ -202,40 +203,22 @@ export class FrictionView implements vscode.TreeDataProvider<Row> {
 			{ label: 'This repo, shared', detail: '.claude/settings.json (committed)', file: '.claude/settings.json' },
 			{ label: 'This repo, just me', detail: '.claude/settings.local.json', file: '.claude/settings.local.json' },
 		], { title: `Where should the guard for "${p.prefix}" live?` });
-		if (!where || !p.prefix) {
+		const prefix = p.prefix;
+		if (!where || !prefix) {
 			return false;
 		}
-		const name = guardFileName(p.prefix);
-		const script = vscode.Uri.file(path.join(root, '.claude', 'hooks', name));
-		const settings = vscode.Uri.file(path.join(root, where.file));
-		const before = await fs.readFile(settings.fsPath, 'utf8').catch(e => (e as NodeJS.ErrnoException).code === 'ENOENT' ? '' : undefined);
-		let data: Record<string, unknown>;
-		try {
-			const parsed = before?.trim() ? JSON.parse(before) as unknown : {};
-			if (before === undefined || !parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-				throw new Error('not a JSON object');
+		const name = guardFileName(prefix);
+		const script = path.join(root, '.claude', 'hooks', name);
+		if (await fs.stat(script).then(() => true, () => false)) {
+			// A guard for this command is there already: say so rather than fail, and offer to give it the new message.
+			const pick = await vscode.window.showWarningMessage(`A guard for "${prefix}" exists already (${name}). Replace its message with the new one?`, { modal: true }, 'Replace');
+			if (pick !== 'Replace') {
+				return false;
 			}
-			data = parsed as Record<string, unknown>;
-		} catch (e) {
-			void vscode.window.showErrorMessage(`${where.file} cannot be read as settings (${(e as Error).message}). Fix it first, then try again.`);
-			return false;
 		}
-		const hooks = (data.hooks && typeof data.hooks === 'object' && !Array.isArray(data.hooks) ? data.hooks : data.hooks = {}) as Record<string, unknown>;
-		const pre = Array.isArray(hooks.PreToolUse) ? hooks.PreToolUse : hooks.PreToolUse = [];
-		if (!Array.isArray(pre)) {
-			return false;
-		}
-		pre.push({ matcher: 'Bash', hooks: [{ type: 'command', command: `node "$CLAUDE_PROJECT_DIR/.claude/hooks/${name}"`, timeout: 10 }] });
-		const after = `${JSON.stringify(data, null, 2)}\n`;
-		const edit = new vscode.WorkspaceEdit();
-		const meta = { needsConfirmation: true, label: `Guard ${p.prefix} with a PreToolUse hook`, description: 'From the friction inbox' };
-		edit.createFile(script, { ignoreIfExists: false, contents: new TextEncoder().encode(guardScript(p.prefix, reason)) }, meta);
-		if (before) {
-			const doc = await vscode.workspace.openTextDocument(settings);
-			edit.replace(settings, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), after, meta);
-		} else {
-			edit.createFile(settings, { ignoreIfExists: false, contents: new TextEncoder().encode(after) }, meta);
-		}
-		return vscode.workspace.applyEdit(edit, { isRefactoring: true });
+		return previewAndWriteFiles(`Guard ${prefix} with a PreToolUse hook`, [
+			{ file: script, change: () => guardScript(prefix, reason) },
+			jsonChange(path.join(root, where.file), (s: Record<string, unknown>) => addGuardHook(s, guardCommand(name))),
+		], 'Add Guard');
 	}
 }
