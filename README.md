@@ -39,24 +39,6 @@ A map and health score of your `CLAUDE.md`, skills, hooks and permissions. Broke
 
 C# / .NET · Java · Python · JavaScript / TypeScript · Go · PHP · Ruby · Rust, from ASP.NET and Spring to FastAPI, NestJS, Rails and axum. [Full support table →](docs/languages.md)
 
-## Get Axle
-
-Download from the [latest release](https://github.com/bothuany/axle/releases/latest). Everything is bundled: no Node, git or build tools needed.
-
-| | Download | Notes |
-|---|---|---|
-| **Windows** | [`Axle-Setup-0.1.0-x64.exe`](https://github.com/bothuany/axle/releases/download/v0.1.0/Axle-Setup-0.1.0-x64.exe) | Installs per user, no admin rights. Not code-signed yet: on the SmartScreen warning choose *More info*, then *Run anyway*. |
-| **macOS** (Apple silicon) | [`Axle-0.1.0-darwin-arm64.dmg`](https://github.com/bothuany/axle/releases/download/v0.1.0/Axle-0.1.0-darwin-arm64.dmg) | Drag to Applications. Not signed by Apple yet: allow it once under *System Settings > Privacy & Security > Open Anyway*. |
-| **macOS** (Intel) | [`Axle-0.1.0-darwin-x64.dmg`](https://github.com/bothuany/axle/releases/download/v0.1.0/Axle-0.1.0-darwin-x64.dmg) | Same as above. |
-| **Linux** (Debian, Ubuntu) | [`axle_0.1.0_amd64.deb`](https://github.com/bothuany/axle/releases/download/v0.1.0/axle_0.1.0_amd64.deb) | `sudo apt install ./axle_0.1.0_amd64.deb` |
-| **Linux** (Fedora and other) | [`.rpm`](https://github.com/bothuany/axle/releases/download/v0.1.0/axle-0.1.0-1.x86_64.rpm) or [`.tar.gz`](https://github.com/bothuany/axle/releases/download/v0.1.0/Axle-0.1.0-linux-x64.tar.gz) | `sudo dnf install ./axle-0.1.0-1.x86_64.rpm` |
-
-The macOS and Linux packages are new in 0.1.0 and have been built, but not yet tested on a Mac or a Linux desktop: please [report problems](https://github.com/bothuany/axle/issues). `brew`, `apt` and `winget` installs are not published yet. C# flows need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
-
-Prefer to build it yourself? `git clone https://github.com/bothuany/axle.git && cd axle && npm run setup && npm start`.
-
-Install details, requirements, web mode and building from source: [docs/building.md](docs/building.md). Axle's MCP tools for agents: [docs/agent-tools.md](docs/agent-tools.md).
-
 ## Contributing
 
 Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately ([SECURITY.md](SECURITY.md)).
