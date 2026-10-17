@@ -119,7 +119,9 @@ export class MemoryActions {
 		const missing: string[] = [];
 		const unknown: string[] = [];
 		for (const p of paths) {
-			const abs = p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : path.isAbsolute(p) ? p : path.join(root, p);
+			// The path comes from the memory's text, and only its existence is asked: nothing is read from it or written to it.
+			// nosemgrep: javascript.express.security.audit.express-path-join-resolve-traversal.express-path-join-resolve-traversal
+			const abs =p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : path.isAbsolute(p) ? p : path.join(root, p);
 			if (!await fs.stat(abs).then(() => true, () => false)) {
 				missing.push(p);
 			}

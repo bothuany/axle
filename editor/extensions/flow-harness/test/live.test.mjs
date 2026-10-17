@@ -229,6 +229,7 @@ test('the same failure three times becomes a guard hook for commands, a line for
 	assert.equal(f.errorShape('Error: Cannot find module \'C:\\x\\y.js\' at line 12'), 'error: cannot find module <q> at line <n>')
 	assert.equal(f.commandHead('NODE_ENV=x npx ./bin/run.js'), 'npx')
 	assert.equal(f.commandHead('git push --force'), 'git push')
+	assert.equal(f.commandHead('for n in 1 2 3; do echo $n; done'), '', 'a loop is not a command to guard')
 	assert.equal(f.guardFileName('npm run build'), 'axle-guard-npm-run-build.mjs')
 })
 

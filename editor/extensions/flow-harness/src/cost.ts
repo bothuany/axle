@@ -39,24 +39,25 @@ export function loadCosts(raw: unknown): CostState {
 }
 
 const same = (a: Cost, b: Cost) => a.always === b.always && a.onDemand === b.onDemand;
-const zero: Cost = { always: 0, onDemand: 0 };
 
 /**
- * The state after a scan found `current`: a file whose cost moved gets a change (before → after), a file that went away
- * gets one to zero, and changes older than CHANGE_DAYS are dropped. The very first scan records costs without changes.
+ * The state after a scan found `current`: a file whose cost moved since the last scan gets a change (before → after), and
+ * changes older than CHANGE_DAYS are dropped. The very first scan records costs without changes.
  */
 export function trackCosts(state: CostState, current: Readonly<Record<string, Cost>>, now: number): CostState {
 	const first = !Object.keys(state.files).length;
 	const changes: Record<string, CostChange> = {};
 	for (const [file, c] of Object.entries(state.changes)) {
-		if (now - c.at < CHANGE_DAYS * DAY) {
+		// A change from nothing is a file that appeared, kept by an older version: not an edit.
+		if (now - c.at < CHANGE_DAYS * DAY && (c.before.always || c.before.onDemand)) {
 			changes[file] = c;
 		}
 	}
 	if (!first) {
-		for (const file of new Set([...Object.keys(state.files), ...Object.keys(current)])) {
-			const before = state.files[file] ?? zero;
-			const after = current[file] ?? zero;
+		// Only a file seen in both scans has a before and an after: one that appeared (or is newly tracked) or went away is not an edit to show.
+		for (const file of Object.keys(current).filter(f => state.files[f])) {
+			const before = state.files[file];
+			const after = current[file];
 			if (!same(before, after)) {
 				// A second edit keeps the cost from before the first one, so the change shown is the whole of the recent trim.
 				changes[file] = { before: changes[file]?.before ?? before, after, at: now };

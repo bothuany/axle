@@ -40,12 +40,13 @@ test('an edit shows before and after; a second edit keeps the first "before"; un
 	assert.equal(s.changes['CLAUDE.md'], undefined, 'back where it was: no change to show')
 })
 
-test('a deleted file changes to zero, a new one from zero, and old changes expire', () => {
+test('a new or a deleted file is not an edit; old changes expire', () => {
 	let s = c.trackCosts(c.emptyCosts(), { a: { always: 100, onDemand: 0 } }, 0)
 	s = c.trackCosts(s, { b: { always: 0, onDemand: 50 } }, DAY)
-	assert.deepEqual(s.changes.a.after, { always: 0, onDemand: 0 })
-	assert.deepEqual(s.changes.b.before, { always: 0, onDemand: 0 })
-	s = c.trackCosts(s, { b: { always: 0, onDemand: 50 } }, (c.CHANGE_DAYS + 2) * DAY)
+	assert.deepEqual(s.changes, {}, 'b is new (or newly tracked) and a went away: no "was 0"')
+	s = c.trackCosts(s, { b: { always: 0, onDemand: 80 } }, 2 * DAY)
+	assert.equal(c.costLabel(s.files.b, s.changes.b), '80 on demand (was 50)')
+	s = c.trackCosts(s, { b: { always: 0, onDemand: 80 } }, (c.CHANGE_DAYS + 3) * DAY)
 	assert.deepEqual(s.changes, {})
 })
 

@@ -169,6 +169,10 @@ export function errorShape(error: string): string {
 export function commandHead(command: string): string {
 	const words = command.trim().replace(/^(?:\w+=\S*\s+)+/, '').split(/\s+/);
 	const program = (words[0] ?? '').replace(/^.*[\\/]/, '');
+	// A loop or a condition is not a command a guard could stop: `for n in …` has no head.
+	if (/^(?:for|while|until|if|case|do|then|select|function|\{|\(|\[\[?)$/.test(program)) {
+		return '';
+	}
 	const second = words[1] && !words[1].startsWith('-') && !/[\\/.]/.test(words[1]) ? ` ${words[1]}` : '';
 	return `${program}${second}`.trim();
 }
