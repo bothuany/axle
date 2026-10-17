@@ -166,6 +166,18 @@
         "icon": "$(add)"
       },
       {
+        "command": "flow.agents.newClaudeWorktree",
+        "title": "New Claude Agent in a Worktree",
+        "category": "Axle",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "flow.agents.newCodexWorktree",
+        "title": "New Codex Agent in a Worktree",
+        "category": "Axle",
+        "icon": "$(git-branch)"
+      },
+      {
         "command": "flow.agents.resume",
         "title": "Resume a Claude Session…",
         "category": "Axle",
@@ -229,6 +241,11 @@
           "type": "boolean",
           "default": true,
           "description": "When an agent finishes a turn, show on its row which flows (endpoints) the files it edited may affect."
+        },
+        "flow.agents.worktree": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Start each new Claude Code and Codex agent in a git worktree of its own: a checkout under `.axle/worktrees/<name>` on a new branch `axle/<name>`, cut from the branch you are on. Agents working in parallel then never write over each other's files; the agent's row shows the branch, how far it is ahead of and behind its base, and buttons to open it, show its changes in flow, merge it back and remove it. Axle git-ignores `.axle/` in the repository's `.git/info/exclude`. Off: agents work in this checkout (\"Other…\" in the Agents dock still offers a worktree)."
         },
         "flow.agents.codexHooks": {
           "type": "boolean",

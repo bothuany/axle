@@ -176,9 +176,14 @@ export async function startOrResume(agents: Agents, cli: 'claude' | 'codex', wit
 		}
 		return;
 	}
-	type Item = vscode.QuickPickItem & { session?: PastSession; fresh?: boolean };
+	type Item = vscode.QuickPickItem & { session?: PastSession; fresh?: boolean; place?: 'worktree' | 'here' };
+	// The other place than the setting's default, one click away: a worktree of its own, or this checkout.
+	const inWorktree = vscode.workspace.getConfiguration('flow.agents').get<boolean>('worktree', false);
+	const other: Item = inWorktree
+		? { label: `$(folder) New ${NAME[cli]} Session in This Checkout`, fresh: true, place: 'here' }
+		: { label: `$(git-branch) New ${NAME[cli]} Session in a Worktree`, description: 'its own checkout and branch', fresh: true, place: 'worktree' };
 	const items: Item[] = [
-		...(withNew ? [{ label: `$(add) New ${NAME[cli]} Session`, fresh: true } as Item, { label: 'Resume', kind: vscode.QuickPickItemKind.Separator } as Item] : []),
+		...(withNew ? [{ label: `$(add) New ${NAME[cli]} Session${inWorktree ? ' in a Worktree' : ''}`, fresh: true } as Item, other, { label: 'Resume', kind: vscode.QuickPickItemKind.Separator } as Item] : []),
 		...list.map((s): Item => ({
 			label: s.title ?? s.prompt!.slice(0, 80),
 			description: `${ago(s.modified)} · ${size(s.bytes)}`,
@@ -191,7 +196,7 @@ export async function startOrResume(agents: Agents, cli: 'claude' | 'codex', wit
 		return;
 	}
 	if (pick.fresh) {
-		await agents.spawn(cli);
+		await agents.spawn(cli, undefined, undefined, pick.place);
 		return;
 	}
 	const s = pick.session!;

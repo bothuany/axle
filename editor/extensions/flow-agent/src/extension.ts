@@ -11,6 +11,7 @@ import { registerPlaceholderModels } from './models';
 import { pickAgent } from './pick';
 import { startOrResume } from './resume';
 import { AgentSessionType } from './sessionType';
+import { WorktreeRows } from './worktreeActions';
 
 export function activate(context: vscode.ExtensionContext) {
 	const log = vscode.window.createOutputChannel('Axle Agents', { log: true });
@@ -34,14 +35,18 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const agents = new Agents(context, log);
 	agents.start().catch(e => log.error(`Agents: start failed: ${(e as Error).message}`));
-	const dock = new AgentsDock(agents);
+	const worktrees = new WorktreeRows(agents);
+	const dock = new AgentsDock(agents, worktrees);
 	context.subscriptions.push(
 		agents,
+		worktrees,
 		dock,
 		vscode.window.registerWebviewViewProvider('flow.agents', dock, { webviewOptions: { retainContextWhenHidden: true } }),
 		vscode.commands.registerCommand('flow.agents.newClaude', () => agents.spawn('claude')),
 		vscode.commands.registerCommand('flow.agents.newCodex', () => agents.spawn('codex')),
 		vscode.commands.registerCommand('flow.agents.new', () => pickAgent(agents)),
+		vscode.commands.registerCommand('flow.agents.newClaudeWorktree', () => agents.spawn('claude', undefined, undefined, 'worktree')),
+		vscode.commands.registerCommand('flow.agents.newCodexWorktree', () => agents.spawn('codex', undefined, undefined, 'worktree')),
 		vscode.commands.registerCommand('flow.agents.resume', () => startOrResume(agents, 'claude', false)),
 		vscode.commands.registerCommand('flow.agents.start', (cli: unknown) => cli === 'claude' || cli === 'codex' ? startOrResume(agents, cli) : undefined),
 		// Called by flow-view (Home, "Ask about this flow"): a question for the agent in the dock.

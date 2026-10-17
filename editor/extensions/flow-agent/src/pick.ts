@@ -58,6 +58,9 @@ export async function pickAgent(agents: Agents) {
 		{ label: '$(history) Resume a Claude Session…', detail: 'Continue an earlier conversation of this folder (claude --resume)', run: () => startOrResume(agents, 'claude', false) },
 		{ label: '$(history) Resume a Codex Session…', detail: 'Continue an earlier conversation of this folder (codex resume)', run: () => startOrResume(agents, 'codex', false) },
 		{ label: '$(hubot) Codex', detail: 'Status and edits through read-only hooks (trust them once with /hooks)', run: () => agents.spawn('codex') },
+		{ label: 'In a worktree', kind: vscode.QuickPickItemKind.Separator },
+		{ label: '$(git-branch) Claude Code in a Worktree', detail: 'A checkout and branch of its own (.axle/worktrees): agents working in parallel never write over each other', run: () => agents.spawn('claude', undefined, undefined, 'worktree') },
+		{ label: '$(git-branch) Codex in a Worktree', detail: 'A checkout and branch of its own (.axle/worktrees)', run: () => agents.spawn('codex', undefined, undefined, 'worktree') },
 	];
 	if (saved.length) {
 		items.push({ label: 'Your agents', kind: vscode.QuickPickItemKind.Separator });
