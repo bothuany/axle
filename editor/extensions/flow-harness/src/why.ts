@@ -146,7 +146,7 @@ export class WhyView implements vscode.Disposable {
 
 	private html() {
 		return page('Why?', /* html */ `
-<div class="row"><div class="grow"><h1 id="title">Why?</h1><p class="sub" id="sub">What an agent working on this file reads, and what it may do.</p></div>
+<div class="row head"><div class="grow"><h1 id="title">Why?</h1><p class="sub" id="sub">What an agent working on this file reads, and what it may do.</p></div>
 <button id="follow" title="Follow the active editor">Active editor</button><button id="pick">Pick a file…</button></div>
 <h2>Instructions and rules, in the order they stack</h2><div id="instr"></div>
 <p class="muted">Instruction files never override each other: the agent reads all of them, the more specific later, and a later line wins where two disagree.</p>
@@ -201,7 +201,7 @@ $('pick').onclick = () => vscode.postMessage({ type: 'pick' });
 $('follow').onclick = () => vscode.postMessage({ type: 'follow' });
 window.addEventListener('message', e => { const m = e.data; if (m.type === 'data') render(m); else if (m.type === 'verdict' && m.text === $('call').value.trim()) verdict(m.verdict); });
 vscode.postMessage({ type: 'ready' });
-`, 'h3 { font-size: 13px; margin: 12px 0 4px; }');
+`, 'h3 { font-size: 13px; margin: 12px 0 4px; } .head { flex-wrap: wrap; } .head .grow { min-width: 220px; } h1 { overflow-wrap: anywhere; }');
 	}
 
 	dispose() {

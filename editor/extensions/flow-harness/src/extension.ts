@@ -43,8 +43,8 @@ export function activate(context: vscode.ExtensionContext) {
 			s.avgMs !== undefined ? `${s.avgMs} ms on average (measured)` : '',
 		].filter(Boolean).join(', ');
 		return {
-			label: usageLabel(s, covered) + (s.failures ? `, ${s.failures} failed` : ''),
-			detail: `Used ${facts}.${s.inferred ? ' Hook runs are counted from the events and matchers that fire them.' : ''} The counts cover ${covered} days of this project's sessions.`,
+			label: usageLabel(s, covered, live.sessionsSeen) + (s.failures ? `, ${s.failures} failed` : ''),
+			detail: `Used ${facts}.${s.inferred ? ' Hook runs are counted from the events and matchers that fire them.' : ''} The counts cover ${covered} days and ${live.sessionsSeen} sessions of this project.`,
 		};
 	};
 	tree.setUsage(usageOf);
@@ -66,8 +66,13 @@ export function activate(context: vscode.ExtensionContext) {
 		clearTimeout(liveTimer);
 		liveTimer = setTimeout(() => {
 			if (harness) {
+				const before = harness.gaps.find(g => g.key === 'unused')?.message;
 				markUnused(harness);
 				tree.set(harness);
+				// The view's summary line names the gaps: when the unused-skills one comes or goes (the first backfill), say it there too.
+				if (harness.gaps.find(g => g.key === 'unused')?.message !== before) {
+					void refresh();
+				}
 			}
 			const n = friction.count;
 			frictionView.badge = n ? { value: n, tooltip: `${n} proposals from repeated friction` } : undefined;
@@ -92,7 +97,9 @@ export function activate(context: vscode.ExtensionContext) {
 				const problems = counts.error + counts.warning;
 				const tokens = `About ${(startupTokens / 1000).toFixed(1)}k tokens load before your first prompt.`;
 				// "Nothing broken" alone read as "all set" for a project with no harness at all: say what is missing too.
-				const missing = gaps.length ? ` Not set up here: ${gaps.map(g => g.label).join(', ')}.` : '';
+				const notSetUp = gaps.filter(g => g.key !== 'unused');
+				const unused = gaps.find(g => g.key === 'unused');
+				const missing = (notSetUp.length ? ` Not set up here: ${notSetUp.map(g => g.label).join(', ')}.` : '') + (unused ? ` ${unused.label.replace(/^\w/, c => c.toUpperCase())} in 30 days.` : '');
 				view.description = `Health ${score}`;
 				view.message = problems
 					? `${counts.error ? `${counts.error} broken, ` : ''}${counts.warning} to look at.${missing} ${tokens}`

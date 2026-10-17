@@ -98,7 +98,7 @@ export class XrayView implements vscode.Disposable {
 		const facts = s.transcript ? await this.live.facts(s.transcript) : undefined;
 		this.model = xray({
 			agent: s.agent, cli: s.cli, facts, reported: s.usage, items: h?.items ?? [],
-			usesOf: i => this.live.summary(itemKey(i)).month, covered: this.live.covered,
+			usesOf: i => this.live.summary(itemKey(i)).month, covered: this.live.covered, sessions: this.live.sessionsSeen,
 		});
 		this.panel.title = `Context X-ray: ${s.agent}`;
 		void this.panel.webview.postMessage({

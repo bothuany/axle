@@ -153,6 +153,8 @@ test('labels: this week, this month, never, and not enough history yet', () => {
 	assert.equal(a.usageLabel({ week: 0, month: 3 }, 40), 'used 3× in 30 days')
 	assert.equal(a.usageLabel({ week: 0, month: 0 }, 40), 'never used in 30 days')
 	assert.equal(a.usageLabel({ week: 0, month: 0 }, 4), 'no use in 4 days', 'never claim 30 days before they are covered')
+	assert.equal(a.usageLabel({ week: 0, month: 0 }, 40, 1), 'no use in 1 session', 'nor on one session')
+	assert.equal(a.usageLabel({ week: 0, month: 0 }, 40, 0), 'no use seen yet')
 })
 
 test('storage stays bounded: old days, then old keys and transcripts, are dropped', () => {
@@ -184,6 +186,7 @@ test('corrections: imperative and prohibitive sentences, in English and Turkish'
 	assert.deepEqual(f.corrections('Asla editor/vscode altını düzenleme'), ['Asla editor/vscode altını düzenleme'])
 	assert.deepEqual(f.corrections('Why did you not use npm?'), [], 'a question is not a standing instruction')
 	assert.deepEqual(f.corrections('Add a button to the dock'), [])
+	assert.deepEqual(f.corrections('Look at this:\n<pasted_content id="1">\nNever run the tests.\n</pasted_content>\n```\ndon\'t use x\n```\n> Always do y'), [], 'pasted text, code and quotes are not the person\'s own words')
 })
 
 test('a correction repeated in separate prompts becomes one proposed line, with its evidence', () => {
@@ -219,6 +222,7 @@ test('the same failure three times becomes a guard hook for commands, a line for
 		fail('rm -rf x', "The user doesn't want to proceed with this tool use.", 8),
 		fail('rm -rf x', "The user doesn't want to proceed with this tool use.", 9),
 		fail('rm -rf x', "The user doesn't want to proceed with this tool use.", 10),
+		...[11, 12, 13].map(at => fail('', 'Permission for this action was denied by the Claude Code auto mode classifier. Reason: x', at, 'mcp__browser__click')),
 	]
 	const props = f.failureProposals(failures)
 	assert.deepEqual(props.map(p => [p.kind, p.prefix ?? p.tool, p.evidence.length]), [['hook', 'yarn test', 3], ['instruction', 'Edit', 3]], 'a refusal is not a failure')
@@ -250,6 +254,7 @@ test('the X-ray labels what it knows: /context categories, else the first reques
 		{ kind: 'mcp', scope: 'user', label: 'busy', file: '/h/.claude/settings.json', agents: ['Claude'] },
 		{ kind: 'skills', scope: 'project', label: 'probe', file: '/w/.claude/skills/probe/SKILL.md', tokens: 60, agents: ['Claude'] },
 		{ kind: 'skills', scope: 'project', label: 'used', file: '/w/.claude/skills/used/SKILL.md', tokens: 40, agents: ['Claude'] },
+		{ kind: 'skills', scope: 'project', label: 'idle', file: '/w/.claude/skills/idle/SKILL.md', tokens: 30, agents: ['Claude'] },
 		{ kind: 'instructions', scope: 'project', label: 'CLAUDE.md', file: '/w/CLAUDE.md', tokens: 6000, agents: ['Claude'] },
 	]
 	const usesOf = i => i.label === 'used' || i.label === 'busy' ? 3 : 0
@@ -265,7 +270,9 @@ test('the X-ray labels what it knows: /context categories, else the first reques
 	assert.deepEqual(gh.action, { kind: 'disable-mcp', server: 'github' }, 'a .mcp.json server can be switched off here')
 	assert.match(gh.title, /never called in 30 days/)
 	assert.ok(!withContext.waste.some(w => w.id === 'mcp:busy'), 'a server in use is not waste')
-	assert.match(withContext.waste.find(w => w.id === 'skills').title, /^1 skill not used in 30 days/)
+	const idle = withContext.waste.find(w => w.id === 'skills')
+	assert.match(idle.title, /^1 skill not used in 30 days: ~30 tokens/)
+	assert.match(idle.detail, /^idle./, 'probe was called in this session, so it is not idle')
 	assert.ok(withContext.waste.some(w => w.id === 'big:/w/CLAUDE.md'))
 
 	const noContext = x.xray({ agent: 'a', cli: 'claude', facts: t.parseTranscript(LINES.slice(0, -1)), items, usesOf, covered: 5 })
@@ -274,7 +281,10 @@ test('the X-ray labels what it knows: /context categories, else the first reques
 	assert.equal(rest.how, 'derived')
 	assert.equal(noContext.segments.find(s => s.label.startsWith('Memory')).tokens, 110, '440 characters, about 4 per token')
 	assert.equal(noContext.segments.find(s => s.label.startsWith('Memory')).how, 'estimate')
-	assert.match(noContext.waste.find(w => w.id === 'mcp:github').title, /in the 5 days Axle has seen/, 'never claims 30 days it has not seen')
+	assert.match(noContext.waste.find(w => w.id === 'mcp:github').title, /instructions, never called in 5 days$/, 'never claims 30 days it has not seen')
+	const oneSession = x.xray({ agent: 'a', cli: 'claude', facts: t.parseTranscript(LINES.slice(0, -1)), items, usesOf, covered: 40, sessions: 1 })
+	assert.match(oneSession.waste.find(w => w.id === 'skills').title, /not used in 1 session:/, 'one session does not speak for a month')
+	assert.ok(!oneSession.waste.some(w => w.id === 'skills' && /probe/.test(w.detail)), 'a skill this session called is not idle')
 
 	const codex = x.xray({ agent: 'c', cli: 'codex', reported: { used: 50000, size: 200000 }, items: [{ kind: 'instructions', scope: 'project', label: 'AGENTS.md', file: '/w/AGENTS.md', tokens: 800, agents: ['Codex'] }], usesOf, covered: 0 })
 	assert.equal(codex.source, 'harness')

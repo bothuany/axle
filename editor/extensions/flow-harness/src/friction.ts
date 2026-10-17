@@ -76,7 +76,12 @@ const jaccard = (a: string[], b: string[]) => {
 
 /** The corrections in one prompt: sentences that read as a standing instruction. */
 export function corrections(prompt: string): string[] {
-	return prompt.split(/(?<=[.!?])\s+|\r?\n+/).map(s => s.trim().replace(/^[-*•]\s*/, ''))
+	// Pasted text, code and quoted lines are someone else's words (an agent's output, a log), not the person's instruction.
+	const own = prompt
+		.replace(/<pasted_content\b[^>]*>[\s\S]*?(?:<\/pasted_content>|$)/g, '\n')
+		.replace(/```[\s\S]*?(?:```|$)/g, '\n')
+		.replace(/^\s*>.*$/gm, '');
+	return own.split(/(?<=[.!?])\s+|\r?\n+/).map(s => s.trim().replace(/^[-*•]\s*/, ''))
 		.filter(s => s.length >= 6 && s.length <= 220 && !NOT_STANDING.test(s) && CORRECTION.some(re => re.test(s)) && signature(s).length >= 2);
 }
 
@@ -167,7 +172,7 @@ export function commandHead(command: string): string {
 }
 
 /** A failure that says the person stopped it, not that the tool cannot work. */
-const NOT_A_FAILURE = /doesn't want to proceed|rejected|interrupted|user denied|permission to use .* (?:was|has been) denied|cancel+ed/i;
+const NOT_A_FAILURE = /doesn't want to proceed|rejected|interrupted|user denied|permission (?:to use .* |for this action )?(?:was|has been) denied|denied by the .*classifier|cancel+ed/i;
 
 /** Tool calls that failed the same way at least `min` times: a guard hook for commands, an instruction line for other tools. */
 export function failureProposals(failures: readonly FailureRecord[], min = 3): Proposal[] {

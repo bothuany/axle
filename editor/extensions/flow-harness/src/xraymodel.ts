@@ -7,6 +7,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { TranscriptFacts } from './transcript';
+import { MIN_SESSIONS, noUseSpan } from './activity';
 import { mcpToolPrefix } from './transcript';
 
 export type How = 'measured' | 'claude-estimate' | 'estimate' | 'derived';
@@ -65,6 +66,8 @@ export interface XrayInput {
 	/** Uses in the last 30 days by item, and how many days the counts cover. */
 	usesOf: (item: HarnessPiece) => number;
 	covered: number;
+	/** How many sessions the counts rest on: one session says little about a month. */
+	sessions?: number;
 	/** Window size when nothing says otherwise. */
 	defaultSize?: number;
 }
@@ -120,9 +123,11 @@ export function xray(input: XrayInput): XrayModel {
 		}
 	}
 
-	const settled = input.covered >= 30;
-	const unused = (i: HarnessPiece) => input.usesOf(i) === 0;
-	const span = settled ? 'in 30 days' : `in the ${Math.max(1, input.covered)} days Axle has seen`;
+	// What this very session called counts too, whether or not the counters have seen it yet.
+	const calledHere = new Set((f?.toolUses ?? []).flatMap(u => u.name === 'Skill' && typeof u.input.skill === 'string' ? [`skill:${u.input.skill.toLowerCase()}`] : u.name.startsWith('mcp__') ? [`mcp:${u.name.split('__')[1]?.toLowerCase()}`] : []));
+	const usedHere = (i: HarnessPiece) => calledHere.has(`${i.kind === 'skills' ? 'skill' : 'mcp'}:${(i.kind === 'mcp' ? mcpToolPrefix(i.label) : i.label).toLowerCase()}`);
+	const unused = (i: HarnessPiece) => input.usesOf(i) === 0 && !usedHere(i);
+	const span = noUseSpan(input.covered, input.sessions ?? MIN_SESSIONS).text;
 
 	// MCP servers: every tool name (and, without tool search, every schema) sits in context whether it is called or not.
 	if (isClaude) {
@@ -133,7 +138,7 @@ export function xray(input: XrayInput): XrayModel {
 			if (item && !unused(item)) {
 				continue;
 			}
-			if (!item && input.usesOf({ kind: 'mcp', scope: 'user', label: server, file: '', agents: ['Claude'] }) > 0) {
+			if (!item && !unused({ kind: 'mcp', scope: 'user', label: server, file: '', agents: ['Claude'] })) {
 				continue;
 			}
 			const prefix = `mcp__${mcpToolPrefix(server)}__`;
@@ -145,7 +150,7 @@ export function xray(input: XrayInput): XrayModel {
 			const fromMcpJson = !!item && /\.mcp\.json$/i.test(item.file) && item.scope === 'project';
 			model.waste.push({
 				id: `mcp:${server}`,
-				title: `MCP server ${server}: ${tokens !== undefined ? `~${tok(tokens)} tokens` : 'tokens unknown'}, never called ${span}`,
+				title: `MCP server ${server}: ${tokens === undefined ? 'cost unknown' : measuredTools.length ? `~${tok(tokens)} tokens of tool schemas` : `~${tok(tokens)} tokens of instructions`}, never called ${span}`,
 				detail: [
 					measuredTools.length ? `${measuredTools.length} tool schemas, as /context counted them` : toolCount ? `${toolCount} tools listed (names only while tool search defers them)` : '',
 					instr && !measuredTools.length ? 'its server instructions' : '',

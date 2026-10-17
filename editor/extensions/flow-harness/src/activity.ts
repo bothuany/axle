@@ -128,8 +128,14 @@ export function summary(data: ActivityData, key: string, now: number): Summary {
 /** How many days the counts cover. */
 export const coveredDays = (data: ActivityData, now: number) => Math.max(0, Math.floor((now - data.since) / DAY));
 
-/** "used 12× this week", "used 3× in 30 days", "never used in 30 days", or, before the window is covered, "no use in 4 days". */
-export function usageLabel(s: Summary, covered: number): string {
+/** Sessions the counts must rest on before "never used" is said: one session says little about a month. */
+export const MIN_SESSIONS = 3;
+
+/**
+ * "used 12× this week", "used 3× in 30 days", "never used in 30 days", or, before 30 days and a few sessions are
+ * covered, what was actually seen: "no use in 4 days", "no use in 1 session".
+ */
+export function usageLabel(s: Summary, covered: number, sessions = MIN_SESSIONS): string {
 	const n = (x: number) => `${x}×`;
 	if (s.week) {
 		return `used ${n(s.week)} this week`;
@@ -137,7 +143,19 @@ export function usageLabel(s: Summary, covered: number): string {
 	if (s.month) {
 		return `used ${n(s.month)} in ${WINDOW_DAYS} days`;
 	}
-	return covered >= WINDOW_DAYS ? `never used in ${WINDOW_DAYS} days` : `no use in ${Math.max(1, covered)} day${covered === 1 ? '' : 's'}`;
+	const span = noUseSpan(covered, sessions);
+	return `${span.settled ? 'never used' : 'no use'} ${span.text}`;
+}
+
+/** The stretch "not used" speaks for: "in 30 days" once that and a few sessions are covered, else "in 1 session", "in 4 days" or "yet". */
+export function noUseSpan(covered: number, sessions: number): { settled: boolean; text: string } {
+	if (covered >= WINDOW_DAYS && sessions >= MIN_SESSIONS) {
+		return { settled: true, text: `in ${WINDOW_DAYS} days` };
+	}
+	if (sessions < MIN_SESSIONS) {
+		return { settled: false, text: sessions ? `in ${sessions} session${sessions === 1 ? '' : 's'}` : 'seen yet' };
+	}
+	return { settled: false, text: `in ${Math.max(1, covered)} day${covered === 1 ? '' : 's'}` };
 }
 
 // ---------------------------------------------------------------------------------------------
