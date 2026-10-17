@@ -1,4 +1,4 @@
-// How the context rows and the usage-limit status bar items read, and what a report from flow-agent must hold (src/budget.ts).
+// How the usage-limit status bar items read, and what a report from flow-agent must hold (src/budget.ts).
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { build } from 'esbuild'
@@ -18,28 +18,8 @@ before(async () => {
 })
 after(() => rmSync(tmp, { recursive: true, force: true }))
 
-test('a 1M session reads as 1M, with a bar and a percentage', () => {
-	const u = b.toUsage({ agent: 'Claude 1', harness: 'Claude Code', model: 'Sonnet 5.5', used: 66_700, size: 1_000_000 })
-	assert.equal(b.usageLine(u), 'Sonnet 5.5 · 66.7k / 1M ▰▱▱▱▱▱▱▱▱▱ 7%')
-})
-
-test('an unknown window shows the tokens and no percentage, never a 200k guess', () => {
-	assert.equal(b.usageLine(b.toUsage({ agent: 'a', used: 66_700 })), '66.7k tokens')
-	assert.equal(b.usageLine(b.toUsage({ agent: 'a', used: 66_700, size: 0 })), '66.7k tokens')
-	assert.equal(b.share(b.toUsage({ agent: 'a', used: 5 })), undefined)
-})
-
-test('a row is keyed by the session id, so a renamed agent stays one row; an ended report carries only the key', () => {
-	assert.equal(b.toUsage({ id: 's1', agent: 'Claude 1', used: 5 }).key, 's1')
-	assert.equal(b.toUsage({ agent: 'Claude (ACP)', used: 5 }).key, 'Claude (ACP)')
-	assert.deepEqual(b.toUsage({ id: 's1', agent: 'Claude 1', ended: true }), { key: 's1', ended: true })
-})
-
 test('reports that are not reports are dropped', () => {
-	assert.equal(b.toUsage(undefined), undefined)
-	assert.equal(b.toUsage({ agent: '', used: 1 }), undefined)
-	assert.equal(b.toUsage({ agent: 'a', used: -1 }), undefined)
-	assert.equal(b.toUsage({ agent: 'a', used: '5' }), undefined)
+	assert.equal(b.toLimits(undefined), undefined)
 	assert.equal(b.toLimits({ harness: 'Claude Code', windows: [] }), undefined)
 	assert.equal(b.toLimits({ harness: 'Claude Code', windows: [{ label: '5h' }] }), undefined)
 	assert.equal(b.toLimits({ windows: [{ label: '5h', usedPercent: 3 }] }), undefined)

@@ -1,12 +1,9 @@
 /*---------------------------------------------------------------------------------------------
  *  Axle Harness: the map. One tree, grouped by what each piece does, every row saying where it
- *  comes from (user, project, local, folder), what it costs, and whether it looks broken. On top,
- *  while agents run, how full each one's context window is.
+ *  comes from (user, project, local, folder), what it costs, and whether it looks broken.
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { fmtTokens, share, usageLine, type AgentUsage } from './budget';
-import type { ContextBudget } from './context';
 import type { Harness, HarnessItem, Kind, Severity } from './scan';
 
 const GROUPS: { kind: Kind; label: string; icon: string; color: string; empty: string }[] = [
@@ -23,16 +20,12 @@ const SCOPE_LABEL = { user: 'you', project: 'repo', local: 'local', directory: '
 const tok = (n?: number) => n === undefined ? '' : n >= 1000 ? `${(n / 1000).toFixed(1)}k tok` : `${n} tok`;
 const worst = (i: HarnessItem): Severity | undefined => i.issues.some(x => x.severity === 'error') ? 'error' : i.issues.some(x => x.severity === 'warning') ? 'warning' : i.issues.length ? 'info' : undefined;
 
-type Node = { type: 'context' } | { type: 'agent'; usage: AgentUsage } | { type: 'group'; kind: Kind } | { type: 'item'; item: HarnessItem } | { type: 'issue'; item: HarnessItem; index: number };
+type Node = { type: 'group'; kind: Kind } | { type: 'item'; item: HarnessItem } | { type: 'issue'; item: HarnessItem; index: number };
 
 export class HarnessTree implements vscode.TreeDataProvider<Node> {
 	private readonly changed = new vscode.EventEmitter<void>();
 	readonly onDidChangeTreeData = this.changed.event;
 	private harness: Harness | undefined;
-
-	constructor(private readonly budget: ContextBudget) {
-		budget.onDidChange(() => this.changed.fire());
-	}
 
 	set(h: Harness | undefined) {
 		this.harness = h;
@@ -40,17 +33,12 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 	}
 
 	getChildren(node?: Node): Node[] {
-		if (node?.type === 'context') {
-			return this.budget.agents.map(usage => ({ type: 'agent', usage }));
-		}
 		const h = this.harness;
-		if (!node) {
-			// Agents can report before the first scan finishes, or in a folder with no harness at all.
-			const context: Node[] = this.budget.agents.length ? [{ type: 'context' }] : [];
-			return [...context, ...(h ? GROUPS.map(g => ({ type: 'group', kind: g.kind }) as Node) : [])];
-		}
 		if (!h) {
 			return [];
+		}
+		if (!node) {
+			return GROUPS.map(g => ({ type: 'group', kind: g.kind }));
 		}
 		if (node.type === 'group') {
 			// Problems first, then by scope from widest to narrowest (the order they are layered in).
@@ -67,31 +55,6 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 	}
 
 	getTreeItem(node: Node): vscode.TreeItem {
-		if (node.type === 'context') {
-			const t = new vscode.TreeItem('Context', vscode.TreeItemCollapsibleState.Expanded);
-			t.id = 'context';
-			t.iconPath = new vscode.ThemeIcon('dashboard');
-			const startup = this.budget.startupTokens;
-			t.description = startup ? `harness ${fmtTokens(startup)} per session` : '';
-			t.tooltip = 'How full each running agent\'s context window is, as the agent reports it. The harness part is what loads before your first prompt.';
-			t.contextValue = 'context';
-			return t;
-		}
-		if (node.type === 'agent') {
-			const u = node.usage;
-			const s = share(u);
-			const t = new vscode.TreeItem(u.agent);
-			t.id = `agent:${u.key}`;
-			t.description = usageLine(u);
-			t.iconPath = new vscode.ThemeIcon('pulse', s === undefined ? undefined : new vscode.ThemeColor(s > 0.85 ? 'flowHarness.deny' : s > 0.6 ? 'flowHarness.ask' : 'flowHarness.allow'));
-			const tip = new vscode.MarkdownString(`**${u.agent}**${u.harness ? ` · ${u.harness}` : ''}${u.model ? ` · ${u.model}` : ''}\n\n`);
-			tip.appendMarkdown(s === undefined
-				? `${u.used.toLocaleString()} tokens in context. The agent has not said how large its window is, so there is no percentage.`
-				: `${u.used.toLocaleString()} of ${u.size!.toLocaleString()} tokens in use (${Math.round(s * 100)}%).`);
-			t.tooltip = tip;
-			t.contextValue = 'contextAgent';
-			return t;
-		}
 		if (node.type === 'group') {
 			const g = GROUPS.find(x => x.kind === node.kind)!;
 			const items = this.harness!.items.filter(i => i.kind === node.kind);
@@ -138,12 +101,6 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 		(t as vscode.TreeItem & { item?: HarnessItem }).item = i;
 		return t;
 	}
-}
-
-/** An agent row carries its agent's name, so Compact knows which terminal to type into. */
-export function agentOf(arg: unknown): string | undefined {
-	const a = arg as { type?: string; usage?: AgentUsage } | undefined;
-	return a?.type === 'agent' ? a.usage?.agent : undefined;
 }
 
 /** A hook row carries its item, so commands run from the tree know what to act on. */

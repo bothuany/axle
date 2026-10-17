@@ -631,6 +631,17 @@ export class Agents implements vscode.Disposable {
 		return true;
 	}
 
+	/** Types /compact into the agent's terminal (both CLIs take it): keeps a summary, frees most of the window. */
+	compact(id: string) {
+		const s = this.sessions.get(id);
+		const t = this.terminals.get(id);
+		if (!s || !t || s.state === 'ended' || s.cli === 'custom') {
+			return;
+		}
+		t.show();
+		t.sendText('/compact');
+	}
+
 	show(id: string) {
 		const t = this.terminals.get(id);
 		const s = this.sessions.get(id);
@@ -1135,17 +1146,12 @@ export class Agents implements vscode.Disposable {
 			return; // the status line refreshes often: only a change is news
 		}
 		s.usage = usage;
-		void Promise.resolve(vscode.commands.executeCommand('flowHarness.reportUsage', { id: s.id, agent: s.name, harness: s.cli === 'codex' ? 'Codex' : 'Claude Code', ...usage })).catch(() => undefined);
 		this.changed.fire();
 	}
 
-	/** The CLI exited or its terminal closed: its context is no longer worth a row in the Harness view. */
+	/** The CLI exited or its terminal closed: its numbers say nothing any more, and a resumed session reports afresh. */
 	private usageEnded(s: AgentSession) {
-		if (s.usage) {
-			void Promise.resolve(vscode.commands.executeCommand('flowHarness.reportUsage', { id: s.id, agent: s.name, ended: true })).catch(() => undefined);
-			// Forgotten here too, so a resumed session reports afresh instead of matching numbers that were dropped.
-			s.usage = undefined;
-		}
+		s.usage = undefined;
 	}
 
 	/** The limits last sent per harness: the status line repeats them on every refresh. */

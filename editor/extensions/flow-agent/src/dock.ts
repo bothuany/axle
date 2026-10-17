@@ -50,6 +50,8 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				this.agents.openImpactFlow(m.id, m.index);
 			} else if (m.type === 'forget' && typeof m.id === 'string') {
 				this.agents.forget(m.id);
+			} else if (m.type === 'compact' && typeof m.id === 'string') {
+				this.agents.compact(m.id);
 			} else if (m.type === 'rename' && typeof m.id === 'string') {
 				void this.rename(m.id);
 			} else if (m.type === 'pick') {
@@ -158,6 +160,13 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 .ctx { position: absolute; left: 38px; right: 10px; bottom: 0; height: 2px; border-radius: 2px; background: transparent; overflow: hidden; }
 .ctx i { display: block; height: 100%; background: color-mix(in srgb, var(--working) 55%, transparent); }
 .ctx.warn i { background: var(--blocked); } .ctx.full i { background: #ff6b7d; }
+/* How full the context window is: the model, used / window and the share, or only the tokens when the CLI gave no window. */
+.ctxline { display: flex; align-items: center; gap: 6px; margin: 6px 0 0 26px; color: var(--muted); font: 11px/1.4 var(--mono); font-variant-numeric: tabular-nums; }
+.ctxline .model { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctxline .amt { flex: none; }
+.ctxline.warn .pct { color: var(--blocked); } .ctxline.full .pct { color: #ff6b7d; font-weight: 600; }
+.cmp { flex: none; margin-left: auto; padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font: 11px/1.5 var(--vscode-font-family, system-ui); cursor: pointer; }
+.cmp:hover { background: var(--hover); color: var(--text); }
 .x { position: absolute; top: 6px; right: 6px; display: none; width: 18px; height: 18px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 18px; }
 .agent.ended:hover .x { display: block; }
 .agent:hover .state { visibility: hidden; }
@@ -187,6 +196,7 @@ let data = { list: [], now: Date.now() };
 const ICONS = ${JSON.stringify(ICON)};
 const icon = s => s.cli === 'custom' ? '<span class="ico custom tile">' + esc((s.command || s.name || '?').split(' ')[0].split('/').pop().charAt(0)) + '</span>' : ICONS[s.cli];
 const ago = (t, now) => { const s = Math.max(0, Math.round((now - t) / 1000)); return s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h'; };
+const tok = n => n >= 1e6 ? +(n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M' : n >= 1000 ? (n / 1000).toFixed(n >= 1e5 ? 0 : 1) + 'k' : String(n);
 const LABEL = { working: 'Working', blocked: 'Needs you', done: 'Done', idle: 'Ready', starting: 'Starting', unknown: 'Running', ended: 'Closed' };
 function render() {
 	const el = document.getElementById('list');
@@ -204,13 +214,21 @@ function render() {
 		const state = s.state === 'working' || s.state === 'blocked' ? LABEL[s.state] + ' · ' + ago(s.since, Date.now()) : s.state === 'done' ? 'Done ' + ago(s.since, Date.now()) + ' ago' : LABEL[s.state];
 		const todos = s.todos.length ? '<div class="todos"><span class="segs">' + s.todos.slice(0, 12).map(t => '<span class="seg ' + esc(t.status) + '"></span>').join('') + '</span><span class="count">' + s.done + '/' + s.todos.length + '</span>' + (s.current ? '<span class="now">' + esc(s.current) + '</span>' : '') + '</div>' : '';
 		const impact = s.impact && s.impact.flows.length ? '<div class="impact"><b>This turn touched ' + (s.impact.flows.length + s.impact.more) + (s.impact.flows.length + s.impact.more === 1 ? ' flow' : ' flows') + ':</b> ' + s.impact.flows.map((f, i) => '<span class="flow" role="button" tabindex="0" data-flow="' + i + '" title="' + esc((f.via && f.via.length ? 'Through ' + f.via.join(', ') + '. ' : '') + 'Open this flow') + '">' + esc(f.label) + '</span>').join('') + (s.impact.more ? '<span>+' + s.impact.more + ' more</span>' : '') + '</div>' : '';
-		return '<button class="agent ' + s.state + (s.unread ? ' unread' : '') + '" data-id="' + esc(s.id) + '" title="' + esc(s.name + (sized ? ' · context ' + pct + '% full' : s.usage ? ' · ' + Math.round(s.usage.used / 1000) + 'k tokens in context' : '')) + '">'
+		const level = pct >= 90 ? ' full' : pct >= 70 ? ' warn' : '';
+		const canCompact = s.usage && s.state !== 'ended' && s.cli !== 'custom';
+		const ctx = s.usage ? '<div class="ctxline' + level + '" title="' + esc(sized ? s.usage.used.toLocaleString() + ' of ' + s.usage.size.toLocaleString() + ' tokens in the context window' : s.usage.used.toLocaleString() + ' tokens in context; the agent has not said how large its window is') + '">'
+			+ (s.usage.model ? '<span class="model">' + esc(s.usage.model) + '</span><span>·</span>' : '')
+			+ '<span class="amt">' + (sized ? tok(s.usage.used) + ' / ' + tok(s.usage.size) + ' <span class="pct">' + pct + '%</span>' : tok(s.usage.used) + ' tokens') + '</span>'
+			+ (canCompact ? '<span class="cmp" data-compact="' + esc(s.id) + '" role="button" title="Send /compact: keeps a summary, frees most of the window">Compact</span>' : '')
+			+ '</div>' : '';
+		return '<button class="agent ' + s.state + (s.unread ? ' unread' : '') + '" data-id="' + esc(s.id) + '" title="' + esc(s.name + (sized ? ' · context ' + pct + '% full' : '')) + '">'
 			+ '<div class="top"><span class="av">' + icon(s) + '<span class="light"></span></span><span class="name">' + esc(s.name) + '</span><span class="state">' + esc(state) + '</span></div>'
 			+ (s.prompt ? '<div class="prompt">' + esc(s.prompt) + '</div>' : '')
 			+ (s.activity ? '<div class="activity">' + esc(s.activity) + '</div>' : '')
 			+ todos
 			+ impact
-			+ (sized ? '<div class="ctx' + (pct >= 90 ? ' full' : pct >= 70 ? ' warn' : '') + '"><i style="width:' + pct + '%"></i></div>' : '')
+			+ ctx
+			+ (sized ? '<div class="ctx' + level + '"><i style="width:' + pct + '%"></i></div>' : '')
 			+ '<span class="ren" data-rename="' + esc(s.id) + '" title="Rename" role="button">✎</span>'
 			+ (s.state === 'ended' ? '<span class="x"data-forget="' + esc(s.id) + '" title="Remove from list" role="button">×</span>' : '')
 			+ '</button>';
@@ -219,7 +237,8 @@ function render() {
 		const f = e.target.closest('[data-forget]');
 		const fl = e.target.closest('[data-flow]');
 		const rn = e.target.closest('[data-rename]');
-		vscode.postMessage(rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : { type: 'show', id: b.dataset.id });
+		const cp = e.target.closest('[data-compact]');
+		vscode.postMessage(cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : { type: 'show', id: b.dataset.id });
 	});
 }
 document.querySelectorAll('.new button').forEach(b => b.onclick = () => vscode.postMessage(b.dataset.cli === 'pick' ? { type: 'pick' } : { type: 'new', cli: b.dataset.cli }));

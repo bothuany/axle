@@ -502,7 +502,6 @@ export class AgentSessionType implements vscode.Disposable {
 					// How full the context window is: VS Code shows it next to the input.
 					const usage = u as unknown as { used: number; size: number };
 					(stream as unknown as { usage?(x: { promptTokens: number; completionTokens: number }): void }).usage?.({ promptTokens: usage.used, completionTokens: 0 });
-					void Promise.resolve(vscode.commands.executeCommand('flowHarness.reportUsage', { agent: LABEL[this.kind], used: usage.used, size: usage.size })).catch(() => undefined);
 					break;
 				}
 				case 'tool_call': {

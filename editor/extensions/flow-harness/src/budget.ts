@@ -1,22 +1,10 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the numbers behind the context rows and the usage-limit status bar items, and
- *  how they read. Reports arrive from flow-agent through registered commands, so every field is
- *  checked here rather than trusted. A window size the agent did not report stays unknown: the
- *  row then shows the tokens in use and no percentage.
+ *  Axle Harness: the plans' usage limits behind the status bar items, and how they read. Reports
+ *  arrive from flow-agent through a registered command, so every field is checked here rather
+ *  than trusted.
  *
  *  Pure (no vscode), so it is tested on its own.
  *--------------------------------------------------------------------------------------------*/
-
-/** One agent's context, as its CLI last reported it. */
-export interface AgentUsage {
-	/** The session's own id when the agent has one: a renamed agent stays one row. Else the name stands in. */
-	key: string;
-	agent: string;
-	harness?: string;
-	model?: string;
-	used: number;
-	size?: number;
-}
 
 export interface LimitWindow {
 	label: string;
@@ -32,27 +20,6 @@ export interface HarnessLimits {
 
 const num = (v: unknown): number | undefined => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined;
 const str = (v: unknown, max = 80): string | undefined => typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined;
-
-/**
- * A usage report from another extension, or undefined when it is not one. A size of 0 or none means "not known".
- * `{ id, ended: true }` says the session is over: `{ ended }` with only its key.
- */
-export function toUsage(arg: unknown): AgentUsage | { key: string; ended: true } | undefined {
-	const a = arg as Record<string, unknown> | undefined;
-	const agent = str(a?.agent, 200);
-	const key = str(a?.id, 200) ?? agent;
-	if (key && a?.ended === true) {
-		return { key, ended: true };
-	}
-	const used = num(a?.used);
-	if (!agent || !key || used === undefined) {
-		return undefined;
-	}
-	const size = num(a?.size) || undefined;
-	const harness = str(a?.harness);
-	const model = str(a?.model);
-	return { key, agent, used, ...(size ? { size } : {}), ...(harness ? { harness } : {}), ...(model ? { model } : {}) };
-}
 
 /** A limits report from another extension, or undefined when it holds no usable window. */
 export function toLimits(arg: unknown): HarnessLimits | undefined {
@@ -72,24 +39,6 @@ export function toLimits(arg: unknown): HarnessLimits | undefined {
 }
 
 export const fmtTokens = (n: number) => n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M` : n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n);
-
-/** Share of the window in use, 0-1, or undefined when the window is not known. */
-export function share(u: AgentUsage): number | undefined {
-	return u.size ? Math.min(1, u.used / u.size) : undefined;
-}
-
-/** Ten cells, filled to the share in use. */
-export function bar(s: number) {
-	const cells = Math.round(s * 10);
-	return `${'▰'.repeat(cells)}${'▱'.repeat(10 - cells)}`;
-}
-
-/** The row's description: `Sonnet 5.5 · 66.7k / 1M ▰▱▱▱▱▱▱▱▱▱ 7%`, or `66.7k tokens` when the window is unknown. */
-export function usageLine(u: AgentUsage): string {
-	const s = share(u);
-	const amount = s === undefined ? `${fmtTokens(u.used)} tokens` : `${fmtTokens(u.used)} / ${fmtTokens(u.size!)} ${bar(s)} ${Math.round(s * 100)}%`;
-	return [u.model, amount].filter(Boolean).join(' · ');
-}
 
 /** The harness's short name in the status bar. */
 const short = (harness: string) => harness.replace(/\s*Code$/, '');
