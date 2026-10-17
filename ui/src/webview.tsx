@@ -3,7 +3,7 @@
 // by the host to the real document, so undo and the agent's Keep/Undo stay consistent.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Background, BackgroundVariant, Controls, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react'
+import { Background, BackgroundVariant, ControlButton, Controls, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow } from '@xyflow/react'
 import * as monaco from 'monaco-editor'
 import editorWorker from 'monaco-editor/editor/editor.worker?worker&inline'
 import '@xyflow/react/dist/style.css'
@@ -39,6 +39,8 @@ let seq = 0
 const pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
 /** A host that never answers (a crashed analyzer, a dropped message) must not leave a spinner or a pending Map entry forever. */
 const REQUEST_TIMEOUT_MS = 120_000
+/** Below this zoom a card's code is too small to read: a flow that only fits smaller opens at its start instead. */
+const READABLE_ZOOM = 0.55
 function request<T>(op: string, payload: Record<string, unknown>): Promise<T> {
   const id = ++seq
   return new Promise<T>((resolve, reject) => {
@@ -146,7 +148,7 @@ function Flow() {
   turnRef.current = turn
   const [impact, setImpact] = useState<{ label: string; items: string[] } | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
-  const { fitView, setCenter, getNode, getViewport } = useReactFlow()
+  const { fitView, setCenter, getNode, getNodes, getViewport } = useReactFlow()
   const editingRef = useRef(editing)
   editingRef.current = editing
 
@@ -353,24 +355,36 @@ function Flow() {
     return { nodes: [...d.nodes, ...u.nodes], edges: [...d.edges, ...u.edges] }
   }, [down, up, hidden, full, showUp, editing, selected, canvasW, chipsView])
 
-  // Fit the whole flow when it is still readable; otherwise open on the method you asked about,
-  // at a zoom where its code can be read, with its callers' edge peeking in from the left.
+  // Fit the whole flow when it is still readable. A flow runs left to right, so a long one fitted whole is a strip of
+  // unreadable cards: then show its start (the leftmost card, a caller when callers are on) at a zoom where code
+  // can be read, and the rest is a pan to the right. The fit button does the same as opening a flow.
+  const frame = useCallback(() => {
+    const el = document.querySelector('.wv-canvas') as HTMLElement | null
+    const cards = getNodes().filter(n => n.type === 'card')
+    if (!el || !cards.length) return
+    const minX = Math.min(...cards.map(n => n.position.x))
+    const maxX = Math.max(...cards.map(n => n.position.x + (Number(n.style?.width) || 0)))
+    const minY = Math.min(...cards.map(n => n.position.y))
+    const maxY = Math.max(...cards.map(n => n.position.y + (Number(n.style?.height) || 0)))
+    const fit = Math.min(el.clientWidth / (maxX - minX + 80), el.clientHeight / (maxY - minY + 80))
+    if (fit >= READABLE_ZOOM) {
+      fitView({ padding: 0.1, maxZoom: 1, duration: 250 })
+      return
+    }
+    const zoom = 0.85
+    setCenter(minX - 40 + el.clientWidth / zoom / 2, minY - 40 + el.clientHeight / zoom / 2, { zoom, duration: 250 })
+  }, [getNodes, fitView, setCenter])
+
   useEffect(() => {
     if (!down) return
-    setTimeout(() => {
-      const el = document.querySelector('.wv-canvas') as HTMLElement
-      const xs = nodes.filter(n => n.type === 'card')
-      const minX = Math.min(...xs.map(n => n.position.x))
-      const maxX = Math.max(...xs.map(n => n.position.x + (Number(n.style?.width) || 0)))
-      const minY = Math.min(...xs.map(n => n.position.y))
-      const maxY = Math.max(...xs.map(n => n.position.y + (Number(n.style?.height) || 0)))
-      const fit = Math.min(el.clientWidth / (maxX - minX + 80), el.clientHeight / (maxY - minY + 80))
-      const root = getNode(down.key)
-      if (fit >= 0.6 || !root) return fitView({ padding: 0.1, maxZoom: 1, duration: 250 })
-      const zoom = 0.85
-      setCenter(root.position.x - 60 + el.clientWidth / zoom / 2, root.position.y - 40 + el.clientHeight / zoom / 2, { zoom, duration: 250 })
-    }, 50)
+    const t = setTimeout(frame, 50)
+    return () => clearTimeout(t)
   }, [down?.symbolId, showUp]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Callers turned on and there are none: say so, or the chip seems to do nothing.
+  useEffect(() => {
+    if (showUp && up && !up.children.length) notify.show('No callers: nothing in the index calls this method.')
+  }, [showUp, up])
 
   const actions = useMemo<CanvasActions>(
     () => ({
@@ -714,7 +728,11 @@ function Flow() {
             proOptions={{ hideAttribution: true }}
           >
             <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-            <Controls showInteractive={false} position="bottom-left" />
+            <Controls showInteractive={false} showFitView={false} position="bottom-left">
+              <ControlButton onClick={frame} title="Fit view" aria-label="Fit view">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 30"><path d="M3.692 4.63c0-.53.4-.938.939-.938h5.215V0H4.708C2.13 0 0 2.054 0 4.63v5.216h3.692V4.631zM27.354 0h-5.2v3.692h5.17c.53 0 .984.4.984.939v5.215H32V4.631A4.624 4.624 0 0027.354 0zm.954 24.83c0 .532-.4.94-.939.94h-5.215v3.768h5.215c2.577 0 4.631-2.13 4.631-4.707v-5.139h-3.692v5.139zm-23.677.94c-.531 0-.939-.4-.939-.94v-5.138H0v5.139c0 2.577 2.13 4.707 4.708 4.707h5.138V25.77H4.631z" /></svg>
+              </ControlButton>
+            </Controls>
             <MiniMap pannable zoomable position="bottom-right" maskColor="var(--fl-mask)" nodeColor={n => (n.type === 'frame' ? 'transparent' : 'var(--fl-line-strong)')} nodeBorderRadius={3} />
           </ReactFlow>
         </ActionsCtx.Provider>
