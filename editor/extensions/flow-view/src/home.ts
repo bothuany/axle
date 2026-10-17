@@ -4,8 +4,10 @@
  *  and whether the agent's harness is in good shape.
  *--------------------------------------------------------------------------------------------*/
 
+import { execFile } from 'child_process';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { entryDisplay } from './entryLabel';
 import { Command } from './commands';
 import { entryName, type Endpoints, type Source } from './backends';
 
@@ -94,6 +96,29 @@ export class FlowHome implements vscode.Disposable {
 		}
 	}
 
+	/**
+	 * How often git saw each file change lately (last 90 days), by absolute path: the endpoints people work on come first.
+	 * Asked once per window, in the background; nothing when the folder is not a repository.
+	 */
+	private churn: Promise<Map<string, number>> | undefined;
+	private churnOf(root: string) {
+		return this.churn ??= new Promise(resolve => {
+			execFile('git', ['log', '--since=90.days', '--name-only', '--pretty=format:'], { cwd: root, maxBuffer: 32 * 1024 * 1024, timeout: 10_000, windowsHide: true }, (err, out) => {
+				const counts = new Map<string, number>();
+				if (!err) {
+					for (const line of out.split('\n')) {
+						const rel = line.trim();
+						if (rel) {
+							const abs = path.join(root, rel).toLowerCase();
+							counts.set(abs, (counts.get(abs) ?? 0) + 1);
+						}
+					}
+				}
+				resolve(counts);
+			});
+		});
+	}
+
 	private async post() {
 		const folder = vscode.workspace.workspaceFolders?.[0];
 		const root = folder?.uri.fsPath ?? '';
@@ -102,7 +127,17 @@ export class FlowHome implements vscode.Disposable {
 			.map(r => ({ path: r.path, name: path.basename(r.path), dir: path.relative(root, path.dirname(r.path)), at: r.at }));
 		const flows = this.context.workspaceState.get<RecentFlow[]>(RECENT_FLOWS, []).slice(0, 7);
 		const all = this.endpoints.cached();
-		const endpoints = interleave(all.filter(e => e.source === 'roslyn'), all.filter(e => e.source === 'poly')).slice(0, 7).map(e => ({ id: e.id, source: e.source, label: entryName(e), http: e.http.split(/\s/)[0] }));
+		// The endpoints whose files changed most lately first; then the order the backends gave.
+		const churn = root ? await this.churnOf(root) : new Map<string, number>();
+		const heat = (file: string) => churn.get(path.normalize(file).toLowerCase()) ?? 0;
+		const ranked = interleave(all.filter(e => e.source === 'roslyn'), all.filter(e => e.source === 'poly'))
+			.map((e, i) => ({ e, i, heat: heat(e.file) }))
+			.sort((a, b) => b.heat - a.heat || a.i - b.i)
+			.map(x => x.e);
+		const endpoints = ranked.slice(0, 7).map(e => {
+			const show = entryDisplay(e, path.relative(root, e.file));
+			return { id: e.id, source: e.source, label: entryName(e), http: e.http.split(/\s/)[0], route: show.title.replace(/^\S+\s+/, ''), detail: show.detail };
+		});
 		await this.panel?.webview.postMessage({
 			type: 'data',
 			repo: folder?.name ?? 'No folder open',
@@ -165,6 +200,8 @@ kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); bor
 .col:first-child { padding-left: 4px; border-left: 0; }
 .col h2 { margin: 0 0 10px; font-size: 12.5px; font-weight: 600; display: flex; align-items: baseline; gap: 8px; }
 .col h2 span { color: var(--muted); font-weight: 400; }
+.more { margin: 4px 0 0; padding: 0; border: 0; background: none; color: var(--accent, #8ab4ff); font: inherit; font-size: 12px; cursor: pointer; }
+.more:hover { text-decoration: underline; }
 .row { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 5px 8px; margin-left: -8px; border: 0; border-radius: 7px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .row:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
 .row .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -263,7 +300,9 @@ window.addEventListener('message', e => {
 		$('flows').innerHTML = d.flows.map(f => '<button class="row" data-id="' + esc(f.id) + '" data-source="' + esc(f.source || '') + '" data-label="' + esc(f.label) + '"><svg class="glyph" viewBox="0 0 10 10"><path d="M5 0l5 5-5 5-5-5z" fill="#b88cff"/></svg><span class="name">' + esc(f.label) + '</span><span class="sub">' + ago(f.at) + '</span></button>').join('');
 	} else {
 		$('flowsTitle').innerHTML = 'Endpoints <span>' + (d.total || '') + '</span>';
-		$('flows').innerHTML = d.endpoints.length ? d.endpoints.map(e => '<button class="row" data-id="' + esc(e.id) + '" data-source="' + esc(e.source) + '" data-label="' + esc(e.label) + '"><span class="verb v-' + esc(e.http) + '">' + esc(e.http) + '</span><span class="name">' + esc(e.label) + '</span></button>').join('') : '<p class="empty">Open a source file and press <kbd data-k="mod+alt+F"></kbd> to draw its flow.</p>';
+		// The route first, as a developer reads it; the service and handler after it.
+		$('flows').innerHTML = (d.endpoints.length ? d.endpoints.map(e => '<button class="row" data-id="' + esc(e.id) + '" data-source="' + esc(e.source) + '" data-label="' + esc(e.label) + '" title="' + esc(e.http + ' ' + e.route + '  ' + e.detail) + '"><span class="verb v-' + esc(e.http) + '">' + esc(e.http) + '</span><span class="name">' + esc(e.route) + '</span><span class="sub">' + esc(e.detail) + '</span></button>').join('') : '<p class="empty">Open a source file and press <kbd data-k="mod+alt+F"></kbd> to draw its flow.</p>')
+			+ (d.total > d.endpoints.length ? '<button class="more" data-run="flow.pickEndpoint">All ' + d.total + ' endpoints…</button>' : '');
 	}
 	const h = d.health;
 	if (h) {
@@ -285,6 +324,8 @@ window.addEventListener('message', e => {
 	document.querySelectorAll('.row[data-path]').forEach(b => b.onclick = () => vscode.postMessage({ type: 'open', path: b.dataset.path, line: b.dataset.line ? Number(b.dataset.line) : undefined }));
 	applyKeys();
 	document.querySelectorAll('.row[data-id]').forEach(b => b.onclick = () => vscode.postMessage({ type: 'flow', id: b.dataset.id, label: b.dataset.label, source: b.dataset.source }));
+	// Drawn with the list, after the page's own [data-run] buttons were wired.
+	document.querySelectorAll('.more[data-run]').forEach(b => b.onclick = () => vscode.postMessage({ type: 'run', command: b.dataset.run }));
 });
 applyKeys();
 vscode.postMessage({ type: 'ready' });

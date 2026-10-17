@@ -434,7 +434,10 @@
           "light": "#c4383c"
         }
       }
-    ]
+    ],
+    "configurationDefaults": {
+      "workbench.startupEditor": "none"
+    }
   },
   "scripts": {
     "build": "node esbuild.mjs",

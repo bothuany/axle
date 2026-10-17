@@ -7,6 +7,7 @@
 import * as vscode from 'vscode';
 import { Analyzer, innermost } from './analyzer';
 import { AgentChanges, GIT_AGENT } from './agentDiff';
+import { entryDisplay } from './entryLabel';
 import { Endpoints, entryName, type Entry, type Source } from './backends';
 import { nodesLinkedTo, parsePlan, statusAfterEdit } from './board/plan';
 import { BoardStore } from './board/store';
@@ -103,12 +104,24 @@ export function activate(context: vscode.ExtensionContext) {
 	wireClaudeCode(flow);
 	wireAgentBridge(flow);
 	watchSources(flow);
-	// A window with nothing open starts on Home instead of an empty editor.
-	timer(context, () => {
+	// A window with nothing open starts on Home instead of an empty editor; so does a folder just trusted (opened in
+	// Restricted Mode, Axle had nothing to show yet), once the trust tab is closed.
+	const homeIfEmpty = () => {
 		if (!vscode.window.tabGroups.all.some(g => g.tabs.length)) {
 			void home.show();
 		}
-	}, 1200);
+	};
+	timer(context, homeIfEmpty, 1200);
+	context.subscriptions.push(vscode.workspace.onDidGrantWorkspaceTrust(() => {
+		const sub = vscode.window.tabGroups.onDidChangeTabs(() => {
+			if (!vscode.window.tabGroups.all.some(g => g.tabs.length)) {
+				sub.dispose();
+				homeIfEmpty();
+			}
+		});
+		context.subscriptions.push(sub);
+		timer(context, homeIfEmpty, 1200);
+	}));
 }
 
 function registerViews({ context, home, endpointsView, panel }: Flow) {
@@ -187,7 +200,12 @@ function registerCommands(flow: Flow) {
 			const qp = vscode.window.createQuickPick<vscode.QuickPickItem & { e: Entry }>();
 			qp.title = 'Axle: open an endpoint';
 			qp.matchOnDescription = true;
-			const toItems = (eps: Entry[]) => eps.map(e => ({ label: `${e.http} ${entryName(e)}`, description: vscode.workspace.asRelativePath(e.file), e }));
+			qp.matchOnDetail = true;
+			// The route first, as a developer reads it; the service and handler after it, the file on the second line.
+			const toItems = (eps: Entry[]) => eps.map(e => {
+				const rel = vscode.workspace.asRelativePath(e.file);
+				return { label: e.http, description: entryDisplay(e, rel).detail, detail: rel, e };
+			});
 			qp.items = toItems(endpointList.cached());
 			qp.busy = true;
 			// An empty list says why: still indexing (and how far), or nothing found. A large first index takes a while.
