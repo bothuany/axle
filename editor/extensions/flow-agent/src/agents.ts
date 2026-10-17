@@ -198,6 +198,8 @@ function transcriptPath(id: string, cwd: string | undefined) {
 export class Agents implements vscode.Disposable {
 	readonly sessions = new Map<string, AgentSession>();
 	private readonly terminals = new Map<string, vscode.Terminal>();
+	/** Sessions a hook has reported from: their CLI is up and past its own start screens, so typing reaches its prompt. */
+	private readonly heard = new Set<string>();
 	private readonly changed = new vscode.EventEmitter<void>();
 	readonly onDidChange = this.changed.event;
 	private server: http.Server | undefined;
@@ -558,6 +560,46 @@ export class Agents implements vscode.Disposable {
 		return session;
 	}
 
+	/**
+	 * Puts `text` into Claude Code's prompt in the Agents dock: the newest Claude session that is waiting, else a new one
+	 * once its first hook says it is up (before that, typing could land in its folder-trust screen). `submit` sends it;
+	 * without it the text waits there to be finished. Home and "Ask about this flow" ask here when the chat panel is off,
+	 * so a question reaches the agent the dock runs. Resolves false when no session could be started for it.
+	 */
+	async ask(text: string, submit: boolean): Promise<boolean> {
+		// One line: a newline would send the prompt half-written.
+		const line = text.replace(/\s*\r?\n\s*/g, ' ').trim();
+		if (!line) {
+			return false;
+		}
+		const waiting = (s: AgentSession) => s.cli === 'claude' && this.heard.has(s.id) && (s.state === 'idle' || s.state === 'done') && this.terminals.has(s.id);
+		let s: AgentSession | undefined = [...this.sessions.values()].filter(waiting).sort((a, b) => b.since - a.since)[0];
+		if (!s) {
+			const started = await this.spawn('claude');
+			if (!started) {
+				return false;
+			}
+			s = await new Promise<AgentSession | undefined>(resolve => {
+				const timer = setTimeout(() => done(undefined), 30_000);
+				const sub = this.onDidChange(() => waiting(started) && done(started));
+				const done = (r: AgentSession | undefined) => {
+					clearTimeout(timer);
+					sub.dispose();
+					resolve(r);
+				};
+			});
+			if (!s) {
+				await vscode.env.clipboard.writeText(line);
+				void vscode.window.showInformationMessage('Axle: Claude Code is still starting. Your question is on the clipboard: paste it into its prompt.');
+				return true; // handled: the caller must not open the chat panel as well
+			}
+		}
+		const terminal = this.terminals.get(s.id)!;
+		terminal.show();
+		terminal.sendText(line, submit);
+		return true;
+	}
+
 	show(id: string) {
 		const t = this.terminals.get(id);
 		const s = this.sessions.get(id);
@@ -715,6 +757,7 @@ export class Agents implements vscode.Disposable {
 		if (!s) {
 			return; // a session Axle did not start (or forgot): stay out of it
 		}
+		this.heard.add(s.id);
 		if (p.transcript_path && p.transcript_path !== s.transcript) {
 			s.transcript = p.transcript_path;
 			this.unwatch(s.id);

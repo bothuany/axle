@@ -7,6 +7,7 @@
 import * as vscode from 'vscode';
 import { Analyzer, innermost } from './analyzer';
 import { AgentChanges, GIT_AGENT } from './agentDiff';
+import { askInDock } from './askAgent';
 import { entryDisplay } from './entryLabel';
 import { Endpoints, entryName, type Entry, type Source } from './backends';
 import { flowToBoard } from './board/fromFlow';
@@ -267,6 +268,10 @@ function registerAgentCommands({ context, panel, changes }: Flow) {
 			await vscode.workspace.fs.createDirectory(dir);
 			const file = vscode.Uri.joinPath(dir, `${label.replace(/[^\w.-]+/g, '_')}.flow.md`);
 			await vscode.workspace.fs.writeFile(file, Buffer.from(flowText, 'utf8'));
+			// Claude Code reads an @-mentioned file itself; the question is left for the user to finish.
+			if (await askInDock(`About the flow in @${file.fsPath} (${label}): `, false)) {
+				return;
+			}
 			await vscode.commands.executeCommand('workbench.action.chat.open', {
 				query: `About the attached flow (${label}): `,
 				isPartialQuery: true,

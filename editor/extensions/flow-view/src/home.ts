@@ -7,6 +7,7 @@
 import { execFile } from 'child_process';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { askInDock } from './askAgent';
 import { entryDisplay } from './entryLabel';
 import { Command } from './commands';
 import { entryName, type Endpoints, type Source } from './backends';
@@ -76,8 +77,8 @@ export class FlowHome implements vscode.Disposable {
 	private async onMessage(m: { type: string; text?: string; path?: string; id?: string; label?: string; source?: Source; command?: string; line?: number }) {
 		switch (m.type) {
 			case 'ready': return this.post();
-			case 'ask': return vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: false });
-			case 'draft': return vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: true });
+			case 'ask': return await askInDock(m.text ?? '', true) || vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: false });
+			case 'draft': return await askInDock(m.text ?? '', false) || vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: true });
 			case 'open': return vscode.window.showTextDocument(vscode.Uri.file(m.path!), { selection: m.line !== undefined ? new vscode.Range(m.line, 0, m.line, 0) : undefined });
 			case 'flow': return vscode.commands.executeCommand(Command.showEntry, m.id, m.label, m.source);
 			// Only the shortcuts this page shows: a message is not a licence to run any command.
@@ -245,7 +246,7 @@ kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); bor
 			<button class="send" id="send" disabled aria-label="Send to chat"><svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 		</div>
 	</form>
-	<p class="hint"><kbd>Enter</kbd> sends to chat, <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</p>
+	<p class="hint"><kbd>Enter</kbd> sends to the agent (Claude Code in the Agents dock), <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</p>
 
 	<div id="resume"></div>
 

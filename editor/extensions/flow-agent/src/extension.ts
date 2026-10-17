@@ -44,7 +44,14 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('flow.agents.new', () => pickAgent(agents)),
 		vscode.commands.registerCommand('flow.agents.resume', () => startOrResume(agents, 'claude', false)),
 		vscode.commands.registerCommand('flow.agents.start', (cli: unknown) => cli === 'claude' || cli === 'codex' ? startOrResume(agents, cli) : undefined),
+		// Called by flow-view (Home, "Ask about this flow"): a question for the agent in the dock.
+		vscode.commands.registerCommand('flow.agents.ask', (text: unknown, submit: unknown) => typeof text === 'string' ? agents.ask(text, submit === true) : false),
 	);
+	// The dock is where Axle's agents live: on the first start, show it rather than the chat panel (which needs ACP to reach them).
+	if (!showChat() && !context.globalState.get<boolean>('flow.agents.dockShown')) {
+		void context.globalState.update('flow.agents.dockShown', true);
+		void vscode.commands.executeCommand('workbench.view.extension.flowAgents');
+	}
 	log.info('Axle agents registered');
 }
 

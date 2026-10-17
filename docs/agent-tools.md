@@ -22,6 +22,8 @@ Claude Code over `/ide` only shows its model the `getDiagnostics` tool, so Axle 
 - Each Axle window lists itself in `~/.axle/bridge/<pid>.json` (loopback port and token); the server picks the window whose workspace folder contains its working directory.
 - In plan mode, the plan an agent submits is drawn as a board (`flow.agents.planBoard`), its steps move to doing and done as files are edited, and when a turn ends the Agents dock lists the flows it touched (`flow.agents.turnImpact`). That list follows the methods the turn's edits landed in, and names them on hover; an edit outside every method (an import, a field) counts its whole file. Boards open as a Markdown preview with a Mermaid diagram; **Axle: Show Board…** lists them.
 
+Home's prompt and **Ask about this flow** put the question into Claude Code in the Agents dock (the newest waiting session, or a new one once it is up); with the chat panel on (`flow.agents.showChat`) they go to the chat panel instead. **Axle: Pin Flow as Board** keeps the flow on the canvas as a board, so boards do not need an agent.
+
 ## How agent status works
 
 Axle starts `claude` with `--settings <file>` that adds observe-only hooks on top of your own settings (your hooks still run). Each hook runs a small Node script that posts the event to the Axle window. The hooks never answer a permission question: Claude Code keeps asking you itself.
