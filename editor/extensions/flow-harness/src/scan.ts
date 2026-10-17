@@ -14,6 +14,7 @@ import { lint, ruleGlobs, type InstructionKind, type LintFile } from './lint';
 import { projectGaps, type Gap } from './gaps';
 import { gitIgnoredOf } from './ignored';
 import { claudeDir, codexDir } from './dirs';
+import { maskArgs, maskUrl, readMcp, type McpServer } from './mcpconfig';
 
 export type Scope = 'user' | 'project' | 'local' | 'directory';
 export type Kind = 'instructions' | 'rules' | 'skills' | 'agents' | 'hooks' | 'mcp' | 'permissions' | 'memory';
@@ -49,6 +50,8 @@ export interface HarnessItem {
 	memory?: Memory;
 	/** Path-scoped rules: the globs they apply to (empty for an always-on rule). */
 	paths?: string[];
+	/** MCP servers: the manager's id for it, the name its tool calls carry, and whether it is on. */
+	mcp?: { id: string; toolPrefix: string; state: McpServer['state']; transport: McpServer['transport'] };
 	agents: string[];
 }
 
@@ -181,7 +184,6 @@ interface HookEntry { matcher?: string; hooks?: { type?: string; command?: strin
 interface Settings {
 	hooks?: Record<string, HookEntry[]>;
 	permissions?: { allow?: string[]; ask?: string[]; deny?: string[]; defaultMode?: string };
-	mcpServers?: Record<string, unknown>;
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -203,7 +205,6 @@ function settingsShape(raw: unknown): Settings {
 	return {
 		hooks,
 		permissions: { allow: strings(perms.allow), ask: strings(perms.ask), deny: strings(perms.deny), defaultMode: typeof perms.defaultMode === 'string' ? perms.defaultMode : undefined },
-		mcpServers: isObject(raw.mcpServers) ? raw.mcpServers : {},
 	};
 }
 
@@ -271,9 +272,6 @@ async function settingsFile(items: HarnessItem[], root: string, file: string, sc
 			items.push({ kind: 'permissions', scope, label: pattern, detail: effect, file, issues: [], agents: ['Claude'], rule: { effect, pattern }, line: lineOf(JSON.stringify(pattern)) });
 		}
 	}
-	for (const name of Object.keys(s.mcpServers ?? {})) {
-		items.push({ kind: 'mcp', scope, label: name, detail: `Defined in ${show(root, file)}`, file, issues: [], agents: ['Claude'] });
-	}
 }
 
 async function skillsIn(items: HarnessItem[], dir: string, scope: Scope, agents: string[]) {
@@ -314,18 +312,28 @@ async function rulesIn(items: HarnessItem[], root: string, dir: string, scope: S
 	}
 }
 
-async function mcpJson(items: HarnessItem[], root: string, file: string, scope: Scope) {
-	const text = await read(file);
-	if (text === undefined) {
-		return;
+/**
+ * Every MCP server either agent loads here (mcpconfig.ts reads the same files the MCP manager edits): user and local
+ * servers in .claude.json, the project's .mcp.json, plugin and managed ones, and Codex's config.toml files.
+ */
+async function mcpServers(items: HarnessItem[], root: string) {
+	const config = await readMcp({
+		root, home, platform: process.platform, claudeDir: claudeDir(), codexDir: codexDir(), claudeConfigDir: process.env.CLAUDE_CONFIG_DIR || undefined,
+		read, list: d => fs.readdir(d).catch(() => [] as string[]),
+	});
+	const scopeOf = (s: McpServer): Scope => s.scope === 'local' || s.scope === 'project' ? s.scope : 'user';
+	for (const s of config.servers) {
+		const target = s.transport === 'stdio' ? [s.command ?? '', ...maskArgs(s.args)].join(' ') : maskUrl(s.url ?? '');
+		const state = s.state === 'off' ? 'off' : s.state === 'pending' ? 'awaiting approval' : '';
+		items.push({
+			kind: 'mcp', scope: scopeOf(s), label: s.name,
+			detail: [s.scope === 'user' || s.scope === 'local' || s.scope === 'project' ? '' : s.scope, s.transport, target, state].filter(Boolean).join(' · '),
+			file: s.file, issues: s.issues.map(i => ({ ...i })), agents: [s.harness],
+			mcp: { id: s.id, toolPrefix: s.toolPrefix, state: s.state, transport: s.transport },
+		});
 	}
-	try {
-		const servers = (JSON.parse(text) as { mcpServers?: Record<string, { command?: string; url?: string }> }).mcpServers ?? {};
-		for (const [name, def] of Object.entries(servers)) {
-			items.push({ kind: 'mcp', scope, label: name, detail: def.url ?? def.command ?? '', file, issues: [], agents: ['Claude'] });
-		}
-	} catch (e) {
-		items.push({ kind: 'mcp', scope, label: show(root, file), detail: 'Not valid JSON', file, issues: [{ severity: 'error', message: `Invalid JSON: ${(e as Error).message}` }], agents: ['Claude'] });
+	for (const p of config.problems) {
+		items.push({ kind: 'mcp', scope: p.file.startsWith(root) ? 'project' : 'user', label: show(root, p.file), detail: 'Not readable: the agent ignores its MCP servers', file: p.file, issues: [{ severity: 'error', message: p.message }], agents: [p.file.endsWith('.toml') ? 'Codex' : 'Claude'] });
 	}
 }
 
@@ -482,7 +490,7 @@ export async function scan(): Promise<Harness | undefined> {
 	await settingsFile(items, root, path.join(claudeDir(), 'settings.json'), 'user');
 	await settingsFile(items, root, path.join(root, '.claude', 'settings.json'), 'project');
 	await settingsFile(items, root, path.join(root, '.claude', 'settings.local.json'), 'local');
-	await mcpJson(items, root, path.join(root, '.mcp.json'), 'project');
+	await mcpServers(items, root);
 
 	conflicts(items);
 	await lintItems(items, root);
