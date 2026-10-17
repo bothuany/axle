@@ -1,0 +1,211 @@
+/*---------------------------------------------------------------------------------------------
+ *  Axle: why an agent needs you, and how urgently. The hooks say what happened (a permission
+ *  question, an AskUserQuestion, an MCP elicitation, a failed turn); this module turns that into one
+ *  "need" per session and ranks the sessions, so the Agents dock puts the one you must answer first
+ *  on top: approval > question > error > done-and-unread > working > idle.
+ *
+ *  What each CLI reports (Claude Code 2.1.302, read from the CLI itself):
+ *  - PermissionRequest (tool_name, tool_input): the CLI is about to ask "allow this?".
+ *  - PreToolUse for AskUserQuestion (tool_input.questions[].question): the agent asks you something.
+ *  - Notification with notification_type permission_prompt, elicitation_dialog or idle_prompt.
+ *  - StopFailure (error, error_details): the turn ended on an API error (rate limit, auth, billing...).
+ *  - PostToolUseFailure: a tool ran and failed; several in a row is a loop worth a look.
+ *  - Stop (last_assistant_message): the turn is over; a reply ending in a question waits for you.
+ *  Codex sends PermissionRequest and Stop the same way; it has no Notification or failure events.
+ *
+ *  Pure (no vscode), so it is tested on its own.
+ *--------------------------------------------------------------------------------------------*/
+
+export type NeedKind = 'approval' | 'question' | 'error';
+
+/** Where a need came from: it decides which later event clears it. */
+export type NeedSource = 'permission' | 'plan' | 'ask' | 'elicitation' | 'reply' | 'loop' | 'stop' | 'crash';
+
+export interface Need {
+	kind: NeedKind;
+	source: NeedSource;
+	/** The question, the permission asked for, or the error, as one line. */
+	text: string;
+	/** When it started, in ms: a new need is a new notification. */
+	at: number;
+}
+
+/** What one session carries between events. */
+export interface Attention {
+	need?: Need;
+	/** Tool calls that failed in a row. */
+	failures: number;
+}
+
+/** The parts of a hook event this module looks at. `described` is the one-line text of the tool call (agents.ts). */
+export interface AttentionEvent {
+	event: string;
+	tool?: string;
+	input?: Record<string, unknown>;
+	described?: string;
+	notificationType?: string;
+	message?: string;
+	error?: string;
+	errorDetails?: string;
+	lastMessage?: string;
+}
+
+/** This many failed tool calls in a row count as an error loop. */
+export const FAILURE_LOOP = 3;
+
+const MAX_TEXT = 240;
+const line = (s: string) => s.replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT);
+
+/** The first question an AskUserQuestion call puts to you, and how many more follow it. */
+export function askedQuestion(input: Record<string, unknown> | undefined): string | undefined {
+	const qs = Array.isArray(input?.questions) ? input.questions as { question?: unknown }[] : [];
+	const texts = qs.map(q => typeof q?.question === 'string' ? q.question.trim() : '').filter(Boolean);
+	if (texts.length) {
+		return line(texts[0] + (texts.length > 1 ? ` (+${texts.length - 1} more)` : ''));
+	}
+	return typeof input?.question === 'string' && input.question.trim() ? line(input.question) : undefined;
+}
+
+/**
+ * The question a finished turn ends on, if it ends on one: the last non-empty line, when it ends with a
+ * question mark. A question in the middle of a long answer is not one the agent is waiting on.
+ */
+export function replyQuestion(message: string | undefined): string | undefined {
+	const lines = (message ?? '').split('\n').map(l => l.trim()).filter(Boolean);
+	const last = lines[lines.length - 1];
+	if (!last || !/[?？]\**\s*$/.test(last)) {
+		return undefined;
+	}
+	// The question itself, not the whole paragraph: the last sentence of the line.
+	const sentences = last.split(/(?<=[.!?。])\s+/);
+	// Bold and list marks are Markdown, not part of the question.
+	return line(sentences[sentences.length - 1].replace(/\*\*|__/g, '').replace(/^[-*>#\s]+/, ''));
+}
+
+/** The error codes StopFailure sends, said the way a person would. */
+const ERRORS: Record<string, string> = {
+	rate_limit: 'Rate limited',
+	authentication_failed: 'Not signed in',
+	billing_error: 'Billing problem',
+	invalid_request: 'Request rejected',
+	server_error: 'API error',
+	max_output_tokens: 'Output limit reached',
+	overloaded: 'API overloaded',
+	unknown: 'The turn failed',
+};
+
+export function errorText(error: string | undefined, details: string | undefined): string {
+	const label = ERRORS[error ?? 'unknown'] ?? `The turn failed (${error})`;
+	return line(details ? `${label}: ${details}` : label);
+}
+
+const clearsOnProgress = (n: Need | undefined) => !n || n.kind === 'approval' || n.kind === 'question';
+
+/** The attention after one hook event. Never mutates `prev`. */
+export function nextAttention(prev: Attention, e: AttentionEvent, now: number): Attention {
+	const need = (kind: NeedKind, source: NeedSource, text: string): Attention => ({ ...prev, need: { kind, source, text: line(text), at: now } });
+	const asks = (tool: string | undefined) => tool === 'AskUserQuestion';
+	switch (e.event) {
+		case 'SessionStart':
+		case 'UserPromptSubmit':
+		case 'SessionEnd':
+			return { failures: 0 };
+		case 'PreToolUse':
+			if (asks(e.tool)) {
+				return need('question', 'ask', askedQuestion(e.input) ?? 'The agent asks you something');
+			}
+			if (e.tool === 'ExitPlanMode') {
+				return need('approval', 'plan', 'Review the plan');
+			}
+			return prev;
+		case 'PermissionRequest':
+			if (asks(e.tool)) {
+				// The question may already be on screen from PreToolUse: keep its start time, so it is not news twice.
+				return prev.need?.source === 'ask' ? prev : need('question', 'ask', askedQuestion(e.input) ?? 'The agent asks you something');
+			}
+			if (e.tool === 'ExitPlanMode') {
+				return prev.need?.source === 'plan' ? prev : need('approval', 'plan', 'Review the plan');
+			}
+			return need('approval', 'permission', e.described ? `Wants to: ${e.described}` : 'Wants permission');
+		case 'Notification':
+			if (e.notificationType === 'permission_prompt' || (!e.notificationType && /permission/i.test(e.message ?? ''))) {
+				// PermissionRequest came first and says more (the command itself): keep it.
+				return prev.need?.kind === 'approval' ? prev : need('approval', 'permission', e.message || 'Wants permission');
+			}
+			if (e.notificationType === 'elicitation_dialog') {
+				return prev.need?.kind === 'question' ? prev : need('question', 'elicitation', e.message || 'A tool asks you for input');
+			}
+			return prev;
+		case 'PostToolUse':
+			// The tool ran: any question about it is answered, and a failure streak is over.
+			return { failures: 0, need: clearsOnProgress(prev.need) || prev.need?.source === 'loop' ? undefined : prev.need };
+		case 'PostToolUseFailure': {
+			const failures = prev.failures + 1;
+			const kept = clearsOnProgress(prev.need) ? undefined : prev.need;
+			if (failures < FAILURE_LOOP) {
+				return { failures, need: kept };
+			}
+			// The count goes up on the row, but the loop keeps the time it started: it is one error, not one per failure.
+			const text = line(`${failures} tool calls failed in a row${e.tool ? ` (last: ${e.tool})` : ''}`);
+			return { failures, need: { kind: 'error', source: 'loop', text, at: kept?.source === 'loop' ? kept.at : now } };
+		}
+		case 'Stop': {
+			const question = replyQuestion(e.lastMessage);
+			if (question) {
+				return { failures: prev.failures, need: { kind: 'question', source: 'reply', text: question, at: now } };
+			}
+			// The turn is over, so nothing is waiting on a prompt any more; an error loop stays until the next prompt.
+			return { failures: prev.failures, need: prev.need?.kind === 'error' ? prev.need : undefined };
+		}
+		case 'StopFailure':
+			return { failures: prev.failures, need: { kind: 'error', source: 'stop', text: errorText(e.error, e.errorDetails), at: now } };
+		default:
+			return prev;
+	}
+}
+
+/** The CLI exited on its own with a failing code: a crash, unless it was already done. */
+export function crashNeed(code: number | undefined, now: number): Need | undefined {
+	return typeof code === 'number' && code !== 0 ? { kind: 'error', source: 'crash', text: `Exited with code ${code}`, at: now } : undefined;
+}
+
+/** The fields of a session ranking looks at. */
+export interface Rankable {
+	state: 'starting' | 'working' | 'blocked' | 'done' | 'idle' | 'unknown' | 'ended';
+	need?: Need;
+	unread: boolean;
+	since: number;
+}
+
+/** What a row is waiting for, for its chip and for notifications: a need, or a finished turn you have not looked at. */
+export type AttentionKind = NeedKind | 'done';
+
+export function attentionKind(s: Rankable): AttentionKind | undefined {
+	if (s.need) {
+		return s.need.kind;
+	}
+	if (s.state === 'blocked') {
+		return 'approval';
+	}
+	return s.state === 'done' && s.unread ? 'done' : undefined;
+}
+
+/** Lower is more urgent. A done turn you have read waits like an idle one: below everything still working. */
+export function urgency(s: Rankable): number {
+	const kind = attentionKind(s);
+	if (kind) {
+		return { approval: 0, question: 1, error: 2, done: 3 }[kind];
+	}
+	return { working: 4, starting: 5, idle: 6, done: 6, blocked: 6, unknown: 7, ended: 8 }[s.state];
+}
+
+/** Most urgent first; within a rank the one waiting longest for you first, else the newest. */
+export function rank<T extends Rankable>(list: T[]): T[] {
+	return [...list].sort((a, b) => urgency(a) - urgency(b) || (attentionKind(a) ? (a.need?.at ?? a.since) - (b.need?.at ?? b.since) : b.since - a.since));
+}
+
+/** A key that changes exactly when a session starts needing you anew: notify once per key. */
+export function attentionKey(s: Rankable): string | undefined {
+	const kind = attentionKind(s);
+	return kind && `${kind}:${s.need?.at ?? s.since}`;
+}

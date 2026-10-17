@@ -1,0 +1,246 @@
+/*---------------------------------------------------------------------------------------------
+ *  Axle: what a session has cost so far, in tokens and, where the CLI says, in US dollars. Nothing
+ *  here prices tokens itself: there is no price table to go stale. The dollars are the ones Claude
+ *  Code's status line reports (`cost.total_cost_usd`, its own API-price estimate since the CLI
+ *  started, also on a subscription plan), so the dock labels them "est.". Codex reports no dollars,
+ *  and neither does Claude when the user has a status line of their own: then only tokens show.
+ *
+ *  - Claude Code writes one transcript line per content block of an assistant message, each with the
+ *    whole message's `usage`: lines are counted once per `message.id`. `output_tokens` already holds
+ *    the thinking tokens, and `iterations[]` repeats the same numbers, so neither is added again.
+ *    Subagents write transcripts of their own: these totals are the main agent's.
+ *  - Codex's rollout has `token_count` events whose `info.total_token_usage` is the running total;
+ *    its `input_tokens` include the cached ones, given again as `cached_input_tokens`.
+ *
+ *  Transcripts can be hundreds of MB, so they are read once and then only from where the last read
+ *  stopped (TranscriptReader). A prompt's share is the running total minus a baseline taken when the
+ *  prompt was sent.
+ *
+ *  Pure (no vscode), so it is tested on its own.
+ *--------------------------------------------------------------------------------------------*/
+
+import { promises as fs } from 'fs';
+
+export interface Tokens {
+	/** Fresh input, not read from or written to the cache. */
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+}
+
+export interface Spend {
+	tokens: Tokens;
+	/** US dollars as the CLI reported them, when it did. */
+	usd?: number;
+}
+
+/** What the dock shows: the session so far and the prompt it is on (or last finished). */
+export interface SessionCost {
+	session: Spend;
+	prompt: Spend;
+	/** Where the dollars come from, for the tooltip; absent when there are none. */
+	usdSource?: string;
+	/** Whose tokens these are, for the tooltip. */
+	scope: string;
+}
+
+export const ZERO: Tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+
+const num = (v: unknown): number => typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0;
+const obj = (v: unknown): Record<string, unknown> | undefined => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : undefined;
+
+export const totalTokens = (t: Tokens) => t.input + t.output + t.cacheRead + t.cacheWrite;
+
+export function addTokens(a: Tokens, b: Tokens): Tokens {
+	return { input: a.input + b.input, output: a.output + b.output, cacheRead: a.cacheRead + b.cacheRead, cacheWrite: a.cacheWrite + b.cacheWrite };
+}
+
+/** `now - base`, never below zero (a total that went down means the count restarted: then all of `now` is new). */
+export function spendSince(now: Spend, base: Spend): Spend {
+	const t = now.tokens, b = base.tokens;
+	const restarted = t.input < b.input || t.output < b.output || t.cacheRead < b.cacheRead || t.cacheWrite < b.cacheWrite;
+	const tokens = restarted ? t : { input: t.input - b.input, output: t.output - b.output, cacheRead: t.cacheRead - b.cacheRead, cacheWrite: t.cacheWrite - b.cacheWrite };
+	const usd = now.usd === undefined ? undefined : base.usd === undefined || now.usd < base.usd ? now.usd : now.usd - base.usd;
+	return usd === undefined ? { tokens } : { tokens, usd };
+}
+
+/** Counts a Claude transcript's tokens, line by line, each assistant message once. */
+export class ClaudeLedger {
+	tokens: Tokens = { ...ZERO };
+	model?: string;
+	private readonly seen = new Set<string>();
+
+	feed(lines: string[]) {
+		for (const l of lines) {
+			if (!l.includes('"usage"')) {
+				continue; // most lines are tool output: skip them before parsing
+			}
+			let e: { type?: string; requestId?: string; message?: { id?: string; model?: string; usage?: Record<string, unknown> } };
+			try {
+				e = JSON.parse(l);
+			} catch {
+				continue;
+			}
+			const u = e.type === 'assistant' ? obj(e.message?.usage) : undefined;
+			if (!u) {
+				continue;
+			}
+			const id = e.message?.id ?? e.requestId;
+			if (id) {
+				if (this.seen.has(id)) {
+					continue;
+				}
+				this.seen.add(id);
+			}
+			// Claude Code writes a stand-in message with the model "<synthetic>" for errors it shows: it cost nothing.
+			if (e.message?.model && e.message.model !== '<synthetic>') {
+				this.model = e.message.model;
+			}
+			this.tokens = addTokens(this.tokens, { input: num(u.input_tokens), output: num(u.output_tokens), cacheRead: num(u.cache_read_input_tokens), cacheWrite: num(u.cache_creation_input_tokens) });
+		}
+	}
+}
+
+/** The newest running total in these Codex rollout lines, if any. */
+export function codexTotals(lines: string[]): Tokens | undefined {
+	for (let i = lines.length - 1; i >= 0; i--) {
+		if (!lines[i].includes('token_count')) {
+			continue;
+		}
+		let e: { type?: string; payload?: Record<string, unknown> };
+		try {
+			e = JSON.parse(lines[i]);
+		} catch {
+			continue;
+		}
+		const p = obj(e.payload);
+		const total = obj(obj(p?.info)?.total_token_usage);
+		if (e.type === 'event_msg' && p?.type === 'token_count' && total) {
+			const cached = num(total.cached_input_tokens);
+			return { input: Math.max(0, num(total.input_tokens) - cached), output: num(total.output_tokens), cacheRead: cached, cacheWrite: 0 };
+		}
+	}
+	return undefined;
+}
+
+/** The dollars in Claude Code's status-line JSON (`cost.total_cost_usd`), when it sent them. */
+export function statusUsd(payload: unknown): number | undefined {
+	const v = obj(obj(payload)?.cost)?.total_cost_usd;
+	return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined;
+}
+
+/** Reads a growing file from where it stopped last time, a chunk at a time, and keeps a cut-off last line for next time. */
+export class TranscriptReader {
+	private offset = 0;
+	private rest = '';
+	private busy: Promise<string[]> | undefined;
+
+	constructor(readonly file: string, private readonly chunk = 4 << 20) { }
+
+	/** The complete lines added since the last call. Calls overlap safely: they share one read. */
+	read(): Promise<string[]> {
+		this.busy ??= this.readNew().finally(() => this.busy = undefined);
+		return this.busy;
+	}
+
+	private async readNew(): Promise<string[]> {
+		let h: fs.FileHandle;
+		try {
+			h = await fs.open(this.file, 'r');
+		} catch {
+			return []; // not written yet
+		}
+		try {
+			const { size } = await h.stat();
+			if (size < this.offset) {
+				// Shorter than before: a new file in its place. Start over.
+				this.offset = 0;
+				this.rest = '';
+			}
+			const out: string[] = [];
+			const buf = Buffer.alloc(Math.min(this.chunk, Math.max(1, size - this.offset)));
+			while (this.offset < size) {
+				const { bytesRead } = await h.read(buf, 0, Math.min(buf.length, size - this.offset), this.offset);
+				if (!bytesRead) {
+					break;
+				}
+				this.offset += bytesRead;
+				// A chunk can end inside a multibyte character: cut at the last newline, whose bytes are never part of one.
+				const slice = buf.subarray(0, bytesRead);
+				const nl = slice.lastIndexOf(0x0a);
+				if (nl < 0) {
+					this.rest += slice.toString('utf8');
+					continue;
+				}
+				const text = this.rest + slice.toString('utf8', 0, nl);
+				this.rest = slice.toString('utf8', nl + 1);
+				out.push(...text.split('\n').filter(Boolean));
+			}
+			return out;
+		} finally {
+			await h.close();
+		}
+	}
+}
+
+/**
+ * One session's running cost: its transcript, the totals so far, the dollars the CLI last reported and the
+ * baseline of the current prompt.
+ */
+export class CostTracker {
+	private readonly ledger = new ClaudeLedger();
+	private codex: Tokens | undefined;
+	private reader: TranscriptReader | undefined;
+	private usd: number | undefined;
+	private base: Spend | undefined;
+
+	constructor(readonly cli: 'claude' | 'codex') { }
+
+	/** Reads what the transcript gained since last time (a new path starts over). */
+	async update(file: string | undefined) {
+		if (!file) {
+			return;
+		}
+		if (this.reader?.file !== file) {
+			this.reader = new TranscriptReader(file);
+		}
+		const lines = await this.reader.read();
+		if (this.cli === 'codex') {
+			this.codex = codexTotals(lines) ?? this.codex;
+		} else {
+			this.ledger.feed(lines);
+		}
+	}
+
+	/** Claude's status line said what the CLI has spent so far. */
+	setUsd(usd: number | undefined) {
+		if (usd !== undefined) {
+			this.usd = usd;
+		}
+	}
+
+	get total(): Spend {
+		const tokens = this.cli === 'codex' ? this.codex ?? { ...ZERO } : this.ledger.tokens;
+		return this.usd === undefined ? { tokens } : { tokens, usd: this.usd };
+	}
+
+	/** A prompt was sent: what comes after it is that prompt's. */
+	markPrompt() {
+		this.base = this.total;
+	}
+
+	/** Undefined until the session has used a token. */
+	snapshot(): SessionCost | undefined {
+		const session = this.total;
+		if (!totalTokens(session.tokens) && session.usd === undefined) {
+			return undefined;
+		}
+		return {
+			session,
+			prompt: this.base ? spendSince(session, this.base) : session,
+			...(session.usd !== undefined ? { usdSource: 'Claude Code\'s own estimate at API prices, since this CLI started' } : {}),
+			scope: this.cli === 'codex' ? 'Codex session' : 'main agent (subagents not included)',
+		};
+	}
+}
