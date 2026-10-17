@@ -375,5 +375,8 @@
   },
   "devDependencies": {
     "esbuild": "0.28.1"
+  },
+  "dependencies": {
+    "jsonc-parser": "3.3.1"
   }
 }

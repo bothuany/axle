@@ -9,5 +9,7 @@ await build({
 	outfile: 'out/extension.js',
 	external: ['vscode'],
 	sourcemap: true,
+	// jsonc-parser's UMD entry requires its parts at run time, which a bundle cannot follow: take its ES module build.
+	mainFields: ['module', 'main'],
 	logLevel: 'info',
 })
