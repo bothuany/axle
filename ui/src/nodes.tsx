@@ -95,6 +95,12 @@ function splitLabel(label: string) {
   return at > 0 ? { owner: clean.slice(0, at), member: clean.slice(at + 1) } : { owner: '', member: clean }
 }
 
+/**
+ * Edits discarded with Esc or Discard, by card (file and first line), kept while the canvas lives: one Esc discards at
+ * once, and opening the same card again offers them back, so a stray Esc costs a click instead of the work.
+ */
+const discarded = new Map<string, { code: string; text: string }>()
+
 /** Monaco on the card. Lives in a fixed-zoom canvas (see webview) so clicks land where they look. */
 function CardEditor({ nodeKey, code, file, startLine, endLine, caret, onSave, onCancel }: { nodeKey: string; code: string; file: string | null; startLine: number; endLine: number; caret?: Caret; onSave: (text: string, session: string) => Promise<string | undefined>; onCancel: () => void }) {
   const host = useRef<HTMLDivElement>(null)
@@ -102,7 +108,9 @@ function CardEditor({ nodeKey, code, file, startLine, endLine, caret, onSave, on
   const [error, setError] = useState<string>()
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
-  const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const keptKey = `${file}:${startLine}`
+  // Only what was discarded from this same text: after a save or an outside change the old edit no longer applies.
+  const [kept, setKept] = useState(() => (discarded.get(keptKey)?.code === code ? discarded.get(keptKey)!.text : undefined))
   const inFlight = useRef(false)
   // One id per opening of this editor: the host shows the card's text to the language servers under it, and puts the file back when it closes.
   const session = useRef(globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).current
@@ -114,7 +122,9 @@ function CardEditor({ nodeKey, code, file, startLine, endLine, caret, onSave, on
     inFlight.current = true
     setSaving(true)
     try {
-      setError(await onSave(ed.getValue(), session))
+      const failed = await onSave(ed.getValue(), session)
+      if (!failed) discarded.delete(keptKey)
+      setError(failed)
     } catch (e) {
       // The host rejected the request (a failed write): say so instead of leaving "Saving…" on the button.
       setError(String((e as Error).message ?? e))
@@ -125,8 +135,20 @@ function CardEditor({ nodeKey, code, file, startLine, endLine, caret, onSave, on
   }
   const saveRef = useRef(save)
   saveRef.current = save
-  const confirmRef = useRef(confirmDiscard)
-  confirmRef.current = confirmDiscard
+  const discard = () => {
+    const text = editor.current?.getValue()
+    if (text !== undefined && text !== code) discarded.set(keptKey, { code, text })
+    onCancel()
+  }
+  const discardRef = useRef(discard)
+  discardRef.current = discard
+  const restore = () => {
+    if (kept === undefined) return
+    editor.current?.setValue(kept)
+    editor.current?.focus()
+    discarded.delete(keptKey)
+    setKept(undefined)
+  }
 
   useEffect(() => {
     // Suggestion, hover and parameter popups live outside the card: it is inside a transformed canvas, where fixed positions would be off.
@@ -172,17 +194,11 @@ function CardEditor({ nodeKey, code, file, startLine, endLine, caret, onSave, on
       overflowWidgetsDomNode: overflow,
     }))
     const unbind = bindEditor(ed, { session, key: nodeKey, file: file!, startLine, endLine, original: code })
-    ed.onDidChangeModelContent(() => {
-      setDirty(ed.getValue() !== code)
-      setConfirmDiscard(false)
-    })
+    ed.onDidChangeModelContent(() => setDirty(ed.getValue() !== code))
     ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveRef.current())
-    // Esc leaves at once when nothing changed; with changes it asks once, so a stray Esc never loses work.
-    // Not while a suggest or find widget is open: Esc closes that widget first.
-    ed.addCommand(monaco.KeyCode.Escape, () => {
-      if (ed.getValue() === code || confirmRef.current) onCancel()
-      else setConfirmDiscard(true)
-    }, '!suggestWidgetVisible && !findWidgetVisible')
+    // Esc leaves at once, discarding changes (kept, see `discarded`). Not while a suggest or find widget is open:
+    // Esc closes that widget first.
+    ed.addCommand(monaco.KeyCode.Escape, () => discardRef.current(), '!suggestWidgetVisible && !findWidgetVisible')
     if (caret) {
       const pos = { lineNumber: Math.max(1, caret.line - startLine + 1), column: caret.column }
       ed.setPosition(pos)
@@ -204,15 +220,18 @@ function CardEditor({ nodeKey, code, file, startLine, endLine, caret, onSave, on
       <div ref={host} className="card-editor-host" />
       <div className="card-editor-bar">
         {error ? (
-          <span className="card-editor-msg err">{error}</span>
-        ) : confirmDiscard ? (
-          <span className="card-editor-msg warn">Unsaved changes. Press Esc again to discard them.</span>
+          <span className="card-editor-msg err" title={error}>{error}</span>
+        ) : kept !== undefined && !dirty ? (
+          <>
+            <span className="card-editor-msg warn" title="The edit you discarded here last time">Discarded edit kept</span>
+            <button className="btn ghost" onClick={restore}>Restore</button>
+          </>
         ) : (
-          <span className="card-editor-msg">
+          <span className="card-editor-msg hint">
             <kbd>{/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘S' : 'Ctrl+S'}</kbd> save <kbd>Esc</kbd> {dirty ? 'discard' : 'close'}
           </span>
         )}
-        <button className="btn ghost" onClick={onCancel}>{dirty ? 'Discard' : 'Close'}</button>
+        <button className="btn ghost" onClick={discard}>{dirty ? 'Discard' : 'Close'}</button>
         <button className="btn solid" disabled={saving || !dirty} onClick={() => saveRef.current()}>
           {saving ? 'Saving…' : 'Save'}
         </button>

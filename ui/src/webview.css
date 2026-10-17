@@ -139,7 +139,11 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .card-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .card-editor-host { flex: 1; min-height: 0; }
 .card-editor-bar { flex: none; height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 11px; border-top: 1px solid var(--fl-line); border-radius: 0 0 8px 8px; }
-.card-editor-msg { margin-right: auto; color: var(--fl-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-editor-msg { margin-right: auto; min-width: 0; color: var(--fl-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The buttons always fit; in a narrow card the shortcut hint goes rather than being cut in the middle of a word. */
+.card-editor-bar { container-type: inline-size; }
+.card-editor-bar .btn { flex: none; }
+@container (max-width: 300px) { .card-editor-msg.hint { visibility: hidden; } }
 .card-editor-msg kbd { margin-left: 4px; }
 .card-editor-msg kbd:first-child { margin-left: 0; }
 .card-editor-msg.err { color: var(--fl-del); }
