@@ -8,6 +8,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { globList } from './effective';
 import { projectGaps, type Gap } from './gaps';
 import { gitIgnoredOf } from './ignored';
 
@@ -35,6 +36,8 @@ export interface HarnessItem {
 	hook?: { event: string; matcher?: string; command: string; settingsFile: string };
 	/** Permission rules: allow / ask / deny. */
 	rule?: { effect: 'allow' | 'ask' | 'deny'; pattern: string };
+	/** Path-scoped rules: the globs they apply to (empty for an always-on rule). */
+	paths?: string[];
 	agents: string[];
 }
 
@@ -280,7 +283,7 @@ async function rulesIn(items: HarnessItem[], root: string, dir: string, scope: S
 		const text = await read(file) ?? '';
 		const fm = frontMatter(text);
 		const always = fm.alwaysApply === 'true' || !fm[globKey];
-		items.push({ kind: 'rules', scope, label: path.relative(dir, file), detail: always ? 'Every file' : `Files matching ${fm[globKey]}`, file, tokens: always ? tokensOf(text) : undefined, issues: await brokenPaths(file, text, root), agents });
+		items.push({ kind: 'rules', scope, label: path.relative(dir, file), detail: always ? 'Every file' : `Files matching ${fm[globKey]}`, file, tokens: always ? tokensOf(text) : undefined, issues: await brokenPaths(file, text, root), agents, paths: always ? [] : globList(fm[globKey]) });
 	}
 }
 
