@@ -30,12 +30,13 @@ test('a flow becomes a board: one node per card, edges by kind, files kept for n
 		edge(card('i', 'OrderServiceImpl.place', 'method', '/w/Impl.java', 20, [edge(repo), edge(shared)]), 'impl'),
 		edge(card('d', 'orders', 'db', null, 0, [], { schema: { writes: true } }), 'db'),
 		edge(card('h', 'create_invoice', 'controller', '/w/main.py', 7), 'http'),
+		edge(card('m', 'OrderListener.onOrder', 'controller', '/w/Listener.java', 4), 'message'),
 		edge(card('s2', 'Audit.log', 'method', '/w/Audit.java', 2)), // the same method reached again
 	])
 	const board = b.flowToBoard(root, 'POST /orders')
 	assert.equal(board.kind, 'flow')
 	assert.equal(board.title, 'POST /orders')
-	assert.deepEqual(board.nodes.map(n => n.label), ['OrderController.place', 'OrderServiceImpl.place', 'OrderRepo.save', 'Audit.log', 'orders', 'create_invoice'])
+	assert.deepEqual(board.nodes.map(n => n.label), ['OrderController.place', 'OrderServiceImpl.place', 'OrderRepo.save', 'Audit.log', 'orders', 'create_invoice', 'OrderListener.onOrder'])
 	assert.deepEqual(board.nodes[0], { id: 'n1', label: 'OrderController.place', kind: 'controller', file: '/w/Ctrl.java', line: 10 })
 	assert.equal(board.nodes.find(n => n.label === 'orders').kind, 'entity')
 	const kinds = board.edges.map(e => `${board.nodes.find(n => n.id === e.from).label}>${board.nodes.find(n => n.id === e.to).label}:${e.kind}${e.label ? ':' + e.label : ''}`)
@@ -45,6 +46,7 @@ test('a flow becomes a board: one node per card, edges by kind, files kept for n
 		'OrderServiceImpl.place>Audit.log:calls',
 		'OrderController.place>orders:writes',
 		'OrderController.place>create_invoice:calls:HTTP?',
+		'OrderController.place>OrderListener.onOrder:calls:topic?',
 		'OrderController.place>Audit.log:calls',
 	])
 	// What an agent's board must pass, a pinned one passes too.

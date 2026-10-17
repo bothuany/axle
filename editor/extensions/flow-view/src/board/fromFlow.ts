@@ -50,6 +50,9 @@ export function flowToBoard(root: FlowNode, title: string): BoardSpec {
 			} else if (c.edgeKind === 'http') {
 				edge.kind = 'calls';
 				edge.label = 'HTTP?';
+			} else if (c.edgeKind === 'message') {
+				edge.kind = 'calls';
+				edge.label = 'topic?';
 			} else {
 				edge.kind = 'calls';
 			}
