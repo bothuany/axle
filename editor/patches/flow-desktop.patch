@@ -31,11 +31,135 @@ diff --git a/src/vs/code/electron-main/app.ts b/src/vs/code/electron-main/app.ts
  		// Native host (main & shared process)
  		this.nativeHostMainService = accessor.get(INativeHostMainService);
  		const nativeHostChannel = ProxyChannel.fromService(this.nativeHostMainService, disposables, {
+diff --git a/src/vs/platform/axleDesktop/common/axleAvatars.ts b/src/vs/platform/axleDesktop/common/axleAvatars.ts
+new file mode 100644
+--- /dev/null
++++ b/src/vs/platform/axleDesktop/common/axleAvatars.ts
+@@ -0,0 +1,119 @@
++/*---------------------------------------------------------------------------------------------
++ *  Axle: the agent avatars (themes "gyro" and "pixel"), drawn by the Agents dock and by the
++ *  desktop status overlay. This file is copied byte for byte into the core patch
++ *  (src/vs/platform/axleDesktop/common/axleAvatars.ts in editor/patches/flow-desktop.patch);
++ *  test/arch/avatars.test.mjs fails when the two differ. It imports nothing for that reason.
++ *
++ *  AVATAR_SCRIPT defines axleAvatar(kind, cli, state, context, size) in the page it is put in.
++ *  Every argument is checked against a fixed list or clamped to a number, and the SVG it returns
++ *  is built from constants only: no text from an agent ever reaches it.
++ *--------------------------------------------------------------------------------------------*/
++
++/** The animations the avatars use; every class starts with ax- so a page's own styles cannot collide. */
++export const AVATAR_CSS = String.raw`
++svg.ax{overflow:visible;display:block;flex:none}
++.ax-v{transform-box:fill-box;transform-origin:center}
++.ax-sp{transform-box:view-box;transform-origin:16px 16px}
++@keyframes ax-tumble{0%,100%{transform:scaleY(.18)}50%{transform:scaleY(1)}}
++@keyframes ax-spin{to{transform:rotate(360deg)}}
++@keyframes ax-br{0%,100%{transform:scale(1)}50%{transform:scale(1.16)}}
++@keyframes ax-pulse{0%{opacity:.8;transform:scale(1)}70%,100%{opacity:0;transform:scale(1.32)}}
++@keyframes ax-step{0%,49%{transform:translateX(0)}50%,100%{transform:translateX(1px)}}
++@keyframes ax-stepb{0%,49%{transform:translateY(0)}50%,100%{transform:translateY(-1px)}}
++@keyframes ax-a{0%,49%{opacity:1}50%,100%{opacity:0}}
++@keyframes ax-b{0%,49%{opacity:0}50%,100%{opacity:1}}
++@keyframes ax-zf{0%,100%{opacity:.25}30%,60%{opacity:1}}
++.ax-tm{animation:ax-tumble 2.8s ease-in-out infinite}
++.ax-sn{animation:ax-spin 1.8s linear infinite}
++.ax-cb{animation:ax-br 3s ease-in-out infinite}
++.ax-pl{animation:ax-pulse 2s ease-out infinite}
++.ax-pl-approval{animation-duration:1.5s}.ax-pl-question{animation-duration:2.6s}
++.ax-pw{animation:ax-stepb .6s steps(1) infinite}.ax-pk{animation:ax-step .9s steps(1) infinite}.ax-pd{animation:ax-stepb .5s steps(1) infinite}
++.ax-pa{animation:ax-a .8s steps(1) infinite}.ax-pb{animation:ax-b .8s steps(1) infinite}
++.ax-z1{animation:ax-zf 2.4s infinite}.ax-z2{animation:ax-zf 2.4s .4s infinite}.ax-z3{animation:ax-zf 2.4s .8s infinite}
++@media (prefers-reduced-motion:reduce){svg.ax *{animation:none!important}}
++`;
++
++/** Plain JavaScript for a page (no template literals in it, so it can sit inside one). */
++export const AVATAR_SCRIPT = String.raw`
++(function () {
++	var COL = { claude: '#ff9d7d', codex: '#7fe0d6', custom: '#c6a8ff' };
++	var AC = { approval: '#ffb454', question: '#c58cff', error: '#ff6b6b', done: '#5fe0a1', idle: '#5a5a62' };
++	var STATES = ['working', 'approval', 'question', 'error', 'done', 'idle'];
++	function n(v) { return Math.round(v * 100) / 100; }
++	function stateColor(cli, s) { return s === 'working' ? COL[cli] : AC[s]; }
++	function arcColor(p, c) { return p >= 85 ? AC.error : p >= 65 ? AC.approval : c; }
++
++	function gyro(cli, s, p, z) {
++		var a = stateColor(cli, s), R = 11, o = '', core;
++		var still = s === 'approval' || s === 'question' || s === 'error';
++		if (still) {
++			o = '<circle cx="16" cy="16" r="' + R + '" fill="none" stroke="' + a + '" stroke-width="1.4"/>'
++				+ '<circle class="ax-v ax-pl ax-pl-' + s + '" cx="16" cy="16" r="' + R + '" fill="none" stroke="' + a + '" stroke-width="1.2"/>';
++		} else {
++			[30, 150].forEach(function (ang, i) {
++				if (s === 'done' && i === 1) { return; }
++				var cls = '', st = '', sat = '';
++				if (s === 'working') { cls = 'ax-tm'; st = 'animation-delay:-' + (i * 1.4) + 's'; }
++				else if (s === 'done') { st = 'transform:scaleY(1)'; }
++				else { st = 'transform:scaleY(.1)'; }
++				if (s === 'working' && i === 0) { sat = '<g class="ax-sp ax-sn"><circle cx="16" cy="' + (16 - R) + '" r="1.5" fill="' + a + '"/></g>'; }
++				o += '<g transform="rotate(' + ang + ' 16 16)"><g class="ax-v ' + cls + '" style="' + st + '"><circle cx="16" cy="16" r="' + R + '" fill="none" stroke="' + (s === 'idle' ? '#45454c' : a) + '" stroke-width="1.3"/>' + sat + '</g></g>';
++			});
++		}
++		if (s === 'done') { core = '<circle cx="16" cy="16" r="5.4" fill="' + a + '"/><path d="M13.6 16.2l1.8 1.8 3.2-3.6" stroke="#06210f" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'; }
++		else if (s === 'question') { core = '<circle cx="16" cy="16" r="4.8" fill="' + a + '"/><path d="M14.5 14.7a1.5 1.5 0 1 1 2.2 1.3c-.5.3-.7.6-.7 1.1v.3" fill="none" stroke="#000" stroke-width="1.3" stroke-linecap="round"/><circle cx="16" cy="18.6" r=".75" fill="#000"/>'; }
++		else if (s === 'error') { core = '<circle cx="16" cy="16" r="4.6" fill="' + a + '"/><path d="M14.4 14.4l3.2 3.2M17.6 14.4l-3.2 3.2" stroke="#000" stroke-width="1.4" stroke-linecap="round"/>'; }
++		else if (s === 'approval') { core = '<circle cx="16" cy="16" r="4.8" fill="' + a + '"/><rect x="15.25" y="13.4" width="1.5" height="3.3" rx=".75" fill="#000"/><circle cx="16" cy="18.3" r=".8" fill="#000"/>'; }
++		else if (s === 'idle') { core = '<circle class="ax-v ax-cb" cx="16" cy="16" r="2.6" fill="#5a5a62"/>'; }
++		else { core = '<circle class="ax-v ax-cb" cx="16" cy="16" r="3.8" fill="' + a + '"/>'; }
++		// The outer arc is how full the context window is; the satellite at its tip is the agent's colour.
++		var Rg = 14.6, C = 2 * Math.PI * Rg, known = typeof p === 'number', q = known ? p : 0;
++		var arcCol = s === 'working' ? arcColor(q, COL[cli]) : s === 'idle' ? '#55555d' : a;
++		var gauge = '<circle cx="16" cy="16" r="' + Rg + '" fill="none" stroke="#1d1d23" stroke-width="1.2"/>'
++			+ (known && q > 0 ? '<circle cx="16" cy="16" r="' + Rg + '" fill="none" stroke="' + arcCol + '" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="' + n(C * q / 100) + ' ' + n(C) + '" transform="rotate(-90 16 16)"/>' : '');
++		var ang = (-90 + 360 * q / 100) * Math.PI / 180;
++		var em = '<circle cx="' + n(16 + Rg * Math.cos(ang)) + '" cy="' + n(16 + Rg * Math.sin(ang)) + '" r="1.7" fill="' + COL[cli] + '" stroke="#000" stroke-width=".9" paint-order="stroke"/>';
++		return '<svg class="ax" width="' + z + '" height="' + z + '" viewBox="0 0 32 32" aria-hidden="true">' + gauge + o + core + em + '</svg>';
++	}
++
++	var SPRITES = {
++		claude: ['.X.......X.', '.XX.....XX.', '.XXXXXXXXX.', 'XXXXXXXXXXX', 'XXXXXXXXXXX', 'XXXXXXXXXXX', 'XXXXXXXXXXX', '.XXXXXXXXX.', '..XXXXXXX..'],
++		codex: ['..XX...XX..', '..XX...XX..', '..XX...XX..', '.XXXXXXXXX.', 'XXXXXXXXXXX', 'XXXXXXXXXXX', 'XXXXXXXXXXX', '.XXXXXXXXX.', '..XXXXXXX..'],
++		custom: ['.XX.....XX.', 'XXXX...XXXX', '.XXXXXXXXX.', 'XXXXXXXXXXX', 'XXXXXXXXXXX', 'XXXXXXXXXXX', 'XXXXXXXXXXX', '.XXXXXXXXX.', '..XXXXXXX..']
++	};
++	function R(x, y, w, h, f) { return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="' + f + '"/>'; }
++	function P(list, f) { return list.map(function (q) { return R(q[0], q[1], 1, 1, f); }).join(''); }
++	function zz(x, y, u, cls) {
++		var m = ['XXXX', '..X.', '.X..', 'XXXX'], o = '';
++		m.forEach(function (r, j) { for (var i = 0; i < 4; i++) { if (r[i] === 'X') { o += R(n(x + i * u), n(y + j * u), u, u, '#8b8b95'); } } });
++		return '<g class="' + cls + '">' + o + '</g>';
++	}
++	function pixel(cli, s, z) {
++		var col = COL[cli], body = '', d = '#1b1620', e = '', ey = cli === 'codex' ? 5 : 4, deco = '';
++		SPRITES[cli].forEach(function (r, y) { for (var x = 0; x < 11; x++) { if (r[x] === 'X') { body += R(x, y, 1, 1, col); } } });
++		var blush = R(1, ey + 2, 1, 1, '#ff8fa3') + R(9, ey + 2, 1, 1, '#ff8fa3');
++		if (s === 'working') { e = '<g class="ax-pk">' + R(3, ey, 1, 2, d) + R(7, ey, 1, 2, d) + '</g>'; }
++		else if (s === 'approval') { e = R(3, ey, 2, 2, d) + R(6, ey, 2, 2, d) + R(3, ey, 1, 1, '#fff') + R(6, ey, 1, 1, '#fff') + R(5, ey + 3, 1, 1, d); }
++		else if (s === 'question') { e = R(3, ey, 1, 2, d) + R(7, ey - 1, 2, 3, d) + R(7, ey - 1, 1, 1, '#fff'); }
++		else if (s === 'error') { e = P([[3, ey - 1], [4, ey], [3, ey + 1], [7, ey - 1], [6, ey], [7, ey + 1]], d) + R(5, ey + 3, 1, 1, d); }
++		else if (s === 'done') { e = P([[2, ey + 1], [3, ey], [4, ey + 1], [6, ey + 1], [7, ey], [8, ey + 1]], d) + R(5, ey + 3, 1, 1, d); }
++		else { e = R(3, ey + 1, 2, 1, d) + R(6, ey + 1, 2, 1, d); }
++		if (s === 'approval') { deco = R(10, -3, 1, 2, AC.approval) + R(10, 0, 1, 1, AC.approval); }
++		else if (s === 'question') { deco = R(9, -3, 2, 1, AC.question) + R(10, -2, 1, 1, AC.question) + R(9, -1, 1, 1, AC.question) + R(9, 1, 1, 1, AC.question); }
++		else if (s === 'done') { deco = P([[13, -4], [12, -3], [11, -2], [9, -3], [10, -2]], AC.done); }
++		else if (s === 'error') { deco = '<g class="ax-pa">' + R(1, -2, 1, 1, AC.error) + R(9, -1, 1, 1, AC.error) + '</g><g class="ax-pb">' + R(9, -2, 1, 1, AC.error) + R(1, -1, 1, 1, AC.error) + '</g>'; }
++		else if (s === 'idle') { deco = zz(7.6, -2.2, 0.42, 'ax-z1') + zz(9.6, -3.8, 0.52, 'ax-z2') + zz(11.8, -5.8, 0.62, 'ax-z3'); }
++		var anim = s === 'working' ? 'ax-pw' : s === 'done' ? 'ax-pd' : '';
++		return '<svg class="ax" width="' + z + '" height="' + z + '" viewBox="-1 -6 15 16" shape-rendering="crispEdges" aria-hidden="true"><g transform="translate(0 1)"><g class="' + anim + '">' + body + blush + e + '</g></g>' + deco + '</svg>';
++	}
++
++	window.axleAvatar = function (kind, cli, state, context, size) {
++		var c = Object.prototype.hasOwnProperty.call(COL, cli) ? cli : 'custom';
++		var s = STATES.indexOf(state) >= 0 ? state : 'idle';
++		var z = typeof size === 'number' && isFinite(size) ? Math.min(96, Math.max(12, Math.round(size))) : 24;
++		var p = typeof context === 'number' && isFinite(context) ? Math.min(100, Math.max(0, context)) : undefined;
++		return kind === 'pixel' ? pixel(c, s, z) : gyro(c, s, p, z);
++	};
++})();
++`;
 diff --git a/src/vs/platform/axleDesktop/common/axleDesktop.ts b/src/vs/platform/axleDesktop/common/axleDesktop.ts
 new file mode 100644
 --- /dev/null
 +++ b/src/vs/platform/axleDesktop/common/axleDesktop.ts
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,70 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Axle: the desktop agent status overlay, shared by the main process (which owns the window) and
 + *  the workbench (which pushes each window's agents). Axle's Agents extension builds the model
@@ -71,6 +195,8 @@ new file mode 100644
 +	readonly opacity: number;
 +	readonly theme: 'black' | 'editor' | 'dark' | 'light';
 +	readonly autoHide: { readonly noAgents: boolean; readonly axleFocused: boolean };
++	/** How each agent is drawn (axleAvatars.ts). */
++	readonly avatar: 'gyro' | 'pixel';
 +}
 +
 +/** CSS colours, resolved from the window's colour theme when the overlay follows it. */
@@ -108,7 +234,7 @@ diff --git a/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts
 new file mode 100644
 --- /dev/null
 +++ b/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts
-@@ -0,0 +1,502 @@
+@@ -0,0 +1,510 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Axle: the desktop agent status overlay. One small always-on-top window for the whole app that
 + *  draws the agents every Axle window pushes (merged per window, like the Dock badge).
@@ -128,6 +254,7 @@ new file mode 100644
 +import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 +import { isMacintosh } from '../../../base/common/platform.js';
 +import { ILogService } from '../../log/common/log.js';
++import { AVATAR_CSS, AVATAR_SCRIPT } from '../common/axleAvatars.js';
 +import { IAxleOverlayColors, IAxleOverlayItem, IAxleOverlayOptions, IAxleOverlayService, IAxleOverlayState } from '../common/axleDesktop.js';
 +
 +/** What the page prefixes its messages with, so an unrelated console line is never taken for one. */
@@ -140,7 +267,7 @@ new file mode 100644
 +	light: { background: 'rgba(250, 250, 252, 0.96)', foreground: '#1f2128', muted: '#5d6170', border: 'rgba(0, 0, 0, 0.12)', working: '#3b5bdb', approval: '#d9480f', question: '#8e44ad', error: '#d63031', done: '#2b8a3e', idle: '#868e96' },
 +};
 +
-+const DEFAULT_OPTIONS: IAxleOverlayOptions = { position: 'top-center', display: 'axle', style: 'pill', size: 'medium', opacity: 0.95, theme: 'black', autoHide: { noAgents: true, axleFocused: false } };
++const DEFAULT_OPTIONS: IAxleOverlayOptions = { position: 'top-center', display: 'axle', style: 'pill', size: 'medium', opacity: 0.95, theme: 'black', autoHide: { noAgents: true, axleFocused: false }, avatar: 'gyro' };
 +
 +interface IWindowAgents {
 +	readonly state: IAxleOverlayState;
@@ -177,6 +304,7 @@ new file mode 100644
 +		opacity: Math.min(1, Math.max(0.3, finite(o?.opacity) ?? DEFAULT_OPTIONS.opacity)),
 +		theme: oneOf(o?.theme, ['black', 'editor', 'dark', 'light'], DEFAULT_OPTIONS.theme),
 +		autoHide: { noAgents: o?.autoHide?.noAgents !== false, axleFocused: o?.autoHide?.axleFocused === true },
++		avatar: oneOf(o?.avatar, ['gyro', 'pixel'], DEFAULT_OPTIONS.avatar),
 +	};
 +	const c = raw?.counts;
 +	const counts = c && { needs: finite(c.needs) ?? 0, working: finite(c.working) ?? 0, done: finite(c.done) ?? 0 };
@@ -316,7 +444,7 @@ new file mode 100644
 +		if (!this.loaded) {
 +			return; // did-finish-load renders again
 +		}
-+		const model = { items, counts: showCounts ? counts : undefined, style: options.style, size: options.size, opacity: options.opacity, colors, notch, attached };
++		const model = { items, counts: showCounts ? counts : undefined, style: options.style, size: options.size, opacity: options.opacity, colors, notch, attached, avatar: options.avatar };
 +		// JSON is a JavaScript expression: the model arrives as data, never as code.
 +		overlay.webContents.executeJavaScript(`window.axleRender(${JSON.stringify(model)})`).catch(e => this.logService.warn(`[axle overlay] render failed: ${e}`));
 +		this.place();
@@ -466,8 +594,8 @@ new file mode 100644
 + * agent list while the pointer is over it, and reports a click on an agent by the key it was given. All text is set
 + * with textContent.
 + *
-+ * Design: a black island that hangs from the top edge. Collapsed it is one dot per agent (working ones breathe, the
-+ * ones that need you glow), the most urgent agent's name and verb, and its context ring and elapsed time. Hover opens a
++ * Design: a black island that hangs from the top edge. Collapsed it is one avatar per agent (axleAvatars.ts: the
++ * theme the user picked), the most urgent agent's name and verb, and its context and elapsed time. Hover opens a
 + * quiet list with the same facts for every agent.
 + */
 +const PAGE = /* html */ `<!doctype html><html><head><meta charset="utf-8">
@@ -475,9 +603,9 @@ new file mode 100644
 +<title>Axle Agents</title>
 +<style>
 +html, body { margin: 0; background: transparent; overflow: hidden; cursor: default; -webkit-user-select: none; user-select: none; }
-+body { font: 12px/1.3 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: 0.005em; color: var(--foreground); --dot: 7px; --ring: 14px; }
-+body.size-small { font-size: 11px; --dot: 6px; --ring: 12px; }
-+body.size-large { font-size: 14px; --dot: 9px; --ring: 17px; }
++body { font: 12px/1.3 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: 0.005em; color: var(--foreground); }
++body.size-small { font-size: 11px; }
++body.size-large { font-size: 14px; }
 +#root { position: absolute; top: 0; left: 0; width: max-content; padding: 6px 8px 10px; }
 +body.attached #root { padding-top: 0; }
 +.box { display: flex; align-items: center; gap: 0.85em; padding: 0.55em 1.1em; background: var(--background); color: var(--foreground); border: 1px solid var(--border); border-radius: 999px; animation: in 140ms ease-out; }
@@ -485,30 +613,36 @@ new file mode 100644
 +.box.list { flex-direction: column; align-items: stretch; gap: 0.1em; padding: 0.7em 0.5em 0.5em; border-radius: 1.2em; min-width: 21em; }
 +body.attached .box.list { border-radius: 0 0 1.5em 1.5em; }
 +@keyframes in { from { opacity: 0.4; } }
-+.dots { display: flex; gap: 0.4em; align-items: center; }
-+.dot { width: var(--dot); height: var(--dot); border-radius: 50%; flex: none; background: var(--idle); }
-+.dot.working { background: var(--working); animation: breathe 2.2s ease-in-out infinite; }
-+.dot.approval { background: var(--approval); box-shadow: 0 0 0.9em color-mix(in srgb, var(--approval) 70%, transparent); }
-+.dot.question { background: var(--question); box-shadow: 0 0 0.9em color-mix(in srgb, var(--question) 70%, transparent); }
-+.dot.error { background: var(--error); box-shadow: 0 0 0.9em color-mix(in srgb, var(--error) 70%, transparent); }
-+.dot.done { background: var(--done); }
-+@keyframes breathe { 50% { opacity: 0.35; transform: scale(0.8); } }
-+@media (prefers-reduced-motion: reduce) { .dot.working { animation: none; } .box { animation: none; } }
++@media (prefers-reduced-motion: reduce) { .box { animation: none; } }
 +.sep { width: 1px; align-self: stretch; margin: 0.15em 0; background: var(--border); }
 +.lead { display: flex; align-items: baseline; gap: 0.55em; min-width: 0; }
 +.name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 12em; }
 +.verb { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 12em; }
 +.more { color: var(--muted); }
 +.meta { display: flex; align-items: center; gap: 0.6em; margin-left: auto; color: var(--muted); white-space: nowrap; }
-+.ring { width: var(--ring); height: var(--ring); border-radius: 50%; flex: none; background: conic-gradient(var(--c, var(--muted)) calc(var(--p) * 1%), color-mix(in srgb, var(--foreground) 14%, transparent) 0); -webkit-mask: radial-gradient(circle, transparent 52%, #000 56%); mask: radial-gradient(circle, transparent 52%, #000 56%); }
 +.head { display: flex; gap: 0.9em; padding: 0.1em 0.8em 0.55em; color: var(--muted); font-size: 0.82em; letter-spacing: 0.08em; text-transform: uppercase; }
 +.head b { color: var(--foreground); font-weight: 600; }
 +.row { display: flex; align-items: center; gap: 0.7em; padding: 0.5em 0.8em; border-radius: 0.8em; cursor: pointer; }
 +.row:hover { background: color-mix(in srgb, var(--foreground) 9%, transparent); }
 +.row .verb { flex: 1; }
 +.row.empty { cursor: default; color: var(--muted); }
++${AVATAR_CSS}
++.dots { display: flex; gap: 0.45em; align-items: center; }
++.avw { display: grid; place-items: center; flex: none; }
 +</style></head><body><div id="root"></div><script>
 +'use strict';
++${AVATAR_SCRIPT}
++const AV = { small: 18, medium: 22, large: 28 };
++// What the avatar shows: what the agent waits for, else its state.
++const avState = i => i.attention && i.attention !== 'done' ? i.attention : i.state === 'needs' ? 'approval' : i.state;
++// The page builds avatars from fixed lists only (axleAvatar checks every argument), so their SVG may go in as markup.
++function avatar(i) {
++	const w = el('span', 'avw');
++	const s = avState(i);
++	w.dataset.k = [i.key, data.avatar, i.cli, s, i.context ?? ''].join('|');
++	w.innerHTML = window.axleAvatar(data.avatar, i.cli, s, i.context, AV[data.size] || 22);
++	return w;
++}
 +const MARKER = ${JSON.stringify(MARKER)};
 +const root = document.getElementById('root');
 +const KIND = { approval: 'Needs approval', question: 'Asks you', error: 'Error', done: 'Done' };
@@ -522,7 +656,6 @@ new file mode 100644
 +	if (text !== undefined) { e.textContent = String(text); }
 +	return e;
 +};
-+const kind = i => i.attention || i.state;
 +const label = i => i.activity || (i.attention ? KIND[i.attention] : i.state === 'working' ? 'Working' : 'Idle');
 +const elapsed = since => {
 +	const s = Math.max(0, Math.floor((Date.now() - since) / 1000));
@@ -531,11 +664,9 @@ new file mode 100644
 +function meta(i) {
 +	const m = el('span', 'meta');
 +	if (typeof i.context === 'number') {
-+		const ring = el('span', 'ring');
-+		ring.style.setProperty('--p', i.context);
-+		ring.style.setProperty('--c', i.context >= 85 ? 'var(--error)' : i.context >= 65 ? 'var(--approval)' : 'var(--muted)');
-+		ring.title = 'Context ' + i.context + '%';
-+		m.append(ring, el('span', '', i.context + '%'));
++		const c = el('span', '', i.context + '%');
++		c.title = 'Context ' + i.context + '% full';
++		m.append(c);
 +	}
 +	if (typeof i.usd === 'number') { m.append(el('span', '', '$' + i.usd.toFixed(2))); }
 +	if (typeof i.since === 'number') {
@@ -547,7 +678,7 @@ new file mode 100644
 +}
 +function row(i) {
 +	const r = el('div', 'row');
-+	r.append(el('span', 'dot ' + kind(i)), el('span', 'name', i.name), el('span', 'verb', label(i)), meta(i));
++	r.append(avatar(i), el('span', 'name', i.name), el('span', 'verb', label(i)), meta(i));
 +	r.addEventListener('click', () => say({ type: 'click', key: i.key }));
 +	return r;
 +}
@@ -574,8 +705,8 @@ new file mode 100644
 +		data.items.forEach(i => box.append(row(i)));
 +	} else {
 +		const dots = el('div', 'dots');
-+		data.items.slice(0, 12).forEach(i => dots.append(el('span', 'dot ' + kind(i))));
-+		if (!data.items.length) { dots.append(el('span', 'dot idle')); }
++		data.items.slice(0, 6).forEach(i => dots.append(avatar(i)));
++		if (!data.items.length) { dots.append(avatar({ key: 'none', cli: 'custom', state: 'idle' })); }
 +		box.append(dots);
 +		if (data.notch) { box.append(el('span', 'notch-gap')); box.lastChild.style.width = '170px'; }
 +		const lead = data.items[0];
@@ -591,6 +722,9 @@ new file mode 100644
 +			}
 +		}
 +	}
++	// An avatar that did not change keeps its element, so its animation runs on instead of restarting with each update.
++	const kept = new Map([...root.querySelectorAll('.avw[data-k]')].map(a => [a.dataset.k, a]));
++	box.querySelectorAll('.avw[data-k]').forEach(a => { const old = kept.get(a.dataset.k); if (old) { kept.delete(a.dataset.k); a.replaceWith(old); } });
 +	root.replaceChildren(box);
 +	requestAnimationFrame(report);
 +}

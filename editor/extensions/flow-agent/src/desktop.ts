@@ -11,7 +11,7 @@
 
 import * as vscode from 'vscode';
 import type { Agents } from './agents';
-import { overlayModel, overlayOptions, readSettings } from './desktopModel';
+import { overlayModel, overlayOptions, readAvatar, readSettings } from './desktopModel';
 
 const SET_BADGE = 'flow.desktop.setBadge';
 const SET_OVERLAY = 'flow.desktop.setOverlay';
@@ -40,7 +40,7 @@ export class DesktopStatus implements vscode.Disposable {
 		this.subs.push(
 			this.agents.onDidChange(() => this.schedule()),
 			// A setting turned off clears its surface at once, not after the next hook.
-			vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('flow.agents.desktop') && this.push()),
+			vscode.workspace.onDidChangeConfiguration(e => (e.affectsConfiguration('flow.agents.desktop') || e.affectsConfiguration('flow.agents.avatar')) && this.push()),
 		);
 		this.push();
 	}
@@ -54,8 +54,9 @@ export class DesktopStatus implements vscode.Disposable {
 		clearTimeout(this.timer);
 		const config = vscode.workspace.getConfiguration('flow.agents.desktop');
 		const settings = readSettings(key => config.get(key));
+		const avatar = readAvatar(vscode.workspace.getConfiguration('flow.agents').get('avatar'));
 		this.setBadge(settings.badge ? this.agents.needsYou : 0);
-		this.setOverlay(settings.overlay ? { ...overlayModel(this.agents.sessions.values(), settings), options: overlayOptions(settings) } : undefined);
+		this.setOverlay(settings.overlay ? { ...overlayModel(this.agents.sessions.values(), settings), options: overlayOptions(settings, avatar) } : undefined);
 	}
 
 	private setBadge(count: number) {

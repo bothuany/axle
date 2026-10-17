@@ -15,6 +15,12 @@ export type OverlayDisplay = 'axle' | 'primary' | 'secondary';
 export type OverlayStyle = 'pill' | 'dots' | 'list';
 export type OverlaySize = 'small' | 'medium' | 'large';
 export type OverlayTheme = 'black' | 'editor' | 'dark' | 'light';
+/** How agents are drawn in the dock and the overlay (src/avatars.ts): `flow.agents.avatar`. */
+export type AvatarKind = 'gyro' | 'pixel';
+
+export function readAvatar(v: unknown): AvatarKind {
+	return v === 'pixel' ? 'pixel' : 'gyro';
+}
 
 /** Which agents and which facts the overlay shows. */
 export interface OverlayShow {
@@ -197,6 +203,6 @@ export function overlayModel(sessions: Iterable<OverlaySource>, o: DesktopSettin
 }
 
 /** What core needs besides the agents: where and how to draw them. */
-export function overlayOptions(o: DesktopSettings) {
-	return { position: o.position, display: o.display, style: o.style, size: o.size, opacity: o.opacity, theme: o.theme, autoHide: o.autoHide };
+export function overlayOptions(o: DesktopSettings, avatar: AvatarKind = 'gyro') {
+	return { position: o.position, display: o.display, style: o.style, size: o.size, opacity: o.opacity, theme: o.theme, autoHide: o.autoHide, avatar };
 }

@@ -129,5 +129,9 @@ test('overlay model: prompts never travel, cost only when asked for, context and
 })
 
 test('overlay options carry only where and how to draw', () => {
-	assert.deepEqual(Object.keys(d.overlayOptions(settings())).sort(), ['autoHide', 'display', 'opacity', 'position', 'size', 'style', 'theme'])
+	assert.deepEqual(Object.keys(d.overlayOptions(settings())).sort(), ['autoHide', 'avatar', 'display', 'opacity', 'position', 'size', 'style', 'theme'])
+	assert.equal(d.overlayOptions(settings(), 'pixel').avatar, 'pixel')
+	assert.equal(d.readAvatar('pixel'), 'pixel')
+	assert.equal(d.readAvatar('robot'), 'gyro')
+	assert.equal(d.readAvatar(undefined), 'gyro')
 })

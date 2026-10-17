@@ -299,6 +299,19 @@
           "default": false,
           "description": "Quiet mode: no agent notifications at all. The Agents dock still ranks and marks what needs you."
         },
+        "flow.agents.avatar": {
+          "type": "string",
+          "enum": [
+            "gyro",
+            "pixel"
+          ],
+          "enumDescriptions": [
+            "Gyro: rings that tumble while the agent works, one ring that pulses while it waits for you; the dot on the outer arc is the agent (its colour) and the arc is how full its context window is",
+            "Pixel pets: a cat (Claude), a bunny (Codex) and a bear (other agents) whose faces show what they do"
+          ],
+          "default": "gyro",
+          "description": "How agents are drawn in the Agents dock and in the desktop status overlay."
+        },
         "flow.agents.desktop.badge": {
           "type": "boolean",
           "default": true,
