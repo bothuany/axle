@@ -32,6 +32,13 @@ const JS_CLIENT = /(^|\.)(axios|http|httpClient|api|apiClient|client|ky|got|supe
 const PY_CLIENT = /(^|\.)(requests|httpx|session|client|http|http_client|async_client|aiohttp)$/i;
 const JAVA_TEMPLATE = /(^|\.)\w*(restTemplate|template)$/i;
 const JAVA_FLUENT = /(^|\.)\w*(webClient|restClient|client)$/i;
+/** Declared types that are Spring HTTP clients: the receiver's name then does not matter (`rest`, `billing`, `http`). */
+const JAVA_TEMPLATE_TYPE = /^(RestTemplate|RestOperations|TestRestTemplate)$/;
+const JAVA_FLUENT_TYPE = /^(WebClient|RestClient)$/;
+/** RestTemplate methods no other common type has: the call is HTTP whatever the receiver is called or typed. */
+const REST_TEMPLATE_ONLY = new Set(['getForObject', 'getForEntity', 'postForObject', 'postForEntity', 'postForLocation', 'patchForObject']);
+/** What ends a WebClient/RestClient request chain: `.uri(...)` and then one of these. */
+const FLUENT_END = new Set(['retrieve', 'exchange', 'exchangeToMono', 'exchangeToFlux', 'toEntity', 'body', 'bodyToMono', 'bodyToFlux']);
 
 /**
  * The URL argument: the first string that reads like a path or a URL, with at least one written segment.
@@ -42,8 +49,11 @@ function urlOf(strings: string[]): string | undefined {
 	return strings.find(s => /^(https?:\/\/|\/|\{…\}\/|\s+\/)/.test(s) && /[A-Za-z0-9_-]/.test(s.replace(/^https?:\/\/[^/]*/, '').replace(/\{…\}/g, '')));
 }
 
-/** The HTTP request a call makes, if it is one: by the client's name and method, per language. */
-export function httpCallOf(lang: string, c: CallFact): HttpCall | undefined {
+/**
+ * The HTTP request a call makes, if it is one: by the client's method and its name or, when the index knows it,
+ * the receiver's declared type (`recvType`), per language.
+ */
+export function httpCallOf(lang: string, c: CallFact, recvType?: string): HttpCall | undefined {
 	let verb: string | null | undefined;
 	if (lang === 'js') {
 		if (c.name === 'fetch' && (!c.recv || c.recv === 'window' || c.recv === 'globalThis')) {
@@ -56,9 +66,11 @@ export function httpCallOf(lang: string, c: CallFact): HttpCall | undefined {
 			verb = c.name.toUpperCase();
 		}
 	} else if (lang === 'java') {
-		if (c.recv && JAVA_TEMPLATE.test(c.recv) && c.name in REST_TEMPLATE) {
+		const template = (recvType && JAVA_TEMPLATE_TYPE.test(recvType)) || (c.recv && JAVA_TEMPLATE.test(c.recv));
+		const fluent = (recvType && JAVA_FLUENT_TYPE.test(recvType)) || (c.recv && JAVA_FLUENT.test(c.recv)) || c.chain?.some(n => FLUENT_END.has(n));
+		if (Object.hasOwn(REST_TEMPLATE, c.name) && (template || REST_TEMPLATE_ONLY.has(c.name))) {
 			verb = REST_TEMPLATE[c.name];
-		} else if (c.recv && JAVA_FLUENT.test(c.recv) && VERBS.has(c.name.toLowerCase()) && c.chain?.includes('uri')) {
+		} else if (fluent && VERBS.has(c.name.toLowerCase()) && c.chain?.includes('uri')) {
 			verb = c.name.toUpperCase(); // webClient.get().uri("/x").retrieve()
 		}
 	}

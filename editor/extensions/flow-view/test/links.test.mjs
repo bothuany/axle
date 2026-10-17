@@ -189,3 +189,49 @@ test('the flow goes on through HTTP into the handler, marked as a guess', async 
 	const back = await index.request('callers', (await fns('server/app.js')).find(m => m.name.endsWith('refundOrder')).id)
 	assert.deepEqual(back.children.map(c => [c.node.file, c.edgeKind, c.guess]), [[join(dir, 'web', 'api.js'), 'http', true]])
 })
+
+test('java: a RestTemplate is found by its declared type or a method only it has, whatever the field is called', () => {
+	assert.equal(l.httpCallOf('java', call('postForObject', 'rest', ['/invoices'])).verb, 'POST', 'postForObject is RestTemplate-only')
+	assert.equal(l.httpCallOf('java', call('put', 'rest', ['/invoices/{id}'])), undefined, 'put alone is too common a name')
+	assert.equal(l.httpCallOf('java', call('put', 'rest', ['/invoices/{id}']), 'RestTemplate').verb, 'PUT', 'but the type says so')
+	assert.equal(l.httpCallOf('java', call('exchange', 'ops', ['/x']), 'RestOperations').verb, null)
+	assert.equal(l.httpCallOf('java', call('get', 'billing', ['/invoices'], ['uri', 'retrieve'])).verb, 'GET', 'a request chain ends in retrieve')
+	assert.equal(l.httpCallOf('java', call('get', 'billing', ['/invoices'], ['uri']), 'WebClient').verb, 'GET')
+	assert.equal(l.httpCallOf('java', call('get', 'map', ['/invoices'])), undefined, 'map.get("/x") is not a request')
+	assert.equal(l.httpCallOf('java', call('toString', 'restTemplate', ['/x'])), undefined, 'inherited names are not client methods')
+})
+
+test('java end to end: rest.postForObject(base + "/invoices") reaches the FastAPI handler', async t => {
+	const root = mkdtempSync(join(tmpdir(), 'flow-links-java-'))
+	const files = {
+		'orders/src/main/java/com/acme/orders/BillingClient.java': `package com.acme.orders;
+import org.springframework.web.client.RestTemplate;
+public class BillingClient {
+    private final RestTemplate rest = new RestTemplate();
+    private final String billingBaseUrl = System.getenv("BILLING_URL");
+    public void charge(String orderId) {
+        rest.postForObject(billingBaseUrl + "/invoices", orderId, String.class);
+    }
+}
+`,
+		'billing/main.py': `from fastapi import FastAPI
+app = FastAPI()
+
+@app.post("/invoices")
+def create_invoice():
+    return {}
+`,
+	}
+	for (const [f, text] of Object.entries(files)) {
+		mkdirSync(join(root, f, '..'), { recursive: true })
+		writeFileSync(join(root, f), text)
+	}
+	const idx = new Index(root)
+	t.after(async () => { await idx.close(); rmSync(root, { recursive: true, force: true }) })
+	await idx.ready
+	const methods = await idx.request('methods', join(root, 'orders', 'src', 'main', 'java', 'com', 'acme', 'orders', 'BillingClient.java'))
+	const flow = await idx.request('graph', methods.find(m => m.name.endsWith('charge')).id)
+	const http = flow.children.filter(c => c.edgeKind === 'http')
+	assert.equal(http.length, 1, JSON.stringify(flow.children.map(c => [c.edgeKind, c.node.label])))
+	assert.match(http[0].node.label, /create_invoice/)
+})

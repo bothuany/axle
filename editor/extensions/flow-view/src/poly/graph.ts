@@ -1066,7 +1066,8 @@ export class Project {
 	 */
 	private httpLink(fn: FuncFact, c: CallFact): Target[] {
 		const lang = this.files.get(fn.file)?.lang;
-		const call = lang && httpCallOf(lang, c);
+		// The receiver's declared type, when the index knows it: `RestTemplate rest` is a client whatever it is called.
+		const call = lang && httpCallOf(lang, c, c.recv ? this.recvType(fn, c.recv)?.type : undefined);
 		if (!call) {
 			return [];
 		}
