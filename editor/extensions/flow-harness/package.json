@@ -81,11 +81,23 @@
       {
         "command": "flowHarness.showContext",
         "title": "Show Context Budget",
-        "category": "Harness"
+        "category": "Harness",
+        "icon": "$(info)"
+      },
+      {
+        "command": "flowHarness.compact",
+        "title": "Compact the Conversation",
+        "category": "Harness",
+        "icon": "$(fold)"
       },
       {
         "command": "flowHarness.reportUsage",
         "title": "Report Usage",
+        "category": "Harness"
+      },
+      {
+        "command": "flowHarness.reportLimits",
+        "title": "Report Usage Limits",
         "category": "Harness"
       },
       {
@@ -113,6 +125,16 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "flowHarness.compact",
+          "when": "view == flowHarness.map && viewItem == contextAgent",
+          "group": "inline"
+        },
+        {
+          "command": "flowHarness.showContext",
+          "when": "view == flowHarness.map && viewItem == context",
+          "group": "inline"
+        },
         {
           "command": "flowHarness.testHook",
           "when": "view == flowHarness.map && viewItem == hook",
@@ -144,6 +166,10 @@
         },
         {
           "command": "flowHarness.reportUsage",
+          "when": "false"
+        },
+        {
+          "command": "flowHarness.reportLimits",
           "when": "false"
         },
         {

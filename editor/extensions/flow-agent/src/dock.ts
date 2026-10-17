@@ -198,17 +198,19 @@ function render() {
 		return;
 	}
 	el.innerHTML = data.list.map(s => {
-		const pct = s.usage ? Math.min(100, Math.round(s.usage.used / s.usage.size * 100)) : 0;
+		// Without a window size from the CLI there is no share to show: no bar, only the tokens in the tooltip.
+		const sized = !!(s.usage && s.usage.size);
+		const pct = sized ? Math.min(100, Math.round(s.usage.used / s.usage.size * 100)) : 0;
 		const state = s.state === 'working' || s.state === 'blocked' ? LABEL[s.state] + ' · ' + ago(s.since, Date.now()) : s.state === 'done' ? 'Done ' + ago(s.since, Date.now()) + ' ago' : LABEL[s.state];
 		const todos = s.todos.length ? '<div class="todos"><span class="segs">' + s.todos.slice(0, 12).map(t => '<span class="seg ' + esc(t.status) + '"></span>').join('') + '</span><span class="count">' + s.done + '/' + s.todos.length + '</span>' + (s.current ? '<span class="now">' + esc(s.current) + '</span>' : '') + '</div>' : '';
 		const impact = s.impact && s.impact.flows.length ? '<div class="impact"><b>This turn touched ' + (s.impact.flows.length + s.impact.more) + (s.impact.flows.length + s.impact.more === 1 ? ' flow' : ' flows') + ':</b> ' + s.impact.flows.map((f, i) => '<span class="flow" role="button" tabindex="0" data-flow="' + i + '" title="' + esc((f.via && f.via.length ? 'Through ' + f.via.join(', ') + '. ' : '') + 'Open this flow') + '">' + esc(f.label) + '</span>').join('') + (s.impact.more ? '<span>+' + s.impact.more + ' more</span>' : '') + '</div>' : '';
-		return '<button class="agent ' + s.state + (s.unread ? ' unread' : '') + '" data-id="' + esc(s.id) + '" title="' + esc(s.name + (s.usage ? ' · context ' + pct + '% full' : '')) + '">'
+		return '<button class="agent ' + s.state + (s.unread ? ' unread' : '') + '" data-id="' + esc(s.id) + '" title="' + esc(s.name + (sized ? ' · context ' + pct + '% full' : s.usage ? ' · ' + Math.round(s.usage.used / 1000) + 'k tokens in context' : '')) + '">'
 			+ '<div class="top"><span class="av">' + icon(s) + '<span class="light"></span></span><span class="name">' + esc(s.name) + '</span><span class="state">' + esc(state) + '</span></div>'
 			+ (s.prompt ? '<div class="prompt">' + esc(s.prompt) + '</div>' : '')
 			+ (s.activity ? '<div class="activity">' + esc(s.activity) + '</div>' : '')
 			+ todos
 			+ impact
-			+ (s.usage ? '<div class="ctx' + (pct >= 90 ? ' full' : pct >= 70 ? ' warn' : '') + '"><i style="width:' + pct + '%"></i></div>' : '')
+			+ (sized ? '<div class="ctx' + (pct >= 90 ? ' full' : pct >= 70 ? ' warn' : '') + '"><i style="width:' + pct + '%"></i></div>' : '')
 			+ '<span class="ren" data-rename="' + esc(s.id) + '" title="Rename" role="button">✎</span>'
 			+ (s.state === 'ended' ? '<span class="x"data-forget="' + esc(s.id) + '" title="Remove from list" role="button">×</span>' : '')
 			+ '</button>';
