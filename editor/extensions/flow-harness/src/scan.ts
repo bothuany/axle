@@ -8,6 +8,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { gitIgnoredOf } from './ignored';
 
 export type Scope = 'user' | 'project' | 'local' | 'directory';
 export type Kind = 'instructions' | 'rules' | 'skills' | 'agents' | 'hooks' | 'mcp' | 'permissions';
@@ -329,7 +330,10 @@ export async function scan(): Promise<Harness | undefined> {
 	await memoryFile(items, root, path.join(root, 'CLAUDE.md'), 'project', ['Claude'], 'Loaded in every session');
 	await memoryFile(items, root, path.join(root, 'CLAUDE.local.md'), 'local', ['Claude'], 'Yours only, not committed');
 	await memoryFile(items, root, path.join(root, 'AGENTS.md'), 'project', ['Codex', 'Cursor'], 'Loaded in every session');
-	const nested = await vscode.workspace.findFiles('**/{CLAUDE,AGENTS}.md', '{**/node_modules/**,**/.git/**,**/bin/**,**/obj/**,**/.claude/worktrees/**}', 200);
+	const found = await vscode.workspace.findFiles('**/{CLAUDE,AGENTS}.md', '{**/node_modules/**,**/.git/**,**/bin/**,**/obj/**,**/.claude/worktrees/**}', 200);
+	// Git answers with the paths as it was given them.
+	const ignored = await gitIgnoredOf(root, found.map(u => u.fsPath));
+	const nested = found.filter(u => !ignored.has(u.fsPath));
 	for (const uri of nested) {
 		if (path.dirname(uri.fsPath) !== root) {
 			await memoryFile(items, root, uri.fsPath, 'directory', path.basename(uri.fsPath) === 'CLAUDE.md' ? ['Claude'] : ['Codex', 'Cursor'], `When working under ${path.relative(root, path.dirname(uri.fsPath))}/`);

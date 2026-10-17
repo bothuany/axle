@@ -10,6 +10,7 @@ import { parentPort, workerData } from 'worker_threads';
 import { parsePrisma } from './db';
 import { Project, type Axis2Service } from './graph';
 import { extractJava } from './java';
+import { gitIgnored, isIgnored } from './ignored';
 import { extractJs } from './js';
 import { isExcludedDir, langOf, type FileFacts } from './model';
 import { extractGo, extractPhp, extractRuby, extractRust } from './others';
@@ -35,6 +36,8 @@ const MAX_BYTES = 600_000;
 
 const { roots, wasmDir, cacheFile } = workerData as Init;
 const project = new Project(roots);
+/** Untracked paths git ignores under the roots (build output, generated code, vendored checkouts): never indexed. */
+let ignored: ReadonlySet<string> = new Set();
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const TreeSitter = require(path.join(wasmDir, 'tree-sitter.js'));
 let parsers: Record<string, { parse(text: string): { rootNode: TsNode; delete(): void } }> = {};
@@ -75,6 +78,9 @@ function walkDir(dir: string, out: Found, depth = 0) {
 			continue;
 		}
 		const full = path.join(dir, e.name);
+		if (isIgnored(full, ignored)) {
+			continue;
+		}
 		if (e.isDirectory()) {
 			if (!isExcludedDir(e.name, full, () => names)) {
 				walkDir(full, out, depth + 1);
@@ -220,6 +226,7 @@ async function index() {
 		// first run
 	}
 	const found: Found = { code: [], services: [], prisma: [], pages: [], xml: [] };
+	ignored = new Set(roots.flatMap(r => [...gitIgnored(r)]));
 	for (const r of roots) {
 		walkDir(r, found);
 	}
@@ -299,6 +306,10 @@ parentPort!.on('message', async (m: { id: number; op: string; args: unknown[] })
 			case 'definition': result = project.definitionAt(m.args[0] as Parameters<Project['definitionAt']>[0]); break;
 			case 'changed': {
 				for (const file of m.args as string[]) {
+					if (isIgnored(file, ignored)) {
+						project.delete(file); // ignored since it was indexed, or never indexed: either way not part of the project
+						continue;
+					}
 					if (file.endsWith('services.xml')) {
 						project.axis2 = [...project.axis2.filter(s => s.file !== file), ...parseServices(file)];
 						project.touched();
