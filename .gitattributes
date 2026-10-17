@@ -2,3 +2,8 @@
 # with no trailing newline (code-icon.svg) no longer matches, so a Windows checkout with core.autocrlf=true
 # would break setup. Keep them LF everywhere; git apply still matches them against a CRLF working tree.
 *.patch eol=lf
+
+# Golden test output is compared byte for byte with what the generators print ("\n"). A Windows checkout with
+# core.autocrlf=true turned the expected files to CRLF and the Mermaid/PlantUML export tests failed there.
+editor/extensions/flow-view/test/expected/** text eol=lf
+editor/extensions/flow-view/test/types-expected/** text eol=lf
