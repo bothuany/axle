@@ -17,7 +17,7 @@ import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexProfile, codex
 import { agentProcessEnv, inheritedAgentEnv } from './env';
 import { parsePatch, patchFiles, patchText } from './patch';
 import { shimScript } from './shim';
-import { claudeTranscriptUsage, codexRolloutUsage, mergeUsage, parseClaudeStatus, type ContextUsage, type UsageLimits } from './usage';
+import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, compactAllowed, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 
 /** claude and codex report through hooks (codex once its hooks are trusted); custom CLIs are plain terminals Axle only lists. */
 export type AgentCli = 'claude' | 'codex' | 'custom';
@@ -43,6 +43,8 @@ export interface AgentSession {
 	todos: Todo[];
 	/** How full its context window is; `size` only when the CLI said (never a guess). */
 	usage?: ContextUsage;
+	/** Bumped when the session ends, so a transcript read that started before then is dropped. */
+	usageEpoch?: number;
 	/** Finished or blocked while you were looking elsewhere. */
 	unread: boolean;
 	pid?: number;
@@ -170,43 +172,21 @@ function lastTitle(lines: string[]): string | undefined {
 	return undefined;
 }
 
-/**
- * Reads the event from stdin and posts it to the Axle window that owns this folder now. Never blocks the agent.
- * Run with `status`, it is the agent's status-line command: it forwards Claude's status JSON (the model, the
- * context window and the plan's usage limits, which no hook carries) and prints nothing, so the CLI's own
- * screen stays as it was.
- */
+/** Reads the event from stdin and posts it to the Axle window that owns this folder now. Never blocks the agent. */
 function HOOK_SCRIPT(portFile: string, tokenFile: string) {
-	return `// Written by Axle: forwards Claude Code hook events and status-line updates to the Axle window (observe only).
+	return `// Written by Axle: forwards Claude Code hook events to the Axle window (observe only).
 const fs = require('fs'), http = require('http');
-const route = process.argv[2] === 'status' ? '/status' : '/hook';
 let body = '';
 process.stdin.on('data', d => body += d).on('end', () => {
 	let port, token;
 	try { port = fs.readFileSync(${JSON.stringify(portFile)}, 'utf8').trim(); token = fs.readFileSync(${JSON.stringify(tokenFile)}, 'utf8').trim(); } catch { process.exit(0); }
 	if (!port) process.exit(0);
-	const req = http.request({ host: '127.0.0.1', port, path: route, method: 'POST', timeout: 3000, headers: { 'Content-Type': 'application/json', 'X-Flow-Token': token, 'X-Flow-Agent': process.env.FLOW_AGENT_SESSION || '' } }, res => { res.resume(); res.on('end', () => process.exit(0)); });
+	const req = http.request({ host: '127.0.0.1', port, path: '/hook', method: 'POST', timeout: 3000, headers: { 'Content-Type': 'application/json', 'X-Flow-Token': token, 'X-Flow-Agent': process.env.FLOW_AGENT_SESSION || '' } }, res => { res.resume(); res.on('end', () => process.exit(0)); });
 	req.on('error', () => process.exit(0)).on('timeout', () => { req.destroy(); process.exit(0); });
 	req.end(body);
 });
 setTimeout(() => process.exit(0), 4000);
 `;
-}
-
-/**
- * Whether the user set a status line of their own (user, project or local settings). A `statusLine` in the
- * settings Axle passes with --settings would take its place, so Axle adds its own only where there is none.
- */
-function userStatusLine(cwd: string | undefined) {
-	const config = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude');
-	const files = [path.join(config, 'settings.json'), ...(cwd ? [path.join(cwd, '.claude', 'settings.json'), path.join(cwd, '.claude', 'settings.local.json')] : [])];
-	return files.some(file => {
-		try {
-			return !!(JSON.parse(readFileSync(file, 'utf8')) as { statusLine?: unknown }).statusLine;
-		} catch {
-			return false;
-		}
-	});
 }
 
 /** Where Claude Code keeps a session's transcript: the cwd with every non-alphanumeric turned into '-'. */
@@ -330,6 +310,25 @@ export class Agents implements vscode.Disposable {
 		return path.join(this.dir, 'agent-hooks.json');
 	}
 
+	/** The same hooks plus Axle's status line: for sessions where the user has no status line of their own. */
+	private get statusSettingsFile() {
+		return path.join(this.dir, 'agent-hooks-status.json');
+	}
+
+	/**
+	 * The settings a new Claude session gets. Decided at each start, from every place Claude reads a status line
+	 * for this workspace, so one the user added since Axle started is never replaced by Axle's.
+	 */
+	private claudeSettings() {
+		const config = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude');
+		const folders = (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath);
+		if (hasOwnStatusLine(config, folders)) {
+			this.log.info('Agents: you have a status line of your own; context windows and usage limits come from the transcript only');
+			return this.settingsFile;
+		}
+		return this.statusSettingsFile;
+	}
+
 	/**
 	 * The hooks a Axle agent gets on top of the user's own: read-only observers that print nothing,
 	 * so they never decide anything. Each one posts the event to whichever Axle window holds this
@@ -355,14 +354,16 @@ export class Agents implements vscode.Disposable {
 			const matcher = e === 'PreToolUse' ? PRE_TOOLS : e === 'PostToolUse' || e === 'PostToolUseFailure' || e === 'PermissionRequest' ? '*' : undefined;
 			hooks[e] = [{ ...(matcher ? { matcher } : {}), hooks: [hook] }];
 		}
+		await fs.writeFile(this.settingsFile, JSON.stringify({ hooks }, null, 2), { mode: 0o600 });
 		// The status line is the one place Claude Code tells the real context window and the plan's 5-hour and weekly
-		// limits. Someone with a status line of their own keeps it: Axle then reads the tokens from the transcript only.
-		const own = userStatusLine(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
-		if (own) {
-			this.log.info('Agents: you have a status line of your own; context windows and usage limits come from the transcript only');
-		}
-		const statusLine = own ? undefined : { type: 'command', command: `${command} status`, padding: 0 };
-		await fs.writeFile(this.settingsFile, JSON.stringify({ hooks, ...(statusLine ? { statusLine } : {}) }, null, 2), { mode: 0o600 });
+		// limits. Claude runs it on every refresh, so it should start fast: a plain `node` on PATH starts several times
+		// quicker than the editor in Node mode, which stays the fallback. It runs through the same shell as the hooks.
+		const statusFile = path.join(this.dir, 'flow-status.js');
+		await fs.writeFile(statusFile, statusScript(portFile, tokenFile, this.dir));
+		const node = findOnPath('node');
+		const statusCommand = node ? `"${node}" "${statusFile}"` : `${asNode}"${process.execPath}" "${statusFile}"`;
+		const statusLine = { type: 'command', command: statusCommand, padding: 0 };
+		await fs.writeFile(this.statusSettingsFile, JSON.stringify({ hooks, statusLine }, null, 2), { mode: 0o600 });
 	}
 
 	/**
@@ -555,7 +556,7 @@ export class Agents implements vscode.Disposable {
 		const codexHooks = cli === 'codex' && await this.codexTakesHooks();
 		const profile = codexHooks ? ` -p ${CODEX_PROFILE}` : '';
 		const command = cli === 'claude'
-			? `claude ${resume ? '--resume' : '--session-id'} ${id}${this.server && this.settingsOk ? ` --settings ${quote(this.settingsFile)}` : ''}${mcp ? ` --mcp-config ${quote(mcp)}` : ''}`
+			? `claude ${resume ? '--resume' : '--session-id'} ${id}${this.server && this.settingsOk ? ` --settings ${quote(this.claudeSettings())}` : ''}${mcp ? ` --mcp-config ${quote(mcp)}` : ''}`
 			// Codex chose its session id; until a hook told us, `codex resume` without one opens its own picker.
 			: cli === 'codex' ? (resume ? `codex resume${profile}${resume.agentId ? ` ${resume.agentId}` : ''}` : `codex${profile}`)
 			: resume?.command ?? custom?.command ?? '';
@@ -635,7 +636,8 @@ export class Agents implements vscode.Disposable {
 	compact(id: string) {
 		const s = this.sessions.get(id);
 		const t = this.terminals.get(id);
-		if (!s || !t || s.state === 'ended' || s.cli === 'custom') {
+		// Checked here, not only in the page: the row may be older than the state (a permission prompt that just came up).
+		if (!s || !t || !compactAllowed(s)) {
 			return;
 		}
 		t.show();
@@ -1122,11 +1124,12 @@ export class Agents implements vscode.Disposable {
 		if (!s.transcript) {
 			return;
 		}
+		const epoch = s.usageEpoch ?? 0;
 		const lines = await this.tail(s.transcript).catch(() => [] as string[]);
 		if (s.cli === 'codex') {
 			const { usage, limits } = codexRolloutUsage(lines);
 			if (usage) {
-				this.setUsage(s, usage);
+				this.setUsage(s, usage, epoch);
 			}
 			if (limits) {
 				this.reportLimits(limits);
@@ -1136,34 +1139,40 @@ export class Agents implements vscode.Disposable {
 		const usage = claudeTranscriptUsage(lines);
 		if (usage) {
 			// The status line's display name (Sonnet 5.5) reads better than the transcript's API id: keep it once known.
-			this.setUsage(s, s.usage?.model ? { used: usage.used } : usage);
+			this.setUsage(s, s.usage?.model ? { used: usage.used } : usage, epoch);
 		}
 	}
 
-	private setUsage(s: AgentSession, next: ContextUsage) {
-		const usage = mergeUsage(s.usage, next);
-		if (s.usage && s.usage.used === usage.used && s.usage.size === usage.size && s.usage.model === usage.model) {
-			return; // the status line refreshes often: only a change is news
+	/** Only news reaches the dock: see applyUsage for what is dropped (ended sessions, stale reads, repeats). */
+	private setUsage(s: AgentSession, next: ContextUsage, epoch?: number) {
+		if (applyUsage(s, next, epoch)) {
+			this.changed.fire();
 		}
-		s.usage = usage;
-		this.changed.fire();
 	}
 
 	/** The CLI exited or its terminal closed: its numbers say nothing any more, and a resumed session reports afresh. */
 	private usageEnded(s: AgentSession) {
-		s.usage = undefined;
+		endUsage(s);
+		// The status line forwards only changes: forget what it last sent, so a resumed session reports its numbers again.
+		if (this.dir) {
+			void fs.rm(path.join(this.dir, `status-${s.id.replace(/[^\w-]/g, '')}.last`), { force: true }).catch(() => undefined);
+		}
 	}
 
-	/** The limits last sent per harness: the status line repeats them on every refresh. */
-	private readonly lastLimits = new Map<string, string>();
+	/** Each harness's limits go to flow-harness once per change, and again after a send that failed. */
+	private readonly limits = new LimitsSender(l => Promise.resolve(vscode.commands.executeCommand('flowHarness.reportLimits', l)));
+	private limitsRetry: NodeJS.Timeout | undefined;
 
 	private reportLimits(limits: UsageLimits) {
-		const key = JSON.stringify(limits.windows);
-		if (this.lastLimits.get(limits.harness) === key) {
-			return;
-		}
-		this.lastLimits.set(limits.harness, key);
-		void Promise.resolve(vscode.commands.executeCommand('flowHarness.reportLimits', limits)).catch(() => undefined);
+		void this.limits.offer(limits).then(outcome => {
+			// A failed send (flow-harness still starting) tries again shortly; a repeat of what went through does not.
+			if (outcome === 'failed' && !this.limitsRetry) {
+				this.limitsRetry = setTimeout(() => {
+					this.limitsRetry = undefined;
+					void this.limits.offer(limits);
+				}, 30_000);
+			}
+		});
 	}
 
 	dispose() {
@@ -1181,6 +1190,7 @@ export class Agents implements vscode.Disposable {
 			}
 		}
 		clearTimeout(this.orphanTimer);
+		clearTimeout(this.limitsRetry);
 		this.watchers.forEach(w => w.close());
 		this.titleTimers.forEach(clearTimeout);
 		this.changed.dispose();

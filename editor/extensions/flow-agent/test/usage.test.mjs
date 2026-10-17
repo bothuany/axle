@@ -109,7 +109,7 @@ const codex = [
 
 test('Codex: context from the last request, window from model_context_window, limits from the newest event that has them', () => {
 	const r = u.codexRolloutUsage(codex)
-	assert.deepEqual(r.usage, { used: 31_000, size: 272_000, model: 'gpt-5.5-codex' })
+	assert.deepEqual(r.usage, { used: 31_000, size: 272_000, percent: 7, model: 'gpt-5.5-codex' })
 	assert.deepEqual(r.limits, {
 		harness: 'Codex',
 		windows: [

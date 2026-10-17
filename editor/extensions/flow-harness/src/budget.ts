@@ -71,6 +71,17 @@ export function limitLines(l: HarnessLimits, now: number, time: (ms: number) => 
 	});
 }
 
+/** How long a window without a reset time stays on show after its report: long enough to outlast a quiet spell between turns, short enough not to linger for hours. */
+export const UNDATED_TTL_MS = 30 * 60_000;
+
+/**
+ * The windows still worth showing: one past its reset no longer says anything true, and one with no reset time
+ * goes once its report is old, since nothing else would ever take it down.
+ */
+export function liveWindows(l: HarnessLimits, receivedAt: number, now: number): LimitWindow[] {
+	return l.windows.filter(w => w.resetsAt ? w.resetsAt > now : now - receivedAt < UNDATED_TTL_MS);
+}
+
 /** The worst window decides the colour: past 90% the limit is close, past 75% worth a look. */
 export function limitLevel(l: HarnessLimits): 'ok' | 'warn' | 'high' {
 	const top = Math.max(...l.windows.map(w => w.usedPercent));

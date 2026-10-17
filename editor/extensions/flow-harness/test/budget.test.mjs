@@ -54,3 +54,10 @@ test('token amounts', () => {
 	assert.equal(b.fmtTokens(1_000_000), '1M')
 	assert.equal(b.fmtTokens(1_500_000), '1.5M')
 })
+
+test('a window past its reset goes; one with no reset time goes once its report is old', () => {
+	const now = 10_000_000
+	const l = { harness: 'Codex', windows: [{ label: '5h', usedPercent: 1, resetsAt: now - 1 }, { label: 'wk', usedPercent: 2, resetsAt: now + 1 }, { label: 'long', usedPercent: 3 }] }
+	assert.deepEqual(b.liveWindows(l, now - 60_000, now).map(w => w.label), ['wk', 'long'])
+	assert.deepEqual(b.liveWindows(l, now - b.UNDATED_TTL_MS, now).map(w => w.label), ['wk'])
+})

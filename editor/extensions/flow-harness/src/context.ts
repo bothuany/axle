@@ -6,7 +6,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { fmtTokens, limitLevel, limitLines, limitsText, toLimits, type HarnessLimits } from './budget';
+import { fmtTokens, limitLevel, limitLines, limitsText, liveWindows, toLimits, type HarnessLimits } from './budget';
 import type { Harness } from './scan';
 
 /** The harness's share of every session: what the Show Context Budget command lists. */
@@ -40,7 +40,7 @@ export class ContextBudget {
  */
 export class UsageLimits implements vscode.Disposable {
 	private readonly items = new Map<string, vscode.StatusBarItem>();
-	private readonly limits = new Map<string, HarnessLimits>();
+	private readonly limits = new Map<string, HarnessLimits & { receivedAt: number }>();
 	/** Reset times pass while nobody reports: the tooltip's "in 2 h" is redrawn each minute. */
 	private readonly timer = setInterval(() => this.limits.forEach(l => this.render(l)), 60_000);
 
@@ -49,11 +49,12 @@ export class UsageLimits implements vscode.Disposable {
 		if (!l) {
 			return;
 		}
-		this.limits.set(l.harness, l);
-		this.render(l);
+		const entry = { ...l, receivedAt: Date.now() };
+		this.limits.set(l.harness, entry);
+		this.render(entry);
 	}
 
-	private render(l: HarnessLimits) {
+	private render(l: HarnessLimits & { receivedAt: number }) {
 		let item = this.items.get(l.harness);
 		if (!item) {
 			const id = `flowHarness.limits.${l.harness.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
@@ -63,9 +64,8 @@ export class UsageLimits implements vscode.Disposable {
 			item.command = 'flow.agents.focus';
 			this.items.set(l.harness, item);
 		}
-		// A window past its reset no longer says anything true: drop it rather than show a stale share.
 		const now = Date.now();
-		const live = { ...l, windows: l.windows.filter(w => !w.resetsAt || w.resetsAt > now) };
+		const live = { harness: l.harness, windows: liveWindows(l, l.receivedAt, now) };
 		if (!live.windows.length) {
 			item.hide();
 			return;
