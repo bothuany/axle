@@ -2,10 +2,12 @@
  *  Axle Harness: the permission simulator. Given the rules from every settings file and a tool
  *  call such as `Bash(git push --force)` or `Edit(src/x.ts)`, say what Claude Code would do
  *  (allow, ask or deny) and which rule decided it, following Claude Code's documented matching:
- *  deny, then ask, then allow across all scopes; Bash compound commands split and wrappers
- *  stripped; gitignore-style paths with the //, ~/, / and ./ anchors; WebFetch domains; MCP and
- *  Agent rules; and the permission mode when no rule matches. Codex's approval policy and sandbox
- *  get a coarser answer. Pure (no vscode), so every case is tested on its own.
+ *  deny, then ask across all scopes; then the checks no allow rule passes (protected paths,
+ *  rm of a critical path, reads from a network path); then allow; then the read-only set and the
+ *  permission mode. Bash compound commands are split (loop and if bodies too) and wrappers
+ *  stripped; gitignore-style paths with the //, ~/, / and ./ anchors; parameter rules; WebFetch
+ *  domains; MCP and Agent rules. Codex's approval policy and sandbox get a coarser answer. Pure
+ *  (no vscode), so every case is tested on its own (test/permmatch.test.mjs).
  *--------------------------------------------------------------------------------------------*/
 
 export type Effect = 'allow' | 'ask' | 'deny';
@@ -23,7 +25,7 @@ export interface SimContext {
 	/** The session's primary working directory (the project root). */
 	cwd: string;
 	home: string;
-	/** defaultMode from the settings; `default` when unset. */
+	/** The session's permission mode; `default` (Manual) when unset. */
 	mode?: string;
 	additionalDirs?: string[];
 }
@@ -34,8 +36,8 @@ export interface Verdict {
 	rule?: Rule;
 	/** One sentence for people: why this is the answer. */
 	reason: string;
-	/** What decided it: a rule, the permission mode, or Claude Code's built-in read-only set. */
-	by: 'rule' | 'mode' | 'builtin' | 'invalid';
+	/** What decided it: a rule, the permission mode, Claude Code's built-in read-only set, or a safety check no allow rule passes. */
+	by: 'rule' | 'mode' | 'builtin' | 'invalid' | 'safety';
 	/** Caveats worth knowing (rules that are never consulted, parts that could not be checked). */
 	notes: string[];
 	/** For a compound Bash command: each subcommand and how it fared. */
@@ -46,9 +48,20 @@ export interface Call {
 	tool: string;
 	/** The primary input: the command, the path, the URL, the agent name; empty for a bare tool. */
 	arg: string;
+	/** The whole input, when the call was written as JSON (`Bash({"command":"x","run_in_background":true})`): what parameter rules match. */
+	params?: Record<string, unknown>;
 }
 
-/** `Tool` or `Tool(arg)`: the tool name runs to the first `(`, the argument to the last `)`, so parentheses inside it are literal. */
+/** Each tool's primary input field: a parameter rule cannot name it, and a JSON call's `arg` is taken from it. */
+const PRIMARY: Record<string, string> = {
+	Bash: 'command', PowerShell: 'command', Read: 'file_path', Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path',
+	NotebookEdit: 'notebook_path', Grep: 'path', Glob: 'path', LS: 'path', WebFetch: 'url', WebSearch: 'query', Agent: 'subagent_type', Task: 'subagent_type', Skill: 'skill',
+};
+
+/**
+ * `Tool` or `Tool(arg)`: the tool name runs to the first `(`, the argument to the last `)`, so parentheses inside it are
+ * literal. An argument that is a JSON object is the tool's whole input, so parameter rules can be checked against it.
+ */
 export function parseCall(text: string): Call | undefined {
 	const t = text.trim();
 	if (!t) {
@@ -63,7 +76,23 @@ export function parseCall(text: string): Call | undefined {
 		return undefined;
 	}
 	const tool = t.slice(0, open).trim();
-	return tool ? { tool, arg: t.slice(open + 1, close) } : undefined;
+	if (!tool) {
+		return undefined;
+	}
+	const arg = t.slice(open + 1, close);
+	if (/^\s*\{/.test(arg)) {
+		try {
+			const params = JSON.parse(arg) as unknown;
+			if (params && typeof params === 'object' && !Array.isArray(params)) {
+				const p = params as Record<string, unknown>;
+				const primary = p[PRIMARY[tool] ?? ''];
+				return { tool, arg: typeof primary === 'string' ? primary : '', params: p };
+			}
+		} catch {
+			// Not JSON after all: a command or path that starts with a brace.
+		}
+	}
+	return { tool, arg };
 }
 
 interface ParsedRule { tool: string; spec?: string }
@@ -182,6 +211,24 @@ export function nestedCommands(command: string): string[] {
 		}
 	}
 	return out.map(s => s.trim()).filter(Boolean).flatMap(s => splitCompound(s) ?? [s]);
+}
+
+/** Shell keywords that open a body or condition: what follows them is the command (`do git clean -f`, `if test -f x`). */
+const LEADING_KEYWORDS = /^(?:do|then|else|elif|if|while|until|!|\{)\s+/;
+/** Parts that run nothing themselves: a loop header's word list, and the words that close a body. */
+const NEUTRAL = /^(?:(?:for|select)\s+\w+(?:\s+in\b.*)?|case\b.*|done|fi|esac|\}|\{|do|then|else)$/s;
+
+/**
+ * The command a compound part runs, with the keywords of loops and conditionals taken off, so deny and ask rules reach
+ * the bodies and allow rules must cover them; undefined for a part that runs nothing (`for f in *`, `done`).
+ */
+export function commandOfPart(part: string): string | undefined {
+	let p = part.trim();
+	for (let prev = ''; prev !== p;) {
+		prev = p;
+		p = p.replace(LEADING_KEYWORDS, '').trim();
+	}
+	return !p || NEUTRAL.test(p) ? undefined : p;
 }
 
 /** Environment variables whose leading assignment does not stop an allow rule from matching. */
@@ -457,22 +504,57 @@ export function ruleProblem(rule: Rule): string | undefined {
 	if (r.spec !== undefined && r.tool === 'Bash' && /^\s*command\s*:/.test(r.spec)) {
 		return `${rule.pattern}: Claude Code ignores rules on Bash's command parameter`;
 	}
+	if (r.spec !== undefined && (r.tool === 'Read' || r.tool === 'Edit') && /^\s*!?[A-Za-z]:[\/]/.test(r.spec)) {
+		const posix = posixPath(r.spec.trim().replace(/^!/, ''));
+		return `${rule.pattern}: Claude Code matches Windows paths in POSIX form, and a pattern without a leading / is read relative to the current directory; the documented way to write this path is ${r.tool}(/${posix})`;
+	}
 	return undefined;
 }
 
-/** `Tool(param:value)`: only deny and ask rules, never on the primary field. The simulator takes only the primary field, so such a rule never matches here. */
-function isParamRule(r: ParsedRule): boolean {
-	if (r.spec === undefined || r.tool.startsWith('mcp__')) {
-		return false;
+/**
+ * `Tool(param:value)`: a top-level input parameter, for deny and ask rules. A drive letter (`Read(C:/x/.env)`) is a path,
+ * not a parameter; for Bash and PowerShell only their known parameters count, since `git:*` is a command prefix.
+ */
+function paramOf(r: ParsedRule): { name: string; value: string } | undefined {
+	if (r.spec === undefined || r.tool.startsWith('mcp__') || /^\s*[A-Za-z]:[\/]/.test(r.spec)) {
+		return undefined;
 	}
-	const m = /^\s*(\w+)\s*:/.exec(r.spec);
+	const m = /^\s*([A-Za-z_]\w*)\s*:\s*(.*)$/s.exec(r.spec);
 	if (!m) {
+		return undefined;
+	}
+	if (r.tool === 'Bash' || r.tool === 'PowerShell' ? !BASH_PARAMS.has(m[1]) : r.tool === 'WebFetch' && m[1] === 'domain') {
+		return undefined;
+	}
+	return { name: m[1], value: m[2].trim() };
+}
+
+const isParamRule = (r: ParsedRule) => !!paramOf(r);
+
+/**
+ * Whether a deny or ask parameter rule matches: the call sets that parameter to that exact value (`*` any text), as
+ * written, before any normalization. A parameter the call leaves out is never matched, and allow rules never are.
+ */
+function paramMatches(rule: Rule, call: Call): boolean {
+	const r = parseRule(rule.pattern);
+	const p = paramOf(r);
+	if (!p || rule.effect === 'allow' || !call.params || !toolNameMatches(r.tool, call.tool, rule.effect) || !(p.name in call.params)) {
 		return false;
 	}
-	if (r.tool === 'Bash' || r.tool === 'PowerShell') {
-		return BASH_PARAMS.has(m[1]);
-	}
-	return !(r.tool === 'WebFetch' && m[1] === 'domain');
+	const v = call.params[p.name];
+	return (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') && globAll(p.value).test(String(v));
+}
+
+/** The first deny or ask parameter rule that matches; a note when such rules exist but the call gave no parameters to check. */
+function firstParamMatch(rules: Rule[], effect: Effect, call: Call): Rule | undefined {
+	return rules.find(r => r.effect === effect && paramMatches(r, call));
+}
+
+function paramNotes(rules: Rule[], call: Call): string[] {
+	const unchecked = rules.filter(r => r.effect !== 'allow' && isParamRule(parseRule(r.pattern)) && toolNameMatches(parseRule(r.pattern).tool, call.tool, r.effect));
+	return unchecked.length && !call.params
+		? [`${unchecked.map(r => r.pattern).join(', ')} ${unchecked.length > 1 ? 'match' : 'matches'} on a parameter: write the call as JSON, like ${call.tool}({"${PRIMARY[call.tool] ?? 'param'}": "…", "${paramOf(parseRule(unchecked[0].pattern))!.name}": …}), to check ${unchecked.length > 1 ? 'them' : 'it'}`]
+		: [];
 }
 
 function toolNameMatches(ruleTool: string, tool: string, effect: Effect): boolean {
@@ -526,8 +608,6 @@ function matchesTool(rule: Rule, call: Call, ctx: SimContext, file: string | und
 	return globAll(r.spec.trim(), 'i').test(call.arg.trim());
 }
 
-const order: Effect[] = ['deny', 'ask', 'allow'];
-
 /** The first rule of `effect` that matches a file-tool call, with `!` carve-outs applied within each settings file. */
 function firstFileMatch(rules: Rule[], effect: Effect, call: Call, ctx: SimContext, file: string | undefined): Rule | undefined {
 	const files = [...new Set(rules.filter(r => r.effect === effect).map(r => r.file))];
@@ -564,13 +644,195 @@ function absolute(arg: string, ctx: SimContext): string {
 	return joinPosix(posixPath(ctx.cwd), a);
 }
 
-function inWorkingDirs(file: string, ctx: SimContext) {
-	return [ctx.cwd, ...(ctx.additionalDirs ?? [])].map(posixPath).some(d => file === d || file.startsWith(`${d}/`));
+/** Windows file systems ignore case, and so do the comparisons there. */
+const sameCase = (ctx: SimContext) => /^[A-Za-z]:/.test(ctx.cwd);
+
+function within(file: string, dir: string, ctx: SimContext) {
+	const [f, d] = sameCase(ctx) ? [file.toLowerCase(), dir.toLowerCase()] : [file, dir];
+	return f === d || f.startsWith(`${d === '/' ? '' : d}/`);
 }
+
+function inWorkingDirs(file: string, ctx: SimContext) {
+	return [ctx.cwd, ...(ctx.additionalDirs ?? [])].map(posixPath).some(d => within(file, d, ctx));
+}
+
+/** The permission mode by its config name: `manual` is an alias of `default`. */
+const modeOf = (ctx: SimContext) => ctx.mode === 'manual' || !ctx.mode ? 'default' : ctx.mode;
+const MODE_LABEL: Record<string, string> = { default: 'Manual mode', acceptEdits: 'acceptEdits mode', plan: 'plan mode', auto: 'auto mode', dontAsk: 'dontAsk mode', bypassPermissions: 'bypassPermissions mode' };
+const modeLabel = (ctx: SimContext) => MODE_LABEL[modeOf(ctx)] ?? `${modeOf(ctx)} mode`;
+
+// ---------------------------------------------------------------------------------------------
+// Checks no allow rule passes (Claude Code's permission-modes page: protected and critical paths; permissions: network paths)
+
+const PROTECTED_DIRS = new Set(['.git', '.vscode', '.idea', '.husky', '.cargo', '.devcontainer', '.yarn', '.mvn', '.claude']);
+const PROTECTED_FILES = new Set([
+	'.gitconfig', '.gitmodules', '.bashrc', '.bash_profile', '.bash_login', '.bash_aliases', '.bash_logout', '.zshrc', '.zprofile', '.zshenv', '.zlogin', '.zlogout', '.profile', '.envrc',
+	'.npmrc', '.yarnrc', '.yarnrc.yml', '.pnp.cjs', '.pnp.loader.mjs', '.pnpmfile.cjs', 'bunfig.toml', '.bunfig.toml', '.bazelrc', '.bazelversion', '.bazeliskrc',
+	'.pre-commit-config.yaml', 'lefthook.yml', 'lefthook.yaml', '.lefthook.yml', '.lefthook.yaml', 'gradle-wrapper.properties', 'maven-wrapper.properties',
+	'.devcontainer.json', '.ripgreprc', 'pyrightconfig.json', '.mcp.json', '.claude.json',
+]);
+
+/**
+ * Why a write to `file` (absolute, POSIX) is never auto-approved, or undefined. The documented exceptions inside .claude
+ * are kept: Claude's own worktrees, plan files, and the Markdown of auto memory and subagent memory.
+ */
+export function protectedWrite(file: string, ctx: SimContext): string | undefined {
+	const segs = file.split('/').filter(Boolean);
+	const lower = sameCase(ctx) ? segs.map(s => s.toLowerCase()) : segs;
+	const name = lower[lower.length - 1] ?? '';
+	if (PROTECTED_FILES.has(name)) {
+		return name;
+	}
+	for (let i = 0; i < lower.length - 1; i++) {
+		const s = lower[i];
+		if (s === '.config' && lower[i + 1] === 'git') {
+			return '.config/git';
+		}
+		if (!PROTECTED_DIRS.has(s)) {
+			continue;
+		}
+		if (s === '.claude') {
+			const rest = lower.slice(i + 1);
+			const md = name.endsWith('.md');
+			if (rest[0] === 'worktrees' || rest[0] === 'plans' || (rest[0] === 'agent-memory' && md) || (rest[0] === 'projects' && rest[2] === 'memory' && md)) {
+				return undefined;
+			}
+		}
+		return s;
+	}
+	return undefined;
+}
+
+/** What each mode does with a write to a protected path: the safety check runs before allow rules. */
+function protectedVerdict(what: string, ctx: SimContext): Verdict {
+	const v = (decision: Effect, reason: string): Verdict => ({ decision, reason, by: 'safety', notes: [] });
+	const lead = `${what} is a protected path: no allow rule pre-approves writing it`;
+	switch (modeOf(ctx)) {
+		case 'bypassPermissions': return v('allow', `${what} is a protected path, but bypassPermissions mode skips the prompt`);
+		case 'dontAsk': return v('deny', `${lead}, and dontAsk mode denies what would prompt`);
+		case 'auto': return v('ask', `${lead}; in auto mode the classifier reviews it`);
+		case 'plan': return v('ask', `${lead}; plan mode asks (it allows it only in a terminal session with bypass permissions available)`);
+		default: return v('ask', `${lead}; ${modeLabel(ctx)} asks`);
+	}
+}
+
+const unquote = (w: string) => w.replace(/^(["'])(.*)\1$/s, '$2');
+
+/** The operands of a command: its words after the program, flags left out (everything after `--` is an operand). */
+function operands(ws: string[]): string[] {
+	const out: string[] = [];
+	let flags = true;
+	for (const w of ws.slice(1)) {
+		if (flags && w === '--') {
+			flags = false;
+		} else if (!flags || !w.startsWith('-') || w === '-') {
+			out.push(w);
+		}
+	}
+	return out;
+}
+
+/** The POSIX path of a shell word, `~` and $HOME expanded; undefined when it depends on anything else the shell expands. */
+function wordPath(word: string, ctx: SimContext, cwd = ctx.cwd): string | undefined {
+	let w = unquote(word).replace(/^\$\{?HOME\}?(?=\/|$)/, '~');
+	if (/[$`]/.test(w)) {
+		return undefined;
+	}
+	if (w === '~' || w.startsWith('~/')) {
+		w = `${posixPath(ctx.home)}/${w.slice(2)}`;
+	}
+	return absolute(w, { ...ctx, cwd });
+}
+
+/** `dir` and every directory above it, up to the root. */
+function selfAndParents(dir: string): string[] {
+	const out = [dir];
+	for (let d = dir; d.lastIndexOf('/') > 0;) {
+		d = d.slice(0, d.lastIndexOf('/'));
+		out.push(d);
+	}
+	return [...out, '/'];
+}
+
+/**
+ * The critical path an `rm` or `rmdir` targets, or undefined: the root, a top-level directory, the home directory, a
+ * drive root or its top-level directories, the working directory or its parents, a glob under an additional directory
+ * or its parents, and the shell forms that can expand to one of them (a glob under a variable, a substitution alone).
+ */
+export function criticalRemoval(command: string, ctx: SimContext): string | undefined {
+	const w = words(command);
+	const program = (w[0] ?? '').replace(/^.*\//, '');
+	if (program !== 'rm' && program !== 'rmdir') {
+		return undefined;
+	}
+	const recursive = w.some(x => /^-[a-zA-Z]*[rR]/.test(x) || x === '--recursive');
+	const drives = sameCase(ctx);
+	const home = posixPath(ctx.home);
+	const cwd = posixPath(ctx.cwd);
+	const eq = (a: string, b: string) => drives ? a.toLowerCase() === b.toLowerCase() : a === b;
+	for (const raw of operands(w)) {
+		const word = unquote(raw);
+		if (/^\\+$/.test(word)) {
+			return raw; // Git Bash reads a lone backslash as the current drive's root
+		}
+		// A glob or trailing slash right under a variable is a removal from the root when the variable expands empty.
+		if (/^"?\$(?:\{[A-Za-z_]\w*\}|[A-Za-z_]\w*|[0-9@*])"?\/(?:\*|$)/.test(raw)) {
+			return raw;
+		}
+		if (recursive && /^"?\$\([^)]*\)"?$|^`[^`]*`$/.test(raw)) {
+			return raw; // only the output of a substitution: what it names cannot be checked first
+		}
+		const glob = /\/\*$/.test(word);
+		const target = wordPath(glob ? word.slice(0, -2) || '/' : word, ctx);
+		if (target === undefined) {
+			continue;
+		}
+		const depth = target.split('/').filter(Boolean).length;
+		if (target === '/' || depth === 1 || eq(target, home) || (drives && depth === 2 && /^\/[a-z]\//i.test(target))) {
+			return raw;
+		}
+		if (selfAndParents(cwd).some(d => eq(d, target))) {
+			return raw;
+		}
+		if (glob && (ctx.additionalDirs ?? []).map(posixPath).some(dir => selfAndParents(dir).some(d => eq(d, target)))) {
+			return raw;
+		}
+	}
+	return undefined;
+}
+
+function criticalVerdict(target: string, ctx: SimContext): Verdict {
+	const v = (decision: Effect, reason: string): Verdict => ({ decision, reason, by: 'safety', notes: [] });
+	const lead = `Removes a critical path (${target}): no allow rule or hook approves that`;
+	switch (modeOf(ctx)) {
+		case 'dontAsk': return v('deny', `${lead}, and dontAsk mode denies it`);
+		case 'auto': return v('ask', `${lead}; auto mode asks you in the terminal with a two-minute limit, and denies it where it cannot ask`);
+		case 'bypassPermissions': return v('ask', `${lead}; even bypassPermissions mode asks`);
+		default: return v('ask', `${lead}; ${modeLabel(ctx)} asks`);
+	}
+}
+
+/** A path that can reach another computer: a UNC path, or a /net automount. Looking one up can send it your credentials. */
+function isNetworkPath(arg: string): boolean {
+	const a = arg.trim().replace(/^["']/, '');
+	return (/^(?:\\\\|\/\/)[^\\/]/.test(a) && !/^\/\/[a-z]\//i.test(a)) || a.startsWith('/net/');
+}
+
+function networkVerdict(ctx: SimContext): Verdict {
+	const v = (decision: Effect, reason: string): Verdict => ({ decision, reason, by: 'safety', notes: [] });
+	switch (modeOf(ctx)) {
+		case 'dontAsk': return v('deny', 'A read from a network path: dontAsk mode denies it');
+		case 'bypassPermissions': return v('allow', 'A read from a network path: bypassPermissions mode skips the prompt');
+		default: return v('ask', 'A read from a network path always asks: no allow rule (not even a bare Read) or hook pre-approves it, and auto mode leaves it to you');
+	}
+}
+
+// ---------------------------------------------------------------------------------------------
+// The permission mode
 
 /** What the permission mode does with a call no rule decided. */
 function byMode(call: Call, ctx: SimContext, file: string | undefined, readOnly: boolean): Verdict {
-	const mode = ctx.mode === 'manual' ? 'default' : ctx.mode ?? 'default';
+	const mode = modeOf(ctx);
 	const v = (decision: Effect, reason: string, by: Verdict['by'] = 'mode'): Verdict => ({ decision, reason, by, notes: [] });
 	const isEdit = EDIT_TOOLS.has(call.tool);
 	const isRead = READ_TOOLS.has(call.tool);
@@ -592,49 +854,99 @@ function byMode(call: Call, ctx: SimContext, file: string | undefined, readOnly:
 			return isEdit ? v('deny', 'Plan mode does not edit files') : v('ask', 'No rule matches: plan mode asks');
 		case 'acceptEdits':
 			if (isEdit && file !== undefined && inWorkingDirs(file, ctx)) {
-				return v('allow', 'acceptEdits mode accepts edits inside the working directory');
+				return v('allow', 'acceptEdits mode accepts edits inside the working directories');
 			}
-			if (call.tool === 'Bash' && /^(?:mkdir|touch|mv|cp)\b/.test(call.arg.trim())) {
-				return v('allow', 'acceptEdits mode accepts common filesystem commands for paths in the working directory (assumed in it)');
-			}
-			return v('ask', 'No rule matches: acceptEdits mode asks for this');
+			return v('ask', isEdit ? 'acceptEdits mode accepts edits only inside the working directories: this one asks' : 'No rule matches: acceptEdits mode asks for this');
 		case 'auto':
 			return v('ask', 'No rule matches: in auto mode a classifier reviews it instead of a prompt');
 		default:
-			return v('ask', 'No rule matches: Claude Code asks (default mode)');
+			return v('ask', `No rule matches: Claude Code asks (${modeLabel(ctx)})`);
 	}
 }
 
-/** What Claude Code decides for `call` under `rules` (from every settings file) and the mode in `ctx`. */
+/** The filesystem commands acceptEdits mode accepts, for paths inside the working directories. */
+const ACCEPT_EDITS_BASH = new Set(['mkdir', 'touch', 'rm', 'rmdir', 'mv', 'cp', 'sed']);
+
+/**
+ * Whether acceptEdits mode runs this (stripped) command without asking: one of its filesystem commands, every path it
+ * names inside the working directories, none protected, and no removal of a critical path. `cwd` follows a `cd` before it.
+ */
+function acceptEditsRuns(command: string, ctx: SimContext, cwd: string): boolean {
+	const w = words(command);
+	const program = w[0] ?? '';
+	if (!ACCEPT_EDITS_BASH.has(program) || criticalRemoval(command, { ...ctx, cwd })) {
+		return false;
+	}
+	let paths = operands(w);
+	if (program === 'sed' && !w.some(x => x === '-e' || x === '-f' || /^--(?:expression|file)/.test(x))) {
+		paths = paths.slice(1); // the first operand is the script
+	}
+	return paths.length > 0 && paths.every(p => {
+		const abs = wordPath(p, ctx, cwd);
+		return abs !== undefined && inWorkingDirs(abs, ctx) && !protectedWrite(abs, ctx);
+	});
+}
+
+// ---------------------------------------------------------------------------------------------
+// Deciding
+
+const ruleReason = (rule: Rule, effect: Effect) => `${rule.pattern} in ${rule.scope} settings ${effect === 'deny' ? 'denies it; no allow rule can override a deny' : effect === 'ask' ? 'asks, even where an allow rule also matches' : 'allows it'}`;
+
+/**
+ * What Claude Code decides for `call` under `rules` (from every settings file) and the mode in `ctx`: deny, then ask,
+ * then the checks no allow rule passes, then allow, then the read-only set and the mode.
+ */
 export function simulate(call: Call, rules: Rule[], ctx: SimContext): Verdict {
-	const notes = [...new Set(rules.map(ruleProblem).filter((x): x is string => !!x))];
+	const notes = [...new Set(rules.map(ruleProblem).filter((x): x is string => !!x)), ...paramNotes(rules, call)];
 	if (call.tool === 'Bash' || call.tool === 'PowerShell') {
 		return simulateBash(call, rules, ctx, notes);
 	}
 	const fileTool = EDIT_TOOLS.has(call.tool) || READ_TOOLS.has(call.tool);
 	const file = fileTool && call.arg.trim() ? absolute(call.arg, ctx) : undefined;
-	for (const effect of order) {
-		const rule = fileTool ? firstFileMatch(rules, effect, call, ctx, file) : rules.find(r => r.effect === effect && matchesTool(r, call, ctx, file));
+	const match = (effect: Effect) => firstParamMatch(rules, effect, call)
+		?? (fileTool ? firstFileMatch(rules, effect, call, ctx, file) : rules.find(r => r.effect === effect && matchesTool(r, call, ctx, file)));
+	for (const effect of ['deny', 'ask'] as const) {
+		const rule = match(effect);
 		if (rule) {
-			return { decision: effect, rule, by: 'rule', notes, reason: `${rule.pattern} in ${rule.scope} settings ${effect === 'deny' ? 'denies it; no allow rule can override a deny' : effect === 'ask' ? 'asks, even where an allow rule also matches' : 'allows it'}` };
+			return { decision: effect, rule, by: 'rule', notes, reason: ruleReason(rule, effect) };
 		}
+	}
+	const guarded = file !== undefined && EDIT_TOOLS.has(call.tool) ? protectedWrite(file, ctx) : undefined;
+	const safety = guarded ? protectedVerdict(guarded, ctx)
+		: READ_TOOLS.has(call.tool) && isNetworkPath(call.arg) ? networkVerdict(ctx) : undefined;
+	if (safety) {
+		return { ...safety, notes };
+	}
+	const rule = match('allow');
+	if (rule) {
+		return { decision: 'allow', rule, by: 'rule', notes, reason: ruleReason(rule, 'allow') };
 	}
 	const v = byMode(call, ctx, file, false);
 	return { ...v, notes: [...notes, ...v.notes] };
 }
 
+const programOf = (command: string) => (words(command)[0] ?? '').replace(/^.*\//, '');
+
 function simulateBash(call: Call, rules: Rule[], ctx: SimContext, notes: string[]): Verdict {
 	const tool = call.tool;
 	const split = splitCompound(call.arg);
-	const parts = split ?? [call.arg.trim()];
+	// The parts that run something, loop and conditional keywords taken off; a loop header or `done` runs nothing.
+	const parts = (split ?? [call.arg.trim()]).map(commandOfPart).filter((x): x is string => !!x);
+	if (!parts.length) {
+		parts.push(call.arg.trim());
+	}
 	const bashRules = rules.filter(r => {
 		const p = parseRule(r.pattern);
 		return (p.tool === tool || (p.tool.includes('*') && r.effect !== 'allow' && globAll(p.tool).test(tool))) && !isParamRule(p) && !ruleProblem(r);
 	});
 	const spec = (r: Rule) => parseRule(r.pattern).tool.includes('*') ? undefined : parseRule(r.pattern).spec;
-	// Deny and ask reach every subcommand, nested ones included, past any environment assignment.
-	const reach = [...parts, ...parts.flatMap(nestedCommands)];
+	// Deny and ask reach every subcommand, nested ones and loop bodies included, past any environment assignment.
+	const reach = [...parts, ...parts.flatMap(nestedCommands).map(commandOfPart).filter((x): x is string => !!x)];
 	for (const effect of ['deny', 'ask'] as const) {
+		const param = firstParamMatch(rules, effect, call);
+		if (param) {
+			return { decision: effect, rule: param, by: 'rule', notes, reason: ruleReason(param, effect) };
+		}
 		for (const part of reach) {
 			const cmd = stripWrappers(part, false).command;
 			const rule = bashRules.find(r => r.effect === effect && bashMatches(spec(r), cmd));
@@ -647,41 +959,86 @@ function simulateBash(call: Call, rules: Rule[], ctx: SimContext, notes: string[
 			}
 		}
 	}
+	// No allow rule, hook or mode approves removing a critical path, wherever in the command the removal sits.
+	for (const part of reach) {
+		const target = criticalRemoval(stripWrappers(part, false).command, ctx);
+		if (target) {
+			const v = criticalVerdict(target, ctx);
+			return { ...v, notes, parts: parts.map(p => ({ command: p, decision: p === part ? v.decision : 'none' })) };
+		}
+	}
 	if (!split) {
 		notes.push('An operator with nothing after it (like a trailing &&) makes the command unparseable: no allow rule approves it');
 	}
-	const results = parts.map(part => {
+	// A `cd` moves where the parts after it run. Into a working directory it is read-only on its own; combined with git it
+	// asks when it changes directory (git there can run that directory's hooks); outside the working directories it asks.
+	let dir = posixPath(ctx.cwd);
+	let moved = false;
+	const cwdOf: string[] = [];
+	const cdOk: boolean[] = [];
+	for (const part of parts) {
+		cwdOf.push(dir);
+		const w = words(stripWrappers(part, true).command);
+		if (w[0] !== 'cd') {
+			cdOk.push(true);
+			continue;
+		}
+		const target = w[1] === undefined ? posixPath(ctx.home) : wordPath(w[1], ctx, dir);
+		cdOk.push(target !== undefined && inWorkingDirs(target, ctx));
+		if (target === undefined || !within(target, dir, ctx) || !within(dir, target, ctx)) {
+			moved = true;
+		}
+		dir = target ?? dir;
+	}
+	const gitAfterCd = moved && parts.some(p => programOf(stripWrappers(p, true).command) === 'git');
+	if (gitAfterCd) {
+		notes.push('A cd into another directory combined with git asks even when each part is read-only: git there can run that directory\'s hooks');
+	}
+	const acceptEdits = modeOf(ctx) === 'acceptEdits';
+	const results = parts.map((part, i) => {
 		const { command, unsafeEnv } = stripWrappers(part, true);
 		const rule = !split || unsafeEnv ? undefined : bashRules.find(r => r.effect === 'allow' && bashMatches(spec(r), command)
 			&& !(prefixCannotApprove(command) && (spec(r) ?? '*').includes('*')));
-		const readOnly = !!split && !unsafeEnv && tool === 'Bash' && isReadOnlyCommand(command);
+		const program = programOf(command);
+		const readOnly = !!split && !unsafeEnv && tool === 'Bash' && isReadOnlyCommand(command) && cdOk[i] && !(gitAfterCd && (program === 'git' || program === 'cd'));
+		const edit = !!split && !unsafeEnv && tool === 'Bash' && acceptEdits && acceptEditsRuns(command, ctx, cwdOf[i]);
 		if (unsafeEnv) {
 			notes.push(`"${part}" starts with an environment assignment that is not on Claude Code's safe list, so allow rules do not match it`);
 		}
 		if (prefixCannotApprove(command) && !rule) {
 			notes.push(`"${command}" runs other commands (an exec wrapper or find with an action): only an exact rule can approve it`);
 		}
-		return { command: part, rule, readOnly };
+		if (program === 'cd' && !cdOk[i]) {
+			notes.push(`"${part}" moves outside the working directories: it asks (approving it adds a Read rule for that path)`);
+		}
+		return { command: part, rule, readOnly, edit };
 	});
-	if (results.every(r => r.rule || r.readOnly)) {
+	if (results.every(r => r.rule || r.readOnly || r.edit)) {
 		const decided = results.find(r => r.rule);
-		if (decided?.rule) {
+		if (decided?.rule && results.every(r => r.rule || r.readOnly)) {
 			return {
 				decision: 'allow', rule: decided.rule, by: 'rule', notes,
 				reason: results.length > 1 ? `Every part is allowed (${[...new Set(results.map(r => r.rule?.pattern ?? 'read-only'))].join(', ')})` : `${decided.rule.pattern} in ${decided.rule.scope} settings allows it`,
 				parts: results.map(r => ({ command: r.command, decision: 'allow', rule: r.rule })),
 			};
 		}
+		if (results.some(r => r.edit && !r.rule && !r.readOnly)) {
+			return {
+				decision: 'allow', by: 'mode', notes, rule: decided?.rule,
+				reason: 'acceptEdits mode accepts its filesystem commands (mkdir, touch, rm, rmdir, mv, cp, sed) for paths inside the working directories',
+				parts: results.map(r => ({ command: r.command, decision: 'allow', rule: r.rule })),
+			};
+		}
 		const v = byMode(call, ctx, undefined, true);
 		return { ...v, notes: [...notes, ...v.notes], parts: results.map(r => ({ command: r.command, decision: 'allow' })) };
 	}
-	const missing = results.filter(r => !r.rule && !r.readOnly);
+	const missing = results.filter(r => !r.rule && !r.readOnly && !r.edit);
 	const v = byMode(call, ctx, undefined, false);
 	return {
 		...v,
 		reason: results.length > 1 ? `${v.reason} (no allow rule covers "${missing[0].command}"; each part must be allowed on its own)` : v.reason,
 		notes: [...notes, ...v.notes],
-		parts: results.map(r => ({ command: r.command, decision: r.rule || r.readOnly ? 'allow' : 'none', rule: r.rule })),
+		parts: results.map(r => ({ command: r.command, decision: r.rule || r.readOnly || r.edit ? 'allow' : 'none', rule: r.rule })),
 	};
 }
 

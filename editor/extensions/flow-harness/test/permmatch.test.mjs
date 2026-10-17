@@ -105,7 +105,7 @@ test('built-in read-only commands run without a rule, unless a rule asks', () =>
 test('Read and Edit paths: the four anchors', () => {
 	assert.equal(decide('Edit(/work/app/src/a.ts)', [rule('Edit(/src/**)')]), 'allow', '/path in project settings anchors at the project')
 	assert.equal(decide('Edit(src/a.ts)', [rule('Edit(/src/**)', 'allow', 'user', 'user')]), 'ask', '/path in user settings anchors at ~/.claude')
-	assert.equal(decide('Edit(/home/me/.claude/src/a.ts)', [rule('Edit(/src/**)', 'allow', 'user', 'user')]), 'allow')
+	assert.equal(decide('Read(/home/me/.claude/src/a.ts)', [rule('Read(/src/**)', 'deny', 'user', 'user')]), 'deny')
 	assert.equal(decide('Read(/tmp/scratch.txt)', [rule('Read(//tmp/**)', 'deny')]), 'deny', '// is the filesystem root')
 	assert.equal(decide('Read(~/.zshrc)', [rule('Read(~/.zshrc)', 'deny')]), 'deny')
 	assert.equal(decide('Edit(./docs/x.md)', [rule('Edit(./docs/**)')]), 'allow')
@@ -212,4 +212,117 @@ test('Codex: approval policy and sandbox', () => {
 	assert.equal(codex('Bash(npm test)', { approval_policy: 'untrusted' }), 'ask')
 	assert.equal(codex('Read(src/a.ts)', { sandbox_mode: 'read-only' }), 'allow')
 	assert.equal(codex('Bash(rm -rf x)', { sandbox_mode: 'danger-full-access', approval_policy: 'never' }), 'allow')
+})
+
+// The cases the merged-main review reproduced, each against code.claude.com/docs/en/permissions and /permission-modes.
+
+test('protected paths are checked before allow rules: Edit(.claude/**) does not pre-approve settings.json', () => {
+	const allow = [rule('Edit(.claude/**)')]
+	const v = sim('Edit(.claude/settings.json)', allow)
+	assert.equal(v.decision, 'ask')
+	assert.equal(v.by, 'safety')
+	assert.equal(decide('Edit(.claude/settings.json)', allow, { ...CTX, mode: 'acceptEdits' }), 'ask', 'acceptEdits prompts for protected paths')
+	assert.equal(decide('Edit(.claude/settings.json)', allow, { ...CTX, mode: 'dontAsk' }), 'deny')
+	assert.equal(decide('Edit(.claude/settings.json)', allow, { ...CTX, mode: 'bypassPermissions' }), 'allow')
+	assert.match(sim('Edit(.claude/settings.json)', allow, { ...CTX, mode: 'auto' }).reason, /classifier/)
+	assert.equal(decide('Edit(.claude/settings.json)', [rule('Edit(.claude/**)', 'deny')]), 'deny', 'a deny still wins')
+	assert.equal(decide('Edit(.git/config)', [rule('Edit')]), 'ask')
+	assert.equal(decide('Write(.mcp.json)', [rule('Edit')]), 'ask', 'protected files by name')
+	assert.equal(decide('Edit(.claude/worktrees/a/src/x.ts)', [rule('Edit')]), 'allow', "Claude's own worktrees are not protected")
+	assert.equal(decide('Edit(.claude/agent-memory/notes.md)', [rule('Edit')]), 'allow', 'subagent memory Markdown is not protected')
+	assert.equal(decide('Edit(~/.claude/projects/p/memory/a.md)', [rule('Edit')]), 'allow', 'auto memory Markdown is not protected')
+	assert.equal(decide('Edit(src/x.ts)', [rule('Edit')]), 'allow')
+})
+
+test('no allow rule approves rm of a critical path; a deny still blocks it', () => {
+	const v = sim('Bash(rm -rf /)', [rule('Bash(rm -rf *)')])
+	assert.equal(v.decision, 'ask')
+	assert.equal(v.by, 'safety')
+	for (const cmd of ['rm -rf ~', 'rm -rf $HOME', 'rm -rf /usr', 'rm -rf /work', 'rm -rf .', 'rm -rf ..', 'rm -rf "$DIR"/*', 'rm -rf "$(pwd)"', 'rmdir /work/app', 'rm -rf ~/*']) {
+		assert.equal(decide(`Bash(${cmd})`, [rule('Bash')]), 'ask', cmd)
+	}
+	assert.equal(decide('Bash(rm -rf build)', [rule('Bash(rm -rf *)')]), 'allow', 'an ordinary target')
+	assert.equal(decide('Bash(rm -rf "${DIR:?}"/*)', [rule('Bash(rm -rf *)')]), 'allow', 'a guarded expansion passes')
+	assert.equal(decide('Bash(cd x && rm -rf /)', [rule('Bash')]), 'ask', 'in any part')
+	assert.equal(decide('Bash(echo "$(rm -rf ~)")', [rule('Bash')]), 'ask', 'nested')
+	assert.equal(decide('Bash(rm -rf /)', [rule('Bash(rm -rf *)')], { ...CTX, mode: 'bypassPermissions' }), 'ask', 'even bypassPermissions asks')
+	assert.equal(decide('Bash(rm -rf /)', [rule('Bash(rm -rf *)')], { ...CTX, mode: 'dontAsk' }), 'deny')
+	assert.equal(decide('Bash(rm -rf /)', [rule('Bash(rm *)', 'deny')]), 'deny')
+	const win = { cwd: 'C:\\w\\app', home: 'C:\\Users\\me' }
+	assert.equal(decide('Bash(rm -rf C:/Windows)', [rule('Bash')], win), 'ask', 'a drive top-level directory')
+	assert.equal(decide('Bash(rm -rf C:/w/app/dist)', [rule('Bash')], win), 'allow')
+	assert.equal(decide('Bash(rm -rf /extra/*)', [rule('Bash')], { ...CTX, additionalDirs: ['/extra'] }), 'ask', 'a glob under an additional directory')
+})
+
+test('deny and ask reach the bodies of loops and conditionals, and allow must cover them', () => {
+	const deny = [rule('Bash(git clean *)', 'deny')]
+	assert.equal(decide('Bash(for f in a; do git clean -f; done)', deny), 'deny')
+	assert.equal(decide('Bash(if true; then git clean -fd; fi)', deny), 'deny')
+	assert.equal(decide('Bash(while true; do git clean -f; done)', deny), 'deny')
+	assert.equal(decide('Bash(for f in a b; do echo $f; done)', []), 'allow', 'a loop of read-only commands')
+	assert.equal(decide('Bash(for f in a; do npm test; done)', [rule('Bash(npm test)')]), 'allow')
+	assert.equal(decide('Bash(for f in a; do npm publish; done)', [rule('Bash(npm test)')]), 'ask')
+	assert.equal(m.commandOfPart('do git clean -f'), 'git clean -f')
+	assert.equal(m.commandOfPart('done'), undefined)
+	assert.equal(m.commandOfPart('for f in *'), undefined)
+})
+
+test('cd: read-only into a working directory, but cd into another directory with git asks', () => {
+	assert.equal(decide('Bash(cd packages/api && ls)', []), 'allow')
+	assert.equal(decide('Bash(cd packages/api && git status)', []), 'ask')
+	assert.match(sim('Bash(cd packages/api && git status)', []).notes.join(' '), /hooks/)
+	assert.equal(decide('Bash(cd . && git status)', []), 'allow', 'a cd to the current directory is a no-op')
+	assert.equal(decide('Bash(cd /tmp && ls)', []), 'ask', 'outside the working directories')
+	assert.equal(decide('Bash(cd /tmp && ls)', [], { ...CTX, additionalDirs: ['/tmp'] }), 'allow')
+})
+
+test('acceptEdits runs its filesystem commands only for paths inside the working directories, part by part', () => {
+	const ae = { ...CTX, mode: 'acceptEdits' }
+	assert.equal(decide('Bash(mv a.txt b.txt)', [], ae), 'allow')
+	assert.equal(decide('Bash(mv notes.txt /etc/notes)', [], ae), 'ask')
+	assert.equal(decide('Bash(mkdir -p src/new && touch src/new/a.ts)', [], ae), 'allow')
+	assert.equal(decide('Bash(mkdir x && curl https://example.com)', [], ae), 'ask', 'each part on its own')
+	assert.equal(decide('Bash(rm -rf build)', [], ae), 'allow', 'rm is on the list')
+	assert.equal(decide('Bash(rm -rf .)', [], ae), 'ask', 'but not on a critical path')
+	assert.equal(decide("Bash(sed -i 's/a/b/' src/x.ts)", [], ae), 'allow')
+	assert.equal(decide('Bash(cp a .git/hooks/pre-commit)', [], ae), 'ask', 'a protected path')
+	assert.equal(decide('Bash(timeout 5 touch a)', [], ae), 'allow', 'wrappers are stripped')
+	assert.equal(decide('Bash(mv a.txt b.txt)', []), 'ask', 'Manual mode asks')
+	assert.equal(decide('Edit(/etc/hosts)', [], ae), 'ask')
+})
+
+test('parameter rules match the call input given as JSON, for deny and ask only', () => {
+	const bg = [rule('Bash(run_in_background:true)', 'deny')]
+	assert.equal(decide('Bash({"command":"npm test","run_in_background":true})', bg), 'deny')
+	assert.equal(decide('Bash({"command":"npm test"})', [...bg, rule('Bash(npm test)')]), 'allow', 'an omitted parameter never matches')
+	assert.equal(decide('Agent({"subagent_type":"x","model":"opus"})', [rule('Agent(model:opus)', 'ask'), rule('Agent')]), 'ask')
+	assert.equal(decide('Agent({"subagent_type":"x","model":"claude-opus-5-5"})', [rule('Agent(model:opus)', 'ask'), rule('Agent')]), 'allow', 'compared as written')
+	assert.equal(decide('Agent({"subagent_type":"x","isolation":"worktree"})', [rule('Agent(isolation:*)', 'deny')]), 'deny', '* in the value')
+	assert.equal(decide('WebSearch({"query":"x","model":"opus"})', [rule('WebSearch(model:opus)'), rule('WebSearch', 'ask')]), 'ask', 'an allow parameter rule approves nothing')
+	assert.equal(m.parseCall('Bash({"command":"ls"})').arg, 'ls', 'the primary field is the argument')
+	assert.match(sim('Bash(npm test)', [...bg, rule('Bash(npm test)')]).notes.join(' '), /JSON/, 'says the parameter rule was not checked')
+	assert.equal(decide('Bash(git status)', [rule('Bash(git:*)')]), 'allow', 'git:* is a command prefix, not a parameter')
+})
+
+test('Windows paths: a drive letter is a path, not a parameter; //c/ is how a rule names it', () => {
+	const win = { cwd: 'C:\\w\\app', home: 'C:\\Users\\me' }
+	assert.equal(decide('Read(C:\\x\\.env)', [rule('Read(//c/x/.env)', 'deny')], win), 'deny')
+	assert.equal(decide('Read(C:/x/.env)', [rule('Read(//c/**/.env)', 'deny')], win), 'deny')
+	const v = sim('Read(C:/x/.env)', [rule('Read(C:/x/.env)', 'deny')], win)
+	assert.notEqual(v.decision, 'deny', 'Claude Code reads a pattern without a leading / relative to the current directory')
+	assert.match(v.notes.join(' '), /Read\(\/\/c\/x\/\.env\)/, 'and the note gives the documented form')
+})
+
+test('a read from a network path asks whatever the allow rules say', () => {
+	assert.equal(decide('Read(\\\\server\\share\\a.txt)', [rule('Read')]), 'ask')
+	assert.equal(decide('Read(//server/share/a.txt)', [rule('Read')]), 'ask')
+	assert.equal(decide('Read(/net/files/a.txt)', [rule('Read')]), 'ask')
+	assert.equal(decide('Read(\\\\server\\share\\a.txt)', [rule('Read')], { ...CTX, mode: 'dontAsk' }), 'deny')
+	assert.equal(decide('Read(\\\\server\\share\\a.txt)', [rule('Read')], { ...CTX, mode: 'bypassPermissions' }), 'allow')
+	assert.equal(decide('Read(\\\\server\\share\\a.txt)', [rule('Read', 'deny')]), 'deny')
+})
+
+test('the reason names the mode it assumed', () => {
+	assert.match(sim('Bash(npm publish)', []).reason, /Manual mode/)
+	assert.match(sim('Bash(npm publish)', [], { ...CTX, mode: 'acceptEdits' }).reason, /acceptEdits/)
 })

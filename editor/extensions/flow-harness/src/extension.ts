@@ -33,8 +33,8 @@ export function activate(context: vscode.ExtensionContext) {
 	const live = new Live(context.workspaceState, () => (harness?.items ?? []).flatMap(i => i.hook ? [i.hook as HookLike] : []));
 	const friction = new FrictionView(live, inbox, () => harness);
 	const frictionView = vscode.window.createTreeView('flowHarness.friction', { treeDataProvider: friction });
-	const why = new WhyView(() => harness);
 	const xray = new XrayView(() => harness, live);
+	const why = new WhyView(() => harness, live);
 	const memories = new MemoryActions(() => harness, () => void refresh());
 	const usageOf = (i: HarnessItem) => {
 		if (!isTracked(i)) {

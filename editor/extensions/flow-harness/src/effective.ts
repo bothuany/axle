@@ -175,7 +175,10 @@ export interface Effective {
 	rules: Rule[];
 	/** Environment variables merged across files (a higher scope wins per variable). */
 	env: { key: string; value: unknown; scope: RuleScope }[];
+	/** defaultMode as Claude Code applies it from these files; undefined when none decides. */
 	mode?: string;
+	/** Why a defaultMode in the files is not the one that applies. */
+	modeNote?: string;
 	additionalDirs: string[];
 }
 
@@ -219,6 +222,24 @@ export function effectiveSettings(layers: readonly SettingsLayer[]): Effective {
 			}
 		}
 	}
-	const mode = scalars.get('permissions.defaultMode')?.value;
-	return { scalars: [...scalars.values()], rules, env: [...env.values()], mode: typeof mode === 'string' ? mode : undefined, additionalDirs };
+	return { scalars: [...scalars.values()], rules, env: [...env.values()], ...startMode(scalars.get('permissions.defaultMode')), additionalDirs };
+}
+
+/**
+ * The mode a session starts in, by the settings: a project or local file cannot choose auto (Claude Code then uses its
+ * built-in default, not a user setting) or bypassPermissions (the session starts in Manual mode). Undefined when no file
+ * decides, which leaves Claude Code's built-in default.
+ */
+function startMode(set: ScalarSetting | undefined): { mode?: string; modeNote?: string } {
+	const v = set?.value;
+	if (typeof v !== 'string' || !set) {
+		return {};
+	}
+	const mode = v === 'manual' ? 'default' : v;
+	if ((set.scope === 'project' || set.scope === 'local') && (mode === 'auto' || mode === 'bypassPermissions')) {
+		return mode === 'auto'
+			? { modeNote: `defaultMode "auto" in ${set.scope} settings does not take effect` }
+			: { mode: 'default', modeNote: `defaultMode "bypassPermissions" in ${set.scope} settings does not take effect: sessions start in Manual mode` };
+	}
+	return { mode };
 }
