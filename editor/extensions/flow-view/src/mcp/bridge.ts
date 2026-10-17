@@ -31,6 +31,18 @@ export class AgentBridge implements vscode.Disposable {
 		}
 	}
 
+	/** An agent worktree's changes since it left `base`: the diff editor and the flow canvas. */
+	async showWorktreeInFlow(root: string, base: string) {
+		const tools = this.tools;
+		try {
+			const changes = await tools.worktreeChanges(root, base);
+			await tools.openChanges(changes, `Axle: ${changes.since ? `Changes since ${changes.since}` : 'Changes'}`);
+			return await tools.changesInFlow(changes);
+		} catch (e) {
+			return { ok: false, opened: false, message: (e as Error).message };
+		}
+	}
+
 	/** A failure (no port, an unwritable home folder) is logged and leaves Axle working without the bridge. */
 	async start() {
 		try {
