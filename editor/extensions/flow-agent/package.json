@@ -1,7 +1,7 @@
 {
   "name": "flow-agent",
   "displayName": "Axle Agents",
-  "description": "Claude Code and Codex in the native chat, over the Agent Client Protocol, using each repo's own harness.",
+  "description": "Agents in terminals (Claude Code, Codex or any agent CLI) with the Agents dock, using each repo's own harness; the chat panel over ACP behind a setting.",
   "version": "0.1.0",
   "publisher": "flow",
   "license": "MIT",
@@ -182,6 +182,12 @@
         "title": "Resume a Claude Session…",
         "category": "Axle",
         "icon": "$(history)"
+      },
+      {
+        "command": "flow.agents.chooseAskTarget",
+        "title": "Change Agent for Questions…",
+        "category": "Axle",
+        "icon": "$(comment-discussion)"
       }
     ],
     "keybindings": [
@@ -218,9 +224,29 @@
               "command": {
                 "type": "string",
                 "description": "Run in a new terminal in the workspace folder."
+              },
+              "acceptsInput": {
+                "type": "boolean",
+                "default": false,
+                "description": "Questions from Home and \"Ask about this flow\" may be typed into its prompt. Off by default: Axle cannot see whether a custom agent is waiting at its prompt or at an approval question."
               }
             }
           }
+        },
+        "flow.agents.askTarget": {
+          "type": "string",
+          "default": "remember",
+          "pattern": "^(ask|remember|claude|codex|chat|clipboard|custom:.+)$",
+          "markdownDescription": "Where questions for the agent go (Home's prompt, **Ask about this flow**): `remember` (default) asks once per workspace and then uses that choice (change it with **Axle: Change Agent for Questions…** or the note in the status bar after sending); `ask` asks every time; `claude`, `codex` or `custom:<name>` always use that CLI (a session waiting at its prompt, else a new one); `chat` the chat panel; `clipboard` copies the question.",
+          "examples": [
+            "remember",
+            "ask",
+            "claude",
+            "codex",
+            "chat",
+            "clipboard",
+            "custom:Gemini"
+          ]
         },
         "flow.agents.mcp": {
           "type": "boolean",

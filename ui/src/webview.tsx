@@ -686,7 +686,7 @@ function Flow() {
         <button className="icon-btn" onClick={() => load(target.target, true)} title="Trace the flow again">
           ↻
         </button>
-        <button className="ask" disabled={!down} onClick={() => vscode.postMessage({ type: 'ask', label: target.label, context: flowText() })} title="Attach this flow to a new chat">
+        <button className="ask" disabled={!down} onClick={() => vscode.postMessage({ type: 'ask', label: target.label, context: flowText() })} title="Hand this flow to the agent you chose">
           Ask about this flow
         </button>
       </header>
