@@ -4,13 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { isTracked, itemKey, usageLabel, type HookLike } from './activity';
 import { ContextBudget } from './context';
+import { FrictionView } from './frictionView';
 import { HookStudio } from './hooks';
+import { Live } from './live';
 import { PermissionInbox, type PermissionRequest } from './permissions';
-import { totalsBySource } from './gaps';
-import { scan, type Harness } from './scan';
+import { totalsBySource, unusedGap } from './gaps';
+import { scan, type Harness, type HarnessItem } from './scan';
 import { registerPreviewProvider } from './settings';
 import { HarnessTree, itemOf } from './tree';
+import { WhyView } from './why';
+import { XrayView } from './xray';
 
 export function activate(context: vscode.ExtensionContext) {
 	let harness: Harness | undefined;
@@ -21,6 +26,53 @@ export function activate(context: vscode.ExtensionContext) {
 	const inbox = new PermissionInbox(() => harness?.root, () => void refresh());
 	const inboxView = vscode.window.createTreeView('flowHarness.permissions', { treeDataProvider: inbox });
 	const diagnostics = vscode.languages.createDiagnosticCollection('harness');
+	const live = new Live(context.workspaceState, () => (harness?.items ?? []).flatMap(i => i.hook ? [i.hook as HookLike] : []));
+	const friction = new FrictionView(live, inbox, () => harness);
+	const frictionView = vscode.window.createTreeView('flowHarness.friction', { treeDataProvider: friction });
+	const why = new WhyView(() => harness);
+	const xray = new XrayView(() => harness, live);
+	const usageOf = (i: HarnessItem) => {
+		if (!isTracked(i)) {
+			return undefined;
+		}
+		const s = live.summary(itemKey(i));
+		const covered = live.covered;
+		const facts = [
+			`${s.week} this week, ${s.month} in 30 days`,
+			s.failures ? `${s.failures} failed` : '',
+			s.avgMs !== undefined ? `${s.avgMs} ms on average (measured)` : '',
+		].filter(Boolean).join(', ');
+		return {
+			label: usageLabel(s, covered) + (s.failures ? `, ${s.failures} failed` : ''),
+			detail: `Used ${facts}.${s.inferred ? ' Hook runs are counted from the events and matchers that fire them.' : ''} The counts cover ${covered} days of this project's sessions.`,
+		};
+	};
+	tree.setUsage(usageOf);
+	/** Skills unused for the whole window: an info line on each, and a gap entry. Applied after the scan, so the health score does not change. */
+	const markUnused = (h: Harness) => {
+		const idle = h.items.filter(i => i.kind === 'skills' && live.summary(itemKey(i)).month === 0);
+		const gap = unusedGap(idle.map(i => i.label), live.covered, live.sessionsSeen);
+		h.gaps = h.gaps.filter(g => g.key !== 'unused');
+		for (const i of h.items) {
+			i.issues = i.issues.filter(x => !x.message.startsWith('Not used in 30 days'));
+		}
+		if (gap) {
+			h.gaps.push(gap);
+			idle.forEach(i => i.issues.push({ severity: 'info', message: 'Not used in 30 days: prune it, or sharpen its description so the agent knows when to use it' }));
+		}
+	};
+	let liveTimer: NodeJS.Timeout | undefined;
+	live.onDidChange(() => {
+		clearTimeout(liveTimer);
+		liveTimer = setTimeout(() => {
+			if (harness) {
+				markUnused(harness);
+				tree.set(harness);
+			}
+			const n = friction.count;
+			frictionView.badge = n ? { value: n, tooltip: `${n} proposals from repeated friction` } : undefined;
+		}, 800);
+	});
 
 	let running: Promise<void> | undefined;
 	let dirty = false;
@@ -28,8 +80,13 @@ export function activate(context: vscode.ExtensionContext) {
 	const rescan = async () => {
 		try {
 			harness = await scan();
+			if (harness) {
+				markUnused(harness);
+				void live.backfill(harness.root);
+			}
 			tree.set(harness);
 			budget.setHarness(harness);
+			void friction.setHarness(harness);
 			if (harness) {
 				const { score, counts, startupTokens, gaps } = harness;
 				const problems = counts.error + counts.warning;
@@ -95,6 +152,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		view, inboxView, budget, studio, diagnostics, watcher, registerPreviewProvider(),
+		live, frictionView, why, xray, { dispose: () => clearTimeout(liveTimer) },
 		watcher.onDidChange(soon), watcher.onDidCreate(soon), watcher.onDidDelete(soon),
 		{ dispose: () => clearTimeout(timer) },
 		vscode.window.onDidChangeWindowState(s => s.focused && ifStale()),
@@ -114,6 +172,14 @@ export function activate(context: vscode.ExtensionContext) {
 		// Called by flow-agent: usage after each update, and every permission question with its answer.
 		vscode.commands.registerCommand('flowHarness.reportUsage', (u: { agent: string; used: number; size: number }) => budget.report(u)),
 		vscode.commands.registerCommand('flowHarness.recordPermission', (r: PermissionRequest) => inbox.record(r)),
+		// Called by flow-agent with every hook event of the agents it runs: what they used, what failed, what you typed.
+		vscode.commands.registerCommand('flowHarness.recordEvent', (e: unknown) => live.record(e)),
+		// From the Agents dock (one agent's session) or the Harness view (asks which session).
+		vscode.commands.registerCommand('flowHarness.contextXray', (s?: unknown) => xray.show(s)),
+		vscode.commands.registerCommand('flowHarness.why', (uri?: unknown) => why.show(uri)),
+		vscode.commands.registerCommand('flowHarness.simulatePermission', (call: unknown, agent?: unknown) => typeof call === 'string' ? why.simulate(call, agent === 'Codex' ? 'Codex' : 'Claude') : undefined),
+		vscode.commands.registerCommand('flowHarness.applyProposal', (arg: unknown) => friction.apply(arg)),
+		vscode.commands.registerCommand('flowHarness.dismissProposal', (arg: unknown) => friction.dismiss(arg)),
 		// For Axle Home: the health summary in one call.
 		vscode.commands.registerCommand('flowHarness.health', async () => {
 			if (!harness) {

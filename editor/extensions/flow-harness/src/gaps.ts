@@ -13,7 +13,7 @@ export interface ItemLike {
 }
 
 export interface Gap {
-	key: 'instructions' | 'hooks' | 'permissions';
+	key: 'instructions' | 'hooks' | 'permissions' | 'unused';
 	/** Short, for a list: "CLAUDE.md". */
 	label: string;
 	/** Why it matters, one sentence. */
@@ -38,6 +38,21 @@ export function projectGaps(items: readonly ItemLike[]): Gap[] {
 		gaps.push({ key: 'permissions', label: 'permission rules', cost: 0, message: 'No project permission rules: agents ask for everything, or follow only your personal rules.' });
 	}
 	return gaps;
+}
+
+/**
+ * Skills nobody used in a month still cost their description in every session, and one the agent never reaches for may
+ * just be described badly. Only said once the counts cover 30 days and a few sessions: before that, "unused" is a guess.
+ */
+export function unusedGap(unused: readonly string[], coveredDays: number, sessions: number): Gap | undefined {
+	if (!unused.length || coveredDays < 30 || sessions < 3) {
+		return undefined;
+	}
+	const names = unused.slice(0, 4).join(', ') + (unused.length > 4 ? ` and ${unused.length - 4} more` : '');
+	return {
+		key: 'unused', label: plural(unused.length, 'unused skill'), cost: 0,
+		message: `${plural(unused.length, 'skill')} not used in 30 days (${names}): prune ${unused.length === 1 ? 'it' : 'them'}, or sharpen the description so the agent knows when to use ${unused.length === 1 ? 'it' : 'them'}.`,
+	};
 }
 
 /** Item counts by kind, split into this project's and the user's own. */

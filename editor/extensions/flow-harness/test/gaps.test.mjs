@@ -46,3 +46,13 @@ test('plurals', () => {
 	assert.equal(g.plural(2, 'instruction'), '2 instructions')
 	assert.equal(g.plural(0, 'hook'), '0 hooks')
 })
+
+test('unused skills become a gap only once 30 days and a few sessions are covered', () => {
+	assert.equal(g.unusedGap(['a'], 10, 9), undefined, 'not enough days')
+	assert.equal(g.unusedGap(['a'], 40, 1), undefined, 'not enough sessions')
+	assert.equal(g.unusedGap([], 40, 9), undefined)
+	const gap = g.unusedGap(['a', 'b', 'c', 'd', 'e'], 30, 3)
+	assert.equal(gap.key, 'unused')
+	assert.equal(gap.cost, 0, 'a choice, not a fault: no points off')
+	assert.match(gap.message, /5 skills not used in 30 days \(a, b, c, d and 1 more\)/)
+})

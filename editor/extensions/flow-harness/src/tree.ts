@@ -26,6 +26,13 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 	private readonly changed = new vscode.EventEmitter<void>();
 	readonly onDidChangeTreeData = this.changed.event;
 	private harness: Harness | undefined;
+	/** How often an item was used lately ("used 12× this week"), and the details for its tooltip; undefined where use cannot be seen. */
+	private usage: ((i: HarnessItem) => { label: string; detail: string } | undefined) | undefined;
+
+	setUsage(usage: (i: HarnessItem) => { label: string; detail: string } | undefined) {
+		this.usage = usage;
+		this.changed.fire();
+	}
 
 	set(h: Harness | undefined) {
 		this.harness = h;
@@ -82,10 +89,14 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 		const i = node.item;
 		const t = new vscode.TreeItem(i.label, i.issues.length ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
 		const sev = worst(i);
-		t.description = [SCOPE_LABEL[i.scope], i.kind === 'hooks' || i.kind === 'permissions' ? i.detail : tok(i.tokens)].filter(Boolean).join('  ');
+		const used = this.usage?.(i);
+		t.description = [SCOPE_LABEL[i.scope], i.kind === 'hooks' || i.kind === 'permissions' ? i.detail : tok(i.tokens), used?.label].filter(Boolean).join('  ');
 		const tip = new vscode.MarkdownString(`**${i.label}**  \n${i.detail}\n\n${i.agents.join(', ')} · ${i.scope} scope${i.tokens ? ` · about ${i.tokens.toLocaleString()} tokens per session` : ''}\n\n\`${i.file}\``);
 		if (i.hook) {
 			tip.appendMarkdown(`\n\n\`\`\`sh\n${i.hook.command}\n\`\`\``);
+		}
+		if (used) {
+			tip.appendMarkdown(`\n\n${used.detail}`);
 		}
 		t.tooltip = tip;
 		if (sev) {
