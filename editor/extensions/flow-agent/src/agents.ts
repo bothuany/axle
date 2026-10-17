@@ -21,6 +21,7 @@ import { CostTracker, statusUsd, type SessionCost } from './cost';
 import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
+import { canType, type CustomCli, type SessionInfo } from './askTarget';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, compactAllowed, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 import { createWorktree, validBranch, worktreeSlug, type Worktree } from './worktrees';
 
@@ -86,6 +87,8 @@ export interface TurnImpact {
 export interface CustomAgent {
 	name: string;
 	command: string;
+	/** Text may be typed into its prompt (Ask, Home): off unless the user says so, since Axle cannot see its state. */
+	acceptsInput?: boolean;
 }
 
 interface Saved {
@@ -665,44 +668,50 @@ export class Agents implements vscode.Disposable {
 		return session;
 	}
 
+	/** The sessions as the ask picker sees them (askTarget.ts): which have reported from a hook, which still have a terminal. */
+	askSessions(): SessionInfo[] {
+		return [...this.sessions.values()].map(s => ({ id: s.id, cli: s.cli, name: s.name, state: s.state, since: s.since, heard: this.heard.has(s.id), alive: this.terminals.has(s.id), command: s.command }));
+	}
+
 	/**
-	 * Puts `text` into Claude Code's prompt in the Agents dock: the newest Claude session that is waiting, else a new one
-	 * once its first hook says it is up (before that, typing could land in its folder-trust screen). `submit` sends it;
-	 * without it the text waits there to be finished. Home and "Ask about this flow" ask here when the chat panel is off,
-	 * so a question reaches the agent the dock runs. Resolves false when no session could be started for it.
+	 * Types one line into the session's prompt; `submit` presses Enter, else the text waits there to be finished. Checked
+	 * here, at the moment of typing, not only when the target was chosen: a permission prompt may have come up meanwhile,
+	 * and a typed key can answer one. False when the session cannot take it now.
 	 */
-	async ask(text: string, submit: boolean): Promise<boolean> {
-		// One line: a newline would send the prompt half-written.
-		const line = text.replace(/\s*\r?\n\s*/g, ' ').trim();
-		if (!line) {
+	typeInto(id: string, line: string, submit: boolean, customs: CustomCli[]): boolean {
+		const t = this.terminals.get(id);
+		const s = this.askSessions().find(x => x.id === id);
+		if (!t || !s || !canType(s, customs) || !line) {
 			return false;
 		}
-		const waiting = (s: AgentSession) => s.cli === 'claude' && this.heard.has(s.id) && (s.state === 'idle' || s.state === 'done') && this.terminals.has(s.id);
-		let s: AgentSession | undefined = [...this.sessions.values()].filter(waiting).sort((a, b) => b.since - a.since)[0];
-		if (!s) {
-			const started = await this.spawn('claude');
-			if (!started) {
-				return false;
-			}
-			s = await new Promise<AgentSession | undefined>(resolve => {
-				const timer = setTimeout(() => done(undefined), 30_000);
-				const sub = this.onDidChange(() => waiting(started) && done(started));
-				const done = (r: AgentSession | undefined) => {
-					clearTimeout(timer);
-					sub.dispose();
-					resolve(r);
-				};
-			});
-			if (!s) {
-				await vscode.env.clipboard.writeText(line);
-				void vscode.window.showInformationMessage('Axle: Claude Code is still starting. Your question is on the clipboard: paste it into its prompt.');
-				return true; // handled: the caller must not open the chat panel as well
-			}
-		}
-		const terminal = this.terminals.get(s.id)!;
-		terminal.show();
-		terminal.sendText(line, submit);
+		t.show();
+		t.sendText(line, submit);
 		return true;
+	}
+
+	/** Resolves true once the session can take typed text (its first hook said it is at its prompt), false after `ms`. */
+	whenReady(id: string, customs: CustomCli[], ms = 30_000): Promise<boolean> {
+		const ready = () => {
+			const s = this.askSessions().find(x => x.id === id);
+			return !!s && canType(s, customs);
+		};
+		if (ready()) {
+			return Promise.resolve(true);
+		}
+		return new Promise(resolve => {
+			const timer = setTimeout(() => done(false), ms);
+			const sub = this.onDidChange(() => ready() && done(true));
+			const done = (r: boolean) => {
+				clearTimeout(timer);
+				sub.dispose();
+				resolve(r);
+			};
+		});
+	}
+
+	/** Brings the session's terminal forward without typing into it. */
+	reveal(id: string) {
+		this.terminals.get(id)?.show();
 	}
 
 	/** Types /compact into the agent's terminal (both CLIs take it): keeps a summary, frees most of the window. */

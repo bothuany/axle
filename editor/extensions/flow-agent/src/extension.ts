@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { AgentHost, type AgentKind } from './acp';
 import { Agents } from './agents';
+import { AskRouter } from './ask';
 import { AgentsDock } from './dock';
 import { registerPlaceholderModels } from './models';
 import { AttentionNotifier } from './notify';
@@ -38,8 +39,10 @@ export function activate(context: vscode.ExtensionContext) {
 	agents.start().catch(e => log.error(`Agents: start failed: ${(e as Error).message}`));
 	const worktrees = new WorktreeRows(agents);
 	const dock = new AgentsDock(agents, worktrees);
+	const router = new AskRouter(context, agents);
 	context.subscriptions.push(
 		agents,
+		router,
 		worktrees,
 		dock,
 		new AttentionNotifier(agents),
@@ -51,8 +54,12 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('flow.agents.newCodexWorktree', () => agents.spawn('codex', undefined, undefined, 'worktree')),
 		vscode.commands.registerCommand('flow.agents.resume', () => startOrResume(agents, 'claude', false)),
 		vscode.commands.registerCommand('flow.agents.start', (cli: unknown) => cli === 'claude' || cli === 'codex' ? startOrResume(agents, cli) : undefined),
-		// Called by flow-view (Home, "Ask about this flow"): a question for the agent in the dock.
-		vscode.commands.registerCommand('flow.agents.ask', (text: unknown, submit: unknown) => typeof text === 'string' ? agents.ask(text, submit === true) : false),
+		// Called by flow-view (Home, "Ask about this flow") and any other extension with text for "the agent": the user's
+		// chosen agent gets it (ask.ts). `origin` names the feature for the picker; `files` are referred to as each target reads them.
+		vscode.commands.registerCommand('flow.agents.ask', (text: unknown, submit: unknown, origin: unknown, files: unknown) => typeof text === 'string'
+			? router.ask(text, submit === true, typeof origin === 'string' ? origin : undefined, Array.isArray(files) ? files.filter((f): f is string => typeof f === 'string') : [])
+			: false),
+		vscode.commands.registerCommand('flow.agents.chooseAskTarget', () => router.choose()),
 	);
 	// The dock is where Axle's agents live: on the first start, show it rather than the chat panel (which needs ACP to reach them).
 	if (!showChat() && !context.globalState.get<boolean>('flow.agents.dockShown')) {
