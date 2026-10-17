@@ -37,7 +37,7 @@
       },
       {
         "command": "flow.pickSolution",
-        "title": "Choose Solution…",
+        "title": "Choose Solution or Project…",
         "category": "Axle",
         "icon": "$(folder-library)"
       },

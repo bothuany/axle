@@ -5,7 +5,7 @@ await Cli.RunAsync(args);
 
 static class Cli
 {
-    const string Usage = "usage: FlowAnalyzer serve <sln> [port] [parent-pid] --token <hex> | dump <sln> <controller.action|docId> [depth] | callers <sln> <file> <method> [depth] | list <sln>";
+    const string Usage = "usage: FlowAnalyzer serve <sln|csproj> [port] [parent-pid] --token <hex> | dump <sln|csproj> <controller.action|docId> [depth] | callers <sln|csproj> <file> <method> [depth] | list <sln|csproj>";
 
     static int Fail(string message)
     {
@@ -105,20 +105,27 @@ static class Cli
     static async Task<FlowGraph?> LoadAsync(string sln)
     {
         var path = Path.GetFullPath(sln);
-        if (!File.Exists(path)) { Fail($"Solution not found: {path}"); return null; }
+        if (!File.Exists(path)) { Fail($"Solution or project not found: {path}"); return null; }
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var ws = MSBuildWorkspace.Create();
         ws.RegisterWorkspaceFailedHandler(e => Console.Error.WriteLine($"[workspace] {e.Diagnostic.Kind}: {e.Diagnostic.Message}"));
         try
         {
-            var solution = await ws.OpenSolutionAsync(path);
+            // `dotnet new webapi` makes a project and no solution: a project file is opened as a solution of its own
+            // (with the projects it references), so such a repository traces like any other.
+            var solution = IsProjectFile(path)
+                ? (await ws.OpenProjectAsync(path)).Solution
+                : await ws.OpenSolutionAsync(path);
             Console.Error.WriteLine($"[load] {solution.Projects.Count()} project(s), {sw.Elapsed.TotalSeconds:F1}s");
             return new FlowGraph(solution);
         }
         catch (Exception e)
         {
-            Fail($"Cannot open solution {path}: {e.Message}");
+            Fail($"Cannot open {path}: {e.Message}");
             return null;
         }
     }
+
+    static bool IsProjectFile(string path) =>
+        path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".fsproj", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase);
 }

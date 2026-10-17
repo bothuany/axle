@@ -157,7 +157,7 @@ export class Analyzer implements vscode.Disposable {
 		return this.ready;
 	}
 
-	/** Whether there is a .NET solution to load: one already chosen, or any .sln/.slnx in the workspace. */
+	/** Whether there is .NET code to load: a solution or project already chosen, or any .sln/.slnx (else a .csproj) in the workspace. */
 	async hasSolution(): Promise<boolean> {
 		return !!this.context.workspaceState.get<string>(SOLUTION_KEY) || (await this.findSolutions(1)).length > 0;
 	}
@@ -167,8 +167,14 @@ export class Analyzer implements vscode.Disposable {
 		return !!this.context.workspaceState.get<string>(SOLUTION_KEY) || (await this.findSolutions(2)).length === 1;
 	}
 
-	private findSolutions(limit: number) {
-		return vscode.workspace.findFiles('**/*.{sln,slnx}', '**/{node_modules,bin,obj,.claude,.git}/**', limit);
+	/**
+	 * What the analyzer can open: the solutions, or, when there is none, the project files. `dotnet new webapi` makes a
+	 * project and no solution; without this fallback such a repository showed no C# endpoints and said nothing.
+	 */
+	private async findSolutions(limit: number) {
+		const exclude = '**/{node_modules,bin,obj,.claude,.git}/**';
+		const solutions = await vscode.workspace.findFiles('**/*.{sln,slnx}', exclude, limit);
+		return solutions.length ? solutions : vscode.workspace.findFiles('**/*.{csproj,fsproj,vbproj}', exclude, limit);
 	}
 
 	private async solution(): Promise<string> {
@@ -178,16 +184,17 @@ export class Analyzer implements vscode.Disposable {
 		}
 		const found = await this.findSolutions(200);
 		if (!found.length) {
-			throw new Error('No .sln in this workspace');
+			throw new Error('No .sln, .slnx or .csproj in this workspace');
 		}
 		let pick = found[0];
 		if (found.length > 1) {
 			const items = found
 				.map(u => ({ label: path.basename(u.fsPath), description: vscode.workspace.asRelativePath(path.dirname(u.fsPath)), uri: u }))
 				.sort((a, b) => a.description.length - b.description.length);
-			const chosen = await vscode.window.showQuickPick(items, { title: 'Axle: which solution should the flow come from?', ignoreFocusOut: true, matchOnDescription: true });
+			const what = /\.(sln|slnx)$/i.test(found[0].fsPath) ? 'solution' : 'project';
+			const chosen = await vscode.window.showQuickPick(items, { title: `Axle: which ${what} should the flow come from?`, ignoreFocusOut: true, matchOnDescription: true });
 			if (!chosen) {
-				throw new Error('No solution chosen');
+				throw new Error(`No ${what} chosen`);
 			}
 			pick = chosen.uri;
 		}
