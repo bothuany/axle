@@ -8,6 +8,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as path from 'path';
+import { sameDir } from './worktrees';
 
 /** What one live session has touched, collected across its turns. */
 export interface SessionEdits {
@@ -49,14 +50,7 @@ export function key(file: string, root: string, platform: NodeJS.Platform = proc
 }
 
 /** Two checkouts are the same folder (Windows compares without case and without a trailing separator). */
-export function sameRoot(a: string, b: string, platform: NodeJS.Platform = process.platform): boolean {
-	const p = platform === 'win32' ? path.win32 : path.posix;
-	const n = (x: string) => {
-		const r = p.resolve(x).replace(/[\\/]+$/, '');
-		return platform === 'win32' ? r.toLowerCase() : r;
-	};
-	return n(a) === n(b);
-}
+export const sameRoot = sameDir;
 
 /** For every session, the others it overlaps with: same files, and the methods and flows they share when those are known. */
 export function findConflicts(sessions: SessionEdits[], platform: NodeJS.Platform = process.platform): Map<string, Conflict[]> {

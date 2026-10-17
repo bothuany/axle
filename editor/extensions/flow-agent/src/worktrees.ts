@@ -202,6 +202,16 @@ export async function repoInfo(cwd: string): Promise<{ root: string; branch: str
 	return { root: path.normalize(top.stdout.trim()), branch: name };
 }
 
+/** Two spellings of one folder: git prints C:/x/y, VS Code c:\x\y, and Windows ignores case. */
+export function sameDir(a: string, b: string, platform: NodeJS.Platform = process.platform): boolean {
+	const p = platform === 'win32' ? path.win32 : path.posix;
+	const n = (x: string) => {
+		const r = p.resolve(x).replace(/[\\/]+$/, '');
+		return platform === 'win32' ? r.toLowerCase() : r;
+	};
+	return n(a) === n(b);
+}
+
 /** Adds Axle's line to <common git dir>/info/exclude, so every worktree of the repository ignores .axle too. */
 export async function ensureExcluded(root: string): Promise<void> {
 	const common = await git(root, commonDirArgs());
@@ -222,6 +232,11 @@ export async function createWorktree(cwd: string, slug: string): Promise<Worktre
 	const info = await repoInfo(cwd);
 	if (typeof info === 'string') {
 		throw new Error(info);
+	}
+	// A folder below the repository's top would put the worktree (a copy of the whole repository) outside this window's
+	// folder, where neither the dock's conflict check nor flow-view's diff can see it: refused, with the reason.
+	if (!sameDir(cwd, info.root)) {
+		throw new Error(`this folder is inside the repository ${info.root}; open that folder to start agents in worktrees`);
 	}
 	const dir = worktreePath(info.root, slug);
 	const newBranch = branchFor(slug);

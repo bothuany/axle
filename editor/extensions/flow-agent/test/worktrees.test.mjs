@@ -3,7 +3,7 @@ import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { build } from 'esbuild'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -160,9 +160,13 @@ test('a conflict is refused before anything changes, and so is a dirty or switch
 	assert.match((await w.planMerge(wt)).reason, /on other, not main/)
 })
 
-test('no worktree outside a repository or on a detached HEAD', async () => {
+test('no worktree outside a repository, from a folder below its top, or on a detached HEAD', async () => {
 	await assert.rejects(w.createWorktree(mkdtempSync(join(tmp, 'plain-')), 'x'), /not a git repository/)
 	const dir = repo()
+	mkdirSync(join(dir, 'sub'))
+	await assert.rejects(w.createWorktree(join(dir, 'sub'), 'x'), /inside the repository/)
+	assert.ok(w.sameDir('C:/Repo/', 'c:\\repo', 'win32'))
+	assert.ok(!w.sameDir('/a/Repo', '/a/repo', 'linux'))
 	run(dir, 'checkout', '-q', '--detach')
 	await assert.rejects(w.createWorktree(dir, 'x'), /detached/)
 })
