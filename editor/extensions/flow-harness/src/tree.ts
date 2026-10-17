@@ -29,6 +29,14 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 	/** How often an item was used lately ("used 12× this week"), and the details for its tooltip; undefined where use cannot be seen. */
 	private usage: ((i: HarnessItem) => { label: string; detail: string } | undefined) | undefined;
 
+	/** What an item's file costs and how that changed ("710 tok (was 1.2k)"), and a sentence for its tooltip. */
+	private cost: ((i: HarnessItem) => { label: string; detail: string } | undefined) | undefined;
+
+	setCost(cost: (i: HarnessItem) => { label: string; detail: string } | undefined) {
+		this.cost = cost;
+		this.changed.fire();
+	}
+
 	setUsage(usage: (i: HarnessItem) => { label: string; detail: string } | undefined) {
 		this.usage = usage;
 		this.changed.fire();
@@ -66,11 +74,12 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 			const g = GROUPS.find(x => x.kind === node.kind)!;
 			const items = this.harness!.items.filter(i => i.kind === node.kind);
 			const tokens = items.reduce((a, i) => a + (i.agents.includes('Claude') ? i.tokens ?? 0 : 0), 0);
+			const onDemand = items.reduce((a, i) => a + (i.agents.includes('Claude') ? i.onDemand ?? 0 : 0), 0);
 			const problems = items.reduce((a, i) => a + i.issues.filter(x => x.severity !== 'info').length, 0);
 			const t = new vscode.TreeItem(g.label, items.length ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
 			t.iconPath = new vscode.ThemeIcon(g.icon, new vscode.ThemeColor(g.color));
 			t.description = items.length
-				? [String(items.length), tokens ? tok(tokens) : '', problems ? `${problems} to fix` : ''].filter(Boolean).join('  ')
+				? [String(items.length), tokens ? tok(tokens) : '', onDemand ? `+${tok(onDemand).replace(' tok', '')} on demand` : '', problems ? `${problems} to fix` : ''].filter(Boolean).join('  ')
 				: g.empty;
 			t.contextValue = `group.${g.kind}`;
 			if (problems) {
@@ -93,10 +102,14 @@ export class HarnessTree implements vscode.TreeDataProvider<Node> {
 		const t = new vscode.TreeItem(i.label, i.issues.length ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
 		const sev = worst(i);
 		const used = this.usage?.(i);
-		t.description = [SCOPE_LABEL[i.scope], i.kind === 'hooks' || i.kind === 'permissions' ? i.detail : tok(i.tokens), used?.label].filter(Boolean).join('  ');
-		const tip = new vscode.MarkdownString(`**${i.label}**  \n${i.detail}\n\n${i.agents.join(', ')} · ${i.scope} scope${i.tokens ? ` · about ${i.tokens.toLocaleString()} tokens per session` : ''}\n\n\`${i.file}\``);
+		const cost = this.cost?.(i);
+		t.description = [SCOPE_LABEL[i.scope], i.kind === 'hooks' || i.kind === 'permissions' ? i.detail : cost?.label ?? tok(i.tokens), used?.label].filter(Boolean).join('  ');
+		const tip = new vscode.MarkdownString(`**${i.label}**  \n${i.detail}\n\n${i.agents.join(', ')} · ${i.scope} scope${!cost && i.tokens ? ` · about ${i.tokens.toLocaleString()} tokens per session` : ''}\n\n\`${i.file}\``);
 		if (i.hook) {
 			tip.appendMarkdown(`\n\n\`\`\`sh\n${i.hook.command}\n\`\`\``);
+		}
+		if (cost) {
+			tip.appendMarkdown(`\n\n${cost.detail}`);
 		}
 		if (used) {
 			tip.appendMarkdown(`\n\n${used.detail}`);

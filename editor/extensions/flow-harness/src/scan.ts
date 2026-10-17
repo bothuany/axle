@@ -32,6 +32,8 @@ export interface HarnessItem {
 	label: string;
 	detail: string;
 	file: string;
+	/** Tokens read only when they apply (a folder's CLAUDE.md, a path-scoped rule, a skill's or subagent's body). Estimates, like `tokens`. */
+	onDemand?: number;
 	/** Tokens this costs in every session (memory files, skill descriptions); undefined when unknown. */
 	tokens?: number;
 	issues: Issue[];
@@ -168,7 +170,7 @@ async function memoryFile(items: HarnessItem[], root: string, file: string, scop
 	if (lines > 300) {
 		issues.push({ severity: 'info', message: `${lines} lines: costs about ${tokens.toLocaleString()} tokens in every session` });
 	}
-	items.push({ kind: 'instructions', scope, label: show(root, file), detail: where, file, tokens: scope === 'directory' ? undefined : tokens, issues, agents });
+	items.push({ kind: 'instructions', scope, label: show(root, file), detail: where, file, tokens: scope === 'directory' ? undefined : tokens, onDemand: scope === 'directory' ? tokens : undefined, issues, agents });
 }
 
 interface HookEntry { matcher?: string; hooks?: { type?: string; command?: string }[] }
@@ -272,14 +274,18 @@ async function skillsIn(items: HarnessItem[], dir: string, scope: Scope, agents:
 			issues.push({ severity: 'warning', message: 'No description: the agent cannot tell when to use this skill', line: 0 });
 		}
 		// Only name + description sit in context until the skill is used.
-		items.push({ kind: 'skills', scope, label: fm.name || path.basename(d), detail: fm.description ?? '', file, tokens: tokensOf(`${fm.name ?? ''} ${fm.description ?? ''}`), issues, agents });
+		const listed = tokensOf(`${fm.name ?? ''} ${fm.description ?? ''}`);
+		items.push({ kind: 'skills', scope, label: fm.name || path.basename(d), detail: fm.description ?? '', file, tokens: listed, onDemand: Math.max(0, tokensOf(text) - listed), issues, agents });
 	}
 }
 
 async function agentsIn(items: HarnessItem[], dir: string, scope: Scope) {
 	for (const file of (await listDir(dir)).filter(f => f.endsWith('.md'))) {
-		const fm = frontMatter(await read(file) ?? '');
-		items.push({ kind: 'agents', scope, label: fm.name || path.basename(file, '.md'), detail: fm.description ?? '', file, tokens: tokensOf(`${fm.name ?? ''} ${fm.description ?? ''}`), issues: [], agents: ['Claude'] });
+		const text = await read(file) ?? '';
+		const fm = frontMatter(text);
+		const listed = tokensOf(`${fm.name ?? ''} ${fm.description ?? ''}`);
+		// The body is the subagent's own prompt: it fills the subagent's window when spawned, not the main one.
+		items.push({ kind: 'agents', scope, label: fm.name || path.basename(file, '.md'), detail: fm.description ?? '', file, tokens: listed, onDemand: Math.max(0, tokensOf(text) - listed), issues: [], agents: ['Claude'] });
 	}
 }
 
@@ -289,7 +295,7 @@ async function rulesIn(items: HarnessItem[], root: string, dir: string, scope: S
 		const text = await read(file) ?? '';
 		const fm = frontMatter(text);
 		const always = fm.alwaysApply === 'true' || !fm[globKey];
-		items.push({ kind: 'rules', scope, label: path.relative(dir, file), detail: always ? 'Every file' : `Files matching ${fm[globKey]}`, file, tokens: always ? tokensOf(text) : undefined, issues: await brokenPaths(file, text, root), agents, paths: always ? [] : globList(fm[globKey]) });
+		items.push({ kind: 'rules', scope, label: path.relative(dir, file), detail: always ? 'Every file' : `Files matching ${fm[globKey]}`, file, tokens: always ? tokensOf(text) : undefined, onDemand: always ? undefined : tokensOf(text), issues: await brokenPaths(file, text, root), agents, paths: always ? [] : globList(fm[globKey]) });
 	}
 }
 

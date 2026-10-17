@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { isTracked, itemKey, usageLabel, type HookLike } from './activity';
 import { ContextBudget } from './context';
+import { costLabel, delta, loadCosts, tok, totals, totalsBefore, trackCosts, type Cost } from './cost';
 import { FrictionView } from './frictionView';
 import { HookStudio } from './hooks';
 import { Live } from './live';
@@ -48,6 +49,36 @@ export function activate(context: vscode.ExtensionContext) {
 		};
 	};
 	tree.setUsage(usageOf);
+	// What each file costs, and the costs at the last scan, so an edit shows as before/after.
+	let costs = loadCosts(context.workspaceState.get('flowHarness.costs'));
+	const costKinds = new Set(['instructions', 'rules', 'skills', 'agents']);
+	const trackHarnessCosts = (h: Harness) => {
+		const current: Record<string, Cost> = {};
+		for (const i of h.items.filter(x => costKinds.has(x.kind) && x.agents.includes('Claude'))) {
+			const c = current[i.file] ??= { always: 0, onDemand: 0 };
+			c.always += i.tokens ?? 0;
+			c.onDemand += i.onDemand ?? 0;
+		}
+		costs = trackCosts(costs, current, Date.now());
+		void context.workspaceState.update('flowHarness.costs', costs);
+	};
+	tree.setCost(i => {
+		const c = costs.files[i.file];
+		if (!costKinds.has(i.kind) || !c || !(c.always || c.onDemand)) {
+			return undefined;
+		}
+		const change = costs.changes[i.file];
+		const when = i.kind === 'skills' ? 'when the skill is used' : i.kind === 'agents' ? "in the subagent's own window when it is spawned" : 'when the agent works on files it covers';
+		return {
+			label: costLabel(c, change),
+			detail: [
+				c.always ? `About ${c.always.toLocaleString()} tokens in every session (always-on).` : '',
+				c.onDemand ? `About ${c.onDemand.toLocaleString()} more ${when} (on demand).` : '',
+				change ? `Before the edit of ${new Date(change.at).toLocaleString()}: ${change.before.always.toLocaleString()} always-on, ${change.before.onDemand.toLocaleString()} on demand.` : '',
+				'Estimates: about 4 characters per token.',
+			].filter(Boolean).join(' '),
+		};
+	});
 	/** Skills unused for the whole window: an info line on each, and a gap entry. Applied after the scan, so the health score does not change. */
 	const markUnused = (h: Harness) => {
 		const idle = h.items.filter(i => i.kind === 'skills' && live.summary(itemKey(i)).month === 0);
@@ -94,13 +125,17 @@ export function activate(context: vscode.ExtensionContext) {
 			void friction.setHarness(harness);
 			if (harness) {
 				const { score, counts, startupTokens, gaps } = harness;
+				trackHarnessCosts(harness);
+				const now = totals(costs.files);
+				const was = totalsBefore(costs);
 				const problems = counts.error + counts.warning;
-				const tokens = `About ${(startupTokens / 1000).toFixed(1)}k tokens load before your first prompt.`;
+				const trimmed = was.always !== now.always ? ` (${delta(now.always - was.always)} after your recent edits)` : '';
+				const tokens = `About ${(startupTokens / 1000).toFixed(1)}k tokens load before your first prompt${trimmed}${now.onDemand ? `, and about ${tok(now.onDemand)} more on demand` : ''}.`;
 				// "Nothing broken" alone read as "all set" for a project with no harness at all: say what is missing too.
 				const notSetUp = gaps.filter(g => g.key !== 'unused');
 				const unused = gaps.find(g => g.key === 'unused');
 				const missing = (notSetUp.length ? ` Not set up here: ${notSetUp.map(g => g.label).join(', ')}.` : '') + (unused ? ` ${unused.label.replace(/^\w/, c => c.toUpperCase())} in 30 days.` : '');
-				view.description = `Health ${score}`;
+				view.description = `Health ${score} · ${tok(now.always)} always-on${now.onDemand ? ` · ${tok(now.onDemand)} on demand` : ''}`;
 				view.message = problems
 					? `${counts.error ? `${counts.error} broken, ` : ''}${counts.warning} to look at.${missing} ${tokens}`
 					: `Nothing broken.${missing} ${tokens}`;
