@@ -6,7 +6,10 @@
  *  Kept free of vscode so the rules can be tested in node (test/askTarget.test.mjs).
  *--------------------------------------------------------------------------------------------*/
 
-import type { AgentCli, AgentState } from './agents';
+/** claude and codex report through hooks (codex once its hooks are trusted); custom CLIs are plain terminals Axle only lists. */
+export type AgentCli = 'claude' | 'codex' | 'custom';
+/** working: busy · blocked: waiting for you · done: finished a turn · idle: started, no prompt yet · unknown: no reports (custom CLIs, untrusted Codex hooks) · ended: the CLI exited. */
+export type AgentState = 'starting' | 'working' | 'blocked' | 'done' | 'idle' | 'unknown' | 'ended';
 
 /** A custom CLI from flow.agents.custom; `acceptsInput` says text may be typed into its prompt. */
 export interface CustomCli {

@@ -21,14 +21,12 @@ import { CostTracker, statusUsd, type SessionCost } from './cost';
 import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
-import { canType, type CustomCli, type SessionInfo } from './askTarget';
+import { canType, type AgentCli, type AgentState, type CustomCli, type SessionInfo } from './askTarget';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, compactAllowed, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 import { createWorktree, validBranch, worktreeSlug, type Worktree } from './worktrees';
 
-/** claude and codex report through hooks (codex once its hooks are trusted); custom CLIs are plain terminals Axle only lists. */
-export type AgentCli = 'claude' | 'codex' | 'custom';
-/** working: busy · blocked: waiting for you · done: finished a turn · idle: started, no prompt yet · unknown: no reports (custom CLIs, untrusted Codex hooks) · ended: the CLI exited. */
-export type AgentState = 'starting' | 'working' | 'blocked' | 'done' | 'idle' | 'unknown' | 'ended';
+// Declared with the ask rules, which must not import this file (it needs vscode); every other file takes them from here.
+export type { AgentCli, AgentState } from './askTarget';
 
 export interface Todo {
 	text: string;
