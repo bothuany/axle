@@ -23,6 +23,10 @@ interface Health {
 	startupTokens: number;
 	totals: Record<string, number>;
 	issues: { severity: string; message: string; label: string; file: string; line?: number }[];
+	/** This project's counts and the user's own (~/.claude); absent from an older flow-harness. */
+	bySource?: { project: Record<string, number>; user: Record<string, number> };
+	/** What the project has not set up. */
+	gaps?: { label: string; message: string }[];
 }
 
 /** a1 b1 a2 b2 …: with two backends neither pushes the other off a short list. */
@@ -174,6 +178,7 @@ kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); bor
 .score { font-size: 30px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .score.good { color: var(--ok); } .score.mid { color: var(--plan); } .score.bad { color: var(--bad); }
 .health p { margin: 0; color: var(--muted); font-size: 12px; }
+.gaps { margin: 6px 0 2px; color: var(--plan); font-size: 12px; }
 .sev { flex: none; width: 6px; height: 6px; border-radius: 50%; transform: translateY(-2px); }
 .sev.error { background: var(--bad); } .sev.warning { background: var(--plan); }
 
@@ -264,9 +269,16 @@ window.addEventListener('message', e => {
 	if (h) {
 		const cls = h.score >= 85 ? 'good' : h.score >= 60 ? 'mid' : 'bad';
 		const t = h.totals;
+		const n = (k, one, many) => k + ' ' + (k === 1 ? one : many || one + 's');
+		const list = c => [n(c.instructions, 'instruction'), n(c.skills, 'skill'), n(c.hooks, 'hook'), c.mcp + ' MCP'].join(', ');
+		const gaps = h.gaps || [];
 		$('health').innerHTML = '<div class="health"><span class="score ' + cls + '">' + h.score + '</span><p>' + (h.counts.error ? h.counts.error + ' broken, ' : '') + h.counts.warning + ' to look at<br>' + (h.startupTokens / 1000).toFixed(1) + 'k tokens before your first prompt</p></div>'
 			+ h.issues.slice(0, 4).map(i => '<button class="row" data-path="' + esc(i.file) + '" data-line="' + (i.line ?? '') + '"><span class="sev ' + esc(i.severity) + '"></span><span class="name">' + esc(i.message) + '</span></button>').join('')
-			+ '<p class="empty">' + [t.instructions + ' instructions', t.skills + ' skills', t.hooks + ' hooks', t.mcp + ' MCP'].join(', ') + '</p>';
+			+ (gaps.length ? '<p class="gaps" title="' + esc(gaps.map(g => g.message).join(' ')) + '">Not set up here: ' + esc(gaps.map(g => g.label).join(', ')) + '</p>' : '')
+			// Which counts are the project's and which come from your own ~/.claude: an empty project is not "1 instruction, 20 skills".
+			+ (h.bySource
+				? '<p class="empty">This project: ' + list(h.bySource.project) + '<br>Yours (~/.claude): ' + list(h.bySource.user) + '</p>'
+				: '<p class="empty">' + list(t) + '</p>');
 	} else {
 		$('health').innerHTML = '<p class="empty">Open a folder to check its harness.</p>';
 	}

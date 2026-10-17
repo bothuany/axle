@@ -8,6 +8,7 @@ import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { projectGaps, type Gap } from './gaps';
 import { gitIgnoredOf } from './ignored';
 
 export type Scope = 'user' | 'project' | 'local' | 'directory';
@@ -42,6 +43,8 @@ export interface Harness {
 	items: HarnessItem[];
 	score: number;
 	counts: Record<Severity, number>;
+	/** What this project has not set up (see gaps.ts); missing instructions also lower the score. */
+	gaps: Gap[];
 	/** Tokens loaded into every new session before the first prompt. */
 	startupTokens: number;
 }
@@ -361,7 +364,8 @@ export async function scan(): Promise<Harness | undefined> {
 
 	const counts: Record<Severity, number> = { error: 0, warning: 0, info: 0 };
 	items.forEach(i => i.issues.forEach(x => counts[x.severity]++));
-	const score = Math.max(0, 100 - counts.error * 12 - counts.warning * 4 - counts.info);
+	const gaps = projectGaps(items);
+	const score = Math.max(0, 100 - counts.error * 12 - counts.warning * 4 - counts.info - gaps.reduce((a, g) => a + g.cost, 0));
 	const claudeStartup = items.filter(i => i.agents.includes('Claude') && i.tokens && (i.kind === 'instructions' || i.kind === 'skills' || i.kind === 'agents' || i.kind === 'rules'));
-	return { root, items, score, counts, startupTokens: claudeStartup.reduce((a, i) => a + (i.tokens ?? 0), 0) };
+	return { root, items, score, counts, gaps, startupTokens: claudeStartup.reduce((a, i) => a + (i.tokens ?? 0), 0) };
 }

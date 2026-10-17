@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { ContextBudget } from './context';
 import { HookStudio } from './hooks';
 import { PermissionInbox, type PermissionRequest } from './permissions';
+import { totalsBySource } from './gaps';
 import { scan, type Harness } from './scan';
 import { registerPreviewProvider } from './settings';
 import { HarnessTree, itemOf } from './tree';
@@ -30,12 +31,15 @@ export function activate(context: vscode.ExtensionContext) {
 			tree.set(harness);
 			budget.setHarness(harness);
 			if (harness) {
-				const { score, counts, startupTokens } = harness;
+				const { score, counts, startupTokens, gaps } = harness;
 				const problems = counts.error + counts.warning;
+				const tokens = `About ${(startupTokens / 1000).toFixed(1)}k tokens load before your first prompt.`;
+				// "Nothing broken" alone read as "all set" for a project with no harness at all: say what is missing too.
+				const missing = gaps.length ? ` Not set up here: ${gaps.map(g => g.label).join(', ')}.` : '';
 				view.description = `Health ${score}`;
 				view.message = problems
-					? `${counts.error ? `${counts.error} broken, ` : ''}${counts.warning} to look at. About ${(startupTokens / 1000).toFixed(1)}k tokens load before your first prompt.`
-					: `Nothing broken. About ${(startupTokens / 1000).toFixed(1)}k tokens load before your first prompt.`;
+					? `${counts.error ? `${counts.error} broken, ` : ''}${counts.warning} to look at.${missing} ${tokens}`
+					: `Nothing broken.${missing} ${tokens}`;
 				view.badge = problems ? { value: problems, tooltip: `${problems} harness problems` } : undefined;
 				// Line-level problems also show in the editor and the Problems panel.
 				diagnostics.clear();
@@ -121,6 +125,9 @@ export function activate(context: vscode.ExtensionContext) {
 				counts: h.counts,
 				startupTokens: h.startupTokens,
 				totals: Object.fromEntries(['instructions', 'rules', 'skills', 'agents', 'hooks', 'mcp', 'permissions'].map(k => [k, h.items.filter(i => i.kind === k).length])),
+				// Home says which counts are the project's and which are the user's own (~/.claude), and what is missing.
+				bySource: totalsBySource(h.items, ['instructions', 'skills', 'hooks', 'mcp', 'permissions']),
+				gaps: h.gaps.map(g => ({ label: g.label, message: g.message })),
 				issues: h.items.flatMap(i => i.issues.filter(x => x.severity !== 'info').map(x => ({ ...x, label: i.label, file: i.file }))).slice(0, 6),
 			};
 		}),
