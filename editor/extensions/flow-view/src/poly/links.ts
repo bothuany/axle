@@ -40,6 +40,70 @@ const REST_TEMPLATE_ONLY = new Set(['getForObject', 'getForEntity', 'postForObje
 /** What ends a WebClient/RestClient request chain: `.uri(...)` and then one of these. */
 const FLUENT_END = new Set(['retrieve', 'exchange', 'exchangeToMono', 'exchangeToFlux', 'toEntity', 'body', 'bodyToMono', 'bodyToFlux']);
 
+const isVerb = (name: string | undefined) => !!name && VERBS.has(name.toLowerCase());
+/** The verb a call names (`Get`, `post`), else the first verb chained onto it: `client.R().Post(url)`. */
+const verbIn = (c: CallFact) => isVerb(c.name) ? c.name.toUpperCase() : c.chain?.find(isVerb)?.toUpperCase();
+/** `request('POST', url)`, `NewRequest(http.MethodPost, url)`: the method written as the first string (the extractors spell constants as their verb). */
+const methodArg = (c: CallFact) => c.strings.find(s => /^[A-Za-z]+$/.test(s) && isVerb(s))?.toUpperCase() ?? null;
+
+const GO_CLIENT = /(^|\.)(http|client|httpClient|DefaultClient|hc|resty)$/i;
+const PHP_CLIENT = /(^|\.)(client|http|httpClient|guzzle)$/i;
+const RUBY_CLIENT = /(^|\.)@?(conn|connection|client|http|http_client|faraday|api)$/i;
+const RUST_CLIENT = /(^|\.)(client|http|http_client|reqwest)$/i;
+
+/**
+ * Go, PHP, Ruby and Rust clients: the verb a call sends (null: not said), or undefined if it is not a request.
+ * Receivers are as the extractors spell them: `Net.HTTP` (`::` → `.`), `this.client` (`$this->client`), the
+ * PHP static scope as written (`Http`, `\Illuminate\Support\Facades\Http`).
+ */
+const OTHER_CLIENTS: Record<'go' | 'php' | 'ruby' | 'rust', (c: CallFact) => string | null | undefined> = {
+	go: c => {
+		if (!c.recv || !GO_CLIENT.test(c.recv)) {
+			return undefined;
+		}
+		if (/^(Get|Post|Head|PostForm)$/.test(c.name)) {
+			return c.name === 'PostForm' ? 'POST' : c.name.toUpperCase(); // http.Get(url), client.Post(url, ctype, body)
+		}
+		if (c.name === 'NewRequest' || c.name === 'NewRequestWithContext') {
+			return methodArg(c);
+		}
+		// resty: client.R().SetBody(b).Post(url), resty.New().R().Get(url)
+		return c.name === 'R' || (c.name === 'New' && c.chain?.[0] === 'R') ? verbIn({ ...c, name: '' }) : undefined;
+	},
+	php: c => {
+		if (c.recv && /(^|\\)Http$/.test(c.recv)) {
+			return verbIn(c); // Http::get(url), Http::withToken($t)->post(url)
+		}
+		if (c.recv && PHP_CLIENT.test(c.recv)) {
+			// Guzzle / Symfony HttpClient: $client->get(url), $client->request('POST', url), getAsync, requestAsync
+			const name = c.name.replace(/Async$/, '');
+			return name === 'request' ? methodArg(c) : isVerb(name) ? name.toUpperCase() : undefined;
+		}
+		return undefined;
+	},
+	ruby: c => {
+		if (!c.recv) {
+			return undefined;
+		}
+		const verb = c.name.replace(/_form$/, ''); // Net::HTTP.post_form
+		if (/^(HTTParty|RestClient|Faraday|Net\.HTTP|HTTP|Excon|Typhoeus)$/.test(c.recv) || RUBY_CLIENT.test(c.recv)) {
+			// HTTParty.get(url), conn.post(url), Faraday.new(url: base).get(path)
+			return isVerb(verb) ? verb.toUpperCase() : c.name === 'new' && c.recv === 'Faraday' ? verbIn({ ...c, name: '' }) : undefined;
+		}
+		const req = /^Net\.HTTP\.(Get|Post|Put|Patch|Delete|Head)$/.exec(c.recv);
+		return req && c.name === 'new' ? req[1].toUpperCase() : undefined; // Net::HTTP::Post.new(URI(url))
+	},
+	rust: c => {
+		if (c.recv && /(^|\.)reqwest(\.blocking)?$/.test(c.recv) && c.name === 'get') {
+			return 'GET'; // reqwest::get(url)
+		}
+		if (c.recv && RUST_CLIENT.test(c.recv)) {
+			return c.name === 'request' ? methodArg(c) : isVerb(c.name) ? c.name.toUpperCase() : undefined; // client.post(url), client.request(Method::POST, url)
+		}
+		return undefined;
+	},
+};
+
 /**
  * The URL argument: the first string that reads like a path or a URL, with at least one written segment.
  * Blanks stay: a concatenation arrives with a blank for each part that is not a literal (`BASE + "/orders"` is
@@ -73,6 +137,8 @@ export function httpCallOf(lang: string, c: CallFact, recvType?: string): HttpCa
 		} else if (fluent && VERBS.has(c.name.toLowerCase()) && c.chain?.includes('uri')) {
 			verb = c.name.toUpperCase(); // webClient.get().uri("/x").retrieve()
 		}
+	} else if (lang === 'go' || lang === 'php' || lang === 'ruby' || lang === 'rust') {
+		verb = OTHER_CLIENTS[lang](c);
 	}
 	if (verb === undefined) {
 		return undefined;

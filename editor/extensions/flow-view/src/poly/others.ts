@@ -7,7 +7,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { joinPath, type CallFact, type FileFacts, type FuncFact, type Lang, type TypeFact } from './model';
-import { endLine, line, splitType, stringValue, walk, type TsNode } from './ts';
+import { endLine, line, same, splitType, stringValue, walk, type TsNode } from './ts';
 
 type RouteVerb = string;
 
@@ -27,6 +27,118 @@ function str(n: TsNode | null | undefined): string | undefined {
 		default:
 			return stringValue(n);
 	}
+}
+
+/**
+ * A call argument as the string it builds, for URLs, SQL and topics: literal parts as written, an
+ * interpolation (`"#{id}"`, `"$id"`, `format!("{id}")`, `Sprintf("%d")`) as `{…}`, and a part of a
+ * concatenation that is not a literal as a blank (what links.ts and the SQL reader expect, as in
+ * stringValue). Undefined when nothing in it is written out. Route paths keep reading `str`.
+ */
+function argString(n: TsNode | null | undefined): string | undefined {
+	if (!n) {
+		return undefined;
+	}
+	switch (n.type) {
+		case 'interpreted_string_literal':
+		case 'raw_string_literal':
+		case 'string_literal':
+		case 'encapsed_string':
+		case 'string':
+			if (!n.namedChildren.length) {
+				return n.type === 'raw_string_literal' && n.text.startsWith('`') ? n.text.slice(1, -1) : n.text.replace(/^[a-zA-Z]*#*["'`]/, '').replace(/["'`]#*$/, '');
+			}
+			// The parts: content and escapes as written, anything else (a variable, an expression) as {…}.
+			return n.namedChildren.map(c => /content$|^escape_sequence$/.test(c.type) ? c.text : '{…}').join('');
+		case 'binary_expression':
+		case 'binary': {
+			const parts = n.namedChildren.map(c => argString(c));
+			return parts.some(p => p !== undefined) ? parts.map(p => p ?? ' ').join('') : undefined;
+		}
+		case 'parenthesized_expression':
+		case 'reference_expression':
+		case 'argument':
+		case 'pair':
+			return argString(n.namedChildren.at(-1));
+		case 'macro_invocation': {
+			// format!("{}/orders/{id}", base): the format string, its placeholders as {…}.
+			const fmt = n.namedChildren.find(c => c.type === 'token_tree')?.namedChildren[0];
+			return /^(format|concat)$/.test(n.namedChildren[0]?.text ?? '') ? argString(fmt)?.replace(/\{[^{}]*\}/g, '{…}') : undefined;
+		}
+		case 'call_expression': {
+			// fmt.Sprintf("%s/orders/%d", base, id)
+			const f = n.childForFieldName('function')?.text;
+			const first = n.childForFieldName('arguments')?.namedChildren[0];
+			return f === 'fmt.Sprintf' ? argString(first)?.replace(/%[-+# 0-9.]*[a-zA-Z]/g, '{…}') : undefined;
+		}
+		case 'call': {
+			// URI("http://…") / URI.parse(…): the URL inside.
+			const m = n.childForFieldName('method')?.text;
+			const r = n.childForFieldName('receiver')?.text;
+			return (!r && m === 'URI') || (r === 'URI' && m === 'parse') ? argString(n.childForFieldName('arguments')?.namedChildren[0]) : undefined;
+		}
+		case 'selector_expression':
+		case 'scoped_identifier': {
+			// http.MethodPost, Method::POST: the method name the constant stands for.
+			const m = /^(?:http\.Method|(?:reqwest::)?(?:http::)?Method::)([A-Za-z]+)$/.exec(n.text.replace(/\s+/g, ''));
+			return m ? m[1].toUpperCase() : undefined;
+		}
+		default:
+			return undefined;
+	}
+}
+
+/** The written strings among a call's arguments (see argString). */
+function argStrings(args: TsNode | null | undefined): string[] {
+	return (args?.namedChildren ?? []).map(a => argString(a)).filter((s): s is string => !!s?.trim());
+}
+
+/**
+ * A call with its arguments' strings and the calls chained onto it: `client.R().SetBody(b).Post("/x")`
+ * is the call `R` on `client` with the chain ['SetBody', 'Post'] and the strings of every link. The outer
+ * calls are still calls of their own (their receivers are not plain names, so they resolve as before).
+ * `outer(cur)` is the call that takes `cur` as its receiver, if any; `argsOf` the arguments of a call.
+ */
+function withChain(call: CallFact, n: TsNode, argsOf: (c: TsNode) => TsNode | null, outer: (c: TsNode) => { name: string; call: TsNode } | undefined): CallFact {
+	call.strings = argStrings(argsOf(n));
+	const chain: string[] = [];
+	for (let cur = n, up = outer(cur); up; cur = up.call, up = outer(cur)) {
+		chain.push(up.name);
+		call.strings.push(...argStrings(argsOf(up.call)));
+	}
+	if (chain.length) {
+		call.chain = chain;
+	}
+	return call;
+}
+
+/** Go and Rust: `x.f()` on a call, through `.await` and `?` (Rust). */
+function outerSelector() {
+	return (c: TsNode): { name: string; call: TsNode } | undefined => {
+		let p = c.parent;
+		while (p?.type === 'await_expression' || p?.type === 'try_expression') {
+			p = p.parent;
+		}
+		const call = p?.parent;
+		if ((p?.type === 'selector_expression' || p?.type === 'field_expression') && call?.type === 'call_expression' && call.childForFieldName('function') && same(call.childForFieldName('function'), p)) {
+			return { name: p.childForFieldName('field')?.text ?? '?', call };
+		}
+		return undefined;
+	};
+}
+const callArgs = (c: TsNode) => c.childForFieldName('arguments');
+const outerChained = outerSelector();
+
+/** PHP: `$x->f()` / `$x?->f()` on a call. */
+function outerPhp(c: TsNode): { name: string; call: TsNode } | undefined {
+	const p = c.parent;
+	return (p?.type === 'member_call_expression' || p?.type === 'nullsafe_member_call_expression') && same(p.childForFieldName('object'), c) ? { name: p.childForFieldName('name')?.text ?? '?', call: p } : undefined;
+}
+
+/** Ruby: `x.f` on a call. */
+function outerRuby(c: TsNode): { name: string; call: TsNode } | undefined {
+	const p = c.parent;
+	return p?.type === 'call' && same(p.childForFieldName('receiver'), c) ? { name: p.childForFieldName('method')?.text ?? '?', call: p } : undefined;
 }
 
 const BUILTIN_CALLS = new Set(['len', 'cap', 'make', 'new', 'append', 'copy', 'delete', 'panic', 'recover', 'print', 'close', 'string', 'int', 'int64', 'float64', 'byte', 'bool', 'error', 'isset', 'empty', 'count', 'array', 'unset', 'die', 'exit', 'puts', 'require', 'require_relative', 'raise', 'attr_accessor', 'attr_reader', 'attr_writer', 'include', 'extend', 'vec', 'Some', 'Ok', 'Err', 'Box', 'format']);
@@ -115,6 +227,11 @@ export function extractGo(root: TsNode, file: string, mtime: number): FileFacts 
 		if (written === undefined || args.length < 2 || !GO_ROUTE_VERB.test(verb)) {
 			return undefined;
 		}
+		// http.Post("/x", "application/json", body), client.Post(…) are requests: net/http registers only with
+		// Handle/HandleFunc, and no router takes a string (a content type) or nil as a handler.
+		if ((f.childForFieldName('operand')?.text === 'http' && !/^Handle(Func)?$/.test(verb)) || str(args[1]) !== undefined || args.at(-1)!.type === 'nil') {
+			return undefined;
+		}
 		// net/http (Go 1.22) patterns: "GET /users/{id}". Anything else must look like a path, so
 		// `cache.Get("key", &out)` and `cron.AddFunc("@daily", fn)` are ordinary calls.
 		const pattern = /^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+(\/.*)$/.exec(written);
@@ -142,10 +259,10 @@ export function extractGo(root: TsNode, file: string, mtime: number): FileFacts 
 			}
 			const f = n.childForFieldName('function');
 			if (f?.type === 'identifier') {
-				return { name: f.text, line: line(n), strings: [] };
+				return withChain({ name: f.text, line: line(n), strings: [] }, n, callArgs, outerChained);
 			}
 			if (f?.type === 'selector_expression') {
-				return { name: f.childForFieldName('field')?.text ?? '', recv: recv(f.childForFieldName('operand'), selfName), line: line(n), strings: [] };
+				return withChain({ name: f.childForFieldName('field')?.text ?? '', recv: recv(f.childForFieldName('operand'), selfName), line: line(n), strings: [] }, n, callArgs, outerChained);
 			}
 			return undefined;
 		},
@@ -268,14 +385,14 @@ export function extractPhp(root: TsNode, file: string, mtime: number): FileFacts
 		call: n => {
 			if (n.type === 'function_call_expression') {
 				const f = n.childForFieldName('function');
-				return f ? { name: f.text.split('\\').pop()!, line: line(n), strings: [] } : undefined;
+				return f ? withChain({ name: f.text.split('\\').pop()!, line: line(n), strings: [] }, n, callArgs, outerPhp) : undefined;
 			}
 			if (n.type === 'member_call_expression' || n.type === 'nullsafe_member_call_expression') {
-				return { name: n.childForFieldName('name')?.text ?? '', recv: recv(n.childForFieldName('object')), line: line(n), strings: [] };
+				return withChain({ name: n.childForFieldName('name')?.text ?? '', recv: recv(n.childForFieldName('object')), line: line(n), strings: [] }, n, callArgs, outerPhp);
 			}
 			if (n.type === 'scoped_call_expression') {
 				const scope = n.childForFieldName('scope')?.text ?? '';
-				return { name: n.childForFieldName('name')?.text ?? '', recv: scope === 'static' ? 'self' : scope, line: line(n), strings: [] };
+				return withChain({ name: n.childForFieldName('name')?.text ?? '', recv: scope === 'static' ? 'self' : scope, line: line(n), strings: [] }, n, callArgs, outerPhp);
 			}
 			return undefined;
 		},
@@ -497,7 +614,7 @@ export function extractRuby(root: TsNode, file: string, mtime: number): FileFact
 		call: n => {
 			if (n.type === 'call') {
 				const name = n.childForFieldName('method')?.text;
-				return name ? { name, recv: recv(n.childForFieldName('receiver')), line: line(n), strings: [] } : undefined;
+				return name ? withChain({ name, recv: recv(n.childForFieldName('receiver')), line: line(n), strings: [] }, n, callArgs, outerRuby) : undefined;
 			}
 			// A bare word on its own line is a method call (`audit`, `greet`), unless it is a local variable.
 			if (n.type === 'identifier' && isBareCall(n) && !locals.has(n.text)) {
@@ -676,13 +793,13 @@ export function extractRust(root: TsNode, file: string, mtime: number): FileFact
 			}
 			const f = n.childForFieldName('function');
 			if (f?.type === 'identifier') {
-				return { name: f.text, line: line(n), strings: [] };
+				return withChain({ name: f.text, line: line(n), strings: [] }, n, callArgs, outerChained);
 			}
 			if (f?.type === 'scoped_identifier') {
-				return { name: f.childForFieldName('name')?.text ?? '', recv: recv(f.childForFieldName('path')), line: line(n), strings: [] };
+				return withChain({ name: f.childForFieldName('name')?.text ?? '', recv: recv(f.childForFieldName('path')), line: line(n), strings: [] }, n, callArgs, outerChained);
 			}
 			if (f?.type === 'field_expression') {
-				return { name: f.childForFieldName('field')?.text ?? '', recv: recv(f.childForFieldName('value')), line: line(n), strings: [] };
+				return withChain({ name: f.childForFieldName('field')?.text ?? '', recv: recv(f.childForFieldName('value')), line: line(n), strings: [] }, n, callArgs, outerChained);
 			}
 			return undefined;
 		},
@@ -789,9 +906,9 @@ function inline(facts: FileFacts, lit: TsNode, verb: string, path: string, param
 				}
 				const f = n.childForFieldName('function');
 				if (f?.type === 'identifier') {
-					return { name: f.text, line: line(n), strings: [] };
+					return withChain({ name: f.text, line: line(n), strings: [] }, n, callArgs, outerChained);
 				}
-				return f?.type === 'selector_expression' ? { name: f.childForFieldName('field')?.text ?? '', recv: recv(f.childForFieldName('operand')), line: line(n), strings: [] } : undefined;
+				return f?.type === 'selector_expression' ? withChain({ name: f.childForFieldName('field')?.text ?? '', recv: recv(f.childForFieldName('operand')), line: line(n), strings: [] }, n, callArgs, outerChained) : undefined;
 			},
 		};
 		collect(body, fn, w);
