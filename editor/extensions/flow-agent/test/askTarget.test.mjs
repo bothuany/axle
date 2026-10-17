@@ -160,3 +160,11 @@ test('Compact and Measure are typed only at the prompt, by kind, never into a pe
 	assert.equal(a.slashRefusal(s('a', 'custom', 'unknown', 1), 'compact'), 'unsupported')
 	assert.equal(a.slashRefusal(undefined, 'compact'), 'unknown')
 })
+
+test('"Plan first": /plan for Claude Code, words for every target without it', () => {
+	assert.equal(a.planFirst('fix the bug', { kind: 'session', id: 'a', cli: 'claude' }), '/plan fix the bug')
+	assert.equal(a.planFirst('fix the bug', { kind: 'new', cli: 'claude' }), '/plan fix the bug')
+	for (const t of [{ kind: 'session', id: 'b', cli: 'codex' }, { kind: 'new', cli: 'custom', custom: 'Gemini' }, { kind: 'chat' }, { kind: 'clipboard' }]) {
+		assert.equal(a.planFirst('fix the bug', t), `${a.PLAN_FIRST} fix the bug`, t.kind + (t.cli ?? ''))
+	}
+})

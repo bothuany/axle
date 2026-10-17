@@ -13,7 +13,7 @@ import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { crashNeed, nextAttention, attentionKind, type Attention, type Need } from './attention';
+import { crashNeed, nextAttention, attentionKind, startupNeed, type Attention, type Need } from './attention';
 import { findConflicts, key, type Conflict, type SessionEdits } from './conflicts';
 import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexProfile, codexProfileFile } from './codexHooks';
 import { agentProcessEnv, inheritedAgentEnv } from './env';
@@ -663,11 +663,21 @@ export class Agents implements vscode.Disposable {
 		};
 		this.sessions.set(id, session);
 		this.terminals.set(id, terminal);
+		// The dollars Claude Code reports count from this start; a resumed transcript's earlier turns are kept apart.
+		this.costs.delete(id);
+		this.tracker(session)?.started(Date.now());
 		this.watchTranscript(session);
-		// If SessionStart does not reach us (no Node on the hook path, slow boot), call it ready once it had time to start.
+		// No SessionStart yet: Claude runs no hook before the folder is trusted, so it likely waits on that question (or on
+		// approving MCP servers). Say it may need you, rather than "Ready"; the first hook event clears it. (A missing Node
+		// on the hook path looks the same, which is why the text says "may".)
 		setTimeout(() => {
 			if (session.state === 'starting') {
 				session.state = 'idle';
+				if (cli === 'claude' && !this.heard.has(id)) {
+					const need = startupNeed(Date.now());
+					this.attention.set(id, { failures: 0, need });
+					session.need = need;
+				}
 				this.changed.fire();
 			}
 		}, 8000);

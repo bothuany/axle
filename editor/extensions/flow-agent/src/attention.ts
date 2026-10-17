@@ -19,7 +19,7 @@
 export type NeedKind = 'approval' | 'question' | 'error';
 
 /** Where a need came from: it decides which later event clears it. */
-export type NeedSource = 'permission' | 'plan' | 'ask' | 'elicitation' | 'reply' | 'loop' | 'stop' | 'crash';
+export type NeedSource = 'permission' | 'plan' | 'ask' | 'elicitation' | 'reply' | 'loop' | 'stop' | 'crash' | 'startup';
 
 export interface Need {
 	kind: NeedKind;
@@ -101,8 +101,20 @@ export function errorText(error: string | undefined, details: string | undefined
 
 const clearsOnProgress = (n: Need | undefined) => !n || n.kind === 'approval' || n.kind === 'question';
 
+/**
+ * Claude Code said nothing since it started: no hook runs before you trust the folder, so it is most likely asking that
+ * (or to approve the project's MCP servers) in its terminal. Hooks give no signal for these prompts, so this is a guess,
+ * and says so; the first hook event clears it.
+ */
+export function startupNeed(now: number): Need {
+	return { kind: 'question', source: 'startup', text: 'No word from it yet: it may be asking you to trust this folder or approve MCP servers in its terminal', at: now };
+}
+
 /** The attention after one hook event. Never mutates `prev`. */
 export function nextAttention(prev: Attention, e: AttentionEvent, now: number): Attention {
+	if (prev.need?.source === 'startup') {
+		prev = { ...prev, need: undefined }; // it spoke, so it is past its startup questions
+	}
 	const need = (kind: NeedKind, source: NeedSource, text: string): Attention => ({ ...prev, need: { kind, source, text: line(text), at: now } });
 	const asks = (tool: string | undefined) => tool === 'AskUserQuestion';
 	switch (e.event) {

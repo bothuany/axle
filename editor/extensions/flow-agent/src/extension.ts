@@ -55,9 +55,10 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('flow.agents.resume', () => startOrResume(agents, 'claude', false)),
 		vscode.commands.registerCommand('flow.agents.start', (cli: unknown) => cli === 'claude' || cli === 'codex' ? startOrResume(agents, cli) : undefined),
 		// Called by flow-view (Home, "Ask about this flow") and any other extension with text for "the agent": the user's
-		// chosen agent gets it (ask.ts). `origin` names the feature for the picker; `files` are referred to as each target reads them.
-		vscode.commands.registerCommand('flow.agents.ask', (text: unknown, submit: unknown, origin: unknown, files: unknown) => typeof text === 'string'
-			? router.ask(text, submit === true, typeof origin === 'string' ? origin : undefined, Array.isArray(files) ? files.filter((f): f is string => typeof f === 'string') : [])
+		// chosen agent gets it (ask.ts). `origin` names the feature for the picker; `files` are referred to as each target reads them;
+		// `options.plan` asks it to plan first, in the form that target understands.
+		vscode.commands.registerCommand('flow.agents.ask', (text: unknown, submit: unknown, origin: unknown, files: unknown, options: unknown) => typeof text === 'string'
+			? router.ask(text, submit === true, typeof origin === 'string' ? origin : undefined, Array.isArray(files) ? files.filter((f): f is string => typeof f === 'string') : [], (options as { plan?: unknown } | undefined)?.plan === true)
 			: false),
 		vscode.commands.registerCommand('flow.agents.chooseAskTarget', () => router.choose()),
 		vscode.commands.registerCommand('flow.agents.keptWorktrees', () => worktrees.showKept()),

@@ -74,6 +74,18 @@ export function canType(s: SessionInfo, customs: CustomCli[]): boolean {
 	return s.heard && (s.state === 'idle' || s.state === 'done');
 }
 
+/** What a target is told when a question asks it to plan first, in words, for one that has no /plan of its own. */
+export const PLAN_FIRST = 'Plan this first and wait for my go-ahead before you change any file.';
+
+/**
+ * A question with "plan first" asked: Claude Code takes `/plan <task>` (its documented plan-mode command); every other
+ * target (Codex, a custom CLI, the chat panel, the clipboard) gets the request in words instead of a command it may not know.
+ */
+export function planFirst(line: string, target: AskTarget): string {
+	const claude = (target.kind === 'session' || target.kind === 'new') && target.cli === 'claude';
+	return claude ? `/plan ${line}` : `${PLAN_FIRST} ${line}`;
+}
+
 /** The slash commands another extension may have typed into a session (flow.agents.slash): a kind, never text of its own. */
 export type SlashKind = 'compact' | 'context';
 /** Why a slash command was not typed, or `sent`. */

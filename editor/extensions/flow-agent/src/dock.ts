@@ -267,8 +267,11 @@ function render() {
 		const needText = s.need ? s.need.text : kind === 'approval' ? s.activity : '';
 		const need = chip ? '<div class="need ' + esc(chip) + '"><span class="chip">' + esc(NEED[chip]) + '</span>' + (needText ? '<span class="t">' + esc(needText) + '</span>' : '') + '</div>' : '';
 		const c = s.cost;
-		const cost = c ? '<span class="cost" title="' + esc((c.prompt ? spendTip('This prompt', c.prompt) + '\\n' : '') + spendTip('Session', c.session) + '\\nTokens of the ' + c.scope + '.' + (c.usdSource ? ' Dollars: ' + c.usdSource + '.' : ' No dollar figure: the CLI does not report one.')) + '">'
-			+ (c.prompt ? '<span class="sp">' + esc(spendLine('prompt', c.prompt)) + '</span>' : '') + '<span class="sp">' + esc(spendLine('session', c.session)) + (c.session.usd !== undefined ? ' <span class="est">est.</span>' : '') + '</span></span>' : '';
+		// Both lines are the same kind of estimate, so both say so. A resumed conversation counts from this CLI's start, as its dollars do.
+		const est = x => x.usd !== undefined ? ' <span class="est">est.</span>' : '';
+		const earlier = c && c.earlier ? '\\n' + tok(sum(c.earlier)) + ' tokens from before this CLI started (the conversation was resumed) are not counted here.' : '';
+		const cost = c ? '<span class="cost" title="' + esc((c.prompt ? spendTip('This prompt', c.prompt) + '\\n' : '') + spendTip(c.earlier ? 'Since this CLI started' : 'Session', c.session) + '\\nTokens of the ' + c.scope + '.' + (c.usdSource ? ' Dollars: ' + c.usdSource + '.' : ' No dollar figure: the CLI does not report one.') + earlier) + '">'
+			+ (c.prompt ? '<span class="sp">' + esc(spendLine('prompt', c.prompt)) + est(c.prompt) + '</span>' : '') + '<span class="sp">' + esc(spendLine(c.earlier ? 'since resume' : 'session', c.session)) + est(c.session) + '</span></span>' : '';
 		const p = s.pr;
 		const checks = p && p.checks !== 'none' ? ' <span class="ck ' + esc(p.checks) + '">' + esc(CHECK[p.checks]) + '</span>' : '';
 		const prTip = p ? p.title + ' (' + PRSTATE[p.state] + ')' + (p.checks !== 'none' ? '\\nChecks: ' + p.counts.pass + ' passed, ' + p.counts.fail + ' failed, ' + p.counts.pending + ' pending' + (p.failing.length ? '\\nFailing: ' + p.failing.join(', ') : '') : '') + '\\nOpen on GitHub' : '';

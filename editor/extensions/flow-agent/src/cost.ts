@@ -44,6 +44,11 @@ export interface SessionCost {
 	usdSource?: string;
 	/** Whose tokens these are, for the tooltip. */
 	scope: string;
+	/**
+	 * Tokens of the conversation from before this CLI started (a resumed session). The dollars count only since the
+	 * start, so `session` then holds the tokens since the start too, and this the earlier ones.
+	 */
+	earlier?: Tokens;
 }
 
 export const ZERO: Tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
@@ -69,6 +74,10 @@ export function spendSince(now: Spend, base: Spend): Spend {
 /** Counts a Claude transcript's tokens, line by line, each assistant message once. */
 export class ClaudeLedger {
 	tokens: Tokens = { ...ZERO };
+	/** The share of `tokens` from messages before `since`, when that was set before the transcript was read. */
+	earlier: Tokens = { ...ZERO };
+	/** When the CLI started (ms): messages before it belong to an earlier run of the conversation. */
+	since?: number;
 	model?: string;
 	private readonly seen = new Set<string>();
 
@@ -77,7 +86,7 @@ export class ClaudeLedger {
 			if (!l.includes('"usage"')) {
 				continue; // most lines are tool output: skip them before parsing
 			}
-			let e: { type?: string; requestId?: string; message?: { id?: string; model?: string; usage?: Record<string, unknown> } };
+			let e: { type?: string; requestId?: string; timestamp?: string; message?: { id?: string; model?: string; usage?: Record<string, unknown> } };
 			try {
 				e = JSON.parse(l);
 			} catch {
@@ -98,7 +107,11 @@ export class ClaudeLedger {
 			if (e.message?.model && e.message.model !== '<synthetic>') {
 				this.model = e.message.model;
 			}
-			this.tokens = addTokens(this.tokens, { input: num(u.input_tokens), output: num(u.output_tokens), cacheRead: num(u.cache_read_input_tokens), cacheWrite: num(u.cache_creation_input_tokens) });
+			const add = { input: num(u.input_tokens), output: num(u.output_tokens), cacheRead: num(u.cache_read_input_tokens), cacheWrite: num(u.cache_creation_input_tokens) };
+			this.tokens = addTokens(this.tokens, add);
+			if (this.since !== undefined && Date.parse(e.timestamp ?? '') < this.since) {
+				this.earlier = addTokens(this.earlier, add);
+			}
 		}
 	}
 }
@@ -226,6 +239,16 @@ export class CostTracker {
 		});
 	}
 
+	/**
+	 * The CLI starts now, before its transcript is read: what the transcript holds from before (a resumed conversation)
+	 * is kept apart, since the dollars Claude Code reports count only from its start.
+	 */
+	started(at: number) {
+		if (!this.reader) {
+			this.ledger.since = at;
+		}
+	}
+
 	/** Claude's status line said what the CLI has spent so far. */
 	setUsd(usd: number | undefined) {
 		if (usd !== undefined) {
@@ -250,8 +273,11 @@ export class CostTracker {
 		if (!totalTokens(session.tokens)) {
 			return undefined;
 		}
+		const earlier = this.cli === 'claude' && totalTokens(this.ledger.earlier) ? this.ledger.earlier : undefined;
 		return {
-			session,
+			// A resumed conversation: the session line counts from this CLI's start, like the dollars beside it.
+			session: earlier ? spendSince(session, { tokens: earlier }) : session,
+			...(earlier ? { earlier } : {}),
 			...(this.base ? { prompt: spendSince(session, this.base) } : {}),
 			...(session.usd !== undefined ? { usdSource: 'Claude Code\'s own estimate at API prices, since this CLI started' } : {}),
 			scope: this.cli === 'codex' ? 'Codex session' : 'main agent (subagents not included)',
