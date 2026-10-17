@@ -157,7 +157,7 @@ function transportOf(raw: Record<string, unknown>, harness: McpHarness): Transpo
 
 interface Base { harness: McpHarness; scope: McpScope; file: string; keyPath: string[]; format: 'json' | 'toml'; readOnly?: string; profile?: string; plugin?: string; displayName?: string; toolPrefix?: string }
 
-function server(name: string, raw: Record<string, unknown>, b: Base, platform: NodeJS.Platform): McpServer {
+function server(name: string, raw: Record<string, unknown>, b: Base): McpServer {
 	const transport = transportOf(raw, b.harness);
 	const display = b.displayName ?? name;
 	const s: McpServer = {
@@ -187,13 +187,13 @@ function server(name: string, raw: Record<string, unknown>, b: Base, platform: N
 	if (transport === 'sse') {
 		s.issues.push({ severity: 'info', message: 'SSE is deprecated in Claude Code: use "type": "http" if the server supports it' });
 	}
-	// Node cannot start a .cmd shim without a shell, and neither can the agents: npx and friends on Windows need cmd /c.
-	if (platform === 'win32' && transport === 'stdio' && s.command && /^(npx|npm|pnpm|yarn|bunx|uvx)(\.cmd)?$/i.test(path.basename(s.command))) {
-		s.issues.push({ severity: 'warning', message: `On Windows "${s.command}" is a .cmd script that the agent cannot start directly: write it as "cmd" with args ["/c", "${s.command}", …]` });
-	}
 	const literal = [...Object.entries(s.env), ...Object.entries(s.headers)].filter(([, v]) => v && !/\$\{[^}]+\}/.test(v) && looksSecret(v));
-	if (literal.length && (b.scope === 'project' || b.scope === 'managed')) {
+	if (literal.length && b.scope === 'project') {
 		s.issues.push({ severity: 'warning', message: `${literal.map(([k]) => k).join(', ')} ${literal.length === 1 ? 'holds' : 'hold'} a literal secret in a shared file: use \${VAR} to read it from the environment` });
+	}
+	// A plugin's or the organization's server cannot be fixed here: what is wrong with it is worth knowing, not a mark against this harness.
+	if (b.readOnly) {
+		s.issues.forEach(i => i.severity = 'info');
 	}
 	return s;
 }
@@ -203,8 +203,8 @@ export function looksSecret(v: string): boolean {
 	return /^(sk-|ghp_|gho_|github_pat_|xox[abps]-|AKIA|glpat-|Bearer\s)/.test(v) || (v.length >= 20 && !/\s/.test(v) && /\d/.test(v) && /[A-Za-z]/.test(v) && !/^[./\\~]|:\/\//.test(v));
 }
 
-function serversIn(obj: unknown, b: Base, platform: NodeJS.Platform): McpServer[] {
-	return isObject(obj) ? Object.entries(obj).filter(([, v]) => isObject(v)).map(([n, v]) => server(n, v as Record<string, unknown>, b, platform)) : [];
+function serversIn(obj: unknown, b: Base): McpServer[] {
+	return isObject(obj) ? Object.entries(obj).filter(([, v]) => isObject(v)).map(([n, v]) => server(n, v as Record<string, unknown>, b)) : [];
 }
 
 export async function readMcp(input: McpReadInput): Promise<McpConfig> {
@@ -254,21 +254,21 @@ export async function readMcp(input: McpReadInput): Promise<McpConfig> {
 
 	const claude: McpServer[] = [];
 	if (managed) {
-		claude.push(...serversIn(managed.mcpServers, { harness: 'Claude', scope: 'managed', file: files.managed, keyPath: ['mcpServers'], format: 'json', readOnly: 'Deployed by your organization (managed-mcp.json)' }, platform));
+		claude.push(...serversIn(managed.mcpServers, { harness: 'Claude', scope: 'managed', file: files.managed, keyPath: ['mcpServers'], format: 'json', readOnly: 'Deployed by your organization (managed-mcp.json)' }));
 	}
 	// Claude Code keys a folder by its working directory exactly as it was started there, so on Windows "C:/a" and "c:/a"
 	// can both exist (a terminal and an editor spell the drive differently); each one's servers are this folder's.
 	for (const key of [projectKey, ...Object.keys(projects).filter(k => k !== projectKey && findProjectKey([k], root, platform))]) {
 		const entry = isObject(projects[key]) ? projects[key] as Record<string, unknown> : {};
-		const found = serversIn(entry.mcpServers, { harness: 'Claude', scope: 'local', file: claudeJson, keyPath: ['projects', key, 'mcpServers'], format: 'json' }, platform);
+		const found = serversIn(entry.mcpServers, { harness: 'Claude', scope: 'local', file: claudeJson, keyPath: ['projects', key, 'mcpServers'], format: 'json' });
 		if (key !== projectKey) {
 			found.forEach(s => s.issues.push({ severity: 'info', message: `Written under "${key}": Claude Code sees it only when started from the folder spelled that way` }));
 		}
 		claude.push(...found.filter(f => !claude.some(c => c.scope === 'local' && c.name === f.name)));
 	}
 	const mcpJson = await json(files.mcpJson, true);
-	claude.push(...serversIn(mcpJson?.mcpServers, { harness: 'Claude', scope: 'project', file: files.mcpJson, keyPath: ['mcpServers'], format: 'json' }, platform));
-	claude.push(...serversIn(cj.mcpServers, { harness: 'Claude', scope: 'user', file: claudeJson, keyPath: ['mcpServers'], format: 'json' }, platform));
+	claude.push(...serversIn(mcpJson?.mcpServers, { harness: 'Claude', scope: 'project', file: files.mcpJson, keyPath: ['mcpServers'], format: 'json' }));
+	claude.push(...serversIn(cj.mcpServers, { harness: 'Claude', scope: 'user', file: claudeJson, keyPath: ['mcpServers'], format: 'json' }));
 	claude.push(...await pluginServers(input, settings, problems));
 
 	// Approval of .mcp.json servers, and the /mcp switches for user and local ones.
@@ -327,10 +327,10 @@ export async function readMcp(input: McpReadInput): Promise<McpConfig> {
 			problems.push({ file, message: doc.error });
 			return;
 		}
-		codex.push(...serversIn(doc.data.mcp_servers, { harness: 'Codex', scope, file, keyPath: ['mcp_servers'], format: 'toml', readOnly, profile }, platform));
+		codex.push(...serversIn(doc.data.mcp_servers, { harness: 'Codex', scope, file, keyPath: ['mcp_servers'], format: 'toml', readOnly, profile }));
 		for (const [p, body] of Object.entries(isObject(doc.data.profiles) ? doc.data.profiles : {})) {
 			if (isObject(body)) {
-				codex.push(...serversIn(body.mcp_servers, { harness: 'Codex', scope: 'profile', file, keyPath: ['profiles', p, 'mcp_servers'], format: 'toml', profile: p, readOnly: `Only with \`codex -p ${p}\`: edit it in the file` }, platform));
+				codex.push(...serversIn(body.mcp_servers, { harness: 'Codex', scope: 'profile', file, keyPath: ['profiles', p, 'mcp_servers'], format: 'toml', profile: p, readOnly: `Only with \`codex -p ${p}\`: edit it in the file` }));
 			}
 		}
 	};
@@ -428,7 +428,7 @@ async function pluginServers(input: McpReadInput, settings: Record<string, Recor
 					harness: 'Claude', scope: 'plugin', file, keyPath, format: 'json', plugin: name,
 					displayName: `plugin:${name}:${n}`, toolPrefix: toolPrefixOf(`plugin_${name}_${n}`),
 					readOnly: `From the ${name} plugin: install or remove the plugin to change it`,
-				}, input.platform));
+				}));
 			}
 		}
 	}
@@ -523,7 +523,7 @@ export function publicView(s: McpServer): McpView {
 }
 
 /** Every literal secret value in a set of servers, for hiding them in previews and messages. */
-export function secretsOf(servers: Pick<McpServer, 'env' | 'headers' | 'args'>[]): string[] {
+export function secretsOf(servers: (Pick<McpServer, 'env' | 'headers' | 'args'> & { url?: string })[]): string[] {
 	const out = new Set<string>();
 	for (const s of servers) {
 		for (const v of [...Object.values(s.env), ...Object.values(s.headers)]) {
@@ -532,6 +532,22 @@ export function secretsOf(servers: Pick<McpServer, 'env' | 'headers' | 'args'>[]
 			}
 		}
 		maskArgs(s.args).forEach((m, n) => m !== s.args[n] && out.add(s.args[n].replace(/^--?[\w-]+=/, '')));
+		// What maskUrl hides in a URL: its password and secret-looking query values.
+		try {
+			const u = new URL(s.url ?? '');
+			if (u.password) {
+				out.add(decodeURIComponent(u.password));
+				out.add(u.password);
+			}
+			for (const [k, v] of u.searchParams) {
+				if (v && (/key|token|secret|auth|sig|password|code/i.test(k) || looksSecret(v))) {
+					out.add(v);
+					out.add(encodeURIComponent(v));
+				}
+			}
+		} catch {
+			// not a URL
+		}
 	}
 	return [...out].filter(v => v.length >= 1);
 }

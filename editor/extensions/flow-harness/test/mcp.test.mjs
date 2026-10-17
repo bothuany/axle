@@ -75,7 +75,7 @@ test('Claude Code on Windows: user, local (project key in another spelling), pro
 	assert.match(by('repo', 'project').stateWhy, /this folder in .claude.json/)
 	assert.equal(by('waiting', 'project').state, 'off', 'disabledMcpjsonServers rejects it')
 	assert.equal(by('broken', 'project').issues[0].severity, 'error', 'a url without a type reads as stdio')
-	assert.ok(by('repo', 'project').issues.some(i => /cmd/.test(i.message)), 'npx on Windows needs cmd /c')
+	assert.ok(!by('repo', 'project').issues.length, 'Claude Code starts npx.cmd itself: no Windows warning')
 	assert.deepEqual(by('shared', 'local').keyPath, ['projects', 'C:/work/app', 'mcpServers', 'shared'])
 })
 
@@ -126,6 +126,11 @@ test('plugin servers are read only, named plugin:<plugin>:<server>, and skipped 
 	assert.deepEqual(names, ['plugin:data:hex', 'plugin:tools:db'])
 	const hex = c.servers.find(s => s.name === 'plugin:data:hex')
 	assert.ok(hex.readOnly)
+	const broken = await cfg.readMcp(windowsInput({
+		'C:/Users/me/.claude/plugins/synced/acct/p/.claude-plugin/plugin.json': JSON.stringify({ name: 'p' }),
+		'C:/Users/me/.claude/plugins/synced/acct/p/.mcp.json': JSON.stringify({ mcpServers: { u: { url: 'https://x' } } }),
+	}))
+	assert.equal(broken.servers[0].issues[0].severity, 'info', 'a plugin server cannot be fixed here: info, not an error against the score')
 	assert.equal(hex.toolPrefix, 'plugin_data_hex', 'the name its tool calls carry, for the usage counts')
 })
 
@@ -182,6 +187,8 @@ test('the page sees names and variable references, never values', async () => {
 	const masked = cfg.maskText(`{"A": "${SECRET}", "${SECRET}": 1}\nclaude -e A=${SECRET}`, cfg.secretsOf(c.servers))
 	assert.ok(!masked.includes(SECRET), masked)
 	assert.equal(cfg.maskText('{"b": "b", "x": "b"}', ['b']), '{"b": "••••", "x": "••••"}', 'a key spelled like a short secret stays')
+	const urlSecrets = cfg.secretsOf([{ env: {}, headers: {}, args: [], url: 'https://u:pa55w0rd@h.example/mcp?token=abc&x=1' }])
+	assert.ok(urlSecrets.includes('pa55w0rd') && urlSecrets.includes('abc') && !urlSecrets.includes('1'), JSON.stringify(urlSecrets))
 })
 
 test('JSON edits keep every other key, comments and indentation', () => {

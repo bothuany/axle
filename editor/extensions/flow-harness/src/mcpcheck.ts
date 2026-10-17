@@ -34,6 +34,8 @@ export interface CheckResult {
 	ms: number;
 	/** An HTTP server that wants a sign-in first (401). */
 	needsAuth?: boolean;
+	/** A Windows .cmd/.bat script: only cmd.exe runs one, and Axle does not start a shell; the caller may ask the agent's CLI instead. */
+	needsShell?: boolean;
 	/** The last lines the server wrote to stderr, secrets masked by the caller. */
 	stderr?: string;
 	at: number;
@@ -72,30 +74,36 @@ export function killTree(child: ChildProcess, platform: NodeJS.Platform = proces
 }
 
 /**
- * On Windows a bare name like `npx` resolves through PATHEXT, and when it lands on a .cmd/.bat script no program can start it
- * without cmd.exe. The agents cannot either, so the check says so instead of starting a shell.
+ * The program a command names, as an absolute path found on PATH (with PATHEXT on Windows), so a bare `node` never
+ * resolves to a node.exe sitting in the folder the check runs in. `script` marks a Windows .cmd/.bat.
  */
-export function windowsScript(command: string, env: NodeJS.ProcessEnv, isFile: (p: string) => boolean): string | undefined {
-	if (/[\\/]/.test(command) || path.extname(command)) {
-		return /\.(cmd|bat)$/i.test(command) ? command : undefined;
+export function resolveCommand(command: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform, isFile: (p: string) => boolean): { file?: string; script: boolean } {
+	const p = platform === 'win32' ? path.win32 : path.posix;
+	const isScript = (f: string) => platform === 'win32' && /\.(cmd|bat)$/i.test(f);
+	if (/[\\/]/.test(command)) {
+		return { file: command, script: isScript(command) };
 	}
-	const dirs = (env.PATH ?? env.Path ?? '').split(';').filter(Boolean);
+	const dirs = (env.PATH ?? env.Path ?? '').split(platform === 'win32' ? ';' : ':').filter(Boolean);
+	const exts = platform === 'win32' ? (p.extname(command) ? [''] : ['.com', '.exe', '.bat', '.cmd']) : [''];
 	for (const d of dirs) {
-		for (const ext of ['.com', '.exe', '.bat', '.cmd']) {
-			const f = path.win32.join(d, command + ext);
+		for (const ext of exts) {
+			const f = p.join(d.replace(/^"|"$/g, ''), command + ext);
 			if (isFile(f)) {
-				return /\.(cmd|bat)$/i.test(ext) ? f : undefined;
+				return { file: f, script: isScript(f) };
 			}
 		}
 	}
-	return undefined;
+	return { script: false };
 }
+
+/** What a server may print or send before the check gives up on it. */
+const MAX_BYTES = 1 << 20;
 
 interface Rpc { id?: number | string; result?: unknown; error?: { code: number; message: string }; method?: string }
 
 export interface StdioDef { command: string; args: string[]; env: Record<string, string>; cwd?: string }
 
-export function checkStdio(def: StdioDef, opts: { timeoutMs?: number; env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform; isFile?: (p: string) => boolean; cwd?: string } = {}): Promise<CheckResult> {
+export function checkStdio(def: StdioDef, opts: { timeoutMs?: number; env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform; isFile: (p: string) => boolean; cwd?: string }): Promise<CheckResult> {
 	const started = Date.now();
 	const platform = opts.platform ?? process.platform;
 	const base = opts.env ?? process.env;
@@ -106,16 +114,17 @@ export function checkStdio(def: StdioDef, opts: { timeoutMs?: number; env?: Node
 	const command = expandVars(def.command, base);
 	const args = def.args.map(a => expandVars(a, base));
 	const done = (r: Omit<CheckResult, 'ms' | 'at' | 'how'>): CheckResult => ({ how: 'handshake', ...r, ms: Date.now() - started, at: Date.now() });
-	if (platform === 'win32' && opts.isFile) {
-		const script = windowsScript(command, env, opts.isFile);
-		if (script) {
-			return Promise.resolve(done({ ok: false, status: `Not started: ${path.basename(script)} is a script only cmd.exe can run, and the agent cannot start it either. Write the command as "cmd" with args ["/c", "${command}", …]` }));
-		}
+	const program = resolveCommand(command, env, platform, opts.isFile);
+	if (!program.file) {
+		return Promise.resolve(done({ ok: false, status: `Could not start ${command}: not found on PATH` }));
+	}
+	if (program.script) {
+		return Promise.resolve({ ...done({ ok: false, status: `${path.basename(program.file)} is a script only cmd.exe runs, and Axle does not start a shell` }), how: 'not run', needsShell: true });
 	}
 	return new Promise(resolve => {
 		let child: ChildProcess;
 		try {
-			child = spawn(command, args, { cwd: def.cwd ? expandVars(def.cwd, base) : opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: platform !== 'win32' });
+			child = spawn(program.file!, args, { cwd: def.cwd ? expandVars(def.cwd, base) : opts.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, detached: platform !== 'win32' });
 		} catch (e) {
 			resolve(done({ ok: false, status: `Could not start: ${(e as Error).message}` }));
 			return;
@@ -143,6 +152,9 @@ export function checkStdio(def: StdioDef, opts: { timeoutMs?: number; env?: Node
 		child.stderr?.on('data', d => stderr = (stderr + d).slice(-4000));
 		child.stdout?.on('data', d => {
 			stdout += d;
+			if (stdout.length > MAX_BYTES) {
+				return finish({ ok: false, status: 'Wrote more than 1 MB without a line end: not an MCP server on stdio' });
+			}
 			let nl: number;
 			while ((nl = stdout.indexOf('\n')) >= 0) {
 				const line = stdout.slice(0, nl).trim();
@@ -217,12 +229,17 @@ export async function checkHttp(def: HttpDef, opts: { timeoutMs?: number; env?: 
 	let session: string | undefined;
 	let version = PROTOCOL;
 	const post = async (msg: object, id?: number): Promise<{ status: number; rpc?: Rpc }> => {
+		// Redirects are not followed: the configured headers (an API key) would go to wherever the server points.
 		const res = await doFetch(url, {
-			method: 'POST', signal: deadline,
+			method: 'POST', signal: deadline, redirect: 'manual',
 			headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': version, ...(session ? { 'mcp-session-id': session } : {}), ...headers },
 			body: JSON.stringify({ jsonrpc: '2.0', ...msg }),
 		});
 		session = res.headers.get('mcp-session-id') ?? session;
+		if (res.status >= 300 && res.status < 400) {
+			await res.body?.cancel().catch(() => undefined);
+			throw Object.assign(new Error(`HTTP ${res.status}: redirects${res.headers.get('location') ? ` to ${new URL(res.headers.get('location')!, url).host}` : ''}, which the check does not follow with your headers`), { name: 'Redirect' });
+		}
 		if (id === undefined || res.status >= 400) {
 			await res.body?.cancel().catch(() => undefined);
 			return { status: res.status };
@@ -238,6 +255,10 @@ export async function checkHttp(def: HttpDef, opts: { timeoutMs?: number; env?: 
 				break;
 			}
 			body += decoder.decode(value, { stream: true });
+			if (body.length > MAX_BYTES) {
+				await reader.cancel().catch(() => undefined);
+				throw Object.assign(new Error('The answer is larger than 1 MB'), { name: 'TooLarge' });
+			}
 			const rpc = rpcFromBody(body, type, id);
 			if (rpc) {
 				await reader.cancel().catch(() => undefined);
@@ -282,7 +303,7 @@ export async function checkHttp(def: HttpDef, opts: { timeoutMs?: number; env?: 
 		return done({ ok: true, status: summary(tools, schemaTokens), serverName: info.serverInfo?.name, serverVersion: info.serverInfo?.version, tools: tools.map(t => ({ name: t.name, description: t.description })), schemaTokens });
 	} catch (e) {
 		const err = e as Error & { cause?: { code?: string } };
-		return done({ ok: false, status: err.name === 'TimeoutError' || err.name === 'AbortError' ? `No answer within ${Math.round((opts.timeoutMs ?? DEFAULT_TIMEOUT) / 1000)} s` : `Could not connect: ${err.cause?.code ?? err.message}` });
+		return done({ ok: false, status: err.name === 'TimeoutError' || err.name === 'AbortError' ? `No answer within ${Math.round((opts.timeoutMs ?? DEFAULT_TIMEOUT) / 1000)} s` : err.name === 'Redirect' || err.name === 'TooLarge' ? err.message : `Could not connect: ${err.cause?.code ?? err.message}` });
 	}
 }
 

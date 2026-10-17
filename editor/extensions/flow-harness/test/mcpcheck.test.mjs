@@ -3,12 +3,13 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { build } from 'esbuild'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+const isFile = p => { try { return statSync(p).isFile() } catch { return false } }
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 let m
 let tmp
@@ -36,7 +37,7 @@ createInterface({ input: process.stdin }).on('line', l => {
 after(() => rmSync(tmp, { recursive: true, force: true }))
 
 test('stdio: initialize, tools/list over two pages, env, server info', async () => {
-	const r = await m.checkStdio({ command: process.execPath, args: [join(tmp, 'server.mjs')], env: { GREETING: '${WHO:-fallback}' } }, { timeoutMs: 15000, env: { ...process.env, WHO: 'fake-server' } })
+	const r = await m.checkStdio({ command: process.execPath, args: [join(tmp, 'server.mjs')], env: { GREETING: '${WHO:-fallback}' } }, { timeoutMs: 15000, env: { ...process.env, WHO: 'fake-server' }, isFile })
 	assert.equal(r.ok, true, r.status)
 	assert.equal(r.how, 'handshake')
 	assert.deepEqual(r.tools.map(t => t.name), ['a', 'b'])
@@ -47,25 +48,30 @@ test('stdio: initialize, tools/list over two pages, env, server info', async () 
 
 test('stdio: a server that never answers is killed at the timeout; one that exits says so', async () => {
 	const t0 = Date.now()
-	const r = await m.checkStdio({ command: process.execPath, args: [join(tmp, 'silent.mjs')], env: {} }, { timeoutMs: 800 })
+	const r = await m.checkStdio({ command: process.execPath, args: [join(tmp, 'silent.mjs')], env: {} }, { timeoutMs: 800, isFile })
 	assert.equal(r.ok, false)
 	assert.match(r.status, /No answer to initialize/)
 	assert.ok(Date.now() - t0 < 5000)
-	const c = await m.checkStdio({ command: process.execPath, args: [join(tmp, 'crash.mjs')], env: {} }, { timeoutMs: 8000 })
+	const c = await m.checkStdio({ command: process.execPath, args: [join(tmp, 'crash.mjs')], env: {} }, { timeoutMs: 8000, isFile })
 	assert.match(c.status, /Exited with code 3/)
 	assert.match(c.stderr, /boom/)
-	const n = await m.checkStdio({ command: 'surely-not-a-program-axle', args: [], env: {} }, { timeoutMs: 8000 })
-	assert.match(n.status, /not found on PATH|Could not start/)
+	const n = await m.checkStdio({ command: 'surely-not-a-program-axle', args: [], env: {} }, { timeoutMs: 8000, isFile })
+	assert.match(n.status, /not found on PATH/)
 })
 
-test('Windows: a .cmd shim is reported, never run through a shell', async () => {
-	const files = new Set(['C:\\node\\npx.cmd', 'C:\\node\\node.exe'])
-	assert.equal(m.windowsScript('npx', { PATH: 'C:\\node' }, f => files.has(f)), 'C:\\node\\npx.cmd')
-	assert.equal(m.windowsScript('node', { PATH: 'C:\\node' }, f => files.has(f)), undefined)
-	assert.equal(m.windowsScript('C:\\x\\run.bat', {}, () => false), 'C:\\x\\run.bat')
-	const r = await m.checkStdio({ command: 'npx', args: ['-y', 'x'], env: {} }, { platform: 'win32', env: { PATH: 'C:\\node' }, isFile: f => files.has(f) })
-	assert.equal(r.ok, false)
-	assert.match(r.status, /cmd/)
+test('a bare command resolves on PATH only (never a program in the folder), and a Windows .cmd is handed back', async () => {
+	const w = String.raw
+	const files = new Set([w`C:\node\npx.cmd`, w`C:\node\node.exe`, w`C:\repo\node.exe`])
+	const has = f => files.has(f)
+	assert.deepEqual(m.resolveCommand('node', { PATH: w`C:\node` }, 'win32', has), { file: w`C:\node\node.exe`, script: false })
+	assert.deepEqual(m.resolveCommand('npx', { Path: w`C:\node` }, 'win32', has), { file: w`C:\node\npx.cmd`, script: true })
+	assert.deepEqual(m.resolveCommand(w`C:\x\run.bat`, {}, 'win32', () => false), { file: w`C:\x\run.bat`, script: true })
+	assert.deepEqual(m.resolveCommand('node', { PATH: '/usr/bin' }, 'linux', f => f === '/usr/bin/node'), { file: '/usr/bin/node', script: false })
+	assert.deepEqual(m.resolveCommand('ghost', { PATH: w`C:\node` }, 'win32', has), { script: false })
+	// Claude Code starts a .cmd shim itself (checked with 2.1.302); Axle does not start cmd.exe, so the caller asks the CLI.
+	const r = await m.checkStdio({ command: 'npx', args: ['-y', 'x'], env: {} }, { platform: 'win32', env: { PATH: w`C:\node` }, isFile: has })
+	assert.equal(r.needsShell, true)
+	assert.equal(r.how, 'not run')
 })
 
 test('expanding ${VAR} and ${VAR:-default} as Claude Code does', () => {
@@ -78,6 +84,10 @@ test('HTTP: JSON and SSE answers, the session id, paging, and a 401 as a sign-in
 		let body = ''
 		req.on('data', d => body += d)
 		req.on('end', () => {
+			if (req.url === '/moved') {
+				res.writeHead(307, { location: 'https://evil.example/collect' }).end()
+				return
+			}
 			if (req.url === '/locked') {
 				res.writeHead(401).end()
 				return
@@ -109,6 +119,9 @@ test('HTTP: JSON and SSE answers, the session id, paging, and a 401 as a sign-in
 		assert.deepEqual(r.tools.map(t => t.name), ['x', 'y'])
 		assert.equal(seen[1].session, 'S1', 'the session id goes back on later requests')
 		assert.equal(seen[0].auth, 'Bearer t0k')
+		const moved = await m.checkHttp({ url: `${base}/moved`, headers: { 'X-Api-Key': 'k' } }, { timeoutMs: 5000 })
+		assert.equal(moved.ok, false)
+		assert.match(moved.status, /redirects to evil\.example/)
 		const locked = await m.checkHttp({ url: `${base}/locked`, headers: {} }, { timeoutMs: 5000 })
 		assert.equal(locked.needsAuth, true)
 		assert.match(locked.status, /sign-in/)

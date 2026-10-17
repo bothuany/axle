@@ -17,7 +17,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { findNodeAtLocation, parseTree } from 'jsonc-parser';
 import { claudeDir, codexDir } from './dirs';
-import { checkHttp, checkStdio, parseClaudeGet, runCli, type CheckResult } from './mcpcheck';
+import { checkHttp, checkStdio, expandVars, parseClaudeGet, runCli, type CheckResult } from './mcpcheck';
 import { maskArgs, maskText, maskUrl, publicView, readMcp, secretsOf, type McpConfig, type McpHarness, type McpServer } from './mcpconfig';
 import { claudeAddArgs, claudeEntry, claudeRemoveArgs, codexAddArgs, codexEntry, codexRemoveArgs, commandLine, defOf, excerpt, findExecutable, jsonList, NAME, setCodexEnabled, setServer, splitCommandLine, targetFile, type ClaudeCliScope, type ServerDef } from './mcpedit';
 import { page } from './page';
@@ -191,15 +191,42 @@ export class McpManager implements vscode.Disposable {
 		return s.transport === 'stdio' ? commandLine(s.command ?? '', maskArgs(s.args)) : maskUrl(s.url ?? '');
 	}
 
+	/**
+	 * Everything a check of `s` runs or sends, for the confirmation: the command with its folder and the names of the
+	 * variables it is given (flagging the ones that change what runs), or the URL with the headers and the variables from
+	 * your environment that go with it.
+	 */
+	private explain(s: McpServer): string {
+		const reads = [s.url ?? '', s.command ?? '', ...s.args, ...Object.values(s.env), ...Object.values(s.headers)].flatMap(v => [...v.matchAll(/\$\{([A-Za-z_]\w*)/g)].map(m => m[1]));
+		const lines = [`• ${s.name} (${s.harness}, ${s.scope}): ${this.describe(s)}`];
+		if (s.transport === 'stdio') {
+			lines.push(`   in ${s.cwd ?? (vscode.workspace.isTrusted ? 'this folder' : 'your home folder')}`);
+			const names = Object.keys(s.env);
+			const risky = names.filter(n => /^(NODE_OPTIONS|PATH|PATHEXT|PYTHONPATH|PYTHONSTARTUP|LD_\w+|DYLD_\w+|COMSPEC)$/i.test(n));
+			if (names.length) {
+				lines.push(`   with ${names.join(', ')}${risky.length ? ` (${risky.join(', ')} change${risky.length === 1 ? 's' : ''} what runs)` : ''}`);
+			}
+		} else {
+			const headers = [...Object.keys(s.headers), ...Object.keys(s.envHeaders), ...(s.bearerEnv ? ['Authorization'] : [])];
+			if (headers.length) {
+				lines.push(`   sending ${headers.join(', ')}`);
+			}
+		}
+		const fromEnv = [...new Set([...reads, ...Object.values(s.envHeaders), ...(s.bearerEnv ? [s.bearerEnv] : [])])];
+		if (fromEnv.length) {
+			lines.push(`   reading ${fromEnv.map(v => '$' + v).join(', ')} from your environment`);
+		}
+		return lines.join('\n');
+	}
+
 	private async checkAll() {
 		const all = (this.config?.servers ?? []).filter(s => !s.shadowedBy && s.state !== 'off');
 		if (!all.length) {
 			return;
 		}
-		const stdio = all.filter(s => s.transport === 'stdio');
 		const ok = await vscode.window.showInformationMessage(`Check ${all.length} MCP server${all.length === 1 ? '' : 's'}?`, {
 			modal: true,
-			detail: `Each one is started once (or contacted over HTTP), asked for its tools, and stopped.${stdio.length ? `\n\nThis runs:\n${stdio.map(s => `• ${s.name}: ${this.describe(s)}`).join('\n')}` : ''}`,
+			detail: `Each one is started once (or contacted over HTTP), asked for its tools, and stopped.\n\n${all.map(s => this.explain(s)).join('\n')}`,
 		}, 'Check');
 		if (ok === 'Check') {
 			await this.check(all, true);
@@ -211,14 +238,15 @@ export class McpManager implements vscode.Disposable {
 		if (!root) {
 			return;
 		}
-		// A repository's .mcp.json names a program to run: only in a trusted folder, and only once the user saw it.
-		const repo = list.filter(s => s.scope === 'project' && s.transport === 'stdio');
+		// A repository's .mcp.json or .codex/config.toml names a program to run, or a URL to send headers and variables to:
+		// only in a trusted folder, and only once the user saw exactly what.
+		const repo = list.filter(s => s.scope === 'project');
 		if (repo.length && !vscode.workspace.isTrusted) {
-			void vscode.window.showWarningMessage('This folder is not trusted: Axle does not start servers its .mcp.json or .codex/config.toml names. Trust the folder first.');
+			void vscode.window.showWarningMessage('This folder is not trusted: Axle does not start or contact the servers its .mcp.json or .codex/config.toml names. Trust the folder first.');
 			list = list.filter(s => !repo.includes(s));
 		} else if (repo.length && !confirmed) {
-			const ok = await vscode.window.showWarningMessage(`Run ${repo[0].name} to check it?`, { modal: true, detail: `It comes from this repository (${path.basename(repo[0].file)}), so it runs a program the repository chose:\n\n${this.describe(repo[0])}\n\nIt is started once, asked for its tools, and stopped.` }, 'Run');
-			if (ok !== 'Run') {
+			const ok = await vscode.window.showWarningMessage(`${repo[0].transport === 'stdio' ? 'Run' : 'Contact'} ${repo[0].name} to check it?`, { modal: true, detail: `It comes from this repository (${path.basename(repo[0].file)}), so the repository chose what runs or where it goes:\n\n${this.explain(repo[0])}\n\nIt is checked once and stopped.` }, 'Check');
+			if (ok !== 'Check') {
 				return;
 			}
 		}
@@ -227,7 +255,11 @@ export class McpManager implements vscode.Disposable {
 			await this.render();
 			try {
 				const r = await this.run(s, root);
-				const stored: StoredCheck = { ok: r.ok, how: r.how, status: maskText(r.status, secretsOf([s])), toolCount: r.tools?.length, tools: r.tools?.slice(0, 200).map(t => t.name), schemaTokens: r.schemaTokens, at: r.at, ms: r.ms };
+				// A server may echo what it was given in an error: hide the values it got from the environment too.
+				const expanded = [...Object.values(s.env), ...Object.values(s.headers), ...s.args].map(v => expandVars(v, process.env));
+				const fromEnv = [...Object.values(s.envHeaders), ...s.envVars, ...(s.bearerEnv ? [s.bearerEnv] : [])].map(v => process.env[v] ?? '');
+				const secrets = [...secretsOf([s]), ...secretsOf([{ env: Object.fromEntries(expanded.map((v, n) => [String(n), v])), headers: {}, args: [], url: expandVars(s.url ?? '', process.env) }]), ...fromEnv.filter(v => v.length >= 4)];
+				const stored: StoredCheck = { ok: r.ok, how: r.how, status: maskText(r.status, secrets).slice(0, 300), toolCount: r.tools?.length, tools: r.tools?.slice(0, 200).map(t => t.name.slice(0, 100)), schemaTokens: r.schemaTokens, at: r.at, ms: r.ms };
 				await this.state.update(CHECKS_KEY, { ...this.checks(), [s.id]: stored });
 			} finally {
 				this.busy.delete(s.id);
@@ -241,7 +273,8 @@ export class McpManager implements vscode.Disposable {
 		const notRun = (status: string): CheckResult => ({ ok: false, how: 'not run', status, ms: 0, at: Date.now() });
 		const viaClaude = async (): Promise<CheckResult | undefined> => {
 			const exe = this.claudeCli();
-			if (!exe || s.harness !== 'Claude') {
+			// A name read from a file goes on a command line: only names the CLI takes as one (a repo's "--scope" must not become an option).
+			if (!exe || s.harness !== 'Claude' || !(NAME.test(s.name) || /^plugin:[\w-]+:[\w-]+$/.test(s.name))) {
 				return undefined;
 			}
 			const t0 = Date.now();
@@ -253,7 +286,10 @@ export class McpManager implements vscode.Disposable {
 			if (!s.command) {
 				return notRun('No command to run');
 			}
-			return checkStdio({ command: s.command, args: s.args, env: s.env, cwd: s.cwd }, { cwd: root, isFile });
+			// The agent starts it in the folder; in an untrusted folder the home folder, so nothing in the folder gets to run.
+			const r = await checkStdio({ command: s.command, args: s.args, env: s.env, cwd: s.cwd }, { cwd: vscode.workspace.isTrusted ? root : os.homedir(), isFile });
+			// Claude Code starts a .cmd shim itself; Axle does not start cmd.exe, so Claude Code's own check answers for it.
+			return r.needsShell ? (await viaClaude()) ?? { ...r, status: `${r.status}: check it from ${s.harness === 'Codex' ? 'Codex' : 'Claude Code'}` } : r;
 		}
 		if (s.transport === 'http') {
 			const headers = { ...s.headers };
@@ -345,15 +381,6 @@ export class McpManager implements vscode.Disposable {
 			// The arguments that were shown masked, in order, take their old values back.
 			const secrets = old ? old.args.filter((a, n) => masked[n] !== a) : [];
 			args = args.map(a => a === MASK ? secrets.shift() ?? a : a.includes(MASK) && secrets.length ? a.replace(MASK, secrets.shift()!.replace(/^--?[\w-]+=/, '')) : a);
-			if (process.platform === 'win32' && /^(npx|npm|pnpm|yarn|bunx|uvx)$/i.test(command)) {
-				const wrap = await vscode.window.showQuickPick([{ label: `Run it as cmd /c ${command} …`, description: 'recommended: the agents cannot start a .cmd script directly', w: true }, { label: `Keep ${command}`, w: false }], { ignoreFocusOut: true, title: `${name}: ${command} is a .cmd script on Windows` });
-				if (!wrap) {
-					return false;
-				}
-				if (wrap.w) {
-					[command, args] = ['cmd', ['/c', command, ...args]];
-				}
-			}
 			def.command = command;
 			def.args = args;
 			return true;
@@ -495,7 +522,7 @@ export class McpManager implements vscode.Disposable {
 		}
 		// A local server filed under another spelling of this folder is out of the CLI's reach from here: edit the file.
 		const otherKey = s.scope === 'local' && s.keyPath[1] !== this.config?.projectKey;
-		const cli = otherKey ? undefined : s.harness === 'Claude' ? this.claudeCli() : s.scope === 'user' ? this.codexCli() : undefined;
+		const cli = otherKey || !NAME.test(s.name) ? undefined : s.harness === 'Claude' ? this.claudeCli() : s.scope === 'user' ? this.codexCli() : undefined;
 		if (cli && s.scope !== 'profile') {
 			const args = s.harness === 'Claude' ? claudeRemoveArgs(s.name, s.scope as ClaudeCliScope) : codexRemoveArgs(s.name);
 			await this.cli([{ program: cli, args, shown: commandLine(path.basename(cli, '.exe'), args) }], `Remove MCP server ${s.name}?`, `From ${s.file.replace(os.homedir(), '~')} (${s.scope}).`, 'Remove');
@@ -513,11 +540,12 @@ export class McpManager implements vscode.Disposable {
 			const claude = t.harness === 'Claude' ? this.claudeCli() : undefined;
 			const codex = t.harness === 'Codex' && t.scope === 'user' ? this.codexCli() : undefined;
 			const codexArgs = codex ? codexAddArgs(t.name, t.def) : undefined;
+			// What the dialog shows is built from a masked copy, so no secret depends on being found again inside the quoted JSON.
+			const shownDef = masked(t.def);
 			if (claude) {
-				const args = claudeAddArgs(t.name, t.def, t.scope);
-				runs.push({ program: claude, args, shown: commandLine('claude', args) });
+				runs.push({ program: claude, args: claudeAddArgs(t.name, t.def, t.scope), shown: commandLine('claude', claudeAddArgs(t.name, shownDef, t.scope)) });
 			} else if (codex && codexArgs) {
-				runs.push({ program: codex, args: codexArgs, shown: commandLine('codex', codexArgs) });
+				runs.push({ program: codex, args: codexArgs, shown: commandLine('codex', codexAddArgs(t.name, shownDef) ?? []) });
 			} else {
 				const target = targetFile(t.harness, t.scope, c.files, c.projectKey);
 				const keyPath = [...target.keyPath, t.name];
@@ -615,6 +643,12 @@ export class McpManager implements vscode.Disposable {
 	}
 }
 
+/** A definition with every literal env and header value, secret-looking argument and URL secret replaced by the mask. */
+function masked(def: ServerDef): ServerDef {
+	const hide = (m?: Record<string, string>) => m && Object.fromEntries(Object.entries(m).map(([k, v]) => [k, /^\$\{[^}]+\}$/.test(v.trim()) ? v : MASK]));
+	return { ...def, env: hide(def.env), headers: hide(def.headers), args: def.args && maskArgs(def.args), url: def.url && maskUrl(def.url) };
+}
+
 interface Change {
 	file: string;
 	format: 'json' | 'toml';
@@ -663,7 +697,7 @@ function row(s, cli, trusted) {
 	const target = s.transport === 'stdio' ? [s.command || '', ...s.args].join(' ') : s.url || '';
 	const c = s.check;
 	const canEdit = !s.readOnly;
-	const runsRepoCode = s.scope === 'project' && s.transport === 'stdio';
+	const runsRepoCode = s.scope === 'project';
 	return el('div', { class: 'card srv' + (s.shadowed ? ' shadowed' : ''), id: 's-' + s.id },
 		el('div', { class: 'row' },
 			el('div', { class: 'grow' },
@@ -672,7 +706,7 @@ function row(s, cli, trusted) {
 				el('span', { class: 'chip' }, s.transport),
 				el('span', { class: 'chip ' + s.state, title: s.stateWhy }, s.state === 'pending' ? 'awaiting approval' : s.state)),
 			el('div', { class: 'actions' },
-				el('button', { onclick: () => post('check', s.id), disabled: s.busy || (runsRepoCode && !trusted), title: runsRepoCode && !trusted ? 'Trust the folder to run its servers' : 'Start it once and list its tools' }, s.busy ? 'Checking…' : 'Check'),
+				el('button', { onclick: () => post('check', s.id), disabled: s.busy || (runsRepoCode && !trusted), title: runsRepoCode && !trusted ? "Trust the folder to check the repository's servers" : 'Start it once (or contact its URL) and list its tools' }, s.busy ? 'Checking…' : 'Check'),
 				canEdit ? el('button', { onclick: () => post('edit', s.id) }, 'Edit…') : null,
 				canEdit ? el('button', { onclick: () => post('toggle', s.id) }, s.state === 'off' ? 'Turn on…' : 'Turn off…') : null,
 				canEdit ? el('button', { onclick: () => post('remove', s.id) }, 'Remove…') : null,
