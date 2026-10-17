@@ -44,6 +44,10 @@ export class PolyIndex implements vscode.Disposable {
 	private unavailable = 'No folder is open.';
 	private readonly disposables: vscode.Disposable[] = [];
 	isReady = false;
+	/** Files the first index has gone through, of how many: what the endpoint picker shows while it waits. */
+	progress: { done: number; total: number } | undefined;
+	private readonly progressed = new vscode.EventEmitter<{ done: number; total: number }>();
+	readonly onDidProgress = this.progressed.event;
 
 	/** The index of this window: the canvas asks it for editing help without being handed it. */
 	static current: PolyIndex | undefined;
@@ -83,12 +87,15 @@ export class PolyIndex implements vscode.Disposable {
 			workerData: { roots, wasmDir: wasm, cacheFile },
 			resourceLimits: { maxOldGenerationSizeMb: 2048 },
 		});
-		worker.on('message', (m: { id?: number; type?: string; result?: unknown; error?: string; message?: string; stats?: object; ms?: number; parsed?: number }) => {
+		worker.on('message', (m: { id?: number; type?: string; result?: unknown; error?: string; message?: string; stats?: object; ms?: number; parsed?: number; done?: number; total?: number }) => {
 			if (this.worker !== worker) {
 				return; // an answer from a worker that was replaced
 			}
 			if (m.type === 'log') {
 				this.log.warn(`Index: ${m.message}`);
+			} else if (m.type === 'progress') {
+				this.progress = { done: m.done ?? 0, total: m.total ?? 0 };
+				this.progressed.fire(this.progress);
 			} else if (m.type === 'ready') {
 				this.log.info(`Index ready in ${m.ms} ms (${m.parsed} parsed): ${JSON.stringify(m.stats)}`);
 				this.isReady = true;
@@ -260,6 +267,7 @@ export class PolyIndex implements vscode.Disposable {
 		clearTimeout(this.changeTimer);
 		void this.worker?.terminate();
 		this.ready.dispose();
+		this.progressed.dispose();
 		this.disposables.forEach(d => d.dispose());
 	}
 }

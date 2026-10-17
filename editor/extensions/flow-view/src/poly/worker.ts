@@ -231,7 +231,14 @@ async function index() {
 		walkDir(r, found);
 	}
 	let parsed = 0;
+	let done = 0;
+	const total = found.code.length;
+	// How far the first index is, for the endpoint picker: a large repository takes a while before any endpoint is known.
+	post({ type: 'progress', done, total });
 	for (const file of found.code) {
+		if (++done % 200 === 0) {
+			post({ type: 'progress', done, total });
+		}
 		let mtime = 0;
 		try {
 			mtime = fs.statSync(file).mtimeMs;

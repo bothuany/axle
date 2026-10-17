@@ -188,6 +188,15 @@ function registerCommands(flow: Flow) {
 			const toItems = (eps: Entry[]) => eps.map(e => ({ label: `${e.http} ${entryName(e)}`, description: vscode.workspace.asRelativePath(e.file), e }));
 			qp.items = toItems(endpointList.cached());
 			qp.busy = true;
+			// An empty list says why: still indexing (and how far), or nothing found. A large first index takes a while.
+			const waiting = () => {
+				const p = poly.isReady ? undefined : poly.progress;
+				qp.placeholder = qp.items.length ? undefined
+					: p ? `Indexing the workspace: ${p.done.toLocaleString()} of ${p.total.toLocaleString()} files…`
+						: 'Looking for endpoints…';
+			};
+			waiting();
+			const progress = poly.onDidProgress(waiting);
 			qp.onDidAccept(() => {
 				const pick = qp.selectedItems[0];
 				qp.hide();
@@ -195,7 +204,10 @@ function registerCommands(flow: Flow) {
 					flow.showEntry(pick.e.id, entryName(pick.e), pick.e.source).catch(fail);
 				}
 			});
-			qp.onDidHide(() => qp.dispose());
+			qp.onDidHide(() => {
+				progress.dispose();
+				qp.dispose();
+			});
 			qp.show();
 			try {
 				const fresh = await endpointList.fresh(problem => fail(new Error(problem)));
@@ -206,6 +218,9 @@ function registerCommands(flow: Flow) {
 				fail(e);
 			} finally {
 				qp.busy = false;
+				progress.dispose();
+				qp.placeholder = qp.items.length ? undefined
+					: 'No endpoints found in this folder. Put the cursor in any method and run "Show Flow at Cursor".';
 			}
 		}),
 	);
