@@ -364,6 +364,9 @@ export class Agents implements vscode.Disposable {
 			return Promise.resolve(false);
 		}
 		return this.codexHooks ??= this.writeCodexProfile().then(() => new Promise<boolean>(resolve => {
+			// A shell finds `codex` the way the terminal will: npm installs it on Windows as codex.cmd, which execFile cannot
+			// start alone. The command line is fixed text, nothing from a user or a file reaches it.
+			// nosemgrep: axle-shell-true
 			execFile('codex', ['-p', CODEX_PROFILE, 'mcp', 'list'], { shell: true, timeout: 8000, windowsHide: true, env: agentProcessEnv() }, (err, _out, stderr) => {
 				if (err) {
 					this.log.warn(`Agents: Codex runs without status: \`codex -p ${CODEX_PROFILE}\` failed (${String(stderr || err.message).trim().split('\n')[0]})`);
