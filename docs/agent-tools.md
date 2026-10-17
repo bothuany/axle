@@ -13,7 +13,7 @@ Claude Code over `/ide` only shows its model the `getDiagnostics` tool, so Axle 
 | `go_to_definition`, `find_references` | Where a symbol is defined (with its signature), and every place that uses it |
 | `find_entry_points` | Free-text search over endpoints and jobs ("delete user" finds `DELETE /users/{id}`) |
 | `show_flow`, `flow_text` | Opens the flow canvas, or returns the call chain as compact text (files, call lines, tables touched) |
-| `impact` | Who calls a method, and which entry points reach it (through interfaces, mediators and, as a guess, HTTP calls between services) |
+| `impact` | Who calls a method, and which entry points reach it (through interfaces, mediators and, as a guess, HTTP calls and messages between services) |
 | `get_context` | Active file, selection, flow on the canvas, open tabs, git changes, diagnostics, boards |
 | `draw_board`, `update_board` | The agent draws a flow, plan, class, ER or architecture board, and ticks its steps off as it works |
 

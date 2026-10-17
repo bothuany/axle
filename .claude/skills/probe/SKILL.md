@@ -67,7 +67,7 @@ Keep the pane at its own size (`resize_window` preset `desktop`): a larger emula
 
 What to look for, by area:
 
-- **Flow canvas**: the expected cards in order, edges of the right kind (solid call, dashed `impl`, dashed animated `HTTP?` guess, DB cards), each card's code.
+- **Flow canvas**: the expected cards in order, edges of the right kind (solid call, dashed `impl`, dashed animated `HTTP?` and `topic?` guesses, DB cards), each card's code.
 - **Endpoints**: "Open Endpoint Flow…" lists every route once, and nothing that is not a route (a client call like `axios.post(url, body)` must not appear).
 - **Callers / impact**: the Callers view and the "Affects N entry points" chip name the callers you expect, across files and services.
 - **Agents dock, turn impact, Codex hooks**: these need a real Claude Code or Codex session that edits files. Starting one costs the user's quota and may need a login: ask before doing it, and never type credentials.

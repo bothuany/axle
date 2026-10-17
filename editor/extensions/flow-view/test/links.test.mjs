@@ -69,7 +69,45 @@ test('java: RestTemplate verbs and a WebClient chain', () => {
 	assert.equal(l.httpCallOf('java', call('exchange', 'this.restTemplate', ['/api/orders/{id}'])).verb, null)
 	assert.equal(l.httpCallOf('java', call('get', 'webClient', ['/api/orders'], ['uri', 'retrieve', 'bodyToMono'])).verb, 'GET')
 	assert.equal(l.httpCallOf('java', call('get', 'webClient', ['/api/orders'])), undefined, 'no uri() in the chain')
-	assert.equal(l.httpCallOf('go', call('Get', 'http', ['/x'])), undefined, 'not read for Go yet')
+})
+
+test('go: net/http, NewRequest with the method as a string or a constant, resty', () => {
+	assert.equal(l.httpCallOf('go', call('Get', 'http', [' /api/orders/ '])).verb, 'GET')
+	assert.equal(l.httpCallOf('go', call('Post', 'self.client', ['/api/orders', 'application/json'])).verb, 'POST')
+	assert.equal(l.httpCallOf('go', call('NewRequestWithContext', 'http', ['POST', '{…}/api/orders'])).verb, 'POST')
+	assert.equal(l.httpCallOf('go', call('NewRequest', 'http', ['/api/orders'])).verb, null, 'the method is not written')
+	assert.equal(l.httpCallOf('go', call('R', 'client', ['id', '/api/orders/{id}'], ['SetPathParam', 'Get'])).verb, 'GET')
+	assert.equal(l.httpCallOf('go', call('New', 'resty', ['/api/orders'], ['R', 'Post'])).verb, 'POST')
+	assert.equal(l.httpCallOf('go', call('Get', 'cache', ['/x'])), undefined, 'not a client')
+	assert.equal(l.httpCallOf('go', call('Get', 'client', ['user:1'])), undefined, 'a key is not a URL')
+})
+
+test('php: the Laravel Http facade, also chained and fully qualified; Guzzle', () => {
+	assert.equal(l.httpCallOf('php', call('get', 'Http', ['/api/orders/{…}'])).verb, 'GET')
+	assert.equal(l.httpCallOf('php', call('withToken', 'Http', [' /api/orders'], ['post'])).verb, 'POST')
+	assert.equal(l.httpCallOf('php', call('get', String.raw`\Illuminate\Support\Facades\Http`, ['/b'])).verb, 'GET')
+	assert.equal(l.httpCallOf('php', call('request', 'this.client', ['POST', '/x/{…}/y'])).verb, 'POST')
+	assert.equal(l.httpCallOf('php', call('getAsync', 'client', ['/api/a'])).verb, 'GET')
+	assert.equal(l.httpCallOf('php', call('fake', 'Http', ['/api/a'])), undefined)
+	assert.equal(l.httpCallOf('php', call('get', 'Route', ['/users'])), undefined, 'a route is not a request')
+})
+
+test('ruby: HTTParty, RestClient, Faraday, Net::HTTP', () => {
+	assert.equal(l.httpCallOf('ruby', call('get', 'HTTParty', ['{…}/api/orders/{…}'])).verb, 'GET')
+	assert.equal(l.httpCallOf('ruby', call('post', 'RestClient', [' /api/orders'])).verb, 'POST')
+	assert.equal(l.httpCallOf('ruby', call('put', '@conn', ['/api/orders/{…}'])).verb, 'PUT')
+	assert.equal(l.httpCallOf('ruby', call('new', 'Faraday', ['/z'], ['get'])).verb, 'GET')
+	assert.equal(l.httpCallOf('ruby', call('get', 'Net.HTTP', ['http://h/api/x'])).verb, 'GET')
+	assert.equal(l.httpCallOf('ruby', call('post_form', 'Net.HTTP', ['http://h/api/x'])).verb, 'POST')
+	assert.equal(l.httpCallOf('ruby', call('new', 'Net.HTTP.Delete', ['http://h/api/x/{…}'])).verb, 'DELETE')
+	assert.equal(l.httpCallOf('ruby', call('get', undefined, ['/hello'])), undefined, 'a Sinatra route is not a request')
+})
+
+test('rust: reqwest::get, a client and its request(Method::X)', () => {
+	assert.equal(l.httpCallOf('rust', call('get', 'reqwest', ['{…}/api/orders/{…}'])).verb, 'GET')
+	assert.equal(l.httpCallOf('rust', call('post', 'self.client', ['http://x/api/orders'], ['json', 'send'])).verb, 'POST')
+	assert.equal(l.httpCallOf('rust', call('request', 'client', ['PATCH', '/api/orders'])).verb, 'PATCH')
+	assert.equal(l.httpCallOf('rust', call('get', 'map', ['/x'])), undefined)
 })
 
 const ENTRIES = [
@@ -234,4 +272,171 @@ def create_invoice():
 	const http = flow.children.filter(c => c.edgeKind === 'http')
 	assert.equal(http.length, 1, JSON.stringify(flow.children.map(c => [c.edgeKind, c.node.label])))
 	assert.match(http[0].node.label, /create_invoice/)
+})
+
+// End to end for Go, PHP, Ruby and Rust: each workspace has a server with routes and a client that calls them.
+async function workspace(t, files) {
+	const root = mkdtempSync(join(tmpdir(), 'flow-links-lang-'))
+	for (const [f, text] of Object.entries(files)) {
+		mkdirSync(join(root, f, '..'), { recursive: true })
+		writeFileSync(join(root, f), text)
+	}
+	const ix = new Index(root)
+	t.after(async () => { await ix.close(); rmSync(root, { recursive: true, force: true }) })
+	await ix.ready
+	const fns = async file => ix.request('methods', join(root, file))
+	return {
+		root, ix,
+		/** The handlers an HTTP edge of `name` in `file` reaches, by label, as [label, guess]. */
+		reach: async (file, name) => {
+			const fn = (await fns(file)).find(m => m.name === name || m.name.endsWith('.' + name))
+			assert.ok(fn, `${name} in ${file}`)
+			const g = await ix.request('graph', fn.id)
+			return g.children.filter(c => c.edgeKind === 'http').map(c => [c.node.label.replace(/^.*\./, ''), c.guess])
+		},
+	}
+}
+
+test('go: net/http, NewRequest and resty reach Gin handlers; http.Post is not a route', async t => {
+	const w = await workspace(t, {
+		'server/main.go': `package main
+
+import "github.com/gin-gonic/gin"
+
+func getOrder(c *gin.Context)    { c.JSON(200, nil) }
+func createOrder(c *gin.Context) { c.JSON(201, nil) }
+
+func main() {
+	r := gin.Default()
+	api := r.Group("/api")
+	api.GET("/orders/:id", getOrder)
+	api.POST("/orders", createOrder)
+}
+`,
+		'client/client.go': `package client
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+
+	"github.com/go-resty/resty/v2"
+)
+
+var baseURL = "http://orders"
+
+func FetchOrder(id string) { http.Get(baseURL + "/api/orders/" + id) }
+
+func PlaceOrder() { http.Post("/api/orders", "application/json", nil) }
+
+func PlaceWithClient(body io.Reader) { http.DefaultClient.Post("/api/orders", "application/json", body) }
+
+func PlaceWithContext(ctx context.Context) {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/api/orders", baseURL), nil)
+	http.DefaultClient.Do(req)
+}
+
+func FetchWithResty(client *resty.Client, id string) {
+	client.R().SetPathParam("id", id).Get("/api/orders/{id}")
+}
+`,
+	})
+	assert.deepEqual(await w.reach('client/client.go', 'FetchOrder'), [['getOrder', true]])
+	assert.deepEqual(await w.reach('client/client.go', 'PlaceOrder'), [['createOrder', true]])
+	assert.deepEqual(await w.reach('client/client.go', 'PlaceWithContext'), [['createOrder', true]])
+	assert.deepEqual(await w.reach('client/client.go', 'PlaceWithClient'), [['createOrder', true]])
+	assert.deepEqual(await w.reach('client/client.go', 'FetchWithResty'), [['getOrder', true]])
+	const entries = await w.ix.request('entries')
+	assert.deepEqual(entries.filter(e => e.file === join(w.root, 'client', 'client.go')), [], 'a request registers no route')
+})
+
+test('php: the Http facade and Guzzle reach Laravel controller actions', async t => {
+	const w = await workspace(t, {
+		'routes/web.php': String.raw`<?php
+use App\Http\Controllers\OrderController;
+Route::get('/api/orders/{id}', [OrderController::class, 'show']);
+Route::post('/api/orders', [OrderController::class, 'store']);
+`,
+		'app/OrderController.php': `<?php
+class OrderController {
+    public function show($id) { return $id; }
+    public function store() { return 1; }
+}
+`,
+		'app/OrdersClient.php': String.raw`<?php
+use Illuminate\Support\Facades\Http;
+class OrdersClient {
+    public function __construct(private \GuzzleHttp\Client $client) {}
+    public function find($id) { return Http::get("/api/orders/{$id}"); }
+    public function create($body) { return Http::withToken($this->token)->post(config('svc.orders') . '/api/orders', $body); }
+    public function viaGuzzle($id) { return $this->client->request('GET', "/api/orders/$id"); }
+    public function qualified() { return \Illuminate\Support\Facades\Http::post('/api/orders'); }
+}
+`,
+	})
+	assert.deepEqual(await w.reach('app/OrdersClient.php', 'find'), [['show', true]])
+	assert.deepEqual(await w.reach('app/OrdersClient.php', 'create'), [['store', true]])
+	assert.deepEqual(await w.reach('app/OrdersClient.php', 'viaGuzzle'), [['show', true]])
+	assert.deepEqual(await w.reach('app/OrdersClient.php', 'qualified'), [['store', true]])
+})
+
+test('ruby: HTTParty, RestClient, Faraday and Net::HTTP reach Sinatra routes', async t => {
+	const w = await workspace(t, {
+		'server/app.rb': `get '/api/orders/:id' do
+  load_order
+end
+
+post '/api/orders' do
+  save_order
+end
+`,
+		'client/orders_client.rb': `class OrdersClient
+  def find(id)
+    HTTParty.get("#{BASE}/api/orders/#{id}")
+  end
+
+  def create(body)
+    RestClient.post(BASE + "/api/orders", body)
+  end
+
+  def via_faraday(id)
+    @conn.get("/api/orders/#{id}")
+  end
+
+  def via_net_http(id)
+    Net::HTTP.get(URI("http://orders/api/orders/#{id}"))
+  end
+end
+`,
+	})
+	assert.deepEqual(await w.reach('client/orders_client.rb', 'find'), [['GET /api/orders/:id', true]])
+	assert.deepEqual(await w.reach('client/orders_client.rb', 'create'), [['POST /api/orders', true]])
+	assert.deepEqual(await w.reach('client/orders_client.rb', 'via_faraday'), [['GET /api/orders/:id', true]])
+	assert.deepEqual(await w.reach('client/orders_client.rb', 'via_net_http'), [['GET /api/orders/:id', true]])
+})
+
+test('rust: reqwest reaches axum handlers', async t => {
+	const w = await workspace(t, {
+		'server/main.rs': `use axum::{routing::{get, post}, Router};
+async fn get_order() -> String { String::new() }
+async fn create_order() -> String { String::new() }
+fn app() -> Router {
+    Router::new().route("/api/orders/:id", get(get_order)).route("/api/orders", post(create_order))
+}
+`,
+		'client/lib.rs': `pub async fn fetch_order(base: &str, id: u64) {
+    let _ = reqwest::get(format!("{}/api/orders/{}", base, id)).await;
+}
+pub async fn place_order(client: &reqwest::Client, base: &str) {
+    let _ = client.post(format!("{base}/api/orders")).json(&1).send().await;
+}
+pub async fn fetch_raw(client: &Client) {
+    let _ = client.get(r#"http://orders/api/orders/7"#).send().await?;
+}
+`,
+	})
+	assert.deepEqual(await w.reach('client/lib.rs', 'fetch_order'), [['get_order', true]])
+	assert.deepEqual(await w.reach('client/lib.rs', 'place_order'), [['create_order', true]])
+	assert.deepEqual(await w.reach('client/lib.rs', 'fetch_raw'), [['get_order', true]])
 })
