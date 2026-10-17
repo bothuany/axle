@@ -380,16 +380,18 @@
         "flow.agents.desktop.overlay.theme": {
           "type": "string",
           "enum": [
+            "black",
             "editor",
             "dark",
             "light"
           ],
           "enumDescriptions": [
+            "Pure black with hairline edges: the island look",
             "The colours of Axle's colour theme",
             "Dark",
             "Light"
           ],
-          "default": "editor",
+          "default": "black",
           "description": "The colours of the status overlay."
         },
         "flow.agents.desktop.overlay.show": {
@@ -427,13 +429,18 @@
             },
             "context": {
               "type": "boolean",
-              "default": false,
-              "description": "How full each agent's context window is"
+              "default": true,
+              "description": "How full each agent's context window is, as a small ring"
             },
             "cost": {
               "type": "boolean",
               "default": false,
               "description": "Each session's cost in dollars, where the CLI reports it"
+            },
+            "elapsed": {
+              "type": "boolean",
+              "default": true,
+              "description": "How long each agent has been in its state"
             }
           },
           "additionalProperties": false,
@@ -444,8 +451,9 @@
             "idle": false,
             "counts": true,
             "activity": true,
-            "context": false,
-            "cost": false
+            "context": true,
+            "cost": false,
+            "elapsed": true
           },
           "description": "What the status overlay shows."
         },

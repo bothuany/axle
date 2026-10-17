@@ -28,6 +28,7 @@ test('settings: defaults are the badge on and the overlay off', () => {
 	assert.equal(s.position, 'top-center')
 	assert.equal(s.display, 'axle')
 	assert.equal(s.style, 'pill')
+	assert.equal(s.theme, 'black')
 	assert.equal(s.opacity, 0.95)
 	assert.equal(s.details, false)
 	assert.deepEqual(s.show, d.DEFAULT_SHOW)
@@ -44,13 +45,14 @@ test('settings: badge and overlay switch on and off independently', () => {
 })
 
 test('settings: malformed values fall back, opacity is clamped, partial objects merge with the defaults', () => {
-	const s = settings({ badge: 'yes', 'overlay.position': 'middle', 'overlay.style': 'list', 'overlay.opacity': 0.05, 'overlay.show': { idle: true, cost: 'no' }, 'overlay.autoHide': { axleFocused: true } })
+	const s = settings({ badge: 'yes', 'overlay.position': 'middle', 'overlay.style': 'list', 'overlay.opacity': 0.05, 'overlay.show': { idle: true, cost: 'no', elapsed: false }, 'overlay.autoHide': { axleFocused: true } })
 	assert.equal(s.badge, true)
 	assert.equal(s.position, 'top-center')
 	assert.equal(s.style, 'list')
 	assert.equal(s.opacity, 0.3)
 	assert.equal(s.show.idle, true)
 	assert.equal(s.show.cost, false)
+	assert.equal(s.show.elapsed, false)
 	assert.equal(s.show.working, true)
 	assert.deepEqual(s.autoHide, { noAgents: true, axleFocused: true })
 	assert.equal(settings({ 'overlay.opacity': 7 }).opacity, 1)
@@ -110,13 +112,16 @@ test('overlay model: ranked like the dock, ended sessions never, states filtered
 	assert.equal(detailed.items.find(i => i.id === 'working').activity, 'Editing secret-plan.md')
 })
 
-test('overlay model: prompts never travel, context and cost only when asked for', () => {
+test('overlay model: prompts never travel, cost only when asked for, context and elapsed time by default', () => {
 	const s = agent('a', { prompt: 'refactor the payroll module', usage: { used: 50_000, size: 200_000 }, cost: { session: { usd: 1.25, tokens: {} } } })
 	const plain = d.overlayModel([s], settings())
 	assert.ok(!JSON.stringify(plain).includes('payroll'))
-	assert.equal(plain.items[0].context, undefined)
+	assert.equal(plain.items[0].context, 25)
+	assert.equal(plain.items[0].since, 1)
 	assert.equal(plain.items[0].usd, undefined)
-	const more = d.overlayModel([s, agent('b', { usage: { used: 10, percent: 140 } })], settings({ 'overlay.show': { context: true, cost: true } }))
+	assert.equal(d.overlayModel([s], settings({ 'overlay.show': { context: false, elapsed: false } })).items[0].context, undefined)
+	assert.equal(d.overlayModel([s], settings({ 'overlay.show': { elapsed: false } })).items[0].since, undefined)
+	const more = d.overlayModel([s, agent('b', { usage: { used: 10, percent: 140 } })], settings({ 'overlay.show': { cost: true } }))
 	assert.equal(more.items[0].context, 25)
 	assert.equal(more.items[0].usd, 1.25)
 	assert.equal(more.items[1].context, 100)

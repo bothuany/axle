@@ -35,7 +35,7 @@ diff --git a/src/vs/platform/axleDesktop/common/axleDesktop.ts b/src/vs/platform
 new file mode 100644
 --- /dev/null
 +++ b/src/vs/platform/axleDesktop/common/axleDesktop.ts
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,68 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Axle: the desktop agent status overlay, shared by the main process (which owns the window) and
 + *  the workbench (which pushes each window's agents). Axle's Agents extension builds the model
@@ -59,6 +59,8 @@ new file mode 100644
 +	readonly activity?: string;
 +	readonly context?: number;
 +	readonly usd?: number;
++	/** When it entered this state (epoch ms), for the elapsed time. */
++	readonly since?: number;
 +}
 +
 +export interface IAxleOverlayOptions {
@@ -67,7 +69,7 @@ new file mode 100644
 +	readonly style: 'pill' | 'dots' | 'list';
 +	readonly size: 'small' | 'medium' | 'large';
 +	readonly opacity: number;
-+	readonly theme: 'editor' | 'dark' | 'light';
++	readonly theme: 'black' | 'editor' | 'dark' | 'light';
 +	readonly autoHide: { readonly noAgents: boolean; readonly axleFocused: boolean };
 +}
 +
@@ -106,7 +108,7 @@ diff --git a/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts
 new file mode 100644
 --- /dev/null
 +++ b/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts
-@@ -0,0 +1,468 @@
+@@ -0,0 +1,502 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Axle: the desktop agent status overlay. One small always-on-top window for the whole app that
 + *  draws the agents every Axle window pushes (merged per window, like the Dock badge).
@@ -132,12 +134,13 @@ new file mode 100644
 +const MARKER = '\u0001axle-overlay:';
 +const MAX_ITEMS = 40;
 +
-+const PALETTES: Record<'dark' | 'light', IAxleOverlayColors> = {
++const PALETTES: Record<'black' | 'dark' | 'light', IAxleOverlayColors> = {
++	black: { background: '#000000', foreground: '#f4f4f6', muted: '#8b8b95', border: 'rgba(255, 255, 255, 0.10)', working: '#8c9bff', approval: '#ffb454', question: '#c58cff', error: '#ff6b6b', done: '#5fe0a1', idle: '#4a4a52' },
 +	dark: { background: 'rgba(28, 29, 35, 0.94)', foreground: '#e8e9ee', muted: '#a3a7b5', border: 'rgba(255, 255, 255, 0.12)', working: '#6f86ff', approval: '#ffb454', question: '#c58cff', error: '#ff6b6b', done: '#5fe0a1', idle: '#7d8293' },
 +	light: { background: 'rgba(250, 250, 252, 0.96)', foreground: '#1f2128', muted: '#5d6170', border: 'rgba(0, 0, 0, 0.12)', working: '#3b5bdb', approval: '#d9480f', question: '#8e44ad', error: '#d63031', done: '#2b8a3e', idle: '#868e96' },
 +};
 +
-+const DEFAULT_OPTIONS: IAxleOverlayOptions = { position: 'top-center', display: 'axle', style: 'pill', size: 'medium', opacity: 0.95, theme: 'editor', autoHide: { noAgents: true, axleFocused: false } };
++const DEFAULT_OPTIONS: IAxleOverlayOptions = { position: 'top-center', display: 'axle', style: 'pill', size: 'medium', opacity: 0.95, theme: 'black', autoHide: { noAgents: true, axleFocused: false } };
 +
 +interface IWindowAgents {
 +	readonly state: IAxleOverlayState;
@@ -162,7 +165,7 @@ new file mode 100644
 +		const attention = i.attention ? oneOf(i.attention, ['approval', 'question', 'error', 'done'], 'done') : undefined;
 +		items.push({
 +			id, name, cli: text(i.cli, 30) ?? '', state: oneOf(i.state, ['working', 'needs', 'done', 'idle'], 'idle'),
-+			attention, activity: text(i.activity, 120), context: finite(i.context), usd: finite(i.usd),
++			attention, activity: text(i.activity, 120), context: finite(i.context), usd: finite(i.usd), since: finite(i.since),
 +		});
 +	}
 +	const o = raw?.options;
@@ -172,7 +175,7 @@ new file mode 100644
 +		style: oneOf(o?.style, ['pill', 'dots', 'list'], DEFAULT_OPTIONS.style),
 +		size: oneOf(o?.size, ['small', 'medium', 'large'], DEFAULT_OPTIONS.size),
 +		opacity: Math.min(1, Math.max(0.3, finite(o?.opacity) ?? DEFAULT_OPTIONS.opacity)),
-+		theme: oneOf(o?.theme, ['editor', 'dark', 'light'], DEFAULT_OPTIONS.theme),
++		theme: oneOf(o?.theme, ['black', 'editor', 'dark', 'light'], DEFAULT_OPTIONS.theme),
 +		autoHide: { noAgents: o?.autoHide?.noAgents !== false, axleFocused: o?.autoHide?.axleFocused === true },
 +	};
 +	const c = raw?.counts;
@@ -210,7 +213,7 @@ new file mode 100644
 +	private overlay: BrowserWindow | undefined;
 +	private loaded = false;
 +	private size = { width: 0, height: 0 };
-+	private placement: { display: Display; notch: number; options: IAxleOverlayOptions } | undefined;
++	private placement: { display: Display; notch: number; attached: boolean; options: IAxleOverlayOptions } | undefined;
 +	private focusTimer: Timeout | undefined;
 +
 +	constructor(@ILogService private readonly logService: ILogService) {
@@ -305,13 +308,15 @@ new file mode 100644
 +		// A Mac with a notch has a taller menu bar: the island then covers the notch, top-center only.
 +		const menuBar = display.workArea.y - display.bounds.y;
 +		const notch = isMacintosh && options.position === 'top-center' && menuBar >= 32 ? menuBar : 0;
-+		this.placement = { display, notch, options };
++		this.placement = { display, notch, attached: options.position === 'top-center', options };
 +		const colors = options.theme === 'editor' ? owner.colors ?? PALETTES.dark : PALETTES[options.theme];
++		// Top-center hangs from the screen's top edge like an island; the corners float with a margin.
++		const attached = options.position === 'top-center';
 +		const overlay = this.ensureOverlay();
 +		if (!this.loaded) {
 +			return; // did-finish-load renders again
 +		}
-+		const model = { items, counts: showCounts ? counts : undefined, style: options.style, size: options.size, opacity: options.opacity, colors, notch };
++		const model = { items, counts: showCounts ? counts : undefined, style: options.style, size: options.size, opacity: options.opacity, colors, notch, attached };
 +		// JSON is a JavaScript expression: the model arrives as data, never as code.
 +		overlay.webContents.executeJavaScript(`window.axleRender(${JSON.stringify(model)})`).catch(e => this.logService.warn(`[axle overlay] render failed: ${e}`));
 +		this.place();
@@ -438,9 +443,9 @@ new file mode 100644
 +		if (!overlay || overlay.isDestroyed() || !placement || !this.size.width) {
 +			return;
 +		}
-+		const { display, notch, options } = placement;
-+		const area = notch ? display.bounds : display.workArea;
-+		const margin = notch ? 0 : 10;
++		const { display, attached, options } = placement;
++		const area = attached ? display.bounds : display.workArea;
++		const margin = attached ? 0 : 10;
 +		const { width, height } = this.size;
 +		const [vertical, horizontal] = options.position.split('-');
 +		const x = horizontal === 'left' ? area.x + margin : horizontal === 'right' ? area.x + area.width - width - margin : area.x + (area.width - width) / 2;
@@ -460,40 +465,48 @@ new file mode 100644
 + * The overlay page. It reports the size it needs (the main process moves and sizes the window to it), expands to the
 + * agent list while the pointer is over it, and reports a click on an agent by the key it was given. All text is set
 + * with textContent.
++ *
++ * Design: a black island that hangs from the top edge. Collapsed it is one dot per agent (working ones breathe, the
++ * ones that need you glow), the most urgent agent's name and verb, and its context ring and elapsed time. Hover opens a
++ * quiet list with the same facts for every agent.
 + */
 +const PAGE = /* html */ `<!doctype html><html><head><meta charset="utf-8">
 +<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 +<title>Axle Agents</title>
 +<style>
 +html, body { margin: 0; background: transparent; overflow: hidden; cursor: default; -webkit-user-select: none; user-select: none; }
-+body { font: 12px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: var(--foreground); --dot: 8px; }
-+body.size-small { font-size: 11px; --dot: 7px; }
-+body.size-large { font-size: 14px; --dot: 10px; }
++body { font: 12px/1.3 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: 0.005em; color: var(--foreground); --dot: 7px; --ring: 14px; }
++body.size-small { font-size: 11px; --dot: 6px; --ring: 12px; }
++body.size-large { font-size: 14px; --dot: 9px; --ring: 17px; }
 +#root { position: absolute; top: 0; left: 0; width: max-content; padding: 6px 8px 10px; }
-+.box { display: flex; align-items: center; gap: 0.7em; padding: 0.45em 1em; background: var(--background); color: var(--foreground); border: 1px solid var(--border); border-radius: 999px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28); }
-+.box.list { flex-direction: column; align-items: stretch; gap: 1px; padding: 0.4em; border-radius: 12px; min-width: 15em; }
-+body.notch #root { padding-top: 0; }
-+body.notch .box { background: #000; color: #f2f2f2; border: none; border-radius: 0 0 16px 16px; box-shadow: none; }
-+body.notch .box.list { border-radius: 0 0 16px 16px; }
-+.notch-gap { width: 190px; flex: none; }
-+.dots { display: flex; gap: 0.35em; align-items: center; }
++body.attached #root { padding-top: 0; }
++.box { display: flex; align-items: center; gap: 0.85em; padding: 0.55em 1.1em; background: var(--background); color: var(--foreground); border: 1px solid var(--border); border-radius: 999px; animation: in 140ms ease-out; }
++body.attached .box { border-top-color: transparent; border-radius: 0 0 1.5em 1.5em; }
++.box.list { flex-direction: column; align-items: stretch; gap: 0.1em; padding: 0.7em 0.5em 0.5em; border-radius: 1.2em; min-width: 21em; }
++body.attached .box.list { border-radius: 0 0 1.5em 1.5em; }
++@keyframes in { from { opacity: 0.4; } }
++.dots { display: flex; gap: 0.4em; align-items: center; }
 +.dot { width: var(--dot); height: var(--dot); border-radius: 50%; flex: none; background: var(--idle); }
-+.dot.working { background: var(--working); animation: pulse 1.6s ease-in-out infinite; }
-+.dot.approval { background: var(--approval); }
-+.dot.question { background: var(--question); }
-+.dot.error { background: var(--error); }
++.dot.working { background: var(--working); animation: breathe 2.2s ease-in-out infinite; }
++.dot.approval { background: var(--approval); box-shadow: 0 0 0.9em color-mix(in srgb, var(--approval) 70%, transparent); }
++.dot.question { background: var(--question); box-shadow: 0 0 0.9em color-mix(in srgb, var(--question) 70%, transparent); }
++.dot.error { background: var(--error); box-shadow: 0 0 0.9em color-mix(in srgb, var(--error) 70%, transparent); }
 +.dot.done { background: var(--done); }
-+@keyframes pulse { 50% { opacity: 0.4; } }
-+@media (prefers-reduced-motion: reduce) { .dot.working { animation: none; } }
-+.counts { display: flex; gap: 0.7em; color: var(--muted); font-variant-numeric: tabular-nums; }
-+body.notch .counts, body.notch .act, body.notch .meta { color: #b9bcc6; }
-+.count { display: flex; align-items: center; gap: 0.3em; }
-+.row { display: flex; align-items: center; gap: 0.6em; padding: 0.4em 0.6em; border-radius: 8px; cursor: pointer; }
-+.row:hover { background: color-mix(in srgb, var(--foreground) 10%, transparent); }
++@keyframes breathe { 50% { opacity: 0.35; transform: scale(0.8); } }
++@media (prefers-reduced-motion: reduce) { .dot.working { animation: none; } .box { animation: none; } }
++.sep { width: 1px; align-self: stretch; margin: 0.15em 0; background: var(--border); }
++.lead { display: flex; align-items: baseline; gap: 0.55em; min-width: 0; }
++.name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 12em; }
++.verb { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 12em; }
++.more { color: var(--muted); }
++.meta { display: flex; align-items: center; gap: 0.6em; margin-left: auto; color: var(--muted); white-space: nowrap; }
++.ring { width: var(--ring); height: var(--ring); border-radius: 50%; flex: none; background: conic-gradient(var(--c, var(--muted)) calc(var(--p) * 1%), color-mix(in srgb, var(--foreground) 14%, transparent) 0); -webkit-mask: radial-gradient(circle, transparent 52%, #000 56%); mask: radial-gradient(circle, transparent 52%, #000 56%); }
++.head { display: flex; gap: 0.9em; padding: 0.1em 0.8em 0.55em; color: var(--muted); font-size: 0.82em; letter-spacing: 0.08em; text-transform: uppercase; }
++.head b { color: var(--foreground); font-weight: 600; }
++.row { display: flex; align-items: center; gap: 0.7em; padding: 0.5em 0.8em; border-radius: 0.8em; cursor: pointer; }
++.row:hover { background: color-mix(in srgb, var(--foreground) 9%, transparent); }
++.row .verb { flex: 1; }
 +.row.empty { cursor: default; color: var(--muted); }
-+.name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 14em; }
-+.act { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 16em; }
-+.meta { margin-left: auto; padding-left: 0.6em; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 +</style></head><body><div id="root"></div><script>
 +'use strict';
 +const MARKER = ${JSON.stringify(MARKER)};
@@ -511,26 +524,52 @@ new file mode 100644
 +};
 +const kind = i => i.attention || i.state;
 +const label = i => i.activity || (i.attention ? KIND[i.attention] : i.state === 'working' ? 'Working' : 'Idle');
++const elapsed = since => {
++	const s = Math.max(0, Math.floor((Date.now() - since) / 1000));
++	return s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
++};
++function meta(i) {
++	const m = el('span', 'meta');
++	if (typeof i.context === 'number') {
++		const ring = el('span', 'ring');
++		ring.style.setProperty('--p', i.context);
++		ring.style.setProperty('--c', i.context >= 85 ? 'var(--error)' : i.context >= 65 ? 'var(--approval)' : 'var(--muted)');
++		ring.title = 'Context ' + i.context + '%';
++		m.append(ring, el('span', '', i.context + '%'));
++	}
++	if (typeof i.usd === 'number') { m.append(el('span', '', '$' + i.usd.toFixed(2))); }
++	if (typeof i.since === 'number') {
++		const t = el('span', '', elapsed(i.since));
++		t.dataset.since = String(i.since);
++		m.append(t);
++	}
++	return m;
++}
 +function row(i) {
 +	const r = el('div', 'row');
-+	r.append(el('span', 'dot ' + kind(i)), el('span', 'name', i.name), el('span', 'act', label(i)));
-+	const meta = [];
-+	if (typeof i.context === 'number') { meta.push(i.context + '%'); }
-+	if (typeof i.usd === 'number') { meta.push('$' + i.usd.toFixed(2)); }
-+	if (meta.length) { r.append(el('span', 'meta', meta.join(' · '))); }
++	r.append(el('span', 'dot ' + kind(i)), el('span', 'name', i.name), el('span', 'verb', label(i)), meta(i));
 +	r.addEventListener('click', () => say({ type: 'click', key: i.key }));
 +	return r;
++}
++function head() {
++	const h = el('div', 'head');
++	const c = data.counts;
++	const add = (n, text) => { if (n) { const s = el('span'); s.append(el('b', '', n), ' ' + text); h.append(s); } };
++	if (c) { add(c.needs, 'need you'); add(c.working, 'working'); add(c.done, 'done'); }
++	if (!h.childElementCount) { h.append(el('span', '', data.items.length ? data.items.length + ' agents' : 'No agents')); }
++	return h;
 +}
 +function render() {
 +	if (!data) { return; }
 +	for (const [k, v] of Object.entries(data.colors)) { document.documentElement.style.setProperty('--' + k, v); }
-+	document.body.className = 'size-' + data.size + (data.notch ? ' notch' : '');
++	document.body.className = 'size-' + data.size + (data.attached ? ' attached' : '') + (data.notch ? ' notch' : '');
 +	root.style.opacity = String(data.opacity);
 +	const list = data.style === 'list' || hover;
 +	const box = el('div', 'box' + (list ? ' list' : ''));
 +	if (data.notch) { box.style.minHeight = data.notch + 'px'; }
 +	if (list) {
 +		if (data.notch) { box.style.paddingTop = data.notch + 'px'; }
++		box.append(head());
 +		if (!data.items.length) { box.append(el('div', 'row empty', 'No agents')); }
 +		data.items.forEach(i => box.append(row(i)));
 +	} else {
@@ -538,24 +577,17 @@ new file mode 100644
 +		data.items.slice(0, 12).forEach(i => dots.append(el('span', 'dot ' + kind(i))));
 +		if (!data.items.length) { dots.append(el('span', 'dot idle')); }
 +		box.append(dots);
-+		if (data.notch) { box.append(el('span', 'notch-gap')); }
++		if (data.notch) { box.append(el('span', 'notch-gap')); box.lastChild.style.width = '170px'; }
++		const lead = data.items[0];
 +		if (data.style === 'pill') {
-+			if (data.counts) {
-+				const counts = el('div', 'counts');
-+				const add = (cls, n, title) => {
-+					if (!n) { return; }
-+					const c = el('span', 'count');
-+					c.title = title;
-+					c.append(el('span', 'dot ' + cls), el('span', '', n));
-+					counts.append(c);
-+				};
-+				add('approval', data.counts.needs, 'Need you');
-+				add('working', data.counts.working, 'Working');
-+				add('done', data.counts.done, 'Done');
-+				if (!counts.childElementCount) { counts.append(el('span', '', data.items.length ? data.items.length + ' agents' : 'No agents')); }
-+				box.append(counts);
-+			} else if (data.items.length === 1) {
-+				box.append(el('span', 'act', data.items[0].name + ' · ' + label(data.items[0])));
++			box.append(el('span', 'sep'));
++			if (lead) {
++				const l = el('span', 'lead');
++				l.append(el('span', 'name', lead.name), el('span', 'verb', label(lead)));
++				if (data.items.length > 1) { l.append(el('span', 'more', '+' + (data.items.length - 1))); }
++				box.append(l, meta(lead));
++			} else {
++				box.append(el('span', 'verb', 'No agents'));
 +			}
 +		}
 +	}
@@ -571,6 +603,10 @@ new file mode 100644
 +		say(size);
 +	}
 +}
++setInterval(() => {
++	document.querySelectorAll('[data-since]').forEach(e => { e.textContent = elapsed(Number(e.dataset.since)); });
++	report();
++}, 1000);
 +root.addEventListener('mouseenter', () => { if (!hover) { hover = true; render(); } });
 +root.addEventListener('mouseleave', () => { if (hover) { hover = false; render(); } });
 +window.axleRender = model => { data = model; render(); };

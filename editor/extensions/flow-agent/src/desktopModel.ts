@@ -14,7 +14,7 @@ export type OverlayPosition = 'top-center' | 'top-left' | 'top-right' | 'bottom-
 export type OverlayDisplay = 'axle' | 'primary' | 'secondary';
 export type OverlayStyle = 'pill' | 'dots' | 'list';
 export type OverlaySize = 'small' | 'medium' | 'large';
-export type OverlayTheme = 'editor' | 'dark' | 'light';
+export type OverlayTheme = 'black' | 'editor' | 'dark' | 'light';
 
 /** Which agents and which facts the overlay shows. */
 export interface OverlayShow {
@@ -28,6 +28,8 @@ export interface OverlayShow {
 	activity: boolean;
 	context: boolean;
 	cost: boolean;
+	/** How long it has been in its state. */
+	elapsed: boolean;
 }
 
 export interface DesktopSettings {
@@ -45,7 +47,7 @@ export interface DesktopSettings {
 	details: boolean;
 }
 
-export const DEFAULT_SHOW: OverlayShow = { working: true, needsYou: true, done: true, idle: false, counts: true, activity: true, context: false, cost: false };
+export const DEFAULT_SHOW: OverlayShow = { working: true, needsYou: true, done: true, idle: false, counts: true, activity: true, context: true, cost: false, elapsed: true };
 
 /** Reads `flow.agents.desktop.*` through `get` (relative keys, e.g. `overlay.position`), with anything malformed falling back to its default. */
 export function readSettings(get: (key: string) => unknown): DesktopSettings {
@@ -81,7 +83,7 @@ export function readSettings(get: (key: string) => unknown): DesktopSettings {
 		size: oneOf('overlay.size', ['small', 'medium', 'large'], 'medium'),
 		// Below 0.3 the overlay is there but cannot be read, which is worse than turning it off.
 		opacity: typeof opacity === 'number' && Number.isFinite(opacity) ? Math.min(1, Math.max(0.3, opacity)) : 0.95,
-		theme: oneOf('overlay.theme', ['editor', 'dark', 'light'], 'editor'),
+		theme: oneOf('overlay.theme', ['black', 'editor', 'dark', 'light'], 'black'),
 		show: flags('overlay.show', DEFAULT_SHOW),
 		autoHide: flags('overlay.autoHide', { noAgents: true, axleFocused: false }),
 		details: bool('overlay.details', false),
@@ -122,6 +124,8 @@ export interface OverlayItem {
 	/** Share of the context window in use, 0-100. */
 	context?: number;
 	usd?: number;
+	/** When it entered its state (epoch ms). */
+	since?: number;
 }
 
 export interface OverlayModel {
@@ -181,6 +185,7 @@ export function overlayModel(sessions: Iterable<OverlaySource>, o: DesktopSettin
 		const usd = o.show.cost ? s.cost?.session.usd : undefined;
 		items.push({
 			id: s.id, name: s.name.slice(0, 60), cli: s.cli, state,
+			...(o.show.elapsed ? { since: s.since } : {}),
 			...(kind ? { attention: kind } : {}),
 			...(activity ? { activity } : {}),
 			...(context !== undefined ? { context } : {}),
