@@ -61,6 +61,10 @@ const PY_VERBS: Record<string, string> = { get: 'GET', post: 'POST', put: 'PUT',
 const MAX_NODES = 220;
 /** Languages whose free functions live in a package/module of their own (see pkgFuncs). */
 const PACKAGE_LANGS = new Set(['go', 'php', 'ruby', 'rust']);
+// What a JS/TS import specifier may leave off. The index file is joined with the platform separator because the
+// file map is keyed by native paths: `C:\app\lib` + '/index.ts' never matched on Windows, so a directory import
+// (`from '../lib'`) resolved on Linux but fell back to a name-only guess on Windows.
+const JS_SUFFIXES = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', ...['index.ts', 'index.tsx', 'index.js'].map(f => path.sep + f)];
 
 /** A record lookup that ignores Object.prototype (an import named `toString` is not a function). */
 function own<T>(rec: Record<string, T> | undefined, key: string): T | undefined {
@@ -319,7 +323,7 @@ export class Project {
 		}
 		if (mod.startsWith('.') || mod.startsWith('@/') || mod.startsWith('~/')) {
 			const base = mod.startsWith('.') ? path.resolve(path.dirname(facts.file), mod) : this.aliasPath(mod, facts.file);
-			for (const ext of ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '/index.ts', '/index.tsx', '/index.js']) {
+			for (const ext of JS_SUFFIXES) {
 				if (this.files.has(base + ext)) {
 					return base + ext;
 				}
@@ -333,7 +337,7 @@ export class Project {
 		const rel = mod.replace(/^[@~]\//, '');
 		for (const dir of ['src', 'app', '']) {
 			const p = path.join(root, dir, rel);
-			for (const ext of ['.ts', '.tsx', '.js', '/index.ts']) {
+			for (const ext of ['.ts', '.tsx', '.js', `${path.sep}index.ts`]) {
 				if (this.files.has(p + ext)) {
 					return p;
 				}
