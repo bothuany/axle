@@ -158,6 +158,17 @@ export function isTarget(v: unknown): v is AskTarget {
 	}
 }
 
+/** Why a session cannot take typed text now, in words that say what would change it. */
+export function notReady(s: Pick<SessionInfo, 'name' | 'cli' | 'state'>): string {
+	switch (s.state) {
+		case 'working': return `${s.name} is busy`;
+		case 'blocked': return `${s.name} is waiting for you`;
+		default:
+			// Codex reports nothing until its hooks are trusted, which looks the same as a session that never got going.
+			return s.cli === 'codex' ? `${s.name} has not said it is at its prompt (if this lasts, trust Axle's hooks with /hooks in Codex)` : `${s.name} has not said it is at its prompt yet`;
+	}
+}
+
 /** What to do with a question: send it to `target`, or show the picker (`why` says why when it is not the first time). */
 export type Resolution = { use: AskTarget; why?: string } | { pick: true; why?: string };
 
@@ -209,7 +220,7 @@ export function resolve(o: { setting: AskSetting; remembered?: AskTarget; sessio
 		case 'session': {
 			const s = sessions.find(x => x.id === target.id && x.alive && x.state !== 'ended');
 			if (s) {
-				return canType(s, customs) ? { use: target } : { pick: true, why: `${s.name} is ${s.state === 'blocked' ? 'waiting for you' : 'busy'}` };
+				return canType(s, customs) ? { use: target } : { pick: true, why: notReady(s) };
 			}
 			const other = ofKind(target.cli, target.custom);
 			const gone = `The session you chose before has closed`;

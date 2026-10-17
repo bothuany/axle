@@ -73,6 +73,11 @@ test('a remembered session that is busy or waiting on a prompt is not typed into
 	const blocked = a.resolve({ ...base, setting: 'remember', remembered: { kind: 'session', id: 'cx', cli: 'codex' }, sessions: [s('cx', 'codex', 'blocked', 1)] })
 	assert.equal(blocked.pick, true)
 	assert.match(blocked.why, /waiting for you/)
+	const silent = a.resolve({ ...base, setting: 'remember', remembered: { kind: 'session', id: 'cx', cli: 'codex' }, sessions: [s('cx', 'codex', 'unknown', 1, { heard: false })] })
+	assert.equal(silent.pick, true)
+	assert.doesNotMatch(silent.why, /busy/, 'a Codex with untrusted hooks is not busy')
+	assert.match(silent.why, /\/hooks/)
+	assert.match(a.notReady({ name: 'Claude', cli: 'claude', state: 'starting' }), /not said it is at its prompt yet/)
 })
 
 test('a remembered session that closed falls back to its CLI: another ready session, else a new one', () => {

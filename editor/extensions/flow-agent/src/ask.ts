@@ -8,7 +8,7 @@
 
 import * as vscode from 'vscode';
 import type { Agents } from './agents';
-import { choices, isTarget, oneLine, parseSetting, resolve, sameTarget, targetName, withFiles, type AskTarget, type Choice, type CustomCli } from './askTarget';
+import { choices, isTarget, notReady, oneLine, parseSetting, resolve, sameTarget, targetName, withFiles, type AskTarget, type Choice, type CustomCli } from './askTarget';
 import { savedAgents } from './pick';
 
 const REMEMBERED = 'flow.agents.askTarget';
@@ -140,7 +140,8 @@ export class AskRouter implements vscode.Disposable {
 					return target;
 				}
 				// It started working or asking for permission between choosing and typing: never type into that.
-				await this.toClipboard(line, files, `${name} cannot take it right now`);
+				const now = this.agents.askSessions().find(x => x.id === target.id);
+				await this.toClipboard(line, files, now ? notReady(now) : `${name} has closed`);
 				this.agents.reveal(target.id);
 				return target;
 			}
@@ -159,7 +160,8 @@ export class AskRouter implements vscode.Disposable {
 				if (target.cli !== 'custom' && await this.agents.whenReady(started.id, customs) && this.agents.typeInto(started.id, withFiles(line, files, target.cli), submit, customs)) {
 					this.show(`$(comment-discussion) Sent to ${started.name} · change`);
 				} else {
-					await this.toClipboard(line, files, `${started.name} is ${target.cli === 'custom' ? 'starting' : 'still starting'}`);
+					const now = this.agents.askSessions().find(x => x.id === started.id);
+					await this.toClipboard(line, files, target.cli === 'custom' || !now ? `${started.name} is starting` : notReady(now));
 				}
 				return session;
 			}
