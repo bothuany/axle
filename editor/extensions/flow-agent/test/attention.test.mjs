@@ -47,6 +47,13 @@ test('AskUserQuestion is a question with the first question as text', () => {
 	assert.deepEqual(r.need, { kind: 'question', source: 'ask', text: 'Which database should I use? (+1 more)', at: 1000 })
 })
 
+test('the permission prompt that shows an AskUserQuestion leaves it a question', () => {
+	const input = { questions: [{ question: 'Which port?' }] }
+	const r = run([{ event: 'PreToolUse', tool: 'AskUserQuestion', input }, { event: 'Notification', notificationType: 'permission_prompt', message: 'Claude needs your permission to use AskUserQuestion' }])
+	assert.equal(r.need.kind, 'question')
+	assert.equal(r.need.text, 'Which port?')
+})
+
 test('an MCP elicitation is a question', () => {
 	const r = run([{ event: 'Notification', notificationType: 'elicitation_dialog', message: 'github needs your token scope' }])
 	assert.equal(r.need.kind, 'question')

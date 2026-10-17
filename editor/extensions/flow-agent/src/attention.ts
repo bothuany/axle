@@ -129,8 +129,9 @@ export function nextAttention(prev: Attention, e: AttentionEvent, now: number): 
 			return need('approval', 'permission', e.described ? `Wants to: ${e.described}` : 'Wants permission');
 		case 'Notification':
 			if (e.notificationType === 'permission_prompt' || (!e.notificationType && /permission/i.test(e.message ?? ''))) {
-				// PermissionRequest came first and says more (the command itself): keep it.
-				return prev.need?.kind === 'approval' ? prev : need('approval', 'permission', e.message || 'Wants permission');
+				// PermissionRequest came first and says more (the command itself): keep it. AskUserQuestion is shown
+				// through the permission prompt too, and stays the question it is.
+				return prev.need?.kind === 'approval' || prev.need?.source === 'ask' ? prev : need('approval', 'permission', e.message || 'Wants permission');
 			}
 			if (e.notificationType === 'elicitation_dialog') {
 				return prev.need?.kind === 'question' ? prev : need('question', 'elicitation', e.message || 'A tool asks you for input');

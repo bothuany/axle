@@ -135,22 +135,32 @@ export function statusUsd(payload: unknown): number | undefined {
 export class TranscriptReader {
 	private offset = 0;
 	private rest = '';
-	private busy: Promise<string[]> | undefined;
+	private busy: Promise<void> | undefined;
 
 	constructor(readonly file: string, private readonly chunk = 4 << 20) { }
 
-	/** The complete lines added since the last call. Calls overlap safely: they share one read. */
-	read(): Promise<string[]> {
-		this.busy ??= this.readNew().finally(() => this.busy = undefined);
+	/** The complete lines added since the last call. */
+	async read(): Promise<string[]> {
+		const out: string[] = [];
+		await this.each(lines => out.push(...lines));
+		return out;
+	}
+
+	/**
+	 * Hands the new lines to `sink` a chunk at a time, yielding between chunks: the first read of a large transcript
+	 * must neither hold it all in memory nor block the extension host. A call during a read waits for that read.
+	 */
+	each(sink: (lines: string[]) => void): Promise<void> {
+		this.busy ??= this.readNew(sink).finally(() => this.busy = undefined);
 		return this.busy;
 	}
 
-	private async readNew(): Promise<string[]> {
+	private async readNew(sink: (lines: string[]) => void): Promise<void> {
 		let h: fs.FileHandle;
 		try {
 			h = await fs.open(this.file, 'r');
 		} catch {
-			return []; // not written yet
+			return; // not written yet
 		}
 		try {
 			const { size } = await h.stat();
@@ -159,7 +169,6 @@ export class TranscriptReader {
 				this.offset = 0;
 				this.rest = '';
 			}
-			const out: string[] = [];
 			const buf = Buffer.alloc(Math.min(this.chunk, Math.max(1, size - this.offset)));
 			while (this.offset < size) {
 				const { bytesRead } = await h.read(buf, 0, Math.min(buf.length, size - this.offset), this.offset);
@@ -176,9 +185,11 @@ export class TranscriptReader {
 				}
 				const text = this.rest + slice.toString('utf8', 0, nl);
 				this.rest = slice.toString('utf8', nl + 1);
-				out.push(...text.split('\n').filter(Boolean));
+				sink(text.split('\n').filter(Boolean));
+				if (this.offset < size) {
+					await new Promise(resolve => setImmediate(resolve));
+				}
 			}
-			return out;
 		} finally {
 			await h.close();
 		}
@@ -206,12 +217,13 @@ export class CostTracker {
 		if (this.reader?.file !== file) {
 			this.reader = new TranscriptReader(file);
 		}
-		const lines = await this.reader.read();
-		if (this.cli === 'codex') {
-			this.codex = codexTotals(lines) ?? this.codex;
-		} else {
-			this.ledger.feed(lines);
-		}
+		await this.reader.each(lines => {
+			if (this.cli === 'codex') {
+				this.codex = codexTotals(lines) ?? this.codex;
+			} else {
+				this.ledger.feed(lines);
+			}
+		});
 	}
 
 	/** Claude's status line said what the CLI has spent so far. */

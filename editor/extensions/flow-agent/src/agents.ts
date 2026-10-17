@@ -117,6 +117,8 @@ const IMPACT_WAIT_MS = 9000;
 const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'Stop', 'StopFailure', 'SessionEnd'];
 /** Agents that never come back to a reloaded window (their terminal is gone) are dropped after this. */
 const ORPHAN_TTL_MS = 90_000;
+/** How long after a failing exit code a SessionEnd may still come, making it a quit rather than a crash. */
+const CRASH_GRACE_MS = 1500;
 /** The most a hook may wait for Axle to snapshot a file: the edit must not stall on it. */
 const SNAPSHOT_WAIT_MS = 2500;
 
@@ -765,8 +767,17 @@ export class Agents implements vscode.Disposable {
 		}
 	}
 
-	/** The agent's command ended in its still open terminal. A clean exit is SessionEnd's to report; a failing one is a crash. */
+	/**
+	 * The agent's command ended in its still open terminal. A clean exit is SessionEnd's to report; a failing code with no
+	 * SessionEnd soon after is a crash. (Custom CLIs send no SessionEnd: their exit code alone decides.)
+	 */
 	private exited(t: vscode.Terminal, code: number | undefined) {
+		if (code) {
+			setTimeout(() => this.crashed(t, code), CRASH_GRACE_MS);
+		}
+	}
+
+	private crashed(t: vscode.Terminal, code: number) {
 		for (const [id, term] of this.terminals) {
 			const s = this.sessions.get(id);
 			const crash = term === t && s && s.state !== 'ended' ? crashNeed(code, Date.now()) : undefined;
