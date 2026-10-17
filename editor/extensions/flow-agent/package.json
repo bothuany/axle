@@ -299,6 +299,203 @@
           "default": false,
           "description": "Quiet mode: no agent notifications at all. The Agents dock still ranks and marks what needs you."
         },
+        "flow.agents.avatar": {
+          "type": "string",
+          "enum": [
+            "gyro",
+            "pixel"
+          ],
+          "enumDescriptions": [
+            "Gyro: rings that tumble while the agent works, one ring that pulses while it waits for you; the dot on the outer arc is the agent (its colour) and the arc is how full its context window is",
+            "Pixel pets: a cat (Claude), a bunny (Codex) and a bear (other agents) whose faces show what they do"
+          ],
+          "default": "gyro",
+          "description": "How agents are drawn in the Agents dock and in the desktop status overlay."
+        },
+        "flow.agents.desktop.badge": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show how many agents need you (the Agents dock badge: approvals, questions, errors and finished turns you have not looked at) on the app icon: the Dock on macOS, an overlay on the taskbar button on Windows, the launcher on Linux. Desktop app only. `#flow.agents.notify.quiet#` does not hide it: a count is not an interruption."
+        },
+        "flow.agents.desktop.overlay.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "A small status overlay that stays on top of other apps and shows each live agent with its state: working, needs you (approval, question, error) or done. It never takes focus; clicking an agent shows its terminal in Axle. On a Mac with a notch, `top-center` sits over the notch. Desktop app only. Independent of `#flow.agents.desktop.badge#`."
+        },
+        "flow.agents.desktop.overlay.position": {
+          "type": "string",
+          "enum": [
+            "top-center",
+            "top-left",
+            "top-right",
+            "bottom-left",
+            "bottom-center",
+            "bottom-right"
+          ],
+          "enumDescriptions": [
+            "Top middle of the screen: over the notch on a Mac that has one, a pill elsewhere",
+            "Top left corner",
+            "Top right corner",
+            "Bottom left corner",
+            "Bottom middle",
+            "Bottom right corner"
+          ],
+          "default": "top-center",
+          "description": "Where the status overlay sits on its screen."
+        },
+        "flow.agents.desktop.overlay.display": {
+          "type": "string",
+          "enum": [
+            "axle",
+            "primary",
+            "secondary"
+          ],
+          "enumDescriptions": [
+            "The screen the Axle window is on (it follows the window)",
+            "The primary screen",
+            "The first screen that is not the primary one (the primary one when there is only one)"
+          ],
+          "default": "axle",
+          "description": "Which screen the status overlay is on."
+        },
+        "flow.agents.desktop.overlay.style": {
+          "type": "string",
+          "enum": [
+            "pill",
+            "dots",
+            "list"
+          ],
+          "enumDescriptions": [
+            "A pill with a dot per agent and the counts; hover lists the agents",
+            "Only a dot per agent; hover lists the agents",
+            "Always the list: name, state and activity of each agent"
+          ],
+          "default": "pill",
+          "description": "How the status overlay draws the agents."
+        },
+        "flow.agents.desktop.overlay.size": {
+          "type": "string",
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ],
+          "default": "medium",
+          "description": "How large the status overlay is."
+        },
+        "flow.agents.desktop.overlay.opacity": {
+          "type": "number",
+          "minimum": 0.3,
+          "maximum": 1,
+          "default": 0.95,
+          "description": "How opaque the status overlay is, from 0.3 to 1."
+        },
+        "flow.agents.desktop.overlay.theme": {
+          "type": "string",
+          "enum": [
+            "black",
+            "editor",
+            "dark",
+            "light"
+          ],
+          "enumDescriptions": [
+            "Pure black with hairline edges: the island look",
+            "The colours of Axle's colour theme",
+            "Dark",
+            "Light"
+          ],
+          "default": "black",
+          "description": "The colours of the status overlay."
+        },
+        "flow.agents.desktop.overlay.show": {
+          "type": "object",
+          "properties": {
+            "working": {
+              "type": "boolean",
+              "default": true,
+              "description": "Agents that are working"
+            },
+            "needsYou": {
+              "type": "boolean",
+              "default": true,
+              "description": "Agents that need you: an approval, a question or an error"
+            },
+            "done": {
+              "type": "boolean",
+              "default": true,
+              "description": "Agents that finished a turn you have not looked at"
+            },
+            "idle": {
+              "type": "boolean",
+              "default": false,
+              "description": "Idle and starting agents, and finished turns you have read"
+            },
+            "counts": {
+              "type": "boolean",
+              "default": true,
+              "description": "How many need you, work and are done"
+            },
+            "activity": {
+              "type": "boolean",
+              "default": true,
+              "description": "What each agent does, as a verb (Running, Editing) unless details are on"
+            },
+            "context": {
+              "type": "boolean",
+              "default": true,
+              "description": "How full each agent's context window is, as a small ring"
+            },
+            "cost": {
+              "type": "boolean",
+              "default": false,
+              "description": "Each session's cost in dollars, where the CLI reports it"
+            },
+            "elapsed": {
+              "type": "boolean",
+              "default": true,
+              "description": "How long each agent has been in its state"
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "working": true,
+            "needsYou": true,
+            "done": true,
+            "idle": false,
+            "counts": true,
+            "activity": true,
+            "context": true,
+            "cost": false,
+            "elapsed": true
+          },
+          "description": "What the status overlay shows."
+        },
+        "flow.agents.desktop.overlay.autoHide": {
+          "type": "object",
+          "properties": {
+            "noAgents": {
+              "type": "boolean",
+              "default": true,
+              "description": "Hide when no agent is shown"
+            },
+            "axleFocused": {
+              "type": "boolean",
+              "default": false,
+              "description": "Hide while an Axle window has focus"
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "noAgents": true,
+            "axleFocused": false
+          },
+          "description": "When the status overlay hides itself."
+        },
+        "flow.agents.desktop.overlay.details": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the command, file name or question in the status overlay's activity line, not only a verb. The overlay is on top of every app, so leave this off when you share your screen."
+        },
         "flow.agents.worktree": {
           "type": "boolean",
           "default": false,

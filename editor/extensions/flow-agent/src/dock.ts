@@ -1,12 +1,14 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the Agents dock. One row per agent terminal: a status light (working, waiting for you,
- *  done), the prompt it is on, what it is doing this second, its to-do progress and its context.
+ *  Axle: the Agents dock. One row per agent terminal: its avatar (working, waiting for you,
+ *  done; src/avatars.ts), the prompt it is on, what it is doing this second, its to-do progress and its context.
  *  Whatever needs you rises to the top, so you never hunt for the stuck one.
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
 import type { Agents } from './agents';
 import { attentionKind, rank } from './attention';
+import { AVATAR_CSS, AVATAR_SCRIPT } from './avatars';
+import { readAvatar } from './desktopModel';
 import { conflictText } from './conflicts';
 import { dockAction } from './dockMessage';
 import type { WorktreeRows } from './worktreeActions';
@@ -23,7 +25,11 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 	private readonly changes: vscode.Disposable[];
 
 	constructor(private readonly agents: Agents, private readonly worktrees?: WorktreeRows) {
-		this.changes = [agents.onDidChange(() => this.post()), ...(worktrees ? [worktrees.onDidChange(() => this.post())] : [])];
+		this.changes = [
+			agents.onDidChange(() => this.post()),
+			...(worktrees ? [worktrees.onDidChange(() => this.post())] : []),
+			vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('flow.agents.avatar') && this.post()),
+		];
 	}
 
 	dispose() {
@@ -95,7 +101,8 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 					// Worktree and conflicts are explicit fields: the session's own record (paths, the base branch) stays here.
 					worktree: s.worktree ? this.worktrees?.view(s) : undefined,
 					clash: s.state === 'ended' ? undefined : conflicts.get(s.id)?.map(c => ({ text: conflictText(c), same: c.sameCheckout, files: c.files.slice(0, 12) })) }));
-			void this.view?.webview.postMessage({ type: 'data', list, now: Date.now() });
+			const avatar = readAvatar(vscode.workspace.getConfiguration('flow.agents').get('avatar'));
+			void this.view?.webview.postMessage({ type: 'data', list, now: Date.now(), avatar });
 		}, 60);
 	}
 
@@ -119,55 +126,45 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 .new button.more { flex: 0 0 auto; padding: 0 10px; color: var(--muted); }
 .ico { flex: none; width: 15px; height: 15px; display: block; }
 .ico.claude { color: var(--claude); } .ico.codex { color: var(--codex); } .ico.custom { color: var(--custom); }
-.tile { display: grid; place-items: center; border-radius: 4px; background: color-mix(in srgb, var(--custom) 22%, transparent); color: var(--custom); font: 700 9.5px/1 var(--mono); text-transform: uppercase; }
 
 .agent { position: relative; display: block; width: 100%; margin: 0 0 6px; padding: 9px 10px 9px 12px; border: 1px solid transparent; border-radius: 10px; background: var(--card); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .agent:hover { border-color: var(--line); }
 .agent.blocked { border-color: color-mix(in srgb, var(--blocked) 45%, transparent); background: color-mix(in srgb, var(--blocked) 8%, var(--card)); }
 .agent.ended { opacity: .62; }
 .top { display: flex; align-items: center; gap: 8px; min-width: 0; }
-/* The agent's own mark, with its state as a small light on the corner. */
-.av { position: relative; flex: none; width: 18px; height: 18px; }
-.av .ico { width: 18px; height: 18px; }
-.light { position: absolute; right: -3px; bottom: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--idle); box-shadow: 0 0 0 2px var(--card); }
-.working .light { background: var(--working); }
-.working .light::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 1.5px solid var(--working); opacity: 0; animation: ping 1.6s ease-out infinite; }
-.blocked .light { background: var(--blocked); }
-.blocked .light, .agent.blocked .light { box-shadow: 0 0 0 2px color-mix(in srgb, var(--blocked) 8%, var(--card)); }
-.done .light { background: var(--done); }
-.ended .light { background: var(--ended); }
-.unknown .light { display: none; }
-@keyframes ping { 0% { transform: scale(.6); opacity: .9; } 100% { transform: scale(1.4); opacity: 0; } }
+/* The agent's avatar (src/avatars.ts): who it is and what it is doing, on a dark tile in every colour theme. */
+.av { position: relative; flex: none; display: grid; place-items: center; width: 26px; height: 26px; margin: -4px 0; border-radius: 8px; background: #000; }
+${AVATAR_CSS}
 .name { font-weight: 600; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .state { margin-left: auto; color: var(--muted); font-size: 11.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .blocked .state { color: var(--blocked); font-weight: 600; }
 .unread .name::after { content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--done); vertical-align: middle; }
-.prompt { margin: 5px 0 0 26px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--text); opacity: .86; }
-.activity { margin: 4px 0 0 26px; color: var(--muted); font: 11.5px/1.35 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prompt { margin: 5px 0 0 34px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: var(--text); opacity: .86; }
+.activity { margin: 4px 0 0 34px; color: var(--muted); font: 11.5px/1.35 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .blocked .activity { color: var(--blocked); }
-.todos { display: flex; align-items: center; gap: 8px; margin: 7px 0 0 26px; }
+.todos { display: flex; align-items: center; gap: 8px; margin: 7px 0 0 34px; }
 .segs { display: flex; gap: 2px; flex: none; }
 .seg { width: 10px; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--idle) 30%, transparent); }
 .seg.completed { background: var(--done); } .seg.in_progress { background: var(--working); }
 .todos .now { min-width: 0; color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.impact { margin: 6px 0 0 26px; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
+.impact { margin: 6px 0 0 34px; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
 .impact b { color: var(--text); font-weight: 600; }
 .impact .flow { display: inline-block; margin: 0 4px 2px 0; padding: 0 6px; border-radius: 5px; border: 1px solid var(--line); font: 11px/1.5 var(--mono); color: var(--text); cursor: pointer; }
 .impact .flow:hover { background: var(--hover); }
-.wt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 6px 0 0 26px; color: var(--muted); font: 11px/1.5 var(--mono); }
+.wt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 6px 0 0 34px; color: var(--muted); font: 11px/1.5 var(--mono); }
 .wt .br { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .wt .ab { font-variant-numeric: tabular-nums; }
 .wt .act { padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font: 11px/1.5 var(--vscode-font-family, system-ui); cursor: pointer; }
 .wt .act:hover { background: var(--hover); color: var(--text); }
-.clash { margin: 6px 0 0 26px; padding: 4px 7px; border-radius: 6px; background: color-mix(in srgb, var(--blocked) 10%, transparent); color: var(--blocked); font-size: 11.5px; line-height: 1.45; }
+.clash { margin: 6px 0 0 34px; padding: 4px 7px; border-radius: 6px; background: color-mix(in srgb, var(--blocked) 10%, transparent); color: var(--blocked); font-size: 11.5px; line-height: 1.45; }
 .clash.same { background: color-mix(in srgb, #ff6b7d 12%, transparent); color: #ff8c99; }
 .clash small { display: block; color: var(--muted); }
 .todos .count { flex: none; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.ctx { position: absolute; left: 38px; right: 10px; bottom: 0; height: 2px; border-radius: 2px; background: transparent; overflow: hidden; }
+.ctx { position: absolute; left: 46px; right: 10px; bottom: 0; height: 2px; border-radius: 2px; background: transparent; overflow: hidden; }
 .ctx i { display: block; height: 100%; background: color-mix(in srgb, var(--working) 55%, transparent); }
 .ctx.warn i { background: var(--blocked); } .ctx.full i { background: #ff6b7d; }
 /* How full the context window is: the model, used / window and the share, or only the tokens when the CLI gave no window. */
-.ctxline { display: flex; align-items: center; gap: 6px; margin: 6px 0 0 26px; color: var(--muted); font: 11px/1.4 var(--mono); font-variant-numeric: tabular-nums; }
+.ctxline { display: flex; align-items: center; gap: 6px; margin: 6px 0 0 34px; color: var(--muted); font: 11px/1.4 var(--mono); font-variant-numeric: tabular-nums; }
 .ctxline .model { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ctxline .amt { flex: none; }
 .ctxline.warn .pct { color: var(--blocked); } .ctxline.full .pct { color: #ff6b7d; font-weight: 600; }
@@ -189,7 +186,7 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 .foot { margin-top: 14px; color: var(--muted); font-size: 11.5px; }
 .foot button { all: unset; color: var(--vscode-textLink-foreground); cursor: pointer; }
 /* Why it waits for you: a chip with the kind, then the question, the permission or the error itself. */
-.need { display: flex; align-items: baseline; gap: 6px; margin: 5px 0 0 26px; min-width: 0; font-size: 11.5px; }
+.need { display: flex; align-items: baseline; gap: 6px; margin: 5px 0 0 34px; min-width: 0; font-size: 11.5px; }
 .chip { flex: none; padding: 0 6px; border-radius: 5px; font: 600 10.5px/1.6 var(--vscode-font-family, system-ui); text-transform: uppercase; letter-spacing: .03em; }
 .need .t { min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .need.approval .chip { background: color-mix(in srgb, var(--blocked) 22%, transparent); color: var(--blocked); }
@@ -199,14 +196,13 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 .agent.question { border-color: color-mix(in srgb, var(--working) 45%, transparent); }
 .agent.error { border-color: color-mix(in srgb, #ff6b7d 45%, transparent); }
 /* Tokens and dollars of this prompt and the session; the PR and its checks. */
-.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 5px 0 0 26px; color: var(--muted); font: 11px/1.5 var(--mono); font-variant-numeric: tabular-nums; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 5px 0 0 34px; color: var(--muted); font: 11px/1.5 var(--mono); font-variant-numeric: tabular-nums; }
 .meta .est { opacity: .7; } .meta .sp { white-space: nowrap; }
 .meta .cost { display: inline-flex; flex-wrap: wrap; gap: 0 10px; }
 .pr { padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--text); cursor: pointer; }
 .pr:hover { background: var(--hover); }
 .pr .ck.pass { color: var(--done); } .pr .ck.fail { color: #ff6b7d; } .pr .ck.pending { color: var(--blocked); }
 .pr.merged { color: var(--custom); } .pr.closed { color: var(--muted); }
-@media (prefers-reduced-motion: reduce) { .working .light::after { animation: none; } }
 </style></head><body>
 <div class="new">
 	<button data-cli="claude" title="Start Claude Code in a new terminal, or resume an earlier session">${ICON.claude}Claude</button>
@@ -218,8 +214,9 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 const vscode = acquireVsCodeApi();
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 let data = { list: [], now: Date.now() };
-const ICONS = ${JSON.stringify(ICON)};
-const icon = s => s.cli === 'custom' ? '<span class="ico custom tile">' + esc((s.command || s.name || '?').split(' ')[0].split('/').pop().charAt(0)) + '</span>' : ICONS[s.cli];
+${AVATAR_SCRIPT}
+// What the avatar shows: a question, an approval or an unread error first, then the state.
+const avState = s => s.state === 'ended' ? 'idle' : s.attention === 'approval' || s.attention === 'question' || s.attention === 'error' ? s.attention : s.attention === 'done' ? 'done' : s.state === 'blocked' ? 'approval' : s.state === 'working' || s.state === 'starting' ? 'working' : 'idle';
 const ago = (t, now) => { const s = Math.max(0, Math.round((now - t) / 1000)); return s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h'; };
 const tok = n => n >= 1e6 ? +(n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M' : n >= 1000 ? (n / 1000).toFixed(n >= 1e5 ? 0 : 1) + 'k' : String(n);
 const usd = n => n === 0 ? '$0' : n < 0.01 ? '<$0.01' : '$' + n.toFixed(n < 10 ? 2 : 1);
@@ -230,6 +227,11 @@ const NEED = { approval: 'Approval', question: 'Question', error: 'Error', done:
 const PRSTATE = { open: 'open', draft: 'draft', merged: 'merged', closed: 'closed' };
 const CHECK = { pass: '✓ checks', fail: '✗ checks', pending: '● checks', none: '' };
 const LABEL = { working: 'Working', blocked: 'Needs you', done: 'Done', idle: 'Ready', starting: 'Starting', unknown: 'Running', ended: 'Closed' };
+function avatar(s, pct) {
+	const st = avState(s);
+	const key = [s.id, data.avatar, s.cli, st, pct ?? ''].join('|');
+	return '<span class="av" data-k="' + esc(key) + '">' + window.axleAvatar(data.avatar, s.cli, st, pct, 24) + '</span>';
+}
 function render() {
 	const el = document.getElementById('list');
 	if (!data.list.length) {
@@ -239,6 +241,8 @@ function render() {
 		const c = document.getElementById('chat'); if (c) c.onclick = () => vscode.postMessage({ type: 'chat' });
 		return;
 	}
+	// An avatar that did not change keeps its element, so its animation runs on instead of restarting with every repaint.
+	const kept = new Map([...el.querySelectorAll('.av[data-k]')].map(a => [a.dataset.k, a]));
 	el.innerHTML = data.list.map(s => {
 		// Without a window size from the CLI there is no share to show: no bar, only the tokens in the tooltip.
 		const sized = !!(s.usage && s.usage.size);
@@ -282,7 +286,7 @@ function render() {
 			+ (canCompact ? '<span class="cmp" data-compact="' + esc(s.id) + '" role="button" title="Send /compact: keeps a summary, frees most of the window">Compact</span>' : '')
 			+ '</div>' : '';
 		return '<button class="agent ' + s.state + (kind ? ' ' + kind : '') + (s.unread ? ' unread' : '') + '" data-id="' + esc(s.id) + '" title="' + esc(s.name + (sized ? ' · context ' + pct + '% full' : '')) + '">'
-			+ '<div class="top"><span class="av">' + icon(s) + '<span class="light"></span></span><span class="name">' + esc(s.name) + '</span><span class="state">' + esc(state) + '</span></div>'
+			+ '<div class="top">' + avatar(s, sized ? pct : undefined) + '<span class="name">' + esc(s.name) + '</span><span class="state">' + esc(state) + '</span></div>'
 			+ (s.prompt ? '<div class="prompt">' + esc(s.prompt) + '</div>' : '')
 			+ need
 			+ (s.activity && !(kind === 'approval' && !s.need) && !(s.need && s.activity === s.need.text) ? '<div class="activity">' + esc(s.activity) + '</div>' : '')
@@ -297,6 +301,7 @@ function render() {
 			+ (s.state === 'ended' ? '<span class="x"data-forget="' + esc(s.id) + '" title="Remove from list" role="button">×</span>' : '')
 			+ '</button>';
 	}).join('');
+	el.querySelectorAll('.av[data-k]').forEach(a => { const old = kept.get(a.dataset.k); if (old) { a.replaceWith(old); } });
 	el.querySelectorAll('.agent').forEach(b => b.onclick = e => {
 		const f = e.target.closest('[data-forget]');
 		const fl = e.target.closest('[data-flow]');

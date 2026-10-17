@@ -7,6 +7,7 @@ import * as vscode from 'vscode';
 import { AgentHost, type AgentKind } from './acp';
 import { Agents } from './agents';
 import { AskRouter } from './ask';
+import { DesktopStatus } from './desktop';
 import { AgentsDock } from './dock';
 import { registerPlaceholderModels } from './models';
 import { AttentionNotifier } from './notify';
@@ -46,6 +47,7 @@ export function activate(context: vscode.ExtensionContext) {
 		worktrees,
 		dock,
 		new AttentionNotifier(agents),
+		new DesktopStatus(agents, log),
 		vscode.window.registerWebviewViewProvider('flow.agents', dock, { webviewOptions: { retainContextWhenHidden: true } }),
 		vscode.commands.registerCommand('flow.agents.newClaude', () => agents.spawn('claude')),
 		vscode.commands.registerCommand('flow.agents.newCodex', () => agents.spawn('codex')),
@@ -60,6 +62,14 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('flow.agents.ask', (text: unknown, submit: unknown, origin: unknown, files: unknown, options: unknown) => typeof text === 'string'
 			? router.ask(text, submit === true, typeof origin === 'string' ? origin : undefined, Array.isArray(files) ? files.filter((f): f is string => typeof f === 'string') : [], (options as { plan?: unknown } | undefined)?.plan === true)
 			: false),
+		// Called by core when the user clicks an agent in the desktop status overlay (desktop.ts): only a live agent this
+		// window knows is shown, so a stale or made-up id does nothing (and never resumes an ended session).
+		vscode.commands.registerCommand('flow.agents.reveal', (id: unknown) => {
+			const s = typeof id === 'string' ? agents.sessions.get(id) : undefined;
+			if (s && s.state !== 'ended') {
+				agents.show(s.id);
+			}
+		}),
 		vscode.commands.registerCommand('flow.agents.chooseAskTarget', () => router.choose()),
 		vscode.commands.registerCommand('flow.agents.keptWorktrees', () => worktrees.showKept()),
 		// Called by the harness map's context X-ray (Compact, Measure): it names a session by id and a kind, never text, and

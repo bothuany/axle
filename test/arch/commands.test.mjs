@@ -25,6 +25,14 @@ const files = readdirSync(extensions)
 	.map(path => ({ path: relative(repo, path), text: readFileSync(path, 'utf8') }));
 const all = files.map(f => f.text).join('\n');
 
+// Commands that VS Code core registers, through a workbench contribution in an Axle patch (editor/patches), rather than
+// an extension. The extensions may invoke these too; the last test checks that a patch really registers each one.
+// flow.desktop.*: the app badge and the desktop status overlay (flow-desktop.patch). They exist in the desktop app only,
+// so flow-agent (src/desktop.ts) looks them up with getCommands() before calling them.
+const CORE = ['flow.desktop.setBadge', 'flow.desktop.setOverlay'];
+const patchDir = join(repo, 'editor', 'patches');
+const patches = readdirSync(patchDir).filter(f => f.endsWith('.patch')).map(f => readFileSync(join(patchDir, f), 'utf8')).join('\n');
+
 const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // `const Command = { showEntry: 'flow.showEntry', ... } as const` and `const FOCUS_TYPE = 'flow.types.focusType'`.
@@ -72,7 +80,7 @@ test('every command one extension invokes is registered by one of them', () => {
 	// `flow-agent.pickSkill.${kind}`
 	const templates = registered.filter(id => id.includes('${'))
 		.map(id => new RegExp('^' + id.split(/\$\{[^}]+\}/).map(escape).join('[\\w-]+') + '$'));
-	const isRegistered = id => registered.includes(id) || templates.some(r => r.test(id));
+	const isRegistered = id => registered.includes(id) || CORE.includes(id) || templates.some(r => r.test(id));
 	const missing = ids('executeCommand').filter(c => c.unresolved || (OURS.test(c.id) && !isRegistered(c.id)));
 	assert.deepEqual(missing, []);
 });
@@ -84,4 +92,12 @@ test('the scan finds the calls it is meant to guard', () => {
 		assert.ok(called.includes(id), `${id} is invoked`);
 	}
 	assert.ok(registered.includes('flow.showEntry'), 'registrations through a constant (Command.showEntry) resolve');
+});
+
+test('every command core registers for the extensions is registered by a patch, and invoked', () => {
+	const called = ids('executeCommand').map(c => c.id);
+	for (const id of CORE) {
+		assert.ok(patches.includes(`CommandsRegistry.registerCommand('${id}'`), `${id} is registered in editor/patches`);
+		assert.ok(called.includes(id), `${id} is invoked by an extension (else drop it from CORE)`);
+	}
 });
