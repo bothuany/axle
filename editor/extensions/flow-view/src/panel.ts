@@ -87,7 +87,11 @@ export class FlowPanel implements vscode.Disposable {
 	/** The webview has sent its first message, so it is listening. */
 	private webviewReady = false;
 
+	/** The flow the canvas was last asked to show: what "Pin Flow as Board" pins. */
+	shown: { target: FlowTarget; label: string } | undefined;
+
 	async show(target: FlowTarget, label: string) {
+		this.shown = { target, label };
 		if (this.opening) {
 			await this.opening;
 		}

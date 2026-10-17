@@ -85,7 +85,7 @@ export class MarkdownBoardViewer implements BoardHost, vscode.Disposable {
 		if (!board) {
 			const boards = this.store.list();
 			if (!boards.length) {
-				void vscode.window.showInformationMessage('Axle: no board has been drawn yet. An agent draws one with the draw_board tool, or when it proposes a plan.');
+				void vscode.window.showInformationMessage('Axle: no board yet. Open a flow and run "Pin Flow as Board", or an agent draws one (draw_board, or a plan it proposes).');
 				return;
 			}
 			const chosen = await vscode.window.showQuickPick(boards.map(b => ({ label: b.spec.title, description: `${b.spec.kind} · ${b.spec.nodes.length} nodes`, detail: b.id, b })), { title: 'Axle: show a board' });

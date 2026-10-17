@@ -19,7 +19,8 @@ export interface StoredBoard {
 	createdAt: number;
 	updatedAt: number;
 	/** agent: drawn by a tool call · plan: parsed from a plan an agent proposed. */
-	origin: 'agent' | 'plan';
+	/** Who made it: an agent (draw_board), an agent's plan, or the user pinning a flow. */
+	origin: 'agent' | 'plan' | 'user';
 	/** The Axle agent session a plan board belongs to (editing a file linked from one of its nodes moves that node). */
 	session?: string;
 	planFile?: string;

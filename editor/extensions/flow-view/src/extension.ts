@@ -9,6 +9,7 @@ import { Analyzer, innermost } from './analyzer';
 import { AgentChanges, GIT_AGENT } from './agentDiff';
 import { entryDisplay } from './entryLabel';
 import { Endpoints, entryName, type Entry, type Source } from './backends';
+import { flowToBoard } from './board/fromFlow';
 import { nodesLinkedTo, parsePlan, statusAfterEdit } from './board/plan';
 import { BoardStore } from './board/store';
 import { MarkdownBoardViewer } from './board/viewer';
@@ -383,6 +384,20 @@ function wireAgentBridge(flow: Flow) {
 			}
 			const spec = parsePlan(plan.slice(0, 200_000), await planResolvers(plan, endpointList));
 			await boards.set(spec, { id: `plan:${session}`, origin: 'plan', session, planFile });
+		}),
+		// Boards without an agent: the flow on the canvas, kept as a board (see board/fromFlow.ts).
+		vscode.commands.registerCommand('flow.board.pinFlow', async () => {
+			const shown = flow.panel.shown;
+			if (!shown) {
+				void vscode.window.showInformationMessage('Axle: open a flow first (Open Endpoint Flow… or Show Flow at Cursor), then pin it.');
+				return;
+			}
+			try {
+				const graph = await flow.providerFor(shown.target).graph(shown.target);
+				await boards.set(flowToBoard(graph, shown.label), { origin: 'user' });
+			} catch (e) {
+				flow.fail(e);
+			}
 		}),
 		vscode.commands.registerCommand('flow.agent.edited', async (session: string, files: string[], phase: 'before' | 'after') => {
 			for (const board of boards.forSession(session)) {

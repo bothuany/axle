@@ -136,6 +136,11 @@
         "category": "Axle"
       },
       {
+        "command": "flow.board.pinFlow",
+        "title": "Pin Flow as Board",
+        "category": "Axle"
+      },
+      {
         "command": "flow.types.showDtoDiagram",
         "title": "Show DTO Diagram",
         "category": "Axle",
