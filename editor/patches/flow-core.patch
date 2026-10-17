@@ -845,3 +845,17 @@ index 10bd9fbd..f24fa241 100644
  		return es.readArray([]);
  	}
  
+diff --git a/build/gulpfile.vscode.win32.ts b/build/gulpfile.vscode.win32.ts
+index 1f0f2d9e..c439cde1 100644
+--- a/build/gulpfile.vscode.win32.ts
++++ b/build/gulpfile.vscode.win32.ts
+@@ -88,7 +88,8 @@ function buildWin32Setup(arch: string, target: string): task.CallbackTask {
+ 			Version: pkg.version,
+ 			RawVersion: pkg.version.replace(/-\w+$/, ''),
+ 			Commit: commit,
+-			NameVersion: product.win32NameVersion + (target === 'user' ? ' (User)' : ''),
++			// Axle: the per-user install is the normal one, so Apps & Features shows plain "Axle", not "Axle (User)".
++			NameVersion: product.win32NameVersion,
+ 			ExeBasename: product.nameShort,
+ 			RegValueName: product.win32RegValueName,
+ 			ShellNameShort: product.win32ShellNameShort,
