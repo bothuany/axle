@@ -230,6 +230,31 @@
           "default": true,
           "description": "When an agent finishes a turn, show on its row which flows (endpoints) the files it edited may affect."
         },
+        "flow.agents.notify.approval": {
+          "type": "boolean",
+          "default": true,
+          "description": "Notify when an agent waits for your approval (a permission or a plan) while you look elsewhere: another window, or another terminal."
+        },
+        "flow.agents.notify.question": {
+          "type": "boolean",
+          "default": true,
+          "description": "Notify when an agent asks you a question while you look elsewhere."
+        },
+        "flow.agents.notify.error": {
+          "type": "boolean",
+          "default": true,
+          "description": "Notify when an agent hits an error (an API error, a run of failing tool calls, a crash) while you look elsewhere."
+        },
+        "flow.agents.notify.done": {
+          "type": "boolean",
+          "default": true,
+          "description": "Notify when an agent finishes a turn while you look elsewhere."
+        },
+        "flow.agents.notify.quiet": {
+          "type": "boolean",
+          "default": false,
+          "description": "Quiet mode: no agent notifications at all. The Agents dock still ranks and marks what needs you."
+        },
         "flow.agents.codexHooks": {
           "type": "boolean",
           "default": true,

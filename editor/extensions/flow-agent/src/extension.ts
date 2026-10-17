@@ -8,6 +8,7 @@ import { AgentHost, type AgentKind } from './acp';
 import { Agents } from './agents';
 import { AgentsDock } from './dock';
 import { registerPlaceholderModels } from './models';
+import { AttentionNotifier } from './notify';
 import { pickAgent } from './pick';
 import { startOrResume } from './resume';
 import { AgentSessionType } from './sessionType';
@@ -38,6 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		agents,
 		dock,
+		new AttentionNotifier(agents),
 		vscode.window.registerWebviewViewProvider('flow.agents', dock, { webviewOptions: { retainContextWhenHidden: true } }),
 		vscode.commands.registerCommand('flow.agents.newClaude', () => agents.spawn('claude')),
 		vscode.commands.registerCommand('flow.agents.newCodex', () => agents.spawn('codex')),

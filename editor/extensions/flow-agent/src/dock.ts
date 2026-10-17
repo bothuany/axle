@@ -5,15 +5,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import type { Agents, AgentSession } from './agents';
+import type { Agents } from './agents';
+import { attentionKind, rank } from './attention';
 
 /** The real marks: Claude's spark (from the Claude Code extension) and the Codex cloud (lobe-icons). */
 const ICON = {
 	claude: '<svg class="ico claude" viewBox="0 0 24 24" aria-hidden="true"><path fill="#D97757" d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z"/></svg>',
 	codex: '<svg class="ico codex" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="flow-codex" x1="12" x2="12" y1="0" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#B1A7FF"/><stop offset=".5" stop-color="#7A9DFF"/><stop offset="1" stop-color="#3941FF"/></linearGradient></defs><path fill="url(#flow-codex)" fill-rule="evenodd" clip-rule="evenodd" d="M8.086.457a6.105 6.105 0 013.046-.415c1.333.153 2.521.72 3.564 1.7a.117.117 0 00.107.029c1.408-.346 2.762-.224 4.061.366l.063.03.154.076c1.357.703 2.33 1.77 2.918 3.198.278.679.418 1.388.421 2.126a5.655 5.655 0 01-.18 1.631.167.167 0 00.04.155 5.982 5.982 0 011.578 2.891c.385 1.901-.01 3.615-1.183 5.14l-.182.22a6.063 6.063 0 01-2.934 1.851.162.162 0 00-.108.102c-.255.736-.511 1.364-.987 1.992-1.199 1.582-2.962 2.462-4.948 2.451-1.583-.008-2.986-.587-4.21-1.736a.145.145 0 00-.14-.032c-.518.167-1.04.191-1.604.185a5.924 5.924 0 01-2.595-.622 6.058 6.058 0 01-2.146-1.781c-.203-.269-.404-.522-.551-.821a7.74 7.74 0 01-.495-1.283 6.11 6.11 0 01-.017-3.064.166.166 0 00.008-.074.115.115 0 00-.037-.064 5.958 5.958 0 01-1.38-2.202 5.196 5.196 0 01-.333-1.589 6.915 6.915 0 01.188-2.132c.45-1.484 1.309-2.648 2.577-3.493.282-.188.55-.334.802-.438.286-.12.573-.22.861-.304a.129.129 0 00.087-.087A6.016 6.016 0 015.635 2.31C6.315 1.464 7.132.846 8.086.457zm-.804 7.85a.848.848 0 00-1.473.842l1.694 2.965-1.688 2.848a.849.849 0 001.46.864l1.94-3.272a.849.849 0 00.007-.854l-1.94-3.393zm5.446 6.24a.849.849 0 000 1.695h4.848a.849.849 0 000-1.696h-4.848z"/></svg>',
 };
-
-const ORDER: Record<AgentSession['state'], number> = { blocked: 0, done: 1, working: 2, starting: 3, idle: 4, unknown: 5, ended: 6 };
 
 export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable {
 	private view: vscode.WebviewView | undefined;
@@ -48,6 +47,8 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 			} else if (m.type === 'flow' && typeof m.id === 'string' && Number.isInteger(m.index)) {
 				// An index into the list the host sent: the page never names a flow itself.
 				this.agents.openImpactFlow(m.id, m.index);
+			} else if (m.type === 'pr' && typeof m.id === 'string') {
+				this.agents.openPr(m.id);
 			} else if (m.type === 'forget' && typeof m.id === 'string') {
 				this.agents.forget(m.id);
 			} else if (m.type === 'compact' && typeof m.id === 'string') {
@@ -94,9 +95,8 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 		}
 		clearTimeout(this.timer);
 		this.timer = setTimeout(() => {
-			const list = [...this.agents.sessions.values()]
-				.sort((a, b) => ORDER[a.state] - ORDER[b.state] || b.since - a.since)
-				.map(s => ({ ...s, done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })) } }));
+			const list = rank([...this.agents.sessions.values()])
+				.map(s => ({ ...s, attention: attentionKind(s), done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })) } }));
 			void this.view?.webview.postMessage({ type: 'data', list, now: Date.now() });
 		}, 60);
 	}
@@ -181,6 +181,23 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 .legend i { width: 7px; height: 7px; border-radius: 50%; }
 .foot { margin-top: 14px; color: var(--muted); font-size: 11.5px; }
 .foot button { all: unset; color: var(--vscode-textLink-foreground); cursor: pointer; }
+/* Why it waits for you: a chip with the kind, then the question, the permission or the error itself. */
+.need { display: flex; align-items: baseline; gap: 6px; margin: 5px 0 0 26px; min-width: 0; font-size: 11.5px; }
+.chip { flex: none; padding: 0 6px; border-radius: 5px; font: 600 10.5px/1.6 var(--vscode-font-family, system-ui); text-transform: uppercase; letter-spacing: .03em; }
+.need .t { min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.need.approval .chip { background: color-mix(in srgb, var(--blocked) 22%, transparent); color: var(--blocked); }
+.need.question .chip { background: color-mix(in srgb, var(--working) 22%, transparent); color: var(--working); }
+.need.error .chip { background: color-mix(in srgb, #ff6b7d 22%, transparent); color: #ff6b7d; }
+.need.done .chip { background: color-mix(in srgb, var(--done) 18%, transparent); color: var(--done); }
+.agent.question { border-color: color-mix(in srgb, var(--working) 45%, transparent); }
+.agent.error { border-color: color-mix(in srgb, #ff6b7d 45%, transparent); }
+/* Tokens and dollars of this prompt and the session; the PR and its checks. */
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 5px 0 0 26px; color: var(--muted); font: 11px/1.5 var(--mono); font-variant-numeric: tabular-nums; }
+.meta .est { opacity: .7; }
+.pr { padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--text); cursor: pointer; }
+.pr:hover { background: var(--hover); }
+.pr .ck.pass { color: var(--done); } .pr .ck.fail { color: #ff6b7d; } .pr .ck.pending { color: var(--blocked); }
+.pr.merged { color: var(--custom); } .pr.closed { color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .working .light::after { animation: none; } }
 </style></head><body>
 <div class="new">
@@ -197,6 +214,13 @@ const ICONS = ${JSON.stringify(ICON)};
 const icon = s => s.cli === 'custom' ? '<span class="ico custom tile">' + esc((s.command || s.name || '?').split(' ')[0].split('/').pop().charAt(0)) + '</span>' : ICONS[s.cli];
 const ago = (t, now) => { const s = Math.max(0, Math.round((now - t) / 1000)); return s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h'; };
 const tok = n => n >= 1e6 ? +(n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M' : n >= 1000 ? (n / 1000).toFixed(n >= 1e5 ? 0 : 1) + 'k' : String(n);
+const usd = n => n < 0.01 ? '<$0.01' : '$' + n.toFixed(n < 10 ? 2 : 1);
+const sum = t => t.input + t.output + t.cacheRead + t.cacheWrite;
+const spendLine = (label, x) => label + ' ' + tok(sum(x.tokens)) + ' tok' + (x.usd !== undefined ? ' · ' + usd(x.usd) : '');
+const spendTip = (label, x) => label + ': ' + x.tokens.input.toLocaleString() + ' in, ' + x.tokens.output.toLocaleString() + ' out, ' + x.tokens.cacheRead.toLocaleString() + ' cache read, ' + x.tokens.cacheWrite.toLocaleString() + ' cache write' + (x.usd !== undefined ? ', $' + x.usd.toFixed(4) + ' est.' : '');
+const NEED = { approval: 'Approval', question: 'Question', error: 'Error', done: 'Done' };
+const PRSTATE = { open: 'open', draft: 'draft', merged: 'merged', closed: 'closed' };
+const CHECK = { pass: '✓ checks', fail: '✗ checks', pending: '● checks', none: '' };
 const LABEL = { working: 'Working', blocked: 'Needs you', done: 'Done', idle: 'Ready', starting: 'Starting', unknown: 'Running', ended: 'Closed' };
 function render() {
 	const el = document.getElementById('list');
@@ -214,6 +238,18 @@ function render() {
 		const state = s.state === 'working' || s.state === 'blocked' ? LABEL[s.state] + ' · ' + ago(s.since, Date.now()) : s.state === 'done' ? 'Done ' + ago(s.since, Date.now()) + ' ago' : LABEL[s.state];
 		const todos = s.todos.length ? '<div class="todos"><span class="segs">' + s.todos.slice(0, 12).map(t => '<span class="seg ' + esc(t.status) + '"></span>').join('') + '</span><span class="count">' + s.done + '/' + s.todos.length + '</span>' + (s.current ? '<span class="now">' + esc(s.current) + '</span>' : '') + '</div>' : '';
 		const impact = s.impact && s.impact.flows.length ? '<div class="impact"><b>This turn touched ' + (s.impact.flows.length + s.impact.more) + (s.impact.flows.length + s.impact.more === 1 ? ' flow' : ' flows') + ':</b> ' + s.impact.flows.map((f, i) => '<span class="flow" role="button" tabindex="0" data-flow="' + i + '" title="' + esc((f.via && f.via.length ? 'Through ' + f.via.join(', ') + '. ' : '') + 'Open this flow') + '">' + esc(f.label) + '</span>').join('') + (s.impact.more ? '<span>+' + s.impact.more + ' more</span>' : '') + '</div>' : '';
+		const kind = s.attention;
+		// A need says what it waits for; a finished turn you have not opened only says so.
+		const needText = s.need ? s.need.text : kind === 'approval' ? s.activity : '';
+		const need = kind ? '<div class="need ' + esc(kind) + '"><span class="chip">' + esc(NEED[kind]) + '</span>' + (needText ? '<span class="t">' + esc(needText) + '</span>' : '') + '</div>' : '';
+		const c = s.cost;
+		const cost = c ? '<span title="' + esc(spendTip('This prompt', c.prompt) + '\\n' + spendTip('Session', c.session) + '\\nTokens of the ' + c.scope + '.' + (c.usdSource ? ' Dollars: ' + c.usdSource + '.' : ' No dollar figure: the CLI does not report one.')) + '">'
+			+ esc(spendLine('prompt', c.prompt)) + (c.prompt.usd !== undefined ? ' <span class="est">est.</span>' : '') + ' · ' + esc(spendLine('session', c.session)) + '</span>' : '';
+		const p = s.pr;
+		const checks = p && p.checks !== 'none' ? ' <span class="ck ' + esc(p.checks) + '">' + esc(CHECK[p.checks]) + '</span>' : '';
+		const prTip = p ? p.title + ' (' + PRSTATE[p.state] + ')' + (p.checks !== 'none' ? '\\nChecks: ' + p.counts.pass + ' passed, ' + p.counts.fail + ' failed, ' + p.counts.pending + ' pending' + (p.failing.length ? '\\nFailing: ' + p.failing.join(', ') : '') : '') + '\\nOpen on GitHub' : '';
+		const pr = p ? '<span class="pr ' + esc(p.state) + '" role="button" data-pr="1" title="' + esc(prTip) + '">#' + esc(p.number) + ' ' + esc(PRSTATE[p.state]) + checks + '</span>' : '';
+		const meta = cost || pr ? '<div class="meta">' + pr + cost + '</div>' : '';
 		const level = pct >= 90 ? ' full' : pct >= 70 ? ' warn' : '';
 		const canCompact = s.usage && s.state !== 'ended' && s.cli !== 'custom';
 		const ctx = s.usage ? '<div class="ctxline' + level + '" title="' + esc(sized ? s.usage.used.toLocaleString() + ' of ' + s.usage.size.toLocaleString() + ' tokens in the context window' : s.usage.used.toLocaleString() + ' tokens in context; the agent has not said how large its window is') + '">'
@@ -221,13 +257,15 @@ function render() {
 			+ '<span class="amt">' + (sized ? tok(s.usage.used) + ' / ' + tok(s.usage.size) + ' <span class="pct">' + pct + '%</span>' : tok(s.usage.used) + ' tokens') + '</span>'
 			+ (canCompact ? '<span class="cmp" data-compact="' + esc(s.id) + '" role="button" title="Send /compact: keeps a summary, frees most of the window">Compact</span>' : '')
 			+ '</div>' : '';
-		return '<button class="agent ' + s.state + (s.unread ? ' unread' : '') + '" data-id="' + esc(s.id) + '" title="' + esc(s.name + (sized ? ' · context ' + pct + '% full' : '')) + '">'
+		return '<button class="agent ' + s.state + (kind ? ' ' + kind : '') + (s.unread ? ' unread' : '') + '" data-id="' + esc(s.id) + '" title="' + esc(s.name + (sized ? ' · context ' + pct + '% full' : '')) + '">'
 			+ '<div class="top"><span class="av">' + icon(s) + '<span class="light"></span></span><span class="name">' + esc(s.name) + '</span><span class="state">' + esc(state) + '</span></div>'
 			+ (s.prompt ? '<div class="prompt">' + esc(s.prompt) + '</div>' : '')
-			+ (s.activity ? '<div class="activity">' + esc(s.activity) + '</div>' : '')
+			+ need
+			+ (s.activity && !(kind === 'approval' && !s.need) && !(s.need && s.activity === s.need.text) ? '<div class="activity">' + esc(s.activity) + '</div>' : '')
 			+ todos
 			+ impact
 			+ ctx
+			+ meta
 			+ (sized ? '<div class="ctx' + level + '"><i style="width:' + pct + '%"></i></div>' : '')
 			+ '<span class="ren" data-rename="' + esc(s.id) + '" title="Rename" role="button">✎</span>'
 			+ (s.state === 'ended' ? '<span class="x"data-forget="' + esc(s.id) + '" title="Remove from list" role="button">×</span>' : '')
@@ -238,7 +276,8 @@ function render() {
 		const fl = e.target.closest('[data-flow]');
 		const rn = e.target.closest('[data-rename]');
 		const cp = e.target.closest('[data-compact]');
-		vscode.postMessage(cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : { type: 'show', id: b.dataset.id });
+		const pr = e.target.closest('[data-pr]');
+		vscode.postMessage(pr ? { type: 'pr', id: b.dataset.id } : cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : { type: 'show', id: b.dataset.id });
 	});
 }
 document.querySelectorAll('.new button').forEach(b => b.onclick = () => vscode.postMessage(b.dataset.cli === 'pick' ? { type: 'pick' } : { type: 'new', cli: b.dataset.cli }));
