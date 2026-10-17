@@ -113,6 +113,15 @@ test('the ranking: approval > question > error > done unread > working > idle an
 	assert.equal(order[7], 'ended')
 })
 
+test('an error needs you until you have seen it; an approval until you answer it', () => {
+	const error = { state: 'ended', unread: true, since: 1, need: { kind: 'error', source: 'crash', text: 'Exited with code 1', at: 1 } }
+	assert.equal(a.attentionKind(error), 'error')
+	assert.equal(a.attentionKind({ ...error, unread: false }), undefined)
+	assert.equal(a.urgency({ ...error, unread: false }), 8)
+	const approval = { state: 'blocked', unread: false, since: 1, need: { kind: 'approval', source: 'permission', text: '', at: 1 } }
+	assert.equal(a.attentionKind(approval), 'approval')
+})
+
 test('among equals, the one waiting longest comes first', () => {
 	const q = (id, at) => ({ id, state: 'blocked', unread: true, since: 0, need: { kind: 'approval', source: 'permission', text: '', at } })
 	assert.deepEqual(a.rank([q('new', 20), q('old', 10)]).map(r => r.id), ['old', 'new'])

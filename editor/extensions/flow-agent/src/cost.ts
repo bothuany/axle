@@ -38,7 +38,8 @@ export interface Spend {
 /** What the dock shows: the session so far and the prompt it is on (or last finished). */
 export interface SessionCost {
 	session: Spend;
-	prompt: Spend;
+	/** Absent when the prompt started before Axle was watching (a reloaded window): its share is unknown. */
+	prompt?: Spend;
 	/** Where the dollars come from, for the tooltip; absent when there are none. */
 	usdSource?: string;
 	/** Whose tokens these are, for the tooltip. */
@@ -233,12 +234,13 @@ export class CostTracker {
 	/** Undefined until the session has used a token. */
 	snapshot(): SessionCost | undefined {
 		const session = this.total;
-		if (!totalTokens(session.tokens) && session.usd === undefined) {
+		// Before the first request the status line already reports $0: nothing to show yet.
+		if (!totalTokens(session.tokens)) {
 			return undefined;
 		}
 		return {
 			session,
-			prompt: this.base ? spendSince(session, this.base) : session,
+			...(this.base ? { prompt: spendSince(session, this.base) } : {}),
 			...(session.usd !== undefined ? { usdSource: 'Claude Code\'s own estimate at API prices, since this CLI started' } : {}),
 			scope: this.cli === 'codex' ? 'Codex session' : 'main agent (subagents not included)',
 		};

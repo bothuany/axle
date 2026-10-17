@@ -32,10 +32,10 @@ test('all green is pass, with the counts', () => {
 })
 
 test('one failure in either shape fails, and is named', () => {
-	const r = p.parsePr(pr([run('build', 'COMPLETED', 'SUCCESS'), run('test', 'COMPLETED', 'FAILURE'), ctx('deploy', 'ERROR'), run('slow', 'IN_PROGRESS', '')]))
+	const r = p.parsePr(pr([run('build', 'COMPLETED', 'SUCCESS'), run('test', 'COMPLETED', 'FAILURE'), run('test', 'COMPLETED', 'FAILURE'), ctx('deploy', 'ERROR'), run('slow', 'IN_PROGRESS', '')]))
 	assert.equal(r.checks, 'fail')
 	assert.deepEqual(r.failing, ['test', 'deploy'])
-	assert.deepEqual(r.counts, { pass: 1, fail: 2, pending: 1 })
+	assert.deepEqual(r.counts, { pass: 1, fail: 3, pending: 1 })
 })
 
 test('running or queued checks are pending', () => {

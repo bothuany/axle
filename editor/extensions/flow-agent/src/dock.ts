@@ -193,7 +193,8 @@ body { margin: 0; padding: 8px 10px 16px 8px; color: var(--text); font: 13px/1.4
 .agent.error { border-color: color-mix(in srgb, #ff6b7d 45%, transparent); }
 /* Tokens and dollars of this prompt and the session; the PR and its checks. */
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin: 5px 0 0 26px; color: var(--muted); font: 11px/1.5 var(--mono); font-variant-numeric: tabular-nums; }
-.meta .est { opacity: .7; }
+.meta .est { opacity: .7; } .meta .sp { white-space: nowrap; }
+.meta .cost { display: inline-flex; flex-wrap: wrap; gap: 0 10px; }
 .pr { padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--text); cursor: pointer; }
 .pr:hover { background: var(--hover); }
 .pr .ck.pass { color: var(--done); } .pr .ck.fail { color: #ff6b7d; } .pr .ck.pending { color: var(--blocked); }
@@ -214,7 +215,7 @@ const ICONS = ${JSON.stringify(ICON)};
 const icon = s => s.cli === 'custom' ? '<span class="ico custom tile">' + esc((s.command || s.name || '?').split(' ')[0].split('/').pop().charAt(0)) + '</span>' : ICONS[s.cli];
 const ago = (t, now) => { const s = Math.max(0, Math.round((now - t) / 1000)); return s < 60 ? s + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h'; };
 const tok = n => n >= 1e6 ? +(n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M' : n >= 1000 ? (n / 1000).toFixed(n >= 1e5 ? 0 : 1) + 'k' : String(n);
-const usd = n => n < 0.01 ? '<$0.01' : '$' + n.toFixed(n < 10 ? 2 : 1);
+const usd = n => n === 0 ? '$0' : n < 0.01 ? '<$0.01' : '$' + n.toFixed(n < 10 ? 2 : 1);
 const sum = t => t.input + t.output + t.cacheRead + t.cacheWrite;
 const spendLine = (label, x) => label + ' ' + tok(sum(x.tokens)) + ' tok' + (x.usd !== undefined ? ' · ' + usd(x.usd) : '');
 const spendTip = (label, x) => label + ': ' + x.tokens.input.toLocaleString() + ' in, ' + x.tokens.output.toLocaleString() + ' out, ' + x.tokens.cacheRead.toLocaleString() + ' cache read, ' + x.tokens.cacheWrite.toLocaleString() + ' cache write' + (x.usd !== undefined ? ', $' + x.usd.toFixed(4) + ' est.' : '');
@@ -239,12 +240,13 @@ function render() {
 		const todos = s.todos.length ? '<div class="todos"><span class="segs">' + s.todos.slice(0, 12).map(t => '<span class="seg ' + esc(t.status) + '"></span>').join('') + '</span><span class="count">' + s.done + '/' + s.todos.length + '</span>' + (s.current ? '<span class="now">' + esc(s.current) + '</span>' : '') + '</div>' : '';
 		const impact = s.impact && s.impact.flows.length ? '<div class="impact"><b>This turn touched ' + (s.impact.flows.length + s.impact.more) + (s.impact.flows.length + s.impact.more === 1 ? ' flow' : ' flows') + ':</b> ' + s.impact.flows.map((f, i) => '<span class="flow" role="button" tabindex="0" data-flow="' + i + '" title="' + esc((f.via && f.via.length ? 'Through ' + f.via.join(', ') + '. ' : '') + 'Open this flow') + '">' + esc(f.label) + '</span>').join('') + (s.impact.more ? '<span>+' + s.impact.more + ' more</span>' : '') + '</div>' : '';
 		const kind = s.attention;
-		// A need says what it waits for; a finished turn you have not opened only says so.
+		// A need says what it waits for (an error you have seen still says what went wrong); a finished turn you have not opened only says so.
+		const chip = s.need ? s.need.kind : kind;
 		const needText = s.need ? s.need.text : kind === 'approval' ? s.activity : '';
-		const need = kind ? '<div class="need ' + esc(kind) + '"><span class="chip">' + esc(NEED[kind]) + '</span>' + (needText ? '<span class="t">' + esc(needText) + '</span>' : '') + '</div>' : '';
+		const need = chip ? '<div class="need ' + esc(chip) + '"><span class="chip">' + esc(NEED[chip]) + '</span>' + (needText ? '<span class="t">' + esc(needText) + '</span>' : '') + '</div>' : '';
 		const c = s.cost;
-		const cost = c ? '<span title="' + esc(spendTip('This prompt', c.prompt) + '\\n' + spendTip('Session', c.session) + '\\nTokens of the ' + c.scope + '.' + (c.usdSource ? ' Dollars: ' + c.usdSource + '.' : ' No dollar figure: the CLI does not report one.')) + '">'
-			+ esc(spendLine('prompt', c.prompt)) + (c.prompt.usd !== undefined ? ' <span class="est">est.</span>' : '') + ' · ' + esc(spendLine('session', c.session)) + '</span>' : '';
+		const cost = c ? '<span class="cost" title="' + esc((c.prompt ? spendTip('This prompt', c.prompt) + '\\n' : '') + spendTip('Session', c.session) + '\\nTokens of the ' + c.scope + '.' + (c.usdSource ? ' Dollars: ' + c.usdSource + '.' : ' No dollar figure: the CLI does not report one.')) + '">'
+			+ (c.prompt ? '<span class="sp">' + esc(spendLine('prompt', c.prompt)) + '</span>' : '') + '<span class="sp">' + esc(spendLine('session', c.session)) + (c.session.usd !== undefined ? ' <span class="est">est.</span>' : '') + '</span></span>' : '';
 		const p = s.pr;
 		const checks = p && p.checks !== 'none' ? ' <span class="ck ' + esc(p.checks) + '">' + esc(CHECK[p.checks]) + '</span>' : '';
 		const prTip = p ? p.title + ' (' + PRSTATE[p.state] + ')' + (p.checks !== 'none' ? '\\nChecks: ' + p.counts.pass + ' passed, ' + p.counts.fail + ' failed, ' + p.counts.pending + ' pending' + (p.failing.length ? '\\nFailing: ' + p.failing.join(', ') : '') : '') + '\\nOpen on GitHub' : '';

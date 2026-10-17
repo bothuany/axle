@@ -93,6 +93,7 @@ test('a tracker gives the session and the prompt it is on', async () => {
 	const t = new c.CostTracker('claude')
 	assert.equal(t.snapshot(), undefined)
 	await t.update(file)
+	assert.equal(t.snapshot().prompt, undefined, 'no baseline yet: the share of the prompt is unknown')
 	t.setUsd(0.4)
 	t.markPrompt()
 	appendFileSync(file, assistant('b', u2) + '\n')

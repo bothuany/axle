@@ -277,6 +277,8 @@ export class Agents implements vscode.Disposable {
 			vscode.window.onDidCloseTerminal(t => this.closed(t)),
 			vscode.window.onDidChangeActiveTerminal(t => this.seen(t)),
 			vscode.window.onDidChangeTerminalState(t => t.state.isInteractedWith && this.seen(t)),
+			// The CLI runs in a shell, so a crash leaves the terminal open: shell integration still reports the command's exit code.
+			vscode.window.onDidEndTerminalShellExecution(e => this.exited(e.terminal, e.exitCode)),
 			// An untrusted workspace starts nothing; trusting it later starts the hook server and brings the agents back.
 			vscode.workspace.onDidGrantWorkspaceTrust(() => void this.start()),
 		);
@@ -763,6 +765,27 @@ export class Agents implements vscode.Disposable {
 		}
 	}
 
+	/** The agent's command ended in its still open terminal. A clean exit is SessionEnd's to report; a failing one is a crash. */
+	private exited(t: vscode.Terminal, code: number | undefined) {
+		for (const [id, term] of this.terminals) {
+			const s = this.sessions.get(id);
+			const crash = term === t && s && s.state !== 'ended' ? crashNeed(code, Date.now()) : undefined;
+			if (!s || !crash) {
+				continue;
+			}
+			s.need = crash;
+			this.attention.set(id, { failures: 0, need: crash });
+			s.state = 'ended';
+			s.since = Date.now();
+			s.activity = s.cli === 'claude' ? 'Exited · click to show its terminal' : undefined;
+			if (!this.isWatched(id)) {
+				s.unread = true;
+			}
+			this.usageEnded(s);
+			this.changed.fire();
+		}
+	}
+
 	private closed(t: vscode.Terminal) {
 		for (const [id, term] of this.terminals) {
 			if (term === t) {
@@ -1078,8 +1101,8 @@ export class Agents implements vscode.Disposable {
 	}
 
 	/**
-	 * The transcript tells what no hook does: a /rename (a `custom-title` line), and a "no" to a
-	 * permission question. Watch its folder, since the file only appears with the first message.
+	 * The transcript tells what no hook does: a /rename (a `custom-title` line), a "no" to a
+	 * permission question, and the tokens of the message that ended a turn. Watch its folder, since the file only appears with the first message.
 	 */
 	private watchTranscript(s: AgentSession) {
 		if (s.cli !== 'claude' || !s.transcript || this.watchers.has(s.id)) {
@@ -1101,6 +1124,8 @@ export class Agents implements vscode.Disposable {
 						this.titleTimers.delete(s.id);
 						void this.readTitle(s);
 						void this.checkRefusal(s);
+						// The last message of a turn lands after Stop: the transcript changing is what says it is there.
+						void this.readCost(s);
 					}, 250));
 				});
 				// A watched folder that goes away (EPERM on Windows) must not become an uncaught error.

@@ -181,7 +181,8 @@ export interface Rankable {
 export type AttentionKind = NeedKind | 'done';
 
 export function attentionKind(s: Rankable): AttentionKind | undefined {
-	if (s.need) {
+	// An approval or a question blocks the agent until you answer; an error only needs you to see it.
+	if (s.need && (s.need.kind !== 'error' || s.unread)) {
 		return s.need.kind;
 	}
 	if (s.state === 'blocked') {

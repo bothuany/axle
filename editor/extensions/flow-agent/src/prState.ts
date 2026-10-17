@@ -63,7 +63,8 @@ export function parsePr(json: unknown): PrState | undefined {
 		const r = outcome(c);
 		counts[r]++;
 		const name = typeof c.name === 'string' ? c.name : typeof c.context === 'string' ? c.context : undefined;
-		if (r === 'fail' && name && failing.length < 5) {
+		// The same check runs for the push and for the PR: name it once.
+		if (r === 'fail' && name && failing.length < 5 && !failing.includes(name)) {
 			failing.push(name);
 		}
 	}
