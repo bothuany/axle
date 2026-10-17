@@ -8,7 +8,7 @@ Axle is installed from the files on the [Releases](https://github.com/bothuany/a
 
 > **Not published yet:** `winget install bothuany.Axle`, `brew install --cask bothuany/tap/axle` and an APT repository are prepared in [`packaging/`](../packaging/README.md) but not submitted or hosted. Until they are, install from the release files below; updating means installing the newer release over the old one.
 >
-> **macOS and Linux packages are new:** the release workflow builds them from the next tag on; they have not been run on a Mac or a Linux desktop yet.
+> **macOS and Linux packages are new:** 0.1.0 is the first release that ships them. They are built and packaged on GitHub's runners, but have not been run on a Mac or a Linux desktop yet; please [report problems](https://github.com/bothuany/axle/issues).
 
 ### Windows
 

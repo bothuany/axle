@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/bothuany/axle/releases"><img src="https://img.shields.io/badge/download-Windows-6f86ff" alt="Download for Windows"></a>
+  <a href="https://github.com/bothuany/axle/releases/latest"><img src="https://img.shields.io/badge/download-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-6f86ff" alt="Download for Windows, macOS and Linux"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6f86ff" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-6f86ff" alt="Agents: Claude Code and Codex">
 </p>
@@ -41,18 +41,21 @@ C# / .NET · Java · Python · JavaScript / TypeScript · Go · PHP · Ruby · R
 
 ## Get Axle
 
-**Windows:** download `Axle-Setup-<version>-x64.exe` from [Releases](https://github.com/bothuany/axle/releases) and run it. No admin rights, no Node or build tools needed.
+Download from the [latest release](https://github.com/bothuany/axle/releases/latest). Everything is bundled: no Node, git or build tools needed.
 
-**macOS and Linux:** from the next release on, a `.dmg` (unsigned: allow it once in Privacy & Security) and a `.deb`; `brew`, `apt` and `winget` installs are not published yet ([install docs](docs/building.md#install)). Or build from source:
+| | Download | Notes |
+|---|---|---|
+| **Windows** | [`Axle-Setup-0.1.0-x64.exe`](https://github.com/bothuany/axle/releases/download/v0.1.0/Axle-Setup-0.1.0-x64.exe) | Installs per user, no admin rights. Not code-signed yet: on the SmartScreen warning choose *More info*, then *Run anyway*. |
+| **macOS** (Apple silicon) | [`Axle-0.1.0-darwin-arm64.dmg`](https://github.com/bothuany/axle/releases/download/v0.1.0/Axle-0.1.0-darwin-arm64.dmg) | Drag to Applications. Not signed by Apple yet: allow it once under *System Settings > Privacy & Security > Open Anyway*. |
+| **macOS** (Intel) | [`Axle-0.1.0-darwin-x64.dmg`](https://github.com/bothuany/axle/releases/download/v0.1.0/Axle-0.1.0-darwin-x64.dmg) | Same as above. |
+| **Linux** (Debian, Ubuntu) | [`axle_0.1.0_amd64.deb`](https://github.com/bothuany/axle/releases/download/v0.1.0/axle_0.1.0_amd64.deb) | `sudo apt install ./axle_0.1.0_amd64.deb` |
+| **Linux** (Fedora and other) | [`.rpm`](https://github.com/bothuany/axle/releases/download/v0.1.0/axle-0.1.0-1.x86_64.rpm) or [`.tar.gz`](https://github.com/bothuany/axle/releases/download/v0.1.0/Axle-0.1.0-linux-x64.tar.gz) | `sudo dnf install ./axle-0.1.0-1.x86_64.rpm` |
 
-```bash
-git clone https://github.com/bothuany/axle.git
-cd axle
-npm run setup
-npm start
-```
+The macOS and Linux packages are new in 0.1.0 and have been built, but not yet tested on a Mac or a Linux desktop: please [report problems](https://github.com/bothuany/axle/issues). `brew`, `apt` and `winget` installs are not published yet. C# flows need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
-Requirements, web mode and building the installer: [docs/building.md](docs/building.md). Axle's MCP tools for agents: [docs/agent-tools.md](docs/agent-tools.md).
+Prefer to build it yourself? `git clone https://github.com/bothuany/axle.git && cd axle && npm run setup && npm start`.
+
+Install details, requirements, web mode and building from source: [docs/building.md](docs/building.md). Axle's MCP tools for agents: [docs/agent-tools.md](docs/agent-tools.md).
 
 ## Contributing
 
