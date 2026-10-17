@@ -37,7 +37,7 @@ test('settings: defaults are the badge on and the overlay off', () => {
 test('settings: badge and overlay switch on and off independently', () => {
 	for (const badge of [true, false]) {
 		for (const overlay of [true, false]) {
-			const s = settings({ badge, overlay })
+			const s = settings({ badge, 'overlay.enabled': overlay })
 			assert.deepEqual([s.badge, s.overlay], [badge, overlay])
 		}
 	}

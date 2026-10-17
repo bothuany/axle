@@ -304,7 +304,7 @@
           "default": true,
           "markdownDescription": "Show how many agents need you (the Agents dock badge: approvals, questions, errors and finished turns you have not looked at) on the app icon: the Dock on macOS, an overlay on the taskbar button on Windows, the launcher on Linux. Desktop app only. `#flow.agents.notify.quiet#` does not hide it: a count is not an interruption."
         },
-        "flow.agents.desktop.overlay": {
+        "flow.agents.desktop.overlay.enabled": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "A small status overlay that stays on top of other apps and shows each live agent with its state: working, needs you (approval, question, error) or done. It never takes focus; clicking an agent shows its terminal in Axle. On a Mac with a notch, `top-center` sits over the notch. Desktop app only. Independent of `#flow.agents.desktop.badge#`."

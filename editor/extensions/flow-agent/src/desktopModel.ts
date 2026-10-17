@@ -73,7 +73,8 @@ export function readSettings(get: (key: string) => unknown): DesktopSettings {
 	const opacity = get('overlay.opacity');
 	return {
 		badge: bool('badge', true),
-		overlay: bool('overlay', false),
+		// `overlay.enabled`, not `overlay`: a setting cannot also be the parent of `overlay.position` and the rest.
+		overlay: bool('overlay.enabled', false),
 		position: oneOf('overlay.position', ['top-center', 'top-left', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'], 'top-center'),
 		display: oneOf('overlay.display', ['axle', 'primary', 'secondary'], 'axle'),
 		style: oneOf('overlay.style', ['pill', 'dots', 'list'], 'pill'),
