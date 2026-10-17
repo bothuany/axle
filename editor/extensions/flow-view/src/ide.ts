@@ -150,7 +150,7 @@ export class ClaudeIdeBridge implements vscode.Disposable {
 		if (this.disposed) {
 			return;
 		}
-		// `claude` started in a Axle terminal connects straight away.
+		// `claude` started in an Axle terminal connects straight away.
 		this.context.environmentVariableCollection.replace('CLAUDE_CODE_SSE_PORT', String(this.port));
 		this.context.environmentVariableCollection.replace('ENABLE_IDE_INTEGRATION', 'true');
 		this.disposables.push(vscode.workspace.onDidChangeWorkspaceFolders(() => [...this.servers.keys()].forEach(p => void this.writeLock(p).catch(() => undefined))));
@@ -273,7 +273,7 @@ export class ClaudeIdeBridge implements vscode.Disposable {
 		this.status.color = n ? new vscode.ThemeColor('flowView.get') : undefined;
 		this.status.tooltip = n
 			? `Claude Code is connected to Axle (${n}). Its diffs open here and on the canvas.`
-			: 'No Claude Code terminal connected. Run `claude` in a Axle terminal, or `/ide` in any terminal and pick Axle.';
+			: 'No Claude Code terminal connected. Run `claude` in an Axle terminal, or `/ide` in any terminal and pick Axle.';
 		this.status.show();
 	}
 
@@ -553,7 +553,7 @@ export class ClaudeIdeBridge implements vscode.Disposable {
 	/** Puts a file and line range into Claude's prompt in the terminal, like @-mentioning it. */
 	mention(file: string, startLine: number, endLine: number) {
 		if (!this.clients.size) {
-			void vscode.window.showInformationMessage('No Claude Code terminal is connected. Run `claude` in a Axle terminal first.', 'Open Terminal').then(p => p && vscode.commands.executeCommand('workbench.action.terminal.new'));
+			void vscode.window.showInformationMessage('No Claude Code terminal is connected. Run `claude` in an Axle terminal first.', 'Open Terminal').then(p => p && vscode.commands.executeCommand('workbench.action.terminal.new'));
 			return;
 		}
 		this.broadcast('at_mentioned', { filePath: file, lineStart: startLine, lineEnd: endLine });

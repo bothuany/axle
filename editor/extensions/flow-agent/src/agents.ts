@@ -673,7 +673,8 @@ export class Agents implements vscode.Disposable {
 		setTimeout(() => {
 			if (session.state === 'starting') {
 				session.state = 'idle';
-				if (cli === 'claude' && !this.heard.has(id)) {
+				// Only when its hooks are wired: without them no event ever comes, and every session would say it needs you.
+				if (cli === 'claude' && this.server && this.settingsOk && !this.heard.has(id)) {
 					const need = startupNeed(Date.now());
 					this.attention.set(id, { failures: 0, need });
 					session.need = need;
@@ -744,7 +745,17 @@ export class Agents implements vscode.Disposable {
 
 	/** Types /compact into the agent's terminal (both CLIs take it): keeps a summary, frees most of the window. */
 	compact(id: string) {
-		this.slash(id, 'compact', false, false);
+		const r = this.slash(id, 'compact', false, false);
+		// The row may be older than the state, or a reloaded window has not heard from the session yet: say why nothing was typed.
+		const name = this.sessions.get(id)?.name ?? 'The agent';
+		const why: Partial<Record<SlashResult, string>> = {
+			waiting: `${name} is waiting for your answer in its terminal: answer it first.`,
+			busy: `${name} is working: compact when it is back at its prompt.`,
+			'not-ready': `${name} has not said it is at its prompt since this window opened: type /compact in its terminal yourself.`,
+		};
+		if (why[r]) {
+			void vscode.window.showInformationMessage(why[r]!);
+		}
 	}
 
 	/**

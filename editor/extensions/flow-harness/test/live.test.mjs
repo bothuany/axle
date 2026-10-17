@@ -282,7 +282,7 @@ test('the X-ray labels what it knows: /context categories, else the first reques
 	assert.equal(rest.how, 'derived')
 	assert.equal(noContext.segments.find(s => s.label.startsWith('Memory')).tokens, 110, '440 characters, about 4 per token')
 	assert.equal(noContext.segments.find(s => s.label.startsWith('Memory')).how, 'estimate')
-	assert.match(noContext.waste.find(w => w.id === 'mcp:github').title, /instructions, never called in 5 days$/, 'never claims 30 days it has not seen')
+	assert.match(noContext.waste.find(w => w.id === 'mcp:github').title, /instructions, never called in 5 days in this project$/, 'never claims 30 days it has not seen')
 	const oneSession = x.xray({ agent: 'a', cli: 'claude', facts: t.parseTranscript(LINES.slice(0, -1)), items, usesOf, covered: 40, sessions: 1 })
 	assert.match(oneSession.waste.find(w => w.id === 'skills').title, /not used in 1 session:/, 'one session does not speak for a month')
 	assert.ok(!oneSession.waste.some(w => w.id === 'skills' && /probe/.test(w.detail)), 'a skill this session called is not idle')
