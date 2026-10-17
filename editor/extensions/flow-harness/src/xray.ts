@@ -6,7 +6,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { promises as fs } from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { itemKey } from './activity';
@@ -16,9 +15,12 @@ import type { Harness } from './scan';
 import { arrayAt, previewAndWrite } from './settings';
 import { isTranscriptPath } from './transcript';
 import { xray, type XrayModel } from './xraymodel';
+import { claudeDir } from './dirs';
 
 /** What flow-agent's dock sends for one agent: never a command, only what it knows about the session. */
 export interface XraySession {
+	/** flow-agent's id for the session: Compact and Measure go through it (flow.agents.slash), never through a terminal name. */
+	id?: string;
 	agent: string;
 	cli: string;
 	transcript?: string;
@@ -32,10 +34,11 @@ function sessionOf(raw: unknown): XraySession | undefined {
 	}
 	const u = r.usage as { used?: unknown; size?: unknown } | undefined;
 	return {
+		id: typeof r.id === 'string' ? r.id.slice(0, 200) : undefined,
 		agent: r.agent.slice(0, 200),
 		cli: typeof r.cli === 'string' ? r.cli : 'claude',
 		// Only a Claude Code transcript is read: a .jsonl inside ~/.claude/projects, `..` resolved.
-		transcript: isTranscriptPath(r.transcript, os.homedir()) ? r.transcript : undefined,
+		transcript: isTranscriptPath(r.transcript, claudeDir()) ? r.transcript : undefined,
 		usage: u && typeof u.used === 'number' && typeof u.size === 'number' ? { used: u.used, size: u.size } : undefined,
 	};
 }
@@ -74,7 +77,7 @@ export class XrayView implements vscode.Disposable {
 		const h = this.harness();
 		const picks: (vscode.QuickPickItem & { s: XraySession })[] = [...this.live.sessions.values()]
 			.sort((a, b) => b.at - a.at)
-			.map(x => ({ label: x.agent, description: x.cli, detail: x.transcript ? 'Running session' : 'No transcript (estimates only)', s: { agent: x.agent, cli: x.cli, transcript: x.transcript } }));
+			.map(x => ({ label: x.agent, description: x.cli, detail: x.transcript ? 'Running session' : 'No transcript (estimates only)', s: { id: x.id, agent: x.agent, cli: x.cli, transcript: x.transcript } }));
 		if (h) {
 			const dir = projectTranscriptDir(h.root);
 			const names = (await fs.readdir(dir).catch(() => [] as string[])).filter(n => n.endsWith('.jsonl'));
@@ -103,17 +106,25 @@ export class XrayView implements vscode.Disposable {
 			usesOf: i => this.live.summary(itemKey(i)).month, covered: this.live.covered, sessions: this.live.sessionsSeen,
 		});
 		this.panel.title = `Context X-ray: ${s.agent}`;
+		const can = { measure: await this.slash('context', true) === 'sent', compact: await this.slash('compact', true) === 'sent' };
 		void this.panel.webview.postMessage({
-			type: 'data', model: this.model, hasTerminal: !!this.terminal(),
+			type: 'data', model: this.model, can,
 			transcript: s.transcript ? path.basename(s.transcript) : undefined,
 		});
 	}
 
-	/** The agent's own terminal: one open terminal of that name, or none when the name is missing or ambiguous. */
-	private terminal(): vscode.Terminal | undefined {
-		const s = this.session;
-		const open = s ? vscode.window.terminals.filter(t => t.name === s.agent && t.exitStatus === undefined) : [];
-		return open.length === 1 ? open[0] : undefined;
+	/**
+	 * Asks flow-agent to type a slash command into this session, or with `check` whether it would now. flow-agent owns the
+	 * session's terminal and its state: it types only while the agent sits at its prompt, so the Enter never answers a
+	 * permission prompt. A session it does not know (the latest transcript, the harness alone) gets nothing typed.
+	 */
+	private async slash(kind: 'compact' | 'context', check: boolean): Promise<string> {
+		const id = this.session?.id;
+		if (!id) {
+			return 'unknown';
+		}
+		const r = await Promise.resolve(vscode.commands.executeCommand<string>('flow.agents.slash', id, kind, check)).catch(() => undefined);
+		return typeof r === 'string' ? r : 'unknown';
 	}
 
 	private async message(m: { type?: unknown; id?: unknown }) {
@@ -143,23 +154,30 @@ export class XrayView implements vscode.Disposable {
 				void vscode.window.showInformationMessage(`${a.server} is off for your next sessions here. A running session keeps it until it restarts.`);
 			}
 		} else if (a.kind === 'measure' || a.kind === 'compact') {
-			await this.send(a.kind === 'measure' ? '/context' : '/compact');
+			await this.send(a.kind === 'measure' ? 'context' : 'compact');
 		}
 	}
 
-	/** Types a slash command into the agent's terminal, only on a click, without taking focus from the X-ray. */
-	private async send(command: string) {
-		const terminal = this.terminal();
-		if (!terminal) {
-			void vscode.window.showInformationMessage(`Run ${command} in the session yourself; Axle has no terminal for it.`);
+	/** Types /context or /compact into the agent's terminal, only on a click, without taking focus from the X-ray. */
+	private async send(kind: 'compact' | 'context') {
+		const command = `/${kind}`;
+		const r = await this.slash(kind, false);
+		if (r === 'sent') {
+			if (kind === 'context') {
+				// Claude Code writes the report into the transcript as it prints it.
+				setTimeout(() => void this.render(), 2500);
+			}
 			return;
 		}
-		terminal.show(true);
-		terminal.sendText(command);
-		if (command === '/context') {
-			// Claude Code writes the report into the transcript as it prints it.
-			setTimeout(() => void this.render(), 2500);
-		}
+		const name = this.session?.agent ?? 'The agent';
+		const why: Record<string, string> = {
+			waiting: `${name} is waiting for your answer in its terminal: answer it, then try again (Enter there would approve it).`,
+			busy: `${name} is working: try again when it is back at its prompt.`,
+			'not-ready': `${name} has not said it is at its prompt yet.`,
+			unsupported: `${name} does not take ${command}.`,
+		};
+		void vscode.window.showInformationMessage(why[r] ?? `Run ${command} in the session yourself; Axle has no terminal for it.`);
+		void this.render();
 	}
 
 	private html() {
@@ -190,7 +208,7 @@ function render(d) {
 	if (!m.waste.length) waste.append(el('p', { class: 'muted' }, 'Nothing stands out.'));
 	m.waste.forEach((w, i) => {
 		const a = w.action;
-		const label = !a ? null : a.kind === 'open' ? 'Open' : a.kind === 'disable-mcp' ? 'Disable here…' : a.kind === 'measure' ? (d.hasTerminal ? 'Measure with /context' : null) : (d.hasTerminal ? 'Compact' : null);
+		const label = !a ? null : a.kind === 'open' ? 'Open' : a.kind === 'disable-mcp' ? 'Disable here…' : a.kind === 'measure' ? (d.can.measure ? 'Measure with /context' : null) : (d.can.compact ? 'Compact' : null);
 		waste.append(el('div', { class: 'card row' }, el('div', { class: 'grow' }, el('b', {}, w.title), ' ', howTag(w.how), el('div', { class: 'muted' }, w.detail)),
 			label ? el('button', { class: a.kind === 'disable-mcp' ? 'primary' : '', onclick: () => vscode.postMessage({ type: 'act', id: w.id }) }, label) : null));
 	});

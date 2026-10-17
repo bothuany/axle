@@ -13,6 +13,7 @@ import { parseIndex, parseMemory, projectKey, type Memory } from './memory';
 import { lint, ruleGlobs, type InstructionKind, type LintFile } from './lint';
 import { projectGaps, type Gap } from './gaps';
 import { gitIgnoredOf } from './ignored';
+import { claudeDir, codexDir } from './dirs';
 
 export type Scope = 'user' | 'project' | 'local' | 'directory';
 export type Kind = 'instructions' | 'rules' | 'skills' | 'agents' | 'hooks' | 'mcp' | 'permissions' | 'memory';
@@ -379,7 +380,7 @@ async function lintItems(items: HarnessItem[], root: string) {
 }
 
 /** Where Claude Code keeps its auto memory for a folder. */
-export const claudeMemoryDir = (root: string) => path.join(home, '.claude', 'projects', projectKey(root), 'memory');
+export const claudeMemoryDir = (root: string) => path.join(claudeDir(), 'projects', projectKey(root), 'memory');
 
 /**
  * The agents' own memory for this folder, read only: Claude Code's MEMORY.md (loaded in every session) and its topic files
@@ -408,7 +409,7 @@ async function memoryIn(items: HarnessItem[], root: string) {
 		const issues: Issue[] = entry || indexText === undefined ? [] : [{ severity: 'info', message: 'Not in MEMORY.md: Claude does not know it is there unless it lists the folder', fix: 'Add a line for it to MEMORY.md, or delete it' }];
 		items.push({ kind: 'memory', scope: 'user', label: m.name, detail: [m.type ?? 'memory', m.description].filter(Boolean).join(' · '), file, onDemand: tokensOf(text), issues, agents: ['Claude'], memory: m });
 	}
-	const codex = path.join(home, '.codex', 'memories');
+	const codex = path.join(codexDir(), 'memories');
 	for (const file of (await listDir(codex)).filter(f => /\.(md|txt|json)$/i.test(f))) {
 		const text = await read(file);
 		if (text !== undefined) {
@@ -437,8 +438,8 @@ export async function scan(): Promise<Harness | undefined> {
 	const items: HarnessItem[] = [];
 
 	// Instructions: user, then project, then nested folders (more specific wins).
-	await memoryFile(items, root, path.join(home, '.claude', 'CLAUDE.md'), 'user', ['Claude'], 'Your instructions, every project');
-	await memoryFile(items, root, path.join(home, '.codex', 'AGENTS.md'), 'user', ['Codex'], 'Your instructions, every project');
+	await memoryFile(items, root, path.join(claudeDir(), 'CLAUDE.md'), 'user', ['Claude'], 'Your instructions, every project');
+	await memoryFile(items, root, path.join(codexDir(), 'AGENTS.md'), 'user', ['Codex'], 'Your instructions, every project');
 	await memoryFile(items, root, path.join(root, 'CLAUDE.md'), 'project', ['Claude'], 'Loaded in every session');
 	await memoryFile(items, root, path.join(root, 'CLAUDE.local.md'), 'local', ['Claude'], 'Yours only, not committed');
 	await memoryFile(items, root, path.join(root, 'AGENTS.md'), 'project', ['Codex', 'Cursor'], 'Loaded in every session');
@@ -454,20 +455,20 @@ export async function scan(): Promise<Harness | undefined> {
 	}
 
 	await rulesIn(items, root, path.join(root, '.claude', 'rules'), 'project', ['Claude'], 'paths');
-	await rulesIn(items, root, path.join(home, '.claude', 'rules'), 'user', ['Claude'], 'paths');
+	await rulesIn(items, root, path.join(claudeDir(), 'rules'), 'user', ['Claude'], 'paths');
 	await rulesIn(items, root, path.join(root, '.cursor', 'rules'), 'project', ['Cursor'], 'globs');
 
 	await skillsIn(items, path.join(root, '.claude', 'skills'), 'project', ['Claude']);
 	await skillsIn(items, path.join(root, '.agents', 'skills'), 'project', ['Codex']);
 	await skillsIn(items, path.join(root, '.cursor', 'skills'), 'project', ['Cursor']);
-	await skillsIn(items, path.join(home, '.claude', 'skills'), 'user', ['Claude']);
+	await skillsIn(items, path.join(claudeDir(), 'skills'), 'user', ['Claude']);
 
 	await agentsIn(items, path.join(root, '.claude', 'agents'), 'project');
-	await agentsIn(items, path.join(home, '.claude', 'agents'), 'user');
+	await agentsIn(items, path.join(claudeDir(), 'agents'), 'user');
 
 	await memoryIn(items, root);
 
-	await settingsFile(items, root, path.join(home, '.claude', 'settings.json'), 'user');
+	await settingsFile(items, root, path.join(claudeDir(), 'settings.json'), 'user');
 	await settingsFile(items, root, path.join(root, '.claude', 'settings.json'), 'project');
 	await settingsFile(items, root, path.join(root, '.claude', 'settings.local.json'), 'local');
 	await mcpJson(items, root, path.join(root, '.mcp.json'), 'project');

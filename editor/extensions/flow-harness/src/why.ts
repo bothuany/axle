@@ -13,6 +13,7 @@ import { effectiveSettings, instructionsFor, type SettingsLayer } from './effect
 import { page } from './page';
 import { codexConfig, parseCall, simulate, simulateCodex, type Verdict } from './permmatch';
 import type { Harness, HarnessItem } from './scan';
+import { claudeDir, codexDir } from './dirs';
 
 /** Where an organization's managed settings live, by platform (Claude Code's documented locations). */
 export function managedSettingsFile(): string {
@@ -27,7 +28,7 @@ export async function loadLayers(root: string): Promise<SettingsLayer[]> {
 		['managed', managedSettingsFile()],
 		['local', path.join(root, '.claude', 'settings.local.json')],
 		['project', path.join(root, '.claude', 'settings.json')],
-		['user', path.join(os.homedir(), '.claude', 'settings.json')],
+		['user', path.join(claudeDir(), 'settings.json')],
 	];
 	return Promise.all(files.map(async ([scope, file]) => {
 		const text = await fs.readFile(file, 'utf8').catch(() => undefined);
@@ -106,7 +107,7 @@ export class WhyView implements vscode.Disposable {
 		}
 		const ctx = { cwd: h.root, home: os.homedir() };
 		if (agent === 'Codex') {
-			const toml = await fs.readFile(path.join(os.homedir(), '.codex', 'config.toml'), 'utf8').catch(() => '');
+			const toml = await fs.readFile(path.join(codexDir(), 'config.toml'), 'utf8').catch(() => '');
 			return simulateCodex(call, codexConfig(toml), ctx);
 		}
 		const eff = effectiveSettings(await loadLayers(h.root));

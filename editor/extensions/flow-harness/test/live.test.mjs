@@ -293,17 +293,17 @@ test('the X-ray labels what it knows: /context categories, else the first reques
 	assert.equal(x.xray({ agent: 'a', cli: 'claude', reported: { used: 180000, size: 200000 }, items: [], usesOf, covered: 0 }).waste[0].action.kind, 'compact')
 })
 
-test('only Claude Code transcripts are read: a .jsonl inside ~/.claude/projects, with .. resolved', () => {
+test('only Claude Code transcripts are read: a .jsonl inside projects/ of the config folder, with .. resolved', () => {
 	const home = String.raw`C:\Users\me`
-	assert.ok(t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\C--w\a.jsonl`, home))
-	assert.ok(t.isTranscriptPath('c:/users/ME/.claude/projects/x/b.jsonl', home), 'Windows paths compare without case')
-	assert.ok(!t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\..\..\secret.jsonl`, home), '.. out of the folder')
-	assert.ok(!t.isTranscriptPath(String.raw`D:\x\.claude\projects\a.jsonl`, home), 'another .claude/projects')
-	assert.ok(!t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\a.txt`, home))
-	assert.ok(!t.isTranscriptPath('.claude/projects/a.jsonl', home), 'a relative path')
-	assert.ok(!t.isTranscriptPath(42, home))
-	assert.ok(t.isTranscriptPath('/home/me/.claude/projects/p/s.jsonl', '/home/me'))
-	assert.ok(!t.isTranscriptPath('/home/ME/.claude/projects/p/s.jsonl', '/home/me'), 'POSIX paths keep their case')
+	assert.ok(t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\C--w\a.jsonl`, home + '/.claude'))
+	assert.ok(t.isTranscriptPath('c:/users/ME/.claude/projects/x/b.jsonl', home + '/.claude'), 'Windows paths compare without case')
+	assert.ok(!t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\..\..\secret.jsonl`, home + '/.claude'), '.. out of the folder')
+	assert.ok(!t.isTranscriptPath(String.raw`D:\x\.claude\projects\a.jsonl`, home + '/.claude'), 'another .claude/projects')
+	assert.ok(!t.isTranscriptPath(String.raw`C:\Users\me\.claude\projects\a.txt`, home + '/.claude'))
+	assert.ok(!t.isTranscriptPath('.claude/projects/a.jsonl', home + '/.claude'), 'a relative path')
+	assert.ok(!t.isTranscriptPath(42, home + '/.claude'))
+	assert.ok(t.isTranscriptPath('/home/me/.claude/projects/p/s.jsonl', '/home/me/.claude'))
+	assert.ok(!t.isTranscriptPath('/home/ME/.claude/projects/p/s.jsonl', '/home/me/.claude'), 'POSIX paths keep their case')
 })
 
 test('secrets are blanked before a prompt or a command is stored', () => {

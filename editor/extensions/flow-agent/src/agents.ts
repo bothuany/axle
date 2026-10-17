@@ -21,8 +21,8 @@ import { CostTracker, statusUsd, type SessionCost } from './cost';
 import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
-import { canType, type AgentCli, type AgentState, type CustomCli, type SessionInfo } from './askTarget';
-import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, compactAllowed, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
+import { canType, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
+import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 import { createWorktree, validBranch, worktreeSlug, type Worktree } from './worktrees';
 
 // Declared with the ask rules, which must not import this file (it needs vscode); every other file takes them from here.
@@ -114,6 +114,8 @@ interface HookPayload {
 	duration_ms?: number;
 	/** SubagentStop: which subagent finished. */
 	agent_type?: string;
+	/** The session's permission mode, on the events that carry it (default, plan, acceptEdits, auto, dontAsk, bypassPermissions). */
+	permission_mode?: string;
 }
 
 const AGENT = 'Claude Code (terminal)';
@@ -714,14 +716,27 @@ export class Agents implements vscode.Disposable {
 
 	/** Types /compact into the agent's terminal (both CLIs take it): keeps a summary, frees most of the window. */
 	compact(id: string) {
-		const s = this.sessions.get(id);
+		this.slash(id, 'compact', false, false);
+	}
+
+	/**
+	 * Types a known slash command into one session, found by id (a name can be renamed or shared by a user's shell).
+	 * Checked here, at the moment of typing, not only in the page that asked: the row or the X-ray may be older than the
+	 * state, and the Enter would answer a permission prompt that just came up. `check` only says whether it would be typed.
+	 */
+	slash(id: string, kind: SlashKind, check: boolean, preserveFocus = true): SlashResult {
 		const t = this.terminals.get(id);
-		// Checked here, not only in the page: the row may be older than the state (a permission prompt that just came up).
-		if (!s || !t || !compactAllowed(s)) {
-			return;
+		const s = this.askSessions().find(x => x.id === id);
+		const refused = slashRefusal(s && { ...s, alive: !!t }, kind);
+		const text = s && slashText(kind, s.cli);
+		if (refused || !t || !text) {
+			return refused ?? 'no-terminal';
 		}
-		t.show();
-		t.sendText('/compact');
+		if (!check) {
+			t.show(preserveFocus);
+			t.sendText(text);
+		}
+		return 'sent';
 	}
 
 	show(id: string) {
@@ -1206,7 +1221,7 @@ export class Agents implements vscode.Disposable {
 			at: Date.now(), agent: s.name, cli: s.cli, session: p.session_id, event: p.hook_event_name, tool: p.tool_name, input,
 			error: typeof p.error === 'string' ? p.error.slice(0, 1000) : undefined, durationMs: p.duration_ms,
 			prompt: p.hook_event_name === 'UserPromptSubmit' ? p.prompt?.slice(0, 2000) : undefined,
-			agentType: p.agent_type, transcript: s.transcript,
+			agentType: p.agent_type, transcript: s.transcript, id: s.id, mode: p.permission_mode,
 		})).catch(() => undefined);
 	}
 
@@ -1215,7 +1230,7 @@ export class Agents implements vscode.Disposable {
 		const s = this.sessions.get(id);
 		if (s) {
 			// A click asked for it: if the harness map cannot answer, say so instead of doing nothing.
-			void Promise.resolve(vscode.commands.executeCommand('flowHarness.contextXray', { agent: s.name, cli: s.cli, transcript: s.transcript, usage: s.usage }))
+			void Promise.resolve(vscode.commands.executeCommand('flowHarness.contextXray', { id: s.id, agent: s.name, cli: s.cli, transcript: s.transcript, usage: s.usage }))
 				.catch(e => void vscode.window.showWarningMessage(`The context X-ray is not available: ${(e as Error).message ?? e}`));
 		}
 	}

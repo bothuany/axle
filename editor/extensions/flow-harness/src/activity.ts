@@ -242,6 +242,10 @@ export interface AgentEvent {
 	prompt?: string;
 	agentType?: string;
 	transcript?: string;
+	/** flow-agent's id for the session (stable across renames). */
+	id?: string;
+	/** The permission mode the hook reported. */
+	mode?: string;
 }
 
 /** Counts one hook event: the skill, subagent or MCP server a tool call used, and the user's hooks its event and tool fire. */

@@ -282,7 +282,7 @@ function render() {
 		const clash = (s.clash || []).map(c => '<div class="clash' + (c.same ? ' same' : '') + '" title="' + esc(c.files.join(', ')) + '">⚠ ' + esc(c.text)
 			+ (c.same ? '<small>Same checkout: each writes over the edits of the other. Start agents that work in parallel in a worktree (Other… → in a worktree).</small>' : '') + '</div>').join('');
 		const level = pct >= 90 ? ' full' : pct >= 70 ? ' warn' : '';
-		// Only at the prompt: while the agent asks for permission, the Enter after /compact would answer its menu (compactAllowed).
+		// Only at the prompt: while the agent asks for permission, the Enter after /compact would answer its menu (slashRefusal in askTarget.ts, checked again in Agents.slash).
 		const canCompact = s.usage && s.cli !== 'custom' && (s.state === 'idle' || s.state === 'done');
 		const ctx = s.usage ? '<div class="ctxline' + level + '" title="' + esc(sized ? s.usage.used.toLocaleString() + ' of ' + s.usage.size.toLocaleString() + ' tokens in the context window' : s.usage.used.toLocaleString() + ' tokens in context; the agent has not said how large its window is') + '">'
 			+ (s.usage.model ? '<span class="model">' + esc(s.usage.model) + '</span><span>·</span>' : '')
