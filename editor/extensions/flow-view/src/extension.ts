@@ -30,6 +30,7 @@ import { turnImpact } from './mcp/turnImpact';
 import { FlowPanel } from './panel';
 import { PolyIndex, PolyProvider, POLY_LANGUAGES } from './poly/client';
 import { RoslynProvider, type FlowProvider, type FlowTarget } from './providers';
+import { registerResolveNames } from './resolveNames';
 import { FlowTrail } from './trail';
 
 /** Everything the commands need, built once in `activate`. */
@@ -64,6 +65,8 @@ export function activate(context: vscode.ExtensionContext) {
 	const log = vscode.window.createOutputChannel('Axle', { log: true });
 	const analyzer = new Analyzer(context, log);
 	const poly = new PolyIndex(context, log);
+	// For the harness map: whether the code names an agent's memory mentions still exist.
+	context.subscriptions.push(registerResolveNames(poly));
 	const polyProvider = new PolyProvider(poly);
 	const lsp = new LspProvider();
 	const roslyn = new RoslynProvider(analyzer);
