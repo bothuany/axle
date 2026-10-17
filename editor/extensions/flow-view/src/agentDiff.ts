@@ -17,8 +17,10 @@ export interface CardDiff {
 	removed: { after: number; lines: string[] }[];
 	plus: number;
 	minus: number;
-	/** 'git' when the change is only known from the Git-changes view: uncommitted, not necessarily an agent's. */
+	/** 'git' when the change is only known from the Git-changes view: not necessarily an agent's. */
 	source?: 'git';
+	/** What a Git change is measured against when that is not HEAD ("main"): committed work, so the card offers no Undo. */
+	base?: string;
 }
 
 interface Hunk {
@@ -73,13 +75,16 @@ interface Turn {
 	prompted?: boolean;
 	/** The agent's last write or start of this prompt: edits that trail it by minutes belong to a new step. */
 	lastActivity: number;
+	/** A Git-changes step measured against a commit other than HEAD: its "before" holds committed work, which Undo must not write back. */
+	base?: string;
 }
 
 /** On disk between sessions, so the timeline and Keep/Undo survive a restart. */
 interface Saved {
 	nextTurn: number;
 	baselines: [string, string][];
-	turns: { id: number; prompt: string; agent: string; at: number; before: [string, string][]; after: [string, string][]; created?: string[] }[];
+	committed?: [string, string][];
+	turns: { id: number; prompt: string; agent: string; at: number; before: [string, string][]; after: [string, string][]; created?: string[]; base?: string }[];
 }
 
 /** Older prompts are dropped first; a timeline is for the work in progress, not history. */
@@ -99,6 +104,11 @@ export interface TurnSummary {
 
 export class AgentChanges implements vscode.Disposable {
 	private readonly baselines = new Map<string, string>();
+	/**
+	 * Files whose baseline is committed work (a branch's fork point, HEAD~1), with what it is called. Undo writes the
+	 * baseline back, so these never get one, whoever edits the file afterwards; it lasts as long as the baseline does.
+	 */
+	private readonly committed = new Map<string, string>();
 	private readonly turns: Turn[] = [];
 	private nextTurn = 1;
 	private readonly changed = new vscode.EventEmitter<void>();
@@ -128,6 +138,7 @@ export class AgentChanges implements vscode.Disposable {
 			// Stored paths may be spelled `C:\x`; this window keys files by `c:\x`.
 			const keyed = (list: [string, string][]) => new Map(list.map(([f, t]) => [fileKey(f), t] as const));
 			keyed(saved.baselines).forEach((t, f) => this.baselines.set(f, t));
+			keyed(saved.committed ?? []).forEach((base, f) => this.baselines.has(f) && this.committed.set(f, base));
 			this.turns.push(...saved.turns.map(t => ({ ...t, before: keyed(t.before), after: keyed(t.after), created: new Set((t.created ?? []).map(fileKey)), lastActivity: t.at })), ...early);
 			this.turns.splice(0, Math.max(0, this.turns.length - MAX_TURNS));
 			this.changed.fire();
@@ -164,7 +175,8 @@ export class AgentChanges implements vscode.Disposable {
 		return {
 			nextTurn: this.nextTurn,
 			baselines: keep(this.baselines),
-			turns: this.turns.map(t => ({ id: t.id, prompt: t.prompt, agent: t.agent, at: t.at, before: keep(t.before), after: keep(t.after), created: [...t.created].filter(f => !SECRET.test(f)) })),
+			committed: [...this.committed],
+			turns: this.turns.map(t => ({ id: t.id, prompt: t.prompt, agent: t.agent, at: t.at, before: keep(t.before), after: keep(t.after), created: [...t.created].filter(f => !SECRET.test(f)), base: t.base })),
 		};
 	}
 
@@ -207,19 +219,27 @@ export class AgentChanges implements vscode.Disposable {
 	}
 
 	/**
-	 * Review uncommitted work on the canvas: each file counts as changed since `before` (its text at HEAD, undefined for a
-	 * new file), so the cards of the methods it touched show their diff like an agent's edit. Replaces the earlier set
-	 * with the same label, so asking again does not stack timeline steps.
+	 * Review Git changes on the canvas: each file counts as changed since `before` (its text at HEAD, or at `base` such as
+	 * the branch's fork point; undefined for a new file), so the cards of the methods it touched show their diff like an
+	 * agent's edit. Replaces the earlier set of the same agent, so asking again (or against another base) does not stack
+	 * timeline steps.
 	 */
-	async trackAgainst(label: string, agent: string, entries: { file: string; before: string | undefined }[]) {
+	async trackAgainst(label: string, agent: string, entries: { file: string; before: string | undefined }[], base?: string) {
 		await this.loading;
 		for (let i = this.turns.length - 1; i >= 0; i--) {
-			if (this.turns[i].prompt === label && this.turns[i].agent === agent) {
+			if (this.turns[i].agent === agent) {
+				// Files only that step held go back to "not changed"; a later agent edit keeps its own baseline below.
+				for (const f of this.turns[i].before.keys()) {
+					if (!this.turns.some((t, j) => j !== i && t.before.has(f))) {
+						this.forget(f);
+					}
+				}
 				this.turns.splice(i, 1);
 			}
 		}
 		this.startTurn(label, agent, true);
 		const turn = this.turns.at(-1)!;
+		turn.base = base;
 		for (const { file, before } of entries) {
 			const f = fileKey(file);
 			const text = norm(before ?? '');
@@ -229,9 +249,14 @@ export class AgentChanges implements vscode.Disposable {
 			}
 			turn.after.set(f, norm(await fs.readFile(f, 'utf8').catch(() => '')));
 			this.baselines.set(f, text);
+			if (base) {
+				this.committed.set(f, base);
+			} else {
+				this.committed.delete(f);
+			}
 		}
 		while (this.baselines.size > MAX_BASELINES) {
-			this.baselines.delete(this.baselines.keys().next().value!);
+			this.forget(this.baselines.keys().next().value!);
 		}
 		this.save();
 		this.changed.fire();
@@ -285,11 +310,17 @@ export class AgentChanges implements vscode.Disposable {
 			if (!this.baselines.has(f)) {
 				this.baselines.set(f, now.text); // '' for a new file
 				while (this.baselines.size > MAX_BASELINES) {
-					this.baselines.delete(this.baselines.keys().next().value!);
+					this.forget(this.baselines.keys().next().value!);
 				}
 			}
 		}
 		this.save();
+	}
+
+	/** A file is no longer shown as changed. */
+	private forget(file: string) {
+		this.baselines.delete(file);
+		this.committed.delete(file);
 	}
 
 	private async hunks(file: string): Promise<Hunk[]> {
@@ -299,7 +330,7 @@ export class AgentChanges implements vscode.Disposable {
 		}
 		const now = norm(await currentText(file).catch(() => ''));
 		if (now === base) {
-			this.baselines.delete(file); // reverted elsewhere (chat Undo, git): nothing to show
+			this.forget(file); // reverted elsewhere (chat Undo, git): nothing to show
 			return [];
 		}
 		return structuredPatch('a', 'b', base, now, '', '', { context: 0 }).hunks;
@@ -371,6 +402,10 @@ export class AgentChanges implements vscode.Disposable {
 		if (i < 0) {
 			return { ok: false, message: 'That prompt is no longer tracked.' };
 		}
+		const committed = this.turns.slice(i).find(t => t.base);
+		if (committed) {
+			return { ok: false, message: `"${committed.prompt}" includes committed work; Axle does not undo commits. Use git (revert or reset) for that.` };
+		}
 		const restore = new Map<string, string>();
 		for (const t of this.turns.slice(i)) {
 			for (const [f, text] of t.before) {
@@ -437,7 +472,7 @@ export class AgentChanges implements vscode.Disposable {
 		this.turns.splice(i);
 		for (const f of restore.keys()) {
 			if (this.baselines.get(f) === restore.get(f)) {
-				this.baselines.delete(f);
+				this.forget(f);
 			}
 		}
 		this.save();
@@ -452,7 +487,7 @@ export class AgentChanges implements vscode.Disposable {
 		}
 		const tracked = (f: string) => turnId === undefined ? this.baselines.has(f) : !!this.turns.find(t => t.id === turnId)?.before.has(f);
 		// Only the Git-changes view (agent 'Git') holds the file: nobody known made the change, so it is not an "agent edit".
-		const fromGit = (f: string) => {
+		const gitTurn = (f: string) => {
 			const by = this.turns.filter(t => (turnId === undefined || t.id === turnId) && t.before.has(f));
 			return by.length > 0 && by.every(t => t.agent === GIT_AGENT);
 		};
@@ -465,8 +500,13 @@ export class AgentChanges implements vscode.Disposable {
 					cache.set(file, turnId === undefined ? await this.hunks(file) : await this.turnHunks(turnId, file));
 				}
 				const d = this.cardDiff(cache.get(file)!, n.startLine, n.endLine);
-				if (d && fromGit(file)) {
+				if (d && gitTurn(file)) {
 					d.source = 'git';
+				}
+				// Measured against committed work: say against what, and the canvas offers no Undo.
+				const base = turnId === undefined ? this.committed.get(file) : this.turns.find(t => t.id === turnId)?.base;
+				if (d && base) {
+					d.base = base;
 				}
 				if (d) {
 					(n as FlowNode & { diff?: CardDiff }).diff = d;
@@ -515,7 +555,7 @@ export class AgentChanges implements vscode.Disposable {
 
 	/** Keep: the card's file no longer shows as an agent change. */
 	keep(file: string) {
-		this.baselines.delete(fileKey(file));
+		this.forget(fileKey(file));
 		this.save();
 		this.changed.fire();
 	}
@@ -523,6 +563,10 @@ export class AgentChanges implements vscode.Disposable {
 	/** Undo the agent's changes inside one card (method), leaving the rest of the file alone. */
 	async undo(file: string, start: number, end: number): Promise<{ ok: boolean; message?: string }> {
 		file = fileKey(file);
+		// Checked here, not only by the canvas hiding the button: the baseline is committed work, and Undo would write it back.
+		if (this.committed.has(file)) {
+			return { ok: false, message: `This change is measured against ${this.committed.get(file)} and includes committed work; Axle does not undo commits.` };
+		}
 		const hunks = (await this.hunks(file)).filter(h => {
 			const from = h.newLines ? h.newStart : h.newStart + 1;
 			const to = h.newLines ? h.newStart + h.newLines - 1 : h.newStart;
@@ -548,7 +592,7 @@ export class AgentChanges implements vscode.Disposable {
 		}
 		await doc.save();
 		if (!(await this.hunks(file)).length) {
-			this.baselines.delete(file);
+			this.forget(file);
 		}
 		this.save();
 		this.changed.fire();

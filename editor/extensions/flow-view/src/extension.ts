@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import { Analyzer, innermost } from './analyzer';
 import { AgentChanges, GIT_AGENT } from './agentDiff';
 import { askInDock } from './askAgent';
+import { ChangeSetProvider } from './changeSet';
 import { entryDisplay } from './entryLabel';
 import { Endpoints, entryName, type Entry, type Source } from './backends';
 import { flowToBoard } from './board/fromFlow';
@@ -42,6 +43,7 @@ interface Flow {
 	home: FlowHome;
 	endpointsView: EndpointsView;
 	changes: AgentChanges;
+	changeSet: ChangeSetProvider;
 	boards: BoardStore;
 	providerFor(target: FlowTarget): FlowProvider;
 	/** The flow the canvas was last asked to show (what an agent calls "the flow on the canvas"). */
@@ -69,8 +71,13 @@ export function activate(context: vscode.ExtensionContext) {
 	// Per-workspace: the timeline and Keep/Undo state outlive a restart.
 	const changes = agentChanges = new AgentChanges(context.storageUri && vscode.Uri.joinPath(context.storageUri, 'agent-changes.json').fsPath);
 	void changes.load();
-	const providers: Record<FlowTarget['kind'], FlowProvider> = { roslyn, poly: polyProvider, lsp };
 	const providerFor = (t: FlowTarget) => providers[t.kind];
+	const changeSet = new ChangeSetProvider({
+		impactOf: (files, limits) => turnImpact(files, { analyzer, poly, endpoints: endpointList, providerFor, rangesOf: f => changes.changedRanges(f) }, limits),
+		providerFor,
+		annotate: root => changes.annotate(root),
+	});
+	const providers: Record<FlowTarget['kind'], FlowProvider> = { roslyn, poly: polyProvider, lsp, changes: changeSet };
 	const panel = new FlowPanel(context, providerFor, changes);
 	const boards = new BoardStore();
 	const home = new FlowHome(context, endpointList);
@@ -78,7 +85,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(log, analyzer, poly, polyProvider, endpointList, endpointsView, panel, home, changes, changes.onDidChange(() => panel.refreshSoon()));
 
 	const flow: Flow = {
-		context, log, analyzer, poly, endpointList, panel, home, endpointsView, changes, boards, providerFor, currentFlow: undefined,
+		context, log, analyzer, poly, endpointList, panel, home, endpointsView, changes, changeSet, boards, providerFor, currentFlow: undefined,
 		// Roslyn targets need the analyzer up first, so a load failure shows as an error, not an empty tab.
 		async showRoslyn(id, label) {
 			flow.currentFlow = { id, label };
@@ -373,11 +380,17 @@ function wireAgentBridge(flow: Flow) {
 			await panel.show(target, label);
 		},
 		currentFlow: () => flow.currentFlow,
-		trackChanges: async entries => {
-			await flow.changes.trackAgainst('Git changes', GIT_AGENT, entries);
+		trackChanges: async (entries, base) => {
+			await flow.changes.trackAgainst(base ? `Changes since ${base}` : 'Git changes', GIT_AGENT, entries, base);
 			panel.refreshSoon();
 		},
-		impactOf: files => turnImpact(files, { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor, rangesOf: f => flow.changes.changedRanges(f) }),
+		showChanges: async set => {
+			const target = flow.changeSet.use(set);
+			flow.currentFlow = { id: target.id, label: set.label };
+			await panel.show(target, set.label);
+			// The trace the canvas draws: what the agent is told comes from the same one.
+			return flow.changeSet.latest()!;
+		},
 	}, log);
 	context.subscriptions.push(
 		viewer, bridge, boardPanel, TypeService.get(log),
@@ -416,14 +429,27 @@ function wireAgentBridge(flow: Flow) {
 				}
 			}
 		}),
-		vscode.commands.registerCommand('flow.agent.turnImpact', (files: string[]) => turnImpact(Array.isArray(files) ? files.filter(f => typeof f === 'string') : [], { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor, rangesOf: f => flow.changes.changedRanges(f) })),
+		// flow-agent's dock lists the flows; the changed methods' targets stay here.
+		vscode.commands.registerCommand('flow.agent.turnImpact', async (files: string[]) => {
+			const { changed: _, ...impact } = await turnImpact(Array.isArray(files) ? files.filter(f => typeof f === 'string') : [], { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor, rangesOf: f => flow.changes.changedRanges(f) });
+			return impact;
+		}),
 	);
 	context.subscriptions.push(
 		// "Show the git changes on the flow canvas": from a diff editor's title (its resource, when it is a file, narrows it to that file),
-		// the Source Control title, or the command palette.
+		// the Source Control title, or the command palette. Asks what to compare with: the work since the branch began is
+		// what a finished development is reviewed by.
 		vscode.commands.registerCommand('flow.diff.showInFlow', async (resource?: unknown) => {
 			const only = resource instanceof vscode.Uri && resource.scheme === 'file' ? [resource.fsPath] : undefined;
-			const r = await bridge.showChangesInFlow(only);
+			const pick = await vscode.window.showQuickPick([
+				{ label: 'Uncommitted changes', description: 'against HEAD', base: 'uncommitted' as const },
+				{ label: 'This branch', description: 'everything since it left main, committed or not', base: 'branch' as const },
+				{ label: 'Last commit', description: 'the last commit and anything uncommitted on top', base: 'last_commit' as const },
+			], { title: 'Show Changes in Flow', placeHolder: 'Which changes?' });
+			if (!pick) {
+				return;
+			}
+			const r = await bridge.showChangesInFlow(only, pick.base);
 			if (!r.opened) {
 				void vscode.window.showInformationMessage(`Axle: ${r.message}`);
 			}

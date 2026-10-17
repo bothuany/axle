@@ -18,9 +18,10 @@ export interface FlowNode {
 	children: FlowEdge[];
 	/**
 	 * Change inside this method (current-file line numbers), when Axle is tracking one. `source` 'git' when only the
-	 * Git-changes view tracks the file (an uncommitted change, by anyone), else an agent made it.
+	 * Git-changes view tracks the file (a change by anyone), else an agent made it. `base`: what a Git change is measured
+	 * against when that is not HEAD ("main", "the last commit"): committed work, which a card must not offer to undo.
 	 */
-	diff?: { added: number[]; removed: { after: number; lines: string[] }[]; plus: number; minus: number; source?: 'git' };
+	diff?: { added: number[]; removed: { after: number; lines: string[] }[]; plus: number; minus: number; source?: 'git'; base?: string };
 	/** Database cards: the table a query touches, read from the entity and its ORM configuration. */
 	schema?: DbSchema;
 	/** Calls the static index could not resolve: the host asks the language server, then drops this field. */

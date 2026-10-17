@@ -25,19 +25,33 @@ export interface AffectedFlow {
 	via?: string[];
 }
 
+/** A method an edit landed in, as a flow target. */
+export interface ChangedMethod {
+	target: FlowTarget;
+	name: string;
+	file: string;
+	line: number;
+}
+
 export interface TurnImpact {
 	files: number;
 	flows: AffectedFlow[];
+	/** The methods the edits landed in (only where the edits' lines are known), in file order. */
+	changed: ChangedMethod[];
 	/** More flows than fit in `flows`. */
 	more: number;
 	/** Why the answer may be incomplete. */
 	note?: string;
 }
 
-const MAX_FILES = 6;
-const MAX_FUNCTIONS_PER_FILE = 25;
-const MAX_FLOWS = 12;
-const BUDGET_MS = 7000;
+/** After an agent's turn: quick, a few files. A change set (a whole branch) passes larger ones. */
+export interface ImpactLimits {
+	files: number;
+	functionsPerFile: number;
+	flows: number;
+	budgetMs: number;
+}
+const TURN_LIMITS: ImpactLimits = { files: 6, functionsPerFile: 25, flows: 12, budgetMs: 7000 };
 
 /** The entry an impact line ("GET Users.Delete", "DELETE /users/{id} UsersController.Delete") stands for. */
 export function entryForItem(item: string, entries: Entry[]): Entry | undefined {
@@ -48,18 +62,19 @@ export function entryForItem(item: string, entries: Entry[]): Entry | undefined 
 		?? entries.find(e => ` ${want}`.endsWith(` ${norm(`${e.controller}.${e.action}`)}`) || ` ${want}`.endsWith(` ${norm(entryName(e))}`));
 }
 
-export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly: PolyIndex; endpoints: Endpoints; providerFor(t: FlowTarget): FlowProvider; rangesOf?(file: string): Promise<LineRange[] | undefined> }): Promise<TurnImpact> {
-	const deadline = Date.now() + BUDGET_MS;
+export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly: PolyIndex; endpoints: Endpoints; providerFor(t: FlowTarget): FlowProvider; rangesOf?(file: string): Promise<LineRange[] | undefined> }, limits: ImpactLimits = TURN_LIMITS): Promise<TurnImpact> {
+	const deadline = Date.now() + limits.budgetMs;
 	const entries = d.endpoints.cached();
 	const found = new Map<string, AffectedFlow>();
+	const changed: ChangedMethod[] = [];
 	const unique = [...new Set(files)];
-	let skipped = Math.max(0, unique.length - MAX_FILES);
+	let skipped = Math.max(0, unique.length - limits.files);
 	let partial = false;
 	// The agent wrote these moments ago: have the index read them now rather than after its watcher's delay.
 	if (d.poly.isReady) {
-		await d.poly.refresh(unique.slice(0, MAX_FILES).filter(f => !/\.cs$/i.test(f))).catch(() => undefined);
+		await d.poly.refresh(unique.slice(0, limits.files).filter(f => !/\.cs$/i.test(f))).catch(() => undefined);
 	}
-	for (const file of unique.slice(0, MAX_FILES)) {
+	for (const file of unique.slice(0, limits.files)) {
 		if (Date.now() > deadline) {
 			skipped++;
 			continue;
@@ -79,7 +94,8 @@ export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly:
 			const touched = ranges ? methodsTouched(methods, ranges) : { methods: [] as typeof methods, wholeFile: true };
 			// The changed methods first, so the cap never drops them for the rest of the file.
 			const chosen = touched.wholeFile ? [...touched.methods, ...methods.filter(m => !touched.methods.includes(m))] : touched.methods;
-			targets = chosen.slice(0, MAX_FUNCTIONS_PER_FILE).map(m => ({ kind: m.kind, id: m.id, name: touched.methods.includes(m) ? m.name : undefined }));
+			targets = chosen.slice(0, limits.functionsPerFile).map(m => ({ kind: m.kind, id: m.id, name: touched.methods.includes(m) ? m.name : undefined }));
+			changed.push(...touched.methods.map(m => ({ target: { kind: m.kind, id: m.id }, name: m.name, file, line: m.line })));
 		} catch {
 			continue; // a file the backends do not know (a config, a doc)
 		}
@@ -108,8 +124,9 @@ export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly:
 	const flows = [...found.values()].sort((a, b) => a.label.localeCompare(b.label));
 	return {
 		files: unique.length,
-		flows: flows.slice(0, MAX_FLOWS),
-		more: Math.max(0, flows.length - MAX_FLOWS),
+		flows: flows.slice(0, limits.flows),
+		changed,
+		more: Math.max(0, flows.length - limits.flows),
 		note: skipped || partial ? 'Partial: some files were not checked (index or analyzer not ready, or too many files).' : undefined,
 	};
 }

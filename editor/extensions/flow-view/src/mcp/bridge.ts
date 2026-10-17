@@ -7,7 +7,7 @@
 
 import * as vscode from 'vscode';
 import { startBridgeServer, type BridgeServer } from './http';
-import { AgentTools, type ToolDeps } from './handlers';
+import { AgentTools, type DiffBase, type ToolDeps } from './handlers';
 import { bridgeDir, cleanStale, removeBridgeFileSync, writeBridgeFile } from './registry';
 
 export class AgentBridge implements vscode.Disposable {
@@ -21,11 +21,14 @@ export class AgentBridge implements vscode.Disposable {
 		this.tools = new AgentTools(deps);
 	}
 
-	/** The uncommitted changes on the flow canvas (marks and the affected flow); `only` narrows them to files or folders. */
-	async showChangesInFlow(only?: string[]) {
+	/** The changes since `base` on the flow canvas (one canvas for all of them); `only` narrows them to files or folders. */
+	async showChangesInFlow(only?: string[], base: DiffBase = 'uncommitted') {
 		const tools = this.tools;
-		const rows = only ? (await tools.changesOf(only)).list : undefined;
-		return tools.changesInFlow(rows, true).catch(e => ({ ok: false, opened: false, message: (e as Error).message }));
+		try {
+			return await tools.changesInFlow(await tools.changesOf(only, base));
+		} catch (e) {
+			return { ok: false, opened: false, message: (e as Error).message };
+		}
 	}
 
 	/** A failure (no port, an unwritable home folder) is logged and leaves Axle working without the bridge. */

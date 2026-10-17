@@ -7,7 +7,7 @@ Claude Code over `/ide` only shows its model the `getDiagnostics` tool, so Axle 
 | Tool | What it does |
 |---|---|
 | `open` | Opens a file at a line or range, without taking focus |
-| `open_diff` | Opens the working tree's git changes (modified, staged, deleted, new) in the multi-file diff view, optionally also on the flow canvas |
+| `open_diff` | Opens git changes (modified, staged, deleted, new) in the multi-file diff view, optionally also on the flow canvas; `base` picks what they are measured against: uncommitted (HEAD), the whole branch, or the last commit |
 | `get_diagnostics` | The errors and warnings the language servers report now, for a file or the whole workspace |
 | `find_symbol` | Searches classes, methods, functions and fields by name |
 | `go_to_definition`, `find_references` | Where a symbol is defined (with its signature), and every place that uses it |
@@ -21,6 +21,14 @@ Claude Code over `/ide` only shows its model the `getDiagnostics` tool, so Axle 
 - **A `claude` you start yourself** gets it after the command **Axle: Connect Claude Code Tools (MCP)**. It shows the exact `claude mcp add` it will run and changes your Claude Code user configuration only when you confirm; **Disconnect** removes it.
 - Each Axle window lists itself in `~/.axle/bridge/<pid>.json` (loopback port and token); the server picks the window whose workspace folder contains its working directory.
 - In plan mode, the plan an agent submits is drawn as a board (`flow.agents.planBoard`), its steps move to doing and done as files are edited, and when a turn ends the Agents dock lists the flows it touched (`flow.agents.turnImpact`). That list follows the methods the turn's edits landed in, and names them on hover; an edit outside every method (an import, a field) counts its whole file. Boards open as a Markdown preview with a Mermaid diagram; **Axle: Show Board…** lists them.
+
+**Changes in flow.** Ask an agent to "show what you did in flow" (it calls `open_diff` with `flow: true`), or run **Axle: Show Git Changes in Flow** from the command palette, the Source Control title or a diff editor. Either way one canvas shows the whole change set: every endpoint flow the changed files reach, cut down to the paths that lead to a changed method, plus the changed methods no endpoint reaches. Changed cards show added lines in green and removed lines in red. Pick what to compare with:
+
+- **Uncommitted changes**: against HEAD. Cards offer Undo and Keep.
+- **This branch**: everything since the branch left `main` or `master`, committed or not. On `main` itself, the commits not pushed yet.
+- **Last commit**: the last commit plus anything uncommitted on top.
+
+A branch or last-commit card says "Changed since main" and has no Undo, because Axle does not undo commits.
 
 Home's prompt and **Ask about this flow** put the question into Claude Code in the Agents dock (the newest waiting session, or a new one once it is up); with the chat panel on (`flow.agents.showChat`) they go to the chat panel instead. **Axle: Pin Flow as Board** keeps the flow on the canvas as a board, so boards do not need an agent.
 

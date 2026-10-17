@@ -12,7 +12,9 @@ export type { FlowNode };
 export type FlowTarget =
 	| { kind: 'roslyn'; id: string }
 	| { kind: 'lsp'; uri: string; line: number; character: number }
-	| { kind: 'poly'; id: string };
+	| { kind: 'poly'; id: string }
+	/** A whole change set on one canvas (changeSet.ts): the id only tells one showing from the next. */
+	| { kind: 'changes'; id: string };
 
 export interface FlowProvider {
 	graph(target: FlowTarget): Promise<FlowNode>;

@@ -184,8 +184,9 @@ function Flow() {
       setDown(d)
       setUp(u)
       if (!keepFolds) {
-        // Callees two levels deep, callers one level: enough to read, not enough to drown.
-        setHidden(new Set([...initialHidden(d, 2), ...(u ? initialHidden(u, 1) : [])]))
+        // Callees two levels deep, callers one level: enough to read, not enough to drown. A change set is already cut down
+        // to the paths that lead to a change, so all of it is open.
+        setHidden(new Set([...initialHidden(d, t.kind === 'changes' ? Infinity : 2), ...(u ? initialHidden(u, 1) : [])]))
         setFull(new Set())
         setChipOpen({})
         setEditing(null)
@@ -630,6 +631,8 @@ function Flow() {
     walk(up)
     return out
   }, [down, up])
+  /** What the Git changes on the canvas are measured against, when it is not HEAD ("main"). */
+  const since = changed.find(n => n.diff?.base)?.diff?.base
   const flowTurns = useMemo(() => turns.filter(t => t.files.some(f => flowFiles.some(x => samePath(x, f.file)))), [turns, flowFiles])
   const impactCount = impact?.items.length ?? 0
   const impactText = impact && `${impactCount ? `Affects ${impactCount}` : 'No'} ${impact.label}${impactCount === 1 ? '' : 's'}`
@@ -667,7 +670,7 @@ function Flow() {
               {turn !== undefined
                 ? `Prompt ${turns.findIndex(t => t.id === turn) + 1} of ${turns.length}`
                 : flowTurns.every(t => t.agent === GIT_AGENT)
-                  ? 'Uncommitted changes'
+                  ? since ? `Changes since ${since}` : 'Uncommitted changes'
                   : `${flowTurns.length} ${flowTurns.length === 1 ? 'prompt' : 'prompts'} changed this flow`}
             </button>
             {timelineOpen && <Timeline turns={turns} active={turn} onPick={id => setTurn(id)} onUndo={undoFrom} />}
@@ -726,7 +729,7 @@ function Flow() {
             <span className="tour-label">{changed[tour].label.replace(/\s*▸\s*/g, '.')}</span>
             {turn === undefined && (
               <>
-                <button className="btn ghost" onClick={() => actions.undo?.(changed[tour].key)}>Undo</button>
+                {!changed[tour].diff?.base && <button className="btn ghost" onClick={() => actions.undo?.(changed[tour].key)}>Undo</button>}
                 <button className="btn solid" onClick={() => actions.keep?.(changed[tour].key)}>Keep</button>
               </>
             )}

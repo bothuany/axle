@@ -9,17 +9,16 @@
 import { execFile } from 'child_process';
 import { promises as fs } from 'fs';
 import { promisify } from 'util';
-import { structuredPatch } from 'diff';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { innermost, type Analyzer } from '../analyzer';
 import { entryName, type Endpoints, type Entry, type Source } from '../backends';
 import { parseBoard } from '../board/spec';
 import { cleanBoardId, type BoardStore } from '../board/store';
+import type { ChangeSet, ChangeSetTrace } from '../changeSet';
 import { POLY_LANGUAGES, type PolyIndex } from '../poly/client';
 import type { FlowProvider, FlowTarget } from '../providers';
 import { flowToText } from './flowtext';
-import type { TurnImpact } from './turnImpact';
 import { errorResult, type ToolResult } from './protocol';
 import { resolveInWorkspace } from './registry';
 import { searchEntries } from './search';
@@ -37,25 +36,34 @@ export interface ToolDeps {
 	showTarget(target: FlowTarget, label: string): Promise<void>;
 	/** The flow the canvas shows now. */
 	currentFlow(): { id: string; label: string } | undefined;
-	/** Marks files as changed since the given text (HEAD) on the canvas. */
-	trackChanges(entries: { file: string; before: string | undefined }[]): Promise<void>;
-	/** The endpoints that reach these files (what turnImpact answers). */
-	impactOf(files: string[]): Promise<TurnImpact>;
+	/** Marks files as changed since the given text (HEAD, or the commit `base` names) on the canvas. */
+	trackChanges(entries: { file: string; before: string | undefined }[], base?: string): Promise<void>;
+	/** Opens the change set on the canvas (every flow the files reach, cut down to the changed cards); resolves with what it traced. */
+	showChanges(set: ChangeSet): Promise<ChangeSetTrace>;
 }
 
 /** The Git extension's API, as far as the diff view uses it (its `Status` enum, numbered the same). */
 interface GitChange { uri: vscode.Uri; originalUri: vscode.Uri; status: number }
 interface GitRepo {
 	rootUri: vscode.Uri;
-	state: { workingTreeChanges: GitChange[]; untrackedChanges?: GitChange[]; indexChanges: GitChange[]; mergeChanges: GitChange[] };
+	state: { HEAD?: { name?: string; upstream?: { remote: string; name: string } }; workingTreeChanges: GitChange[]; untrackedChanges?: GitChange[]; indexChanges: GitChange[]; mergeChanges: GitChange[] };
 	status(): Promise<void>;
+	diffWith(ref: string): Promise<GitChange[]>;
+	getMergeBase(ref1: string, ref2: string): Promise<string | undefined>;
+	getCommit(ref: string): Promise<{ hash: string }>;
 }
+/** What the changes are measured against: HEAD (uncommitted work), the branch's fork point, or the commit before HEAD. */
+export type DiffBase = 'uncommitted' | 'branch' | 'last_commit';
+const DIFF_BASES: readonly DiffBase[] = ['uncommitted', 'branch', 'last_commit'];
+/** The branches a feature branch is cut from, in the order they are tried; never a name an agent chose. */
+const MAIN_BRANCHES = ['main', 'master', 'origin/HEAD', 'origin/main', 'origin/master'];
 interface GitApi {
 	repositories: GitRepo[];
 	openRepository(root: vscode.Uri): Promise<GitRepo | null>;
 	toGitUri(uri: vscode.Uri, ref: string): vscode.Uri;
 }
 interface ChangeRow { uri: vscode.Uri; original?: vscode.Uri; modified?: vscode.Uri; mark: string; repo: string }
+interface Changes { list: ChangeRow[]; repos: number; /** What the base is called ("main", "HEAD~1"), when it is not HEAD. */ since?: string; notes: string[] }
 /** Files the flow canvas can draw: the languages of the code index and the C# analyzer. */
 const CODE_FILE = /\.(cs|ts|tsx|js|jsx|java|kt|py|go|rs|php|rb)$/i;
 /** The only filter commands a repository may configure: git-lfs's own, spelled exactly as `git lfs install` writes them. */
@@ -252,77 +260,62 @@ export class AgentTools {
 
 	private async openDiff(a: Record<string, unknown>): Promise<ToolResult> {
 		const only = Array.isArray(a.files) && a.files.length ? await Promise.all(a.files.map(f => this.safeFile(f, false))) : undefined;
-		const { list, repos } = await this.collectChanges(only);
-		if (!list.length) {
-			return text(only ? 'No changes in the given files.' : `No uncommitted changes in ${repos} git repositor${repos === 1 ? 'y' : 'ies'} of this workspace.`);
+		if (a.base !== undefined && !DIFF_BASES.includes(a.base as DiffBase)) {
+			throw new Error(`base must be one of ${DIFF_BASES.join(', ')}.`);
 		}
-		const title = typeof a.title === 'string' && a.title.trim() ? a.title.trim().slice(0, 80) : `Axle: Changes (${list.length} file${list.length === 1 ? '' : 's'})`;
+		const base = (a.base as DiffBase | undefined) ?? 'uncommitted';
+		const changes = await this.collectChanges(only, base);
+		const { list, repos, since, notes } = changes;
+		if (!list.length) {
+			const none = only ? 'No changes in the given files' : `No ${since ? `changes since ${since}` : 'uncommitted changes'} in ${repos} git repositor${repos === 1 ? 'y' : 'ies'} of this workspace`;
+			return text([`${none}.`, ...notes].join('\n'));
+		}
+		const title = typeof a.title === 'string' && a.title.trim() ? a.title.trim().slice(0, 80) : `Axle: ${since ? `Changes since ${since}` : 'Changes'} (${list.length} file${list.length === 1 ? '' : 's'})`;
 		await vscode.commands.executeCommand('vscode.changes', title, list.map(r => [r.uri, r.original, r.modified]));
 		const multi = new Set(list.map(r => r.repo)).size > 1;
 		const out = [
-			`Opened the diff of ${list.length} file${list.length === 1 ? '' : 's'} in Axle (working tree against HEAD; A new, M modified, D deleted, R renamed):`,
+			`Opened the diff of ${list.length} file${list.length === 1 ? '' : 's'} in Axle (working tree against ${since ?? 'HEAD'}; A new, M modified, D deleted, R renamed):`,
 			...list.slice(0, 60).map(r => `${r.mark} ${this.rel(r.uri.fsPath)}${multi ? `  [${r.repo}]` : ''}`),
 			list.length > 60 ? `... and ${list.length - 60} more` : '',
+			...notes,
 		].filter(Boolean);
-		// `flow: true`: the same changes on the flow canvas too (marked methods, the affected endpoint's flow).
+		// `flow: true`: the same changes on the flow canvas too (every flow they reach, cut down to the changed methods).
 		if (a.flow === true) {
-			out.push('', (await this.changesInFlow(list)).message);
+			out.push('', (await this.changesInFlow(changes)).message);
 		}
 		return text(out.join('\n'));
 	}
 
-	/** Opens a resolved flow target on the canvas (what show_flow does after resolving). */
-	private async openResolved(r: Resolved) {
-		if (r.source === 'lsp') {
-			await this.d.showTarget(r.target, r.label);
-		} else {
-			await this.d.showEntry(r.id!, r.label, r.source);
-		}
+	changesOf(only?: string[], base: DiffBase = 'uncommitted') {
+		return this.collectChanges(only, base);
 	}
 
 	/**
-	 * Methods that changed, as flow targets: for an edited file the methods holding changed lines, for a new file its first
-	 * methods. Only what resolves quietly (a backend that is ready) is listed; at most a dozen.
+	 * The commit `base` stands for in one repository, and what to call it. Only fixed names reach git (no agent-chosen ref),
+	 * resolved to a hash here. On the main branch itself, "branch" means the commits not pushed yet.
 	 */
-	private async changedMethods(entries: { file: string; before: string | undefined }[], why: string[] = []): Promise<{ label: string; where: string; resolved: Resolved }[]> {
-		const out: { label: string; where: string; resolved: Resolved }[] = [];
-		const seen = new Set<string>();
-		for (const { file, before } of entries.slice(0, 8)) {
-			let lines: number[] = [];
-			if (before === undefined) {
-				const all = /\.cs$/i.test(file) && this.d.analyzer.isReady ? await within(this.d.analyzer.methods(file), 10_000, 'the C# analyzer').catch(() => []) : this.d.poly.isReady ? await within(this.d.poly.methods(file), 10_000, 'the code index').catch(() => []) : [];
-				lines = all.slice(0, 3).map(m => m.line);
-			} else {
-				const now = (await fs.readFile(file, 'utf8').catch(() => '')).replace(/\r\n/g, '\n');
-				// With no context lines, a hunk's newStart is its first changed line (for a pure deletion, the line it was cut from).
-				lines = structuredPatch('a', 'b', before.replace(/\r\n/g, '\n'), now, '', '', { context: 0 }).hunks.map(h => Math.max(1, h.newStart));
-			}
-			for (const line of lines.slice(0, 6)) {
-				if (out.length >= 12) {
-					return out;
-				}
-				try {
-					const resolved = await this.resolve({ file, line });
-					const key = resolved.id ?? `${file}:${resolved.label}`;
-					if (!seen.has(key)) {
-						seen.add(key);
-						out.push({ label: resolved.label, where: `${this.rel(file)}:${line}`, resolved });
-					}
-				} catch (e) {
-					// not inside a method the backends know (or a backend is still loading): skip, but remember why
-					why.push((e as Error).message);
-				}
+	private async baseCommit(repo: GitRepo, base: Exclude<DiffBase, 'uncommitted'>): Promise<{ hash: string; name: string } | string> {
+		if (base === 'last_commit') {
+			const parent = await repo.getCommit('HEAD~1').catch(() => undefined);
+			return parent ? { hash: parent.hash, name: 'HEAD~1' } : 'it has only one commit';
+		}
+		const head = repo.state.HEAD;
+		const onMain = !!head?.name && ['main', 'master'].includes(head.name);
+		const candidates = onMain ? (head?.upstream ? [`${head.upstream.remote}/${head.upstream.name}`] : []) : MAIN_BRANCHES;
+		for (const name of candidates) {
+			const hash = await repo.getMergeBase('HEAD', name).catch(() => undefined);
+			if (hash && /^[0-9a-f]{7,64}$/i.test(hash)) {
+				return { hash, name };
 			}
 		}
-		return out;
+		return onMain ? `${head!.name} has no upstream branch to compare with` : `no ${MAIN_BRANCHES.slice(0, 2).join(' or ')} branch to compare with`;
 	}
 
-	changesOf(only: string[]) {
-		return this.collectChanges(only);
-	}
-
-	/** The working-tree changes (against HEAD) of every git repository of this workspace, narrowed to `only` (files or folders). */
-	private async collectChanges(only?: string[]): Promise<{ list: ChangeRow[]; repos: number }> {
+	/**
+	 * The working-tree changes of every git repository of this workspace against HEAD (or `base`), narrowed to `only` (files
+	 * or folders). A repository whose base cannot be found is left out, with a note saying why.
+	 */
+	private async collectChanges(only?: string[], base: DiffBase = 'uncommitted'): Promise<Changes> {
 		const api = await this.gitApi();
 		const repos = new Map<string, GitRepo>(api.repositories.map(r => [r.rootUri.fsPath, r]));
 		for (const root of await this.nestedRepos()) {
@@ -334,6 +327,8 @@ export class AgentTools {
 			}
 		}
 		const rows = new Map<string, ChangeRow>();
+		const notes: string[] = [];
+		const names = new Set<string>();
 		for (const repo of repos.values()) {
 			const root = repo.rootUri.fsPath;
 			// A repository that belongs to this window: inside a workspace folder, or one that contains it.
@@ -341,8 +336,27 @@ export class AgentTools {
 				continue;
 			}
 			await within(repo.status(), 15_000, 'git status').catch(e => this.d.log.warn(`open_diff: ${(e as Error).message}`));
+			let ref = 'HEAD';
 			// With git.untrackedChanges "separate" the new files are not in workingTreeChanges.
-			const all = [...repo.state.workingTreeChanges, ...(repo.state.untrackedChanges ?? []), ...repo.state.indexChanges, ...repo.state.mergeChanges];
+			let all = [...repo.state.workingTreeChanges, ...(repo.state.untrackedChanges ?? []), ...repo.state.indexChanges, ...repo.state.mergeChanges];
+			if (base !== 'uncommitted') {
+				const found = await within(this.baseCommit(repo, base), 15_000, 'finding the base commit').catch(e => (e as Error).message);
+				if (typeof found === 'string') {
+					notes.push(`${path.basename(root)}: left out, ${found}.`);
+					continue;
+				}
+				ref = found.hash;
+				names.add(found.name);
+				// The base against the working tree (committed and uncommitted work alike); new files git does not track yet come on top.
+				const diff = await within(repo.diffWith(ref), 30_000, 'git diff').catch(e => {
+					notes.push(`${path.basename(root)}: ${(e as Error).message}`);
+					return undefined;
+				});
+				if (!diff) {
+					continue;
+				}
+				all = [...diff, ...(repo.state.untrackedChanges ?? []), ...repo.state.workingTreeChanges.filter(c => c.status === GitStatus.Untracked)];
+			}
 			for (const c of all) {
 				const file = c.uri.fsPath;
 				// A submodule shows up as a changed "file" in its superproject: it is a folder with a repository of its own.
@@ -362,65 +376,47 @@ export class AgentTools {
 				const renamed = kinds.includes(GitStatus.IndexRenamed) || kinds.includes(GitStatus.IntentToRename);
 				rows.set(file, {
 					uri: c.uri,
-					original: added ? undefined : api.toGitUri(renamed ? c.originalUri : c.uri, 'HEAD'),
+					original: added ? undefined : api.toGitUri(renamed ? c.originalUri : c.uri, ref),
 					modified: deleted ? undefined : c.uri,
 					mark: added ? 'A' : deleted ? 'D' : renamed ? 'R' : 'M',
 					repo: path.basename(root),
 				});
 			}
 		}
-		return { list: [...rows.values()].sort((x, y) => x.uri.fsPath.localeCompare(y.uri.fsPath)), repos: repos.size };
+		const since = base === 'uncommitted' ? undefined : [...names].join(', ') || (base === 'branch' ? 'the main branch' : 'HEAD~1');
+		return { list: [...rows.values()].sort((x, y) => x.uri.fsPath.localeCompare(y.uri.fsPath)), repos: repos.size, since, notes };
 	}
 
 	/**
-	 * Review the uncommitted changes on the flow canvas: the files count as changed since HEAD, so the methods they touch show
-	 * their diff on the cards, and the flow of an endpoint that reaches them is opened. With `choose`, several affected
-	 * endpoints are offered in a pick; without it the first is shown and the others are named.
+	 * Review a change set on the flow canvas: the files count as changed since HEAD (or the base), so the methods they touch show
+	 * their diff on the cards, and one canvas shows every endpoint flow that reaches them, cut down to the changed cards, next to
+	 * the changed methods no endpoint reaches.
 	 */
-	async changesInFlow(rows?: ChangeRow[], choose = false): Promise<{ ok: boolean; opened: boolean; message: string }> {
-		const list = rows ?? (await this.collectChanges()).list;
+	async changesInFlow(changes?: Changes): Promise<{ ok: boolean; opened: boolean; message: string }> {
+		const { list, since, notes } = changes ?? await this.collectChanges();
 		const code = list.filter(r => r.modified && CODE_FILE.test(r.uri.fsPath));
 		if (!code.length) {
-			return { ok: false, opened: false, message: 'No changed source files to show on the flow canvas.' };
+			return { ok: false, opened: false, message: ['No changed source files to show on the flow canvas.', ...notes].join(' ') };
 		}
 		const entries = await Promise.all(code.map(async r => ({
 			file: r.uri.fsPath,
 			before: r.original ? await Promise.resolve(vscode.workspace.openTextDocument(r.original)).then(d => d.getText(), () => '') : undefined,
 		})));
-		await this.d.trackChanges(entries);
-		const impact = await within(this.d.impactOf(code.map(r => r.uri.fsPath)), 30_000, 'the flow lookup').catch(() => undefined);
-		const flows = impact?.flows ?? [];
-		const marked = `${code.length} changed file${code.length === 1 ? '' : 's'} marked on the canvas (cards show what changed since HEAD).`;
-		if (!flows.length) {
-			// No endpoint reaches them (a job, a library, a new file): show the flow of a method that changed instead.
-			const why: string[] = [];
-			const spots = await this.changedMethods(entries, why);
-			if (!spots.length) {
-				const reason = why.find(w => /loading|choose|several C# solutions|still building/i.test(w)) ?? why[0];
-				return { ok: true, opened: false, message: `${marked} No endpoint flow reaches them and no changed method could be opened${reason ? `: ${reason}` : ''}${impact?.note ? ` (${impact.note})` : ''}` };
-			}
-			let spot = spots[0];
-			if (choose && spots.length > 1) {
-				const pick = await vscode.window.showQuickPick(spots.map(x => ({ label: x.label, description: x.where, spot: x })), { title: 'Show the changes in which method?', placeHolder: 'No endpoint reaches the changed files: pick a changed method' });
-				if (!pick) {
-					return { ok: true, opened: false, message: marked };
-				}
-				spot = pick.spot;
-			}
-			await this.openResolved(spot.resolved);
-			return { ok: true, opened: true, message: `${marked} No endpoint reaches the changed files, so Axle opened the flow of the changed method ${spot.label} (${spot.where}).${spots.length > 1 ? ` Other changed methods: ${spots.slice(1, 8).map(x => `${x.label} (${x.where})`).join(', ')}; use show_flow with file and line to open one.` : ''}` };
+		await this.d.trackChanges(entries, since);
+		const label = since ? `Changes since ${since}` : 'Uncommitted changes';
+		const opened = `Opened "${label}" on the flow canvas: ${code.length} changed source file${code.length === 1 ? '' : 's'}, every flow they reach cut down to the changed methods (green added, red removed lines).`;
+		let trace: ChangeSetTrace;
+		try {
+			trace = await within(this.d.showChanges({ label, files: code.map(r => r.uri.fsPath) }), 40_000, 'tracing the changes');
+		} catch (e) {
+			return { ok: true, opened: true, message: `${opened} Which endpoints they reach is not known yet: ${(e as Error).message}.` };
 		}
-		let flow = flows[0];
-		if (choose && flows.length > 1) {
-			const pick = await vscode.window.showQuickPick(flows.map(f => ({ label: f.label, description: f.name, flow: f })), { title: 'Show the changes in which flow?', placeHolder: `${flows.length} flows reach the changed files` });
-			if (!pick) {
-				return { ok: true, opened: false, message: marked };
-			}
-			flow = pick.flow;
-		}
-		await this.d.showEntry(flow.id, flow.name, flow.source);
-		const others = flows.filter(f => f !== flow);
-		return { ok: true, opened: true, message: `${marked} Opened the flow of ${flow.label}.${others.length ? ` Other affected flows: ${others.slice(0, 8).map(f => `${f.label} (id=${f.id})`).join(', ')}${impact!.more ? ` and ${impact!.more} more` : ''}; use show_flow with an id to open one.` : ''}` };
+		const { impact, failed } = trace;
+		const reach = impact.flows.length
+			? ` Endpoints they reach: ${impact.flows.slice(0, 12).map(f => `${f.label} (id=${f.id})`).join(', ')}${impact.more ? ` and ${impact.more} more` : ''}; show_flow with an id opens one in full.`
+			: ' No endpoint reaches them; the changed methods are shown on their own.';
+		const issues = [failed ? `${failed} flows or methods could not be traced` : '', impact.note ?? '', ...notes].filter(Boolean).join('; ');
+		return { ok: true, opened: true, message: `${opened}${reach}${issues ? ` (${issues})` : ''}` };
 	}
 
 	// ── diagnostics, symbols, definitions, references ───────────────────────
