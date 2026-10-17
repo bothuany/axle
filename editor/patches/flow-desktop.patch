@@ -106,7 +106,7 @@ diff --git a/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts
 new file mode 100644
 --- /dev/null
 +++ b/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts
-@@ -0,0 +1,465 @@
+@@ -0,0 +1,468 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Axle: the desktop agent status overlay. One small always-on-top window for the whole app that
 + *  draws the agents every Axle window pushes (merged per window, like the Dock badge).
@@ -243,20 +243,23 @@ new file mode 100644
 +	async update(windowId: number, state: IAxleOverlayState | undefined, colors: IAxleOverlayColors | undefined): Promise<void> {
 +		if (!state) {
 +			this.windows.delete(windowId);
-+		} else {
-+			this.windows.set(windowId, { state: sanitizeState(state), colors: sanitizeColors(colors), at: Date.now() });
-+			if (!this.watched.has(windowId)) {
-+				const win = BrowserWindow.fromId(windowId);
-+				if (win) {
-+					this.watched.add(windowId);
-+					// A window that closes (or crashes) without saying so must not leave its agents on screen.
-+					win.once('closed', () => {
-+						this.watched.delete(windowId);
-+						this.windows.delete(windowId);
-+						this.render();
-+					});
-+				}
-+			}
++			this.render();
++			return;
++		}
++		// Only a window that exists: its `closed` event is what takes its agents off the screen again.
++		const win = typeof windowId === 'number' ? BrowserWindow.fromId(windowId) : null;
++		if (!win || win.isDestroyed() || win === this.overlay) {
++			return;
++		}
++		this.windows.set(windowId, { state: sanitizeState(state), colors: sanitizeColors(colors), at: Date.now() });
++		if (!this.watched.has(windowId)) {
++			this.watched.add(windowId);
++			// A window that closes (or crashes) without saying so must not leave its agents on screen.
++			win.once('closed', () => {
++				this.watched.delete(windowId);
++				this.windows.delete(windowId);
++				this.render();
++			});
 +		}
 +		this.render();
 +	}
@@ -416,7 +419,7 @@ new file mode 100644
 +			const width = finite(message.width);
 +			const height = finite(message.height);
 +			if (width && height) {
-+				this.size = { width: Math.min(800, Math.ceil(width)), height: Math.min(900, Math.ceil(height)) };
++				this.size = { width: Math.min(800, Math.max(1, Math.ceil(width))), height: Math.min(900, Math.max(1, Math.ceil(height))) };
 +				this.place();
 +			}
 +		} else if (message.type === 'click' && typeof message.key === 'string') {
