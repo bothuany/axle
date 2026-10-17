@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { noFlowReason } from './noFlow';
 import { POLY_LANGUAGES } from './poly/client';
 import type { FlowNode, FlowProvider, FlowTarget } from './providers';
 
@@ -45,7 +46,9 @@ export class LspProvider implements FlowProvider {
 		const uri = vscode.Uri.parse(t.uri);
 		const item = await prepare(uri, new vscode.Position(t.line, t.character));
 		if (!item) {
-			throw new Error('No language server answered for this position. Is the language extension installed?');
+			const doc = await vscode.workspace.openTextDocument(uri);
+			const errors = vscode.languages.getDiagnostics(uri).filter(d => d.severity === vscode.DiagnosticSeverity.Error);
+			throw new Error(noFlowReason(doc.languageId, errors.map(d => d.range.start.line + 1)));
 		}
 		return item;
 	}

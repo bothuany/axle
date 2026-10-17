@@ -147,7 +147,9 @@ function registerCommands(flow: Flow) {
 			const { document } = editor;
 			const pos = editor.selection.active;
 			const viaLanguageServer = () => {
-				const word = document.getText(document.getWordRangeAtPosition(pos)) || 'Flow';
+				// getText() of no range is the whole document: a cursor off any word must not title the tab with the file.
+				const range = document.getWordRangeAtPosition(pos);
+				const word = (range && document.getText(range).slice(0, 60)) || 'Flow';
 				return panel.show({ kind: 'lsp', uri: document.uri.toString(), line: pos.line, character: pos.character }, word).catch(fail);
 			};
 			if (POLY_LANGUAGES.has(document.languageId)) {

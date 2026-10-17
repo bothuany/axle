@@ -202,6 +202,8 @@ function Flow() {
     setDown(null)
     setUp(null)
     setError('')
+    // The previous flow's impact must not stand over a flow that has not loaded, or that failed.
+    setImpact(null)
     setImpactOpen(false)
     load(target.target, false)
   }, [target, load])
@@ -624,10 +626,12 @@ function Flow() {
           <span className="owner">{owner}</span>
           <span className="member">{member}</span>
         </div>
-        <button className="chip" aria-pressed={showUp} onClick={() => setShowUp(v => !v)} title="Show who calls this method, to the left">
-          Callers
-        </button>
-        {impact ? (
+        {down && (
+          <button className="chip" aria-pressed={showUp} onClick={() => setShowUp(v => !v)} title="Show who calls this method, to the left">
+            Callers
+          </button>
+        )}
+        {!down ? null : impact ? (
           <span className="impact-wrap">
             <button className={`chip impact${impactCount ? ' hot' : ''}`} aria-expanded={impactOpen} disabled={!impactCount} onClick={() => setImpactOpen(v => !v)}>
               {impactText}
@@ -640,7 +644,7 @@ function Flow() {
             )}
           </span>
         ) : (
-          down && <span className="chip ghosted">Checking impact…</span>
+          <span className="chip ghosted">Checking impact…</span>
         )}
         {turns.length > 0 && (
           <span className="impact-wrap">
