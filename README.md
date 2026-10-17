@@ -12,32 +12,43 @@
 <p align="center">
   <a href="https://github.com/bothuany/axle/releases/latest"><img src="https://img.shields.io/badge/download-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-6f86ff" alt="Download for Windows, macOS and Linux"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6f86ff" alt="License: MIT"></a>
-  <img src="https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex-6f86ff" alt="Agents: Claude Code and Codex">
+  <img src="https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20any%20CLI-6f86ff" alt="Agents: Claude Code, Codex and any CLI">
 </p>
 
 <p align="center">
   <a href="docs/media/axle-demo.mp4">
-    <img src="docs/media/axle-preview.webp" width="100%" alt="Axle demo: the call-flow canvas, a Claude Code diff lighting up the methods it touches, the Agents dock and the harness map">
+    <img src="docs/media/axle-preview.webp" width="100%" alt="Axle demo: three agents at once. What the code runs across services, what an agent changed on the flow, who needs you, and what each agent is allowed to do">
   </a>
 </p>
 
-https://github.com/user-attachments/assets/ea31fc6d-1561-4d4f-a5cd-fa33b7163ba6
-
 ## See how your code runs
 
-Pick an endpoint and watch the chain it runs, card by card: controller → handler → services → database, each with its real, editable code. Database cards show the table the query touches.
+Pick an endpoint and watch the chain it runs, card by card: controller → handler → services → database, each with its real, editable code. Database cards show the table the query touches. The flow follows calls across services too: an HTTP call continues into the route it reaches, a message continues into the listener of its topic or queue (Kafka, RabbitMQ, JMS, SQS, Celery, NestJS). Links found by matching names or paths are drawn dashed as guesses (`HTTP?`, `topic?`), so you always know what is certain.
 
-## Let agents work, and know when they need you
+## Review what an agent changed, on the flow
 
-Claude Code and Codex run as their real CLIs. The Agents dock shows each one at a glance (working, needs you, done) and whatever needs you rises to the top. When Claude proposes a change, the diff opens in Axle and the methods it touches light up on the canvas.
+Ask the agent to "show what you did in flow", or run **Show Git Changes in Flow**. One canvas holds the whole change set: every endpoint the changed code reaches, cut down to the changed methods, added lines in green and removed lines in red. Compare against your uncommitted work, the whole branch since `main`, or the last commit. After each prompt, the Agents dock lists the flows that turn touched.
+
+## Run agents side by side, and know when they need you
+
+Claude Code, Codex and any CLI you add run as their real tools, in terminals. The Agents dock shows each one at a glance and ranks what needs you first: an approval with its text, a question, an error, a finished turn you have not read. Each row carries the model and how full its context window really is, tokens and estimated cost, and the PR and CI state of its branch. Start an agent in its own git worktree, merge it back with one click, and get warned when two agents edit the same file, method or flow. Questions from Home or the canvas go to the agent you pick, and Axle remembers the choice. The status bar shows what is left of your 5-hour and weekly limits.
+
+Outside the editor, an optional app badge counts the agents waiting for you, and an optional status island at the top of the screen (or any corner) shows every agent's state at a glance with an avatar per agent, on macOS and Windows. It never takes focus.
 
 ## Keep your harness healthy
 
-A map and health score of your `CLAUDE.md`, skills, hooks and permissions. Broken hooks and vague skills surface before they cost you a session, and one click turns a permission you keep granting into a standing rule.
+One map of what shapes your agents: `CLAUDE.md` and `AGENTS.md`, rules, skills, subagents, hooks, MCP servers, permissions and the agents' own memory, with a health score and what each piece costs in tokens before you type.
+
+- **Lint without an LLM:** rules whose paths match nothing, broken frontmatter, duplicated instructions across tools, hooks that never fire.
+- **Context X-ray:** what fills a running agent's window, and what you could drop.
+- **What actually runs:** which hooks, skills, subagents and MCP tools fired, and which have not been used in a month.
+- **Why?:** the instructions, rules and permissions that apply to a file, and a simulator that tells you whether `Bash(git push --force)` would be allowed, asked or denied, and by which rule.
+- **Friction inbox:** permissions you keep granting, corrections you keep repeating and tool calls that keep failing become proposed rules, instructions and hooks, applied only when you say so.
+- **MCP servers:** see, check, add, edit and remove the servers of Claude Code and Codex, with secrets kept out of view.
 
 ## Works with your stack
 
-C# / .NET · Java · Python · JavaScript / TypeScript · Go · PHP · Ruby · Rust, from ASP.NET and Spring to FastAPI, NestJS, Rails and axum. [Full support table →](docs/languages.md)
+C# / .NET · Java · Python · JavaScript / TypeScript · Go · PHP · Ruby · Rust, from ASP.NET and Spring to FastAPI, NestJS, Rails and axum. [Full support table →](docs/languages.md) · Agent tools and the `axle` MCP server: [docs/agent-tools.md](docs/agent-tools.md)
 
 ## Contributing
 
