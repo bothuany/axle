@@ -286,7 +286,7 @@ function render() {
 			+ (canCompact ? '<span class="cmp" data-compact="' + esc(s.id) + '" role="button" title="Send /compact: keeps a summary, frees most of the window">Compact</span>' : '')
 			+ '</div>' : '';
 		return '<button class="agent ' + s.state + (kind ? ' ' + kind : '') + (s.unread ? ' unread' : '') + '" data-id="' + esc(s.id) + '" title="' + esc(s.name + (sized ? ' · context ' + pct + '% full' : '')) + '">'
-			+ '<div class="top">' + avatar(s, sized ? pct : undefined)<span class="name">' + esc(s.name) + '</span><span class="state">' + esc(state) + '</span></div>'
+			+ '<div class="top">' + avatar(s, sized ? pct : undefined) + '<span class="name">' + esc(s.name) + '</span><span class="state">' + esc(state) + '</span></div>'
 			+ (s.prompt ? '<div class="prompt">' + esc(s.prompt) + '</div>' : '')
 			+ need
 			+ (s.activity && !(kind === 'approval' && !s.need) && !(s.need && s.activity === s.need.text) ? '<div class="activity">' + esc(s.activity) + '</div>' : '')
