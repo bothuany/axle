@@ -14,6 +14,7 @@ import type {
 	SessionNotification,
 } from '@agentclientprotocol/sdk';
 import { AgentHost, explain, type AgentKind } from './acp';
+import { agentCwd } from './env';
 
 type Update = SessionNotification['update'];
 
@@ -142,7 +143,8 @@ export class AgentSessionType implements vscode.Disposable {
 	}
 
 	private get cwd(): string {
-		return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+		// The same spelling a terminal agent gets (agentCwd), so chat sessions and terminal agents share one entry in .claude.json.
+		return agentCwd(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath) ?? process.cwd();
 	}
 
 	private uri(sessionId: string) {

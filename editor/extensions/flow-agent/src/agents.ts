@@ -16,7 +16,7 @@ import * as vscode from 'vscode';
 import { crashNeed, nextAttention, attentionKind, startupNeed, type Attention, type Need } from './attention';
 import { findConflicts, key, type Conflict, type SessionEdits } from './conflicts';
 import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexProfile, codexProfileFile } from './codexHooks';
-import { agentProcessEnv, inheritedAgentEnv } from './env';
+import { agentCwd, agentProcessEnv, inheritedAgentEnv } from './env';
 import { CostTracker, statusUsd, type SessionCost } from './cost';
 import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
@@ -632,7 +632,7 @@ export class Agents implements vscode.Disposable {
 				return undefined;
 			}
 		}
-		const cwd = worktree?.path ?? folder;
+		const cwd = agentCwd(worktree?.path ?? folder);
 		const terminal = vscode.window.createTerminal({
 			name,
 			cwd,
