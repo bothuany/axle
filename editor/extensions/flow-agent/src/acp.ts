@@ -14,7 +14,7 @@ import {
 	type RequestPermissionResponse,
 	type SessionNotification,
 } from '@agentclientprotocol/sdk';
-import { agentProcessEnv } from './env';
+import { agentCwd, agentProcessEnv } from './env';
 
 export type AgentKind = 'claude' | 'codex';
 
@@ -89,7 +89,7 @@ export class AgentHost implements vscode.Disposable {
 		// process.execPath is Electron on desktop (it needs ELECTRON_RUN_AS_NODE to behave as node) and plain node in server mode.
 		// The adapter needs it for its own children too, so it stays; the session variables of a host Claude Code do not.
 		const child = this.child = spawn(process.execPath, [script], {
-			cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+			cwd: agentCwd(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath),
 			env: agentProcessEnv(process.versions.electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
 			stdio: ['pipe', 'pipe', 'pipe'],
 			windowsHide: true,

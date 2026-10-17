@@ -36,3 +36,14 @@ export function agentProcessEnv(extra: Record<string, string> = {}): NodeJS.Proc
 	}
 	return { ...env, ...extra };
 }
+
+/**
+ * The folder an agent's terminal starts in. VS Code spells a Windows drive in lower case ("c:\app"); cmd.exe and Git Bash
+ * hand that spelling on to the agent, while PowerShell and a terminal opened by hand say "C:\app". Claude Code files a
+ * folder's state in .claude.json under its working directory exactly as given (local MCP servers, trust, approvals),
+ * so the lower-case spelling made a second entry for the same folder. Checked with Claude Code 2.1.302 and
+ * `claude mcp add --scope local` from each shell.
+ */
+export function agentCwd(folder: string | undefined, platform: NodeJS.Platform = process.platform): string | undefined {
+	return folder && platform === 'win32' ? folder.replace(/^([a-z]):/, (_, d: string) => `${d.toUpperCase()}:`) : folder;
+}
