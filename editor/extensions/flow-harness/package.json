@@ -84,8 +84,8 @@
         "category": "Harness"
       },
       {
-        "command": "flowHarness.reportUsage",
-        "title": "Report Usage",
+        "command": "flowHarness.reportLimits",
+        "title": "Report Usage Limits",
         "category": "Harness"
       },
       {
@@ -143,7 +143,7 @@
           "when": "false"
         },
         {
-          "command": "flowHarness.reportUsage",
+          "command": "flowHarness.reportLimits",
           "when": "false"
         },
         {

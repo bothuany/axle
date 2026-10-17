@@ -1,117 +1,89 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the context budget, always in view. How full the agent's context window is,
- *  and how much of it the harness itself (memory files, skills, subagents) takes before you type.
+ *  Axle Harness: how much of the context window the harness itself takes before you type, and the
+ *  plan's usage limits of each harness in use (the only part in the status bar). How full each
+ *  agent's window is shows in the Agents dock, next to the agent. Every limit comes from the CLI's
+ *  own report.
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { fmtTokens, limitLevel, limitLines, limitsText, liveWindows, toLimits, type HarnessLimits } from './budget';
 import type { Harness } from './scan';
 
-interface Usage { agent: string; used: number; size: number }
-
-const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n);
-
-export class ContextBudget implements vscode.Disposable {
-	private readonly item = vscode.window.createStatusBarItem('flowHarness.context', vscode.StatusBarAlignment.Right, 200);
-	/** The last report of each agent, by its name (the name of its terminal, too). Insertion order is report order: the last entry spoke last. */
-	private readonly usages = new Map<string, Usage>();
+/** The harness's share of every session: what the Show Context Budget command lists. */
+export class ContextBudget {
 	private harness: Harness | undefined;
-	private readonly closeListener: vscode.Disposable;
-
-	constructor() {
-		this.item.name = 'Context budget';
-		this.item.command = 'flowHarness.showContext';
-		// An agent whose terminal is closed is gone: its numbers must not stay on show.
-		this.closeListener = vscode.window.onDidCloseTerminal(t => {
-			if (this.usages.delete(t.name)) {
-				this.render();
-			}
-		});
-		this.render();
-	}
-
-	/** The agent that reported last: the status bar follows it. */
-	private get usage(): Usage | undefined {
-		let last: Usage | undefined;
-		for (const u of this.usages.values()) {
-			last = u;
-		}
-		return last;
-	}
 
 	setHarness(h: Harness | undefined) {
 		this.harness = h;
-		this.render();
-	}
-
-	report(u: { agent: string; used: number; size: number }) {
-		this.usages.delete(u.agent);
-		this.usages.set(u.agent, { agent: u.agent, used: u.used, size: u.size });
-		this.render();
-	}
-
-	/** Ten cells, filled to the share of the window in use; colour moves from calm to warning near the limit. */
-	private render() {
-		const startup = this.harness?.startupTokens ?? 0;
-		if (!this.usage && !startup) {
-			this.item.hide();
-			return;
-		}
-		const size = this.usage?.size ?? 200_000;
-		const used = this.usage?.used ?? startup;
-		const share = Math.min(1, used / size);
-		const cells = Math.round(share * 10);
-		this.item.text = `${'▰'.repeat(cells)}${'▱'.repeat(10 - cells)} ${Math.round(share * 100)}%`;
-		this.item.color = share > 0.85 ? new vscode.ThemeColor('flowHarness.deny') : share > 0.6 ? new vscode.ThemeColor('flowHarness.ask') : undefined;
-		const tip = new vscode.MarkdownString(undefined, true);
-		tip.appendMarkdown(`**Context** ${this.usage ? `(${this.usage.agent})` : '(before the first prompt)'}\n\n`);
-		tip.appendMarkdown(`$(circle-filled) ${fmt(used)} of ${fmt(size)} tokens in use\n\n`);
-		if (this.harness) {
-			const by = (k: string) => this.harness!.items.filter(i => i.kind === k && i.agents.includes('Claude')).reduce((a, i) => a + (i.tokens ?? 0), 0);
-			tip.appendMarkdown(`Harness, loaded in every session: **${fmt(startup)}**\n\n`);
-			tip.appendMarkdown(`- Instructions ${fmt(by('instructions'))}\n- Always-on rules ${fmt(by('rules'))}\n- Skill descriptions ${fmt(by('skills'))}\n- Subagent descriptions ${fmt(by('agents'))}\n\n`);
-		}
-		tip.appendMarkdown('Click for details and to compact the conversation.');
-		this.item.tooltip = tip;
-		this.item.show();
 	}
 
 	async showDetails() {
 		const h = this.harness;
 		const heavy = (h?.items ?? []).filter(i => i.tokens && i.agents.includes('Claude')).sort((a, b) => (b.tokens ?? 0) - (a.tokens ?? 0)).slice(0, 12);
-		const picks: (vscode.QuickPickItem & { file?: string; compact?: boolean })[] = [
-			{ label: '$(fold) Compact the conversation', detail: 'Sends /compact to the agent: keeps a summary, frees most of the window', compact: true },
+		const by = (k: string) => (h?.items ?? []).filter(i => i.kind === k && i.agents.includes('Claude')).reduce((a, i) => a + (i.tokens ?? 0), 0);
+		const picks: (vscode.QuickPickItem & { file?: string })[] = [
+			{ label: `Harness, loaded in every session: ${fmtTokens(h?.startupTokens ?? 0)}`, kind: vscode.QuickPickItemKind.Separator },
+			{ label: `Instructions ${fmtTokens(by('instructions'))} · Always-on rules ${fmtTokens(by('rules'))} · Skill descriptions ${fmtTokens(by('skills'))} · Subagent descriptions ${fmtTokens(by('agents'))}` },
 			{ label: 'Heaviest parts of the harness', kind: vscode.QuickPickItemKind.Separator },
-			...heavy.map(i => ({ label: `${fmt(i.tokens ?? 0)}  ${i.label}`, description: i.kind, detail: i.detail, file: i.file })),
+			...heavy.map(i => ({ label: `${fmtTokens(i.tokens ?? 0)}  ${i.label}`, description: i.kind, detail: i.detail, file: i.file })),
 		];
-		const pick = await vscode.window.showQuickPick(picks, { title: this.usage ? `Context: ${fmt(this.usage.used)} of ${fmt(this.usage.size)} tokens` : 'Context budget', matchOnDetail: true });
-		if (pick?.compact) {
-			await this.compact();
-		} else if (pick?.file) {
+		const pick = await vscode.window.showQuickPick(picks, { title: 'Context budget', matchOnDetail: true });
+		if (pick?.file) {
 			await vscode.window.showTextDocument(vscode.Uri.file(pick.file));
 		}
 	}
+}
 
-	/** Types /compact into the terminal of the agent that is running out of room; the agent's own chat is the fallback where it has no terminal. */
-	private async compact() {
-		const agents = [...this.usages.values()].reverse();
-		let pick: string | undefined = agents[0]?.agent;
-		if (agents.length > 1) {
-			pick = (await vscode.window.showQuickPick(agents.map(u => ({ label: u.agent, description: `${fmt(u.used)} of ${fmt(u.size)} tokens` })), { title: 'Compact which agent?' }))?.label;
-			if (!pick) {
-				return;
-			}
+/**
+ * One status bar item per harness with the share of its plan's 5-hour and weekly limits in use, as the CLI
+ * last reported them. Hidden until a harness reports any: no guessing, no account calls of Axle's own.
+ */
+export class UsageLimits implements vscode.Disposable {
+	private readonly items = new Map<string, vscode.StatusBarItem>();
+	private readonly limits = new Map<string, HarnessLimits & { receivedAt: number }>();
+	/** Reset times pass while nobody reports: the tooltip's "in 2 h" is redrawn each minute. */
+	private readonly timer = setInterval(() => this.limits.forEach(l => this.render(l)), 60_000);
+
+	report(arg: unknown) {
+		const l = toLimits(arg);
+		if (!l) {
+			return;
 		}
-		const terminal = vscode.window.terminals.find(t => t.name === pick);
-		if (terminal) {
-			terminal.show();
-			terminal.sendText('/compact');
-		} else {
-			await vscode.commands.executeCommand('workbench.action.chat.open', { query: '/compact', isPartialQuery: false });
+		const entry = { ...l, receivedAt: Date.now() };
+		this.limits.set(l.harness, entry);
+		this.render(entry);
+	}
+
+	private render(l: HarnessLimits & { receivedAt: number }) {
+		let item = this.items.get(l.harness);
+		if (!item) {
+			const id = `flowHarness.limits.${l.harness.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+			item = vscode.window.createStatusBarItem(id, vscode.StatusBarAlignment.Right, 200 - this.items.size);
+			item.name = `${l.harness} usage limits`;
+			// The context of each agent lives in the Agents dock: a click goes there.
+			item.command = 'flow.agents.focus';
+			this.items.set(l.harness, item);
 		}
+		const now = Date.now();
+		const live = { harness: l.harness, windows: liveWindows(l, l.receivedAt, now) };
+		if (!live.windows.length) {
+			item.hide();
+			return;
+		}
+		const level = limitLevel(live);
+		item.text = `$(pulse) ${limitsText(live)}`;
+		item.color = level === 'high' ? new vscode.ThemeColor('flowHarness.deny') : level === 'warn' ? new vscode.ThemeColor('flowHarness.ask') : undefined;
+		const tip = new vscode.MarkdownString(undefined, true);
+		tip.appendMarkdown(`**${l.harness}: plan usage**\n\n`);
+		const time = (ms: number) => new Date(ms).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+		tip.appendMarkdown(limitLines(live, now, time).map(line => `- ${line}`).join('\n'));
+		tip.appendMarkdown(`\n\nAs ${l.harness} last reported it. Context per agent is in the Agents dock.`);
+		item.tooltip = tip;
+		item.show();
 	}
 
 	dispose() {
-		this.closeListener.dispose();
-		this.item.dispose();
+		clearInterval(this.timer);
+		this.items.forEach(i => i.dispose());
 	}
 }

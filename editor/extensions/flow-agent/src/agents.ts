@@ -17,6 +17,7 @@ import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexProfile, codex
 import { agentProcessEnv, inheritedAgentEnv } from './env';
 import { parsePatch, patchFiles, patchText } from './patch';
 import { shimScript } from './shim';
+import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, compactAllowed, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 
 /** claude and codex report through hooks (codex once its hooks are trusted); custom CLIs are plain terminals Axle only lists. */
 export type AgentCli = 'claude' | 'codex' | 'custom';
@@ -40,7 +41,10 @@ export interface AgentSession {
 	/** What it is doing right now, or what it waits for. */
 	activity?: string;
 	todos: Todo[];
-	usage?: { used: number; size: number };
+	/** How full its context window is; `size` only when the CLI said (never a guess). */
+	usage?: ContextUsage;
+	/** Bumped when the session ends, so a transcript read that started before then is dropped. */
+	usageEpoch?: number;
 	/** Finished or blocked while you were looking elsewhere. */
 	unread: boolean;
 	pid?: number;
@@ -306,6 +310,25 @@ export class Agents implements vscode.Disposable {
 		return path.join(this.dir, 'agent-hooks.json');
 	}
 
+	/** The same hooks plus Axle's status line: for sessions where the user has no status line of their own. */
+	private get statusSettingsFile() {
+		return path.join(this.dir, 'agent-hooks-status.json');
+	}
+
+	/**
+	 * The settings a new Claude session gets. Decided at each start, from every place Claude reads a status line
+	 * for this workspace, so one the user added since Axle started is never replaced by Axle's.
+	 */
+	private claudeSettings() {
+		const config = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude');
+		const folders = (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath);
+		if (hasOwnStatusLine(config, folders)) {
+			this.log.info('Agents: you have a status line of your own; context windows and usage limits come from the transcript only');
+			return this.settingsFile;
+		}
+		return this.statusSettingsFile;
+	}
+
 	/**
 	 * The hooks a Axle agent gets on top of the user's own: read-only observers that print nothing,
 	 * so they never decide anything. Each one posts the event to whichever Axle window holds this
@@ -332,6 +355,15 @@ export class Agents implements vscode.Disposable {
 			hooks[e] = [{ ...(matcher ? { matcher } : {}), hooks: [hook] }];
 		}
 		await fs.writeFile(this.settingsFile, JSON.stringify({ hooks }, null, 2), { mode: 0o600 });
+		// The status line is the one place Claude Code tells the real context window and the plan's 5-hour and weekly
+		// limits. Claude runs it on every refresh, so it should start fast: a plain `node` on PATH starts several times
+		// quicker than the editor in Node mode, which stays the fallback. It runs through the same shell as the hooks.
+		const statusFile = path.join(this.dir, 'flow-status.js');
+		await fs.writeFile(statusFile, statusScript(portFile, tokenFile, this.dir));
+		const node = findOnPath('node');
+		const statusCommand = node ? `"${node}" "${statusFile}"` : `${asNode}"${process.execPath}" "${statusFile}"`;
+		const statusLine = { type: 'command', command: statusCommand, padding: 0 };
+		await fs.writeFile(this.statusSettingsFile, JSON.stringify({ hooks, statusLine }, null, 2), { mode: 0o600 });
 	}
 
 	/**
@@ -524,7 +556,7 @@ export class Agents implements vscode.Disposable {
 		const codexHooks = cli === 'codex' && await this.codexTakesHooks();
 		const profile = codexHooks ? ` -p ${CODEX_PROFILE}` : '';
 		const command = cli === 'claude'
-			? `claude ${resume ? '--resume' : '--session-id'} ${id}${this.server && this.settingsOk ? ` --settings ${quote(this.settingsFile)}` : ''}${mcp ? ` --mcp-config ${quote(mcp)}` : ''}`
+			? `claude ${resume ? '--resume' : '--session-id'} ${id}${this.server && this.settingsOk ? ` --settings ${quote(this.claudeSettings())}` : ''}${mcp ? ` --mcp-config ${quote(mcp)}` : ''}`
 			// Codex chose its session id; until a hook told us, `codex resume` without one opens its own picker.
 			: cli === 'codex' ? (resume ? `codex resume${profile}${resume.agentId ? ` ${resume.agentId}` : ''}` : `codex${profile}`)
 			: resume?.command ?? custom?.command ?? '';
@@ -598,6 +630,18 @@ export class Agents implements vscode.Disposable {
 		terminal.show();
 		terminal.sendText(line, submit);
 		return true;
+	}
+
+	/** Types /compact into the agent's terminal (both CLIs take it): keeps a summary, frees most of the window. */
+	compact(id: string) {
+		const s = this.sessions.get(id);
+		const t = this.terminals.get(id);
+		// Checked here, not only in the page: the row may be older than the state (a permission prompt that just came up).
+		if (!s || !t || !compactAllowed(s)) {
+			return;
+		}
+		t.show();
+		t.sendText('/compact');
 	}
 
 	show(id: string) {
@@ -689,6 +733,7 @@ export class Agents implements vscode.Disposable {
 					s.state = 'ended';
 					s.activity = s.cli === 'claude' ? 'Closed · click to resume' : undefined;
 					s.since = Date.now();
+					this.usageEnded(s);
 				}
 				this.unwatch(id);
 				// No save here: a window being reloaded closes its terminals too (they live on in the
@@ -705,7 +750,7 @@ export class Agents implements vscode.Disposable {
 			res.setHeader('content-type', 'application/json');
 			res.end('{}'); // never a decision: the CLI keeps asking the user itself
 		};
-		if (req.method !== 'POST' || req.url !== '/hook' || req.headers['x-flow-token'] !== this.token) {
+		if (req.method !== 'POST' || (req.url !== '/hook' && req.url !== '/status') || req.headers['x-flow-token'] !== this.token) {
 			req.resume();
 			return reply(403);
 		}
@@ -720,7 +765,11 @@ export class Agents implements vscode.Disposable {
 		const agent = String(req.headers['x-flow-agent'] ?? '');
 		req.on('end', async () => {
 			try {
-				await this.hook(JSON.parse(body) as HookPayload, agent);
+				if (req.url === '/status') {
+					this.status(JSON.parse(body), agent);
+				} else {
+					await this.hook(JSON.parse(body) as HookPayload, agent);
+				}
 			} catch (e) {
 				this.log.warn(`Agents: hook failed: ${(e as Error).message}`);
 			}
@@ -843,6 +892,7 @@ export class Agents implements vscode.Disposable {
 				break;
 			case 'SessionEnd':
 				set('ended', undefined);
+				this.usageEnded(s);
 				break;
 		}
 		const active = vscode.window.activeTerminal === this.terminals.get(s.id) && vscode.window.state.focused;
@@ -1054,29 +1104,75 @@ export class Agents implements vscode.Disposable {
 		}
 	}
 
-	/** Context in use: the last assistant message's input side (fresh + cached tokens). */
+	/** Claude's status line spoke: the context window as the CLI knows it, and the plan's limits when it has them. */
+	private status(payload: unknown, agent: string) {
+		const st = parseClaudeStatus(payload);
+		const s = this.sessionFor(st.sessionId, agent);
+		if (s && st.usage) {
+			this.setUsage(s, st.usage);
+		}
+		if (st.limits) {
+			this.reportLimits(st.limits);
+		}
+	}
+
+	/**
+	 * Context in use, from the end of the transcript: for Claude the last assistant message's input side (the
+	 * window comes from the status line, never from a guess), for Codex its newest token_count event.
+	 */
 	private async readUsage(s: AgentSession) {
 		if (!s.transcript) {
 			return;
 		}
+		const epoch = s.usageEpoch ?? 0;
 		const lines = await this.tail(s.transcript).catch(() => [] as string[]);
-		for (let i = lines.length - 1; i >= 0; i--) {
-			let entry: { type?: string; message?: { model?: string; usage?: Record<string, number> } };
-			try {
-				entry = JSON.parse(lines[i]);
-			} catch {
-				continue;
+		if (s.cli === 'codex') {
+			const { usage, limits } = codexRolloutUsage(lines);
+			if (usage) {
+				this.setUsage(s, usage, epoch);
 			}
-			const u = entry.type === 'assistant' ? entry.message?.usage : undefined;
-			if (u) {
-				const used = (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
-				const size = used > 200_000 || /\[1m\]/.test(entry.message?.model ?? '') ? 1_000_000 : 200_000;
-				s.usage = { used, size };
-				void Promise.resolve(vscode.commands.executeCommand('flowHarness.reportUsage', { agent: s.name, used, size })).catch(() => undefined);
-				this.changed.fire();
-				return;
+			if (limits) {
+				this.reportLimits(limits);
 			}
+			return;
 		}
+		const usage = claudeTranscriptUsage(lines);
+		if (usage) {
+			// The status line's display name (Sonnet 5.5) reads better than the transcript's API id: keep it once known.
+			this.setUsage(s, s.usage?.model ? { used: usage.used } : usage, epoch);
+		}
+	}
+
+	/** Only news reaches the dock: see applyUsage for what is dropped (ended sessions, stale reads, repeats). */
+	private setUsage(s: AgentSession, next: ContextUsage, epoch?: number) {
+		if (applyUsage(s, next, epoch)) {
+			this.changed.fire();
+		}
+	}
+
+	/** The CLI exited or its terminal closed: its numbers say nothing any more, and a resumed session reports afresh. */
+	private usageEnded(s: AgentSession) {
+		endUsage(s);
+		// The status line forwards only changes: forget what it last sent, so a resumed session reports its numbers again.
+		if (this.dir) {
+			void fs.rm(path.join(this.dir, `status-${s.id.replace(/[^\w-]/g, '')}.last`), { force: true }).catch(() => undefined);
+		}
+	}
+
+	/** Each harness's limits go to flow-harness once per change, and again after a send that failed. */
+	private readonly limits = new LimitsSender(l => Promise.resolve(vscode.commands.executeCommand('flowHarness.reportLimits', l)));
+	private limitsRetry: NodeJS.Timeout | undefined;
+
+	private reportLimits(limits: UsageLimits) {
+		void this.limits.offer(limits).then(outcome => {
+			// A failed send (flow-harness still starting) tries again shortly; a repeat of what went through does not.
+			if (outcome === 'failed' && !this.limitsRetry) {
+				this.limitsRetry = setTimeout(() => {
+					this.limitsRetry = undefined;
+					void this.limits.offer(limits);
+				}, 30_000);
+			}
+		});
 	}
 
 	dispose() {
@@ -1094,6 +1190,7 @@ export class Agents implements vscode.Disposable {
 			}
 		}
 		clearTimeout(this.orphanTimer);
+		clearTimeout(this.limitsRetry);
 		this.watchers.forEach(w => w.close());
 		this.titleTimers.forEach(clearTimeout);
 		this.changed.dispose();

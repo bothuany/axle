@@ -1,10 +1,11 @@
 /*---------------------------------------------------------------------------------------------
  *  Axle Harness: harness engineering inside the editor. A merged map with a health score,
- *  the context budget, a hook studio and a permission inbox that turns answers into rules.
+ *  the context budget, the plans' usage limits, a hook studio and a permission inbox that turns
+ *  answers into rules.
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { ContextBudget } from './context';
+import { ContextBudget, UsageLimits } from './context';
 import { HookStudio } from './hooks';
 import { PermissionInbox, type PermissionRequest } from './permissions';
 import { totalsBySource } from './gaps';
@@ -14,9 +15,10 @@ import { HarnessTree, itemOf } from './tree';
 
 export function activate(context: vscode.ExtensionContext) {
 	let harness: Harness | undefined;
+	const budget = new ContextBudget();
+	const limits = new UsageLimits();
 	const tree = new HarnessTree();
 	const view = vscode.window.createTreeView('flowHarness.map', { treeDataProvider: tree, showCollapseAll: true });
-	const budget = new ContextBudget();
 	const studio = new HookStudio(() => harness?.root);
 	const inbox = new PermissionInbox(() => harness?.root, () => void refresh());
 	const inboxView = vscode.window.createTreeView('flowHarness.permissions', { treeDataProvider: inbox });
@@ -94,7 +96,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const ifStale = () => Date.now() - lastScan > 30_000 && soon();
 
 	context.subscriptions.push(
-		view, inboxView, budget, studio, diagnostics, watcher, registerPreviewProvider(),
+		view, inboxView, limits, studio, diagnostics, watcher, registerPreviewProvider(),
 		watcher.onDidChange(soon), watcher.onDidCreate(soon), watcher.onDidDelete(soon),
 		{ dispose: () => clearTimeout(timer) },
 		vscode.window.onDidChangeWindowState(s => s.focused && ifStale()),
@@ -111,8 +113,9 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('flowHarness.promote', (arg: unknown) => inbox.promote(arg, 'allow')),
 		vscode.commands.registerCommand('flowHarness.promoteDeny', (arg: unknown) => inbox.promote(arg, 'deny')),
 		vscode.commands.registerCommand('flowHarness.showContext', () => budget.showDetails()),
-		// Called by flow-agent: usage after each update, and every permission question with its answer.
-		vscode.commands.registerCommand('flowHarness.reportUsage', (u: { agent: string; used: number; size: number }) => budget.report(u)),
+		// Called by flow-agent: the plans' usage limits as the CLIs report them, and every permission question with its
+		// answer. Each agent's context fill shows in flow-agent's own Agents dock.
+		vscode.commands.registerCommand('flowHarness.reportLimits', (l: unknown) => limits.report(l)),
 		vscode.commands.registerCommand('flowHarness.recordPermission', (r: PermissionRequest) => inbox.record(r)),
 		// For Axle Home: the health summary in one call.
 		vscode.commands.registerCommand('flowHarness.health', async () => {
