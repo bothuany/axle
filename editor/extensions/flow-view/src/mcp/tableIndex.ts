@@ -11,7 +11,7 @@
 
 import type { Entry } from '../backends';
 import { tableKey } from '../poly/db';
-import { fromEfFact, goneColumns, isMigrationPath, parseMigration, summarize, verbOf, type EfFact } from '../poly/migrations';
+import { fromEfFact, goneColumns, isMigrationPath, opsTouched, parseMigration, summarize, verbOf, type EfFact } from '../poly/migrations';
 import type { Mention, Migration, MigrationFormat, MigrationOp, TableEntity, TablesFact, TableUseFact } from '../poly/model';
 import type { LineRange } from './changedMethods';
 
@@ -264,7 +264,8 @@ export class TableIndex {
 				mig = parseMigration(f.file, f.text, { djangoTable });
 			}
 			if (mig) {
-				migrations.push(mig);
+				// Where the edit landed says which of its operations changed; a file whose lines are unknown counts whole.
+				migrations.push(f.ranges ? { ...mig, ops: opsTouched(mig.ops, f.ranges) } : mig);
 				notes.push(...mig.notes.map(n => `${mig!.name}: ${n}`));
 			}
 		}
@@ -319,10 +320,11 @@ export function usedBy(t: Pick<TableUses, 'endpoints' | 'writers' | 'readers'>):
  * The `impact` answer for a table: endpoints split into writes and reads, each with the method that makes the call and the card it
  * reaches, then what is only a guess and what was not checked.
  */
-export function tableImpactText(t: TableUses & { migrations?: ChangedMigration[] }, rel: (file: string) => string): string[] {
+export function tableImpactText(t: TableUses & { mapped?: string; migrations?: ChangedMigration[] }, rel: (file: string) => string): string[] {
 	const where = (u: TableUse) => u.file ? `${rel(u.file)}${u.line > 0 ? `:${u.line}` : ''}` : '';
 	const line = (u: TableUse) => `- ${u.endpoint.label} ${u.endpoint.name}  via ${u.from}${where(u) ? ` (${where(u)})` : ''}, card ${u.card}${u.ops.length ? ` [${u.ops.join(' → ')}]` : ''}${u.certain ? '' : '  ~table? (guessed)'}`;
-	const out = [`Impact of changing table ${t.table}${t.entity ? ` (entity ${t.entity})` : ''}:`];
+	const entity = t.entity ?? t.mapped;
+	const out = [`Impact of changing table ${t.table}${entity ? ` (entity ${entity})` : ''}:`];
 	if (t.guess) {
 		out.push(`The table name "${t.table}" is a naming default: the entity does not write it, so the mapping is a guess.`);
 	}

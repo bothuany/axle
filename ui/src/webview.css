@@ -210,6 +210,8 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .schema-mark { font: 700 9px var(--fl-ui); color: #ffb454; text-align: center; }
 .schema-name { color: var(--fl-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .schema-col.key .schema-name { color: #ffb454; }
+.schema-col.dropped .schema-name { color: var(--fl-del); text-decoration: line-through; }
+.schema-col.added .schema-name, .schema-col.added .schema-mark { color: var(--fl-add); }
 .schema-type { color: var(--fl-muted); white-space: nowrap; }
 .schema-more { display: flex; align-items: center; padding: 0 10px 0 40px; color: var(--fl-faint); font-style: italic; }
 .schema-rel { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 6px 10px 0 40px; color: var(--fl-muted); font: 11px var(--fl-ui); white-space: nowrap; overflow: hidden; max-height: 18px; }

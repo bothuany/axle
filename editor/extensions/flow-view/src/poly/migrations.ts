@@ -662,3 +662,16 @@ export function mentionPattern(column: string): RegExp {
 	const variants = [...new Set([column, camel, pascal])].map(escapeRe).join('|');
 	return new RegExp(`(?<![A-Za-z0-9_])(?:get|set|is|has)?(?:${variants})(?![A-Za-z0-9_])`);
 }
+
+/**
+ * The operations an edit landed in: each one runs from its line to the line before the next one. An edit that lands in none (the imports,
+ * the revision ids, the rollback) may change any of them, so then every operation counts, the way an edit outside every method does.
+ */
+export function opsTouched(ops: MigrationOp[], ranges: { start: number; end: number }[]): MigrationOp[] {
+	const lines = [...new Set(ops.map(o => o.line))].sort((a, b) => a - b);
+	const hit = ops.filter(o => {
+		const end = (lines.find(l => l > o.line) ?? Infinity) - 1;
+		return ranges.some(r => o.line <= r.end && r.start <= end);
+	});
+	return hit.length ? hit : ops;
+}

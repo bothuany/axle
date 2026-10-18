@@ -161,3 +161,13 @@ test('a Rails migration names tables only, and says so; a file that is no migrat
 	assert.ok(r.notes.some(n => /Rails migrations name tables by convention only/.test(n)), r.notes.join())
 	assert.match(tableIndex.tableImpactText(r.tables[0], f => f).join('\n'), /\(rails, table names only\)/)
 })
+
+test('an edit in one operation of a migration names that operation\'s table, not every table the migration touches', async () => {
+	const text = 'import sqlalchemy as sa\nfrom alembic import op\n\nrevision = "1"\n\n\ndef upgrade():\n    op.add_column("orders", sa.Column("key", sa.String(40)))\n    op.add_column(\n        "customers",\n        sa.Column("region", sa.String(10)),\n    )\n\n\ndef downgrade():\n    op.drop_column("orders", "key")\n'
+	const file = join(dir, 'alembic', 'versions', '0003_x.py')
+	const tablesOf = async ranges => (await tables().changed([{ file, text, ranges }], 12, 2000)).tables.map(t => `${t.table}:${t.migrations[0].ops.length}`).sort()
+	assert.deepEqual(await tablesOf([{ start: 8, end: 8 }]), ['orders:1'], 'the first operation')
+	assert.deepEqual(await tablesOf([{ start: 11, end: 11 }]), ['customers:1'], 'inside a call that spans several lines')
+	assert.deepEqual(await tablesOf([{ start: 1, end: 1 }]), ['customers:1', 'orders:1'], 'an edit in the imports may change any operation')
+	assert.deepEqual(await tablesOf(undefined), ['customers:1', 'orders:1'], 'without lines the whole migration counts')
+})

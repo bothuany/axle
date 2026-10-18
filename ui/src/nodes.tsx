@@ -254,7 +254,11 @@ const QUIET_OPS = new Set(['ConfigureAwait', 'AsQueryable', 'AsEnumerable'])
  * teal, writes in coral), then the columns — key first, Oracle column names, type, nullability and
  * length — and the relations the entity can navigate.
  */
-function SchemaBody({ schema }: { schema: DbSchema }) {
+function SchemaBody({ schema, change }: { schema: DbSchema; change?: FlowNode['tableChange'] }) {
+  // A migration marks the columns it drops (struck through) and the ones it adds (+), where the entity still has them.
+  const names = (pick: 'added' | 'dropped') => new Set((change?.migration ?? []).flatMap(m => m[pick]).map(n => n.toLowerCase()))
+  const added = names('added')
+  const dropped = names('dropped')
   const ops = schema.ops.filter(o => !QUIET_OPS.has(o))
   const cols = schema.columns.slice(0, SCHEMA_MAX)
   const more = schema.columns.length - cols.length
@@ -265,8 +269,8 @@ function SchemaBody({ schema }: { schema: DbSchema }) {
         <span className="schema-chain" title={schema.ops.join(' → ')}>{ops.join(' → ') || 'whole table'}</span>
       </div>
       {cols.map(c => (
-        <div key={c.name} className={`schema-col${c.key ? ' key' : ''}`} style={{ height: SCHEMA_ROW }} title={c.column !== c.name ? `${c.name} → ${c.column}` : c.name}>
-          <span className="schema-mark">{c.key ? 'PK' : ''}</span>
+        <div key={c.name} className={`schema-col${c.key ? ' key' : ''}${dropped.has(c.column.toLowerCase()) || dropped.has(c.name.toLowerCase()) ? ' dropped' : ''}${added.has(c.column.toLowerCase()) || added.has(c.name.toLowerCase()) ? ' added' : ''}`} style={{ height: SCHEMA_ROW }} title={c.column !== c.name ? `${c.name} → ${c.column}` : c.name}>
+          <span className="schema-mark">{c.key ? 'PK' : added.has(c.column.toLowerCase()) ? '+' : ''}</span>
           <span className="schema-name">{c.column}</span>
           <span className="schema-type">{c.type}{c.nullable ? '?' : ''}{c.maxLength ? `(${c.maxLength})` : ''}</span>
         </div>
@@ -513,7 +517,7 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
         title={node.code ? 'Click to show in the editor, double-click to open it' : schema?.file ? 'Click to show the entity, double-click to open it' : undefined}
       >
         <KindGlyph kind={node.kind} />
-        <div className="titles">
+        <div className="titles" title={node.tableChange ? [node.label, node.sub, changeNote(node.tableChange).replace(/^ · /, '')].filter(Boolean).join('\n') : undefined}>
           <div className="title">
             {owner && <span className="owner">{owner}.</span>}
             <span className="member">{member}</span>
@@ -545,7 +549,7 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
       </div>
 
       {chips && chipRows && chipsOpen && !editing && <TypeChips nodeKey={node.key} chips={chips} rows={chipRows} open={chipsOpen} height={chipsH ?? 0} zoomedOut={zoomedOut} still={still} />}
-      {schema && <SchemaBody schema={schema} />}
+      {schema && <SchemaBody schema={schema} change={node.tableChange} />}
       {editing && node.code && actions.save && (
         <CardEditor nodeKey={node.key} code={node.code} file={node.file} startLine={node.startLine} endLine={node.endLine} caret={actions.caret} onSave={(t, session) => actions.save!(node.key, t, session)} onCancel={() => actions.cancelEdit?.()} />
       )}
