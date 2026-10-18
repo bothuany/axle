@@ -73,6 +73,22 @@ public static class Server
         // Every source type with its members, and every controller action with its types: the type model. Cached until a refresh changes the solution.
         var catalog = new TypeCatalog(graph);
         app.MapGet("/api/types", (int? limit, CancellationToken ct) => Locked(async () => Results.Ok(await catalog.GetAsync(Math.Clamp(limit ?? TypeCatalog.MaxTypes, 1, TypeCatalog.MaxTypes), ct)), ct));
+        // Which tables the entry points reach, and which entities map to which tables: the table → endpoints index. The walk goes one entry
+        // point per turn at the gate, so a flow the canvas asks for in the meantime waits for one step, not for the whole walk.
+        var tables = new TableWalk(graph);
+        app.MapGet("/api/tables", async (int? budgetMs, CancellationToken ct) =>
+        {
+            var deadline = DateTime.UtcNow.AddMilliseconds(Math.Clamp(budgetMs ?? 5000, 200, 20_000));
+            var done = false;
+            while (!done && DateTime.UtcNow < deadline)
+            {
+                await gate.WaitAsync(ct);
+                try { done = await tables.StepAsync(ct); } finally { gate.Release(); }
+            }
+            await gate.WaitAsync(ct);
+            try { return Results.Ok(tables.Snapshot()); } finally { gate.Release(); }
+        });
+        app.MapGet("/api/entities", (CancellationToken ct) => Locked(async () => Results.Ok(new EntitiesFact(graph.Version, await graph.EntitiesAsync())), ct));
         app.MapGet("/api/impact", (string id, CancellationToken ct) => Locked(async () => Results.Ok(await graph.ImpactAsync(id, ct: ct)), ct));
         app.MapGet("/api/methods", (string file, CancellationToken ct) => Locked(async () => Results.Ok(await graph.MethodsAsync(file)), ct));
         app.MapGet("/api/callers", (string id, int? depth, CancellationToken ct) => Locked(async () =>

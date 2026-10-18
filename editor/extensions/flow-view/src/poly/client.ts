@@ -13,7 +13,7 @@ import type { Place, Suggestion } from './assist';
 import { VsLsp } from './lspHost';
 import { LspRefiner, stripPending } from './lspResolve';
 import type { PolyTypeFacts } from '../types/wire';
-import { isExcludedPath, type EntryPoint } from './model';
+import { isExcludedPath, type EntryPoint, type TableEntity, type TablesFact } from './model';
 
 export const POLY_LANGUAGES = new Set(['java', 'python', 'javascript', 'typescript', 'javascriptreact', 'typescriptreact', 'go', 'php', 'ruby', 'rust']);
 
@@ -246,6 +246,17 @@ export class PolyIndex implements vscode.Disposable {
 
 	methods(file: string) {
 		return this.request<{ id: string; name: string; line: number; startLine: number; endLine: number; isEntry: boolean }[]>('methods', file);
+	}
+
+	/** The entity and model classes with their tables, for a change to one of them. */
+	entities() {
+		return this.request<TableEntity[]>('entities');
+	}
+
+	/** Which tables the entry points reach, walked `budgetMs` at a time (see `Project.tableUses`). */
+	async tables(budgetMs?: number) {
+		await this.flush();
+		return this.request<TablesFact>('tables', budgetMs);
 	}
 
 	/** Everything the type model is built from (see `Project.typeFacts`): the facts of every file without function bodies, the calls between classes, the entry points with their types. */

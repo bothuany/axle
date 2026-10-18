@@ -8,9 +8,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { DbSchema, EntryPoint, FlowNode } from '../../../../../protocol/flow';
-import { isSpringRepo, isWrite, javaSchema, jsSchema, looksLikeSql, opsOf, pythonSchema, sqlTables, unq, type PrismaModel } from './db';
+import { isSpringRepo, isWrite, javaSchema, jsSchema, looksLikeSql, opsOf, pythonSchema, sqlTables, tableKey, unq, type PrismaModel, type SchemaFact } from './db';
 import { baseType, callBefore, chainBefore, isConstructorName, Kind, paramLabels, recvText, signatureDetail, wordAt, type Place, type Seg, type Suggestion } from './assist';
-import { joinPath, type CallFact, type FileFacts, type FuncFact, type Lang, type RouteFact, type TypeFact } from './model';
+import { joinPath, type CallFact, type FileFacts, type FuncFact, type Lang, type RouteFact, type TableEntity, type TablesFact, type TableUseFact, type TypeFact } from './model';
 import { httpCallOf, matchEndpoints } from './links';
 import { celeryTaskNames, listenerKeys, matchConsumers, messageSendOf } from './messages';
 
@@ -26,7 +26,7 @@ export interface Axis2Service {
 type Target =
 	| { kind: 'fn'; fn: FuncFact; edge: 'call' | 'impl' | 'http' | 'message'; guess?: boolean }
 	| { kind: 'ambiguous'; label: string; options: FuncFact[]; edge?: 'http' | 'message' }
-	| { kind: 'db'; schema: DbSchema; label: string; file: string | null; line: number };
+	| { kind: 'db'; schema: DbSchema; label: string; file: string | null; line: number; guess?: boolean };
 
 /** An entry point with the declared types of its parameters and result, for the type chips. */
 export interface TypeEntry {
@@ -60,6 +60,9 @@ const COMMON = new Set(['get', 'set', 'add', 'put', 'map', 'filter', 'find', 'pu
 const HTTP_ANN: Record<string, string> = { GetMapping: 'GET', PostMapping: 'POST', PutMapping: 'PUT', DeleteMapping: 'DELETE', PatchMapping: 'PATCH', GET: 'GET', POST: 'POST', PUT: 'PUT', DELETE: 'DELETE', PATCH: 'PATCH', HEAD: 'HEAD', OPTIONS: 'OPTIONS', Get: 'GET', Post: 'POST', Put: 'PUT', Delete: 'DELETE', Patch: 'PATCH', All: '*', Head: 'HEAD', Options: 'OPTIONS' };
 const PY_VERBS: Record<string, string> = { get: 'GET', post: 'POST', put: 'PUT', delete: 'DELETE', patch: 'PATCH', head: 'HEAD', options: 'OPTIONS', websocket: 'WS' };
 const MAX_NODES = 220;
+/** The table walk looks at this many entry points and keeps this many uses: a repository of thousands of routes answers in parts. */
+const MAX_TABLE_ENTRIES = 3000;
+const MAX_TABLE_USES = 20_000;
 /** Languages whose free functions live in a package/module of their own (see pkgFuncs). */
 const PACKAGE_LANGS = new Set(['go', 'php', 'ruby', 'rust']);
 // What a JS/TS import specifier may leave off. The index file is joined with the platform separator because the
@@ -89,6 +92,12 @@ export class Project {
 	private impls = new Map<string, TypeFact[]>();
 	private schemas = new Map<string, DbSchema & { orm: string }>();
 	private schemaByTable = new Map<string, DbSchema & { orm: string }>();
+	/** Entities whose table name is not written in the code (a naming default): a card for one says "table?". */
+	private guessedTables = new Set<string>();
+	/** Where each entity is declared, whole class (or Prisma model): the span an edit has to land in to change it. */
+	private entitySpans = new Map<string, { file: string; line: number; endLine: number }>();
+	/** The walk over the entry points that finds which tables they reach, built on first use and cleared with the index. */
+	private tableWalk: { next: number; uses: TableUseFact[] } | undefined;
 	private entries: Entry[] = [];
 	private callersOf: Map<string, { from: string; line: number; link?: 'http' | 'message' }[]> | undefined;
 	/** Message listeners and Celery tasks with the destinations they consume, built on first use. */
@@ -151,6 +160,9 @@ export class Project {
 		this.impls.clear();
 		this.schemas.clear();
 		this.schemaByTable.clear();
+		this.guessedTables.clear();
+		this.entitySpans.clear();
+		this.tableWalk = undefined;
 		this.resolved.clear();
 		this.pkgIndex = undefined;
 		this.callersOf = undefined;
@@ -243,11 +255,18 @@ export class Project {
 	}
 
 	private buildSchemas() {
-		const add = (s: (Omit<DbSchema, 'ops' | 'writes' | 'context'>) | undefined, orm: string) => {
-			if (!s) {
+		const add = (read: SchemaFact | undefined, orm: string, endLine: number) => {
+			if (!read) {
 				return;
 			}
+			const { guess, ...s } = read;
 			const full = { ...s, ops: [], writes: false, context: orm, orm };
+			if (guess) {
+				this.guessedTables.add(s.entity);
+			}
+			if (s.file) {
+				this.entitySpans.set(s.entity, { file: s.file, line: s.line, endLine });
+			}
 			this.schemas.set(s.entity, full);
 			this.schemaByTable.set(s.table.toLowerCase(), full);
 			this.schemaByTable.set(s.table.toLowerCase().split('.').pop()!, full);
@@ -255,17 +274,17 @@ export class Project {
 		for (const f of this.files.values()) {
 			for (const t of f.types) {
 				if (f.lang === 'java') {
-					add(javaSchema(t, this.inheritedFields(t)), 'JPA');
+					add(javaSchema(t, this.inheritedFields(t)), 'JPA', t.endLine);
 				} else if (f.lang === 'python') {
 					const s = pythonSchema(t, f.module);
-					add(s, s?.orm ?? '');
+					add(s, s?.orm ?? '', t.endLine);
 				} else {
-					add(jsSchema(t), 'TypeORM');
+					add(jsSchema(t), 'TypeORM', t.endLine);
 				}
 			}
 		}
 		for (const m of this.prisma) {
-			add({ entity: m.name, table: m.table, dbSchemaName: null, columns: m.columns, relations: m.relations, file: m.file, line: m.line }, 'Prisma');
+			add({ entity: m.name, table: m.table, dbSchemaName: null, columns: m.columns, relations: m.relations, file: m.file, line: m.line, guess: false }, 'Prisma', m.endLine);
 		}
 	}
 
@@ -581,9 +600,10 @@ export class Project {
 		const s = this.schemas.get(entity);
 		const writes = isWrite(ops, fn);
 		if (s) {
-			return { kind: 'db', schema: { ...s, ops, writes, context: context || s.orm }, label: s.table, file: s.file, line: s.line };
+			return { kind: 'db', schema: { ...s, ops, writes, context: context || s.orm }, label: s.table, file: s.file, line: s.line, ...(this.guessedTables.has(entity) ? { guess: true } : {}) };
 		}
-		return { kind: 'db', schema: { entity, table: entity, dbSchemaName: null, context, columns: [], relations: [], ops, writes, file: null, line: 0 }, label: entity, file: null, line: 0 };
+		// No entity of this name in the project: the repository's type argument stands in for the table.
+		return { kind: 'db', schema: { entity, table: entity, dbSchemaName: null, context, columns: [], relations: [], ops, writes, file: null, line: 0 }, label: entity, file: null, line: 0, guess: true };
 	}
 
 	private sqlTarget(sql: string, ops: string[], context: string): Target | undefined {
@@ -597,9 +617,9 @@ export class Project {
 		const opList = [verb || ops[0], ...ops.slice(1)].filter(Boolean);
 		const also = tables.slice(1).map(t => `joins ${t}`);
 		if (known) {
-			return { kind: 'db', schema: { ...known, ops: [...opList, ...also], writes: writes || isWrite(ops), context }, label: known.table, file: known.file, line: known.line };
+			return { kind: 'db', schema: { ...known, ops: [...opList, ...also], writes: writes || isWrite(ops), context }, label: known.table, file: known.file, line: known.line, guess: true };
 		}
-		return { kind: 'db', schema: { entity: name, table: name, dbSchemaName: name.includes('.') ? name.split('.')[0] : null, context, columns: [], relations: [], ops: [...opList, ...also], writes: writes || isWrite(ops), file: null, line: 0 }, label: name, file: null, line: 0 };
+		return { kind: 'db', schema: { entity: name, table: name, dbSchemaName: name.includes('.') ? name.split('.')[0] : null, context, columns: [], relations: [], ops: [...opList, ...also], writes: writes || isWrite(ops), file: null, line: 0 }, label: name, file: null, line: 0, guess: true };
 	}
 
 	private sqlOf(fn: FuncFact, c: CallFact): string | undefined {
@@ -1167,7 +1187,7 @@ export class Project {
 		return this.entryById.get(fn.id);
 	}
 
-	graph(id: string, depth = 5): FlowNode {
+	graph(id: string, depth = 5, withCode = true): FlowNode {
 		const root = this.fnFor(id);
 		if (!root) {
 			throw new Error('This function is no longer in the index. Save the file and try again.');
@@ -1186,7 +1206,8 @@ export class Project {
 				file: fn.file,
 				startLine: fn.line,
 				endLine: fn.endLine,
-				code: this.code(fn),
+				// Reading every file for its text is what makes a flow slow: a walk that only wants the tables skips it.
+				code: withCode ? this.code(fn) : null,
 				children: [],
 			};
 			if (d >= depth || count > MAX_NODES) {
@@ -1206,7 +1227,7 @@ export class Project {
 						}
 						seen.add(k);
 						count++;
-						n.children.push({ callLine: c.line, edgeKind: 'db', node: { key: `p${key++}`, symbolId: null, label: t.label, sub: t.schema.context, kind: 'db', file: t.file, startLine: t.line, endLine: t.line, code: null, children: [], schema: t.schema } });
+						n.children.push({ callLine: c.line, edgeKind: 'db', ...(t.guess ? { guess: true } : {}), node: { key: `p${key++}`, symbolId: null, label: t.label, sub: t.schema.context, kind: 'db', file: t.file, startLine: t.line, endLine: t.line, code: null, children: [], schema: t.schema } });
 					} else if (t.kind === 'ambiguous') {
 						if (seen.has(t.label)) {
 							continue;
@@ -1687,6 +1708,60 @@ export class Project {
 			returns: e.fn.returns,
 		}));
 		return { files: [...this.files.values()].map(f => ({ ...f, funcs: f.funcs.map(slim) })), calls: [...counts.values()], entries };
+	}
+
+	/** Every entity or model class the schema readers found with its table: what an edit to an entity file is resolved against. */
+	entities(): TableEntity[] {
+		this.build();
+		return [...this.schemas.values()].map(s => ({
+			entity: s.entity,
+			table: s.table,
+			schemaName: s.dbSchemaName,
+			orm: s.orm,
+			guess: this.guessedTables.has(s.entity),
+			spans: this.entitySpans.has(s.entity) ? [this.entitySpans.get(s.entity)!] : [],
+		}));
+	}
+
+	/**
+	 * The database cards the entry points' flows reach, with the method that makes each call: the table → endpoints index.
+	 * Walked a few entry points at a time within `budgetMs` (this worker answers one request at a time), where it left off the
+	 * last call; an edit that rebuilds the index starts it over. `done` says whether every entry point has been walked.
+	 */
+	tableUses(budgetMs = 4000): TablesFact {
+		this.build();
+		const walk = this.tableWalk ??= { next: 0, uses: [] };
+		const total = Math.min(this.entries.length, MAX_TABLE_ENTRIES);
+		const deadline = Date.now() + budgetMs;
+		while (walk.next < total && Date.now() < deadline && walk.uses.length < MAX_TABLE_USES) {
+			const entry = this.entries[walk.next++];
+			try {
+				this.collectTables(entry.id, this.graph(entry.id, 5, false), walk.uses);
+			} catch {
+				// one flow that cannot be traced must not lose the others
+			}
+		}
+		const done = walk.next >= total || walk.uses.length >= MAX_TABLE_USES;
+		return { uses: walk.uses.slice(), done, checked: walk.next, total: this.entries.length };
+	}
+
+	private collectTables(entry: string, root: FlowNode, out: TableUseFact[]) {
+		const seen = new Set<string>();
+		const visit = (n: FlowNode) => {
+			for (const c of n.children) {
+				const schema = c.node.schema;
+				if (c.edgeKind === 'db' && schema && schema.entity !== '?') {
+					const k = `${tableKey(schema.table)}|${schema.writes}|${c.node.label}|${n.label}`;
+					if (!seen.has(k)) {
+						seen.add(k);
+						out.push({ entry, table: schema.table, schemaName: schema.dbSchemaName, entity: schema.entity, write: schema.writes, guess: !!c.guess, card: c.node.label, from: n.label, file: n.file, line: c.callLine, ops: schema.ops });
+					}
+				} else {
+					visit(c.node);
+				}
+			}
+		};
+		visit(root);
 	}
 
 	stats() {
