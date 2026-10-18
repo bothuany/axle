@@ -101,6 +101,7 @@ editor/extensions/
   flow-harness/     harness map, hook studio, permission inbox, context budget
   flow-theme/       Axle's colour theme and defaults
 ui/                 the canvas (React Flow + Monaco), built into one script the extension inlines
+playground/         the browser playground: the canvas on a fake host, over demo data from the real index (GitHub Pages)
 analyzer/           C# analyzer (.NET 10, Roslyn MSBuildWorkspace) serving flows over HTTP
 scripts/            setup, start, build-extensions, install-shortcut and installer (Windows .exe), the same on every OS (lib.mjs starts programs without a shell)
 ```
@@ -114,3 +115,18 @@ scripts/            setup, start, build-extensions, install-shortcut and install
 - After a pull that changes `editor/patches/flow-core.patch`, `editor/vscode` still carries the old patch: `npm run setup` stops with "does not apply", and `npm run installer` / `npm run package` say the patches are missing. When only `product.json` changed in the patch (as when Axle's macOS bundle id and Linux desktop and icon names replaced Code - OSS's), re-apply just that file, then run setup:
   `git -C editor/vscode checkout -- product.json && git -C editor/vscode apply --include=product.json ../patches/flow-core.patch`. After any other patch change, delete `editor/vscode` and run `npm run setup` for a clean checkout.
 - Tests: `cd editor/extensions/flow-view && npm test` builds the index worker and checks what it finds in every project under `test/fixtures` against `test/expected` (after an intended change: `UPDATE=1 npm test`, then read the diff). `npm run typecheck` there checks the types.
+
+## The browser playground
+
+`playground/` is the site at https://bothuany.github.io/axle/: the real canvas running in a browser on a fake editor host, with demo data made from the real index (details in [playground/README.md](../playground/README.md)). The data is generated from a fictional demo project (`playground/demo`, two commits' worth) by running flow-view's worker headlessly, so build that first. From the repository root:
+
+```bash
+(cd ui && npm ci)
+(cd editor/extensions/flow-view && npm ci && node esbuild.mjs)
+node scripts/playground-data.mjs        # writes playground/public/data/demo.json (not committed)
+cd playground && npm ci
+npm run typecheck && npm run build      # the site is in playground/dist
+npm run preview                         # http://127.0.0.1:4173/axle/ (the path GitHub Pages serves it under)
+```
+
+`npm run dev` in `playground/` serves it with hot reload. In Git Bash on Windows, `/axle/` in the preview script is rewritten to a Windows path: run `npm run preview` from PowerShell or set `MSYS_NO_PATHCONV=1`. `npm run arch` keeps `playground/` to imports from `ui/` and `protocol/`. `.github/workflows/playground.yml` deploys it on every push to `main`; Pages must be enabled once with the source "GitHub Actions".
