@@ -42,3 +42,5 @@ Axle is released under the [MIT License](LICENSE). Before your first pull reques
 If you contribute as part of your job, make sure your employer allows it (see point 5 of the CLA).
 
 The Axle name and logo are not covered by the code licence: see [TRADEMARKS.md](TRADEMARKS.md).
+
+Be kind: see the [code of conduct](CODE_OF_CONDUCT.md). Questions and ideas are welcome in [Discussions](https://github.com/bothuany/axle/discussions); bugs go to issues.

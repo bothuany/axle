@@ -1,0 +1,43 @@
+name: Feature request
+description: An idea for something Axle should do, or do better.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome. If you are not sure it is a good fit yet, start a conversation in [Discussions](https://github.com/bothuany/axle/discussions/categories/ideas) instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation you run into, not the solution. What is hard or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: How you imagine it working. A sketch or an example is welcome.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do today instead?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part?
+      options:
+        - Call-flow canvas
+        - Language or framework support
+        - Changes on the flow
+        - Agents dock
+        - Harness view
+        - Installer or distribution
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: stack
+    attributes:
+      label: Language and framework, if it is about code analysis
+      description: For example Spring Boot, FastAPI, NestJS, ASP.NET.

@@ -1,0 +1,69 @@
+name: Bug report
+description: Something in Axle does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Please search the existing issues first. For a security problem, do not open an issue: see [SECURITY.md](https://github.com/bothuany/axle/blob/main/SECURITY.md).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead. A screenshot of the canvas, the Agents dock or the Harness view helps.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps that shows it. If it depends on a project, say the language and framework (a small sample repository is ideal).
+      placeholder: |
+        1. Open a folder with ...
+        2. Run "Axle: Open Endpoint Flow..."
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Axle version
+      description: Help, About. Or the release you installed, e.g. 0.3.0.
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Linux
+        - Web mode (npm run web)
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part?
+      options:
+        - Call-flow canvas
+        - Changes on the flow
+        - Agents dock
+        - Harness view
+        - Installer or startup
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Agent and version, if it involves one
+      description: For example Claude Code 2.1.x or Codex 0.16x. Leave empty otherwise.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The "Axle" output channel (View, Output, choose Axle) often says what went wrong. Remove anything private (paths, prompts, tokens) before pasting.
+      render: text
