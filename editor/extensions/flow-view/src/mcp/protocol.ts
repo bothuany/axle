@@ -23,7 +23,7 @@ const DEFAULT_PROTOCOL = '2025-06-18';
 export const INSTRUCTIONS = [
 	"Axle is the user's code editor. These tools act on the Axle window that has the current folder open.",
 	'To open a file or place in the editor use `open`. To show how a feature runs, use `find_entry_points` then `show_flow` (it opens the flow canvas for the user) or `flow_text` (the same call chain as text, to understand code without reading many files).',
-	'Use `impact` before changing shared code, `get_context` to see what the user is looking at, and `draw_board` (kinds: flow, plan, class, er, sequence, architecture) to show the user a flow or plan you designed; tick plan steps with `update_board`.',
+	'Use `impact` before changing shared code (or, with `table` or `entity`, a table or its entity), `get_context` to see what the user is looking at, and `draw_board` (kinds: flow, plan, class, er, sequence, architecture) to show the user a flow or plan you designed; tick plan steps with `update_board`.',
 ].join('\n');
 
 export const errorResult = (text: string): ToolResult => ({ content: [{ type: 'text', text }], isError: true });

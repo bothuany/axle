@@ -167,8 +167,8 @@ export const TOOLS: ToolDef[] = [
 	},
 	{
 		name: 'impact',
-		description: 'What breaks if this method changes: who calls it (callers, up to `depth` levels) and which entry points (endpoints, jobs) reach it. Use it before editing shared code to know the blast radius. Pass `file` plus `method` or `line`, or an `id` from find_entry_points.',
-		inputSchema: { type: 'object', properties: { ...TARGET, depth: int('Caller levels to include (default 3).') }, additionalProperties: false },
+		description: 'What breaks if this changes. For a method: who calls it (callers, up to `depth` levels) and which entry points (endpoints, jobs) reach it; pass `file` plus `method` or `line`, or an `id` from find_entry_points. For a table: pass `table` (a table name) or `entity` (an entity or model class) to get the endpoints that write it and the endpoints that read it, each with the method and database card it goes through; a guessed link (raw SQL, a naming default) is marked ~table?. It follows ORM calls and string SQL only, and says what it did not check (dynamic SQL, views, other services, migrations). Use it before editing shared code, an entity or a column to know the blast radius.',
+		inputSchema: { type: 'object', properties: { ...TARGET, depth: int('Caller levels to include (default 3).'), table: str('A table name, e.g. "orders" (case and schema prefix ignored). Instead of a method.'), entity: str('An entity or model class name, e.g. "Order". Instead of a method.') }, additionalProperties: false },
 		annotations: ro('Change impact'),
 	},
 	{

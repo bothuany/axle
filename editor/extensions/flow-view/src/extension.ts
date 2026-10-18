@@ -26,6 +26,7 @@ import { LspLenses, LspProvider } from './lsp';
 import { AgentBridge } from './mcp/bridge';
 import { planResolvers } from './mcp/planHost';
 import { registerMcpCommands } from './mcp/register';
+import { TableIndex } from './mcp/tableIndex';
 import { turnImpact } from './mcp/turnImpact';
 import { FlowPanel } from './panel';
 import { PolyIndex, PolyProvider, POLY_LANGUAGES } from './poly/client';
@@ -40,6 +41,8 @@ interface Flow {
 	analyzer: Analyzer;
 	poly: PolyIndex;
 	endpointList: Endpoints;
+	/** Which endpoints read or write a table: asked of the code index and the analyzer, never starting the analyzer. */
+	tables: TableIndex;
 	panel: FlowPanel;
 	home: FlowHome;
 	endpointsView: EndpointsView;
@@ -75,8 +78,9 @@ export function activate(context: vscode.ExtensionContext) {
 	const changes = agentChanges = new AgentChanges(context.storageUri && vscode.Uri.joinPath(context.storageUri, 'agent-changes.json').fsPath);
 	void changes.load();
 	const providerFor = (t: FlowTarget) => providers[t.kind];
+	const tables = new TableIndex({ entries: () => endpointList.cached(), poly, analyzer });
 	const changeSet = new ChangeSetProvider({
-		impactOf: (files, limits) => turnImpact(files, { analyzer, poly, endpoints: endpointList, providerFor, rangesOf: f => changes.changedRanges(f) }, limits),
+		impactOf: (files, limits) => turnImpact(files, { analyzer, poly, endpoints: endpointList, providerFor, rangesOf: f => changes.changedRanges(f), tables }, limits),
 		providerFor,
 		annotate: root => changes.annotate(root),
 	});
@@ -88,7 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(log, analyzer, poly, polyProvider, endpointList, endpointsView, panel, home, changes, changes.onDidChange(() => panel.refreshSoon()));
 
 	const flow: Flow = {
-		context, log, analyzer, poly, endpointList, panel, home, endpointsView, changes, changeSet, boards, providerFor, currentFlow: undefined,
+		context, log, analyzer, poly, endpointList, tables, panel, home, endpointsView, changes, changeSet, boards, providerFor, currentFlow: undefined,
 		// Roslyn targets need the analyzer up first, so a load failure shows as an error, not an empty tab.
 		async showRoslyn(id, label) {
 			flow.currentFlow = { id, label };
@@ -375,7 +379,7 @@ function wireAgentBridge(flow: Flow) {
 		},
 	});
 	const bridge = new AgentBridge({
-		log, endpoints: endpointList, analyzer, poly, boards,
+		log, endpoints: endpointList, analyzer, poly, boards, tables: flow.tables,
 		providerFor: flow.providerFor,
 		showEntry: (id, label, source) => flow.showEntry(id, label, source),
 		showTarget: async (target, label) => {
@@ -435,8 +439,9 @@ function wireAgentBridge(flow: Flow) {
 		// flow-agent's dock lists the flows; the changed methods' targets stay here. Their names and files go along, so the
 		// dock can tell two agents that change the same method apart from two that only share a file.
 		vscode.commands.registerCommand('flow.agent.turnImpact', async (files: string[]) => {
-			const { changed, ...impact } = await turnImpact(Array.isArray(files) ? files.filter(f => typeof f === 'string') : [], { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor, rangesOf: f => flow.changes.changedRanges(f) });
-			return { ...impact, methods: changed.slice(0, 40).map(m => ({ file: m.file, name: m.name })) };
+			const { changed, tables: changedTables, ...impact } = await turnImpact(Array.isArray(files) ? files.filter(f => typeof f === 'string') : [], { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor, rangesOf: f => flow.changes.changedRanges(f), tables: flow.tables });
+			// The dock only says "and table orders (4 endpoints)": the endpoints themselves stay here.
+			return { ...impact, methods: changed.slice(0, 40).map(m => ({ file: m.file, name: m.name })), tables: changedTables.map(t => ({ table: t.table, entity: t.entity, endpoints: t.endpoints, guess: t.guess, partial: t.checked < t.of })) };
 		}),
 	);
 	context.subscriptions.push(
