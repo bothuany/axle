@@ -97,7 +97,7 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 		this.timer = setTimeout(() => {
 			const conflicts = this.agents.conflicts();
 			const list = rank([...this.agents.sessions.values()])
-				.map(s => ({ ...s, attention: attentionKind(s), done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })) },
+				.map(s => ({ ...s, attention: attentionKind(s), done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })), tables: s.impact.tables },
 					// Worktree and conflicts are explicit fields: the session's own record (paths, the base branch) stays here.
 					worktree: s.worktree ? this.worktrees?.view(s) : undefined,
 					clash: s.state === 'ended' ? undefined : conflicts.get(s.id)?.map(c => ({ text: conflictText(c), same: c.sameCheckout, files: c.files.slice(0, 12) })) }));
@@ -252,7 +252,9 @@ function render() {
 		const waits = (s.attention === 'question' || s.attention === 'approval') && s.state !== 'ended';
 		const state = waits && s.state !== 'blocked' ? LABEL.blocked : s.state === 'working' || s.state === 'blocked' ? LABEL[s.state] + ' · ' + ago(s.since, Date.now()) : s.state === 'done' ? 'Done ' + ago(s.since, Date.now()) + ' ago' : LABEL[s.state];
 		const todos = s.todos.length ? '<div class="todos"><span class="segs">' + s.todos.slice(0, 12).map(t => '<span class="seg ' + esc(t.status) + '"></span>').join('') + '</span><span class="count">' + s.done + '/' + s.todos.length + '</span>' + (s.current ? '<span class="now">' + esc(s.current) + '</span>' : '') + '</div>' : '';
-		const impact = s.impact && s.impact.flows.length ? '<div class="impact"><b>This turn touched ' + (s.impact.flows.length + s.impact.more) + (s.impact.flows.length + s.impact.more === 1 ? ' flow' : ' flows') + ':</b> ' + s.impact.flows.map((f, i) => '<span class="flow" role="button" tabindex="0" data-flow="' + i + '" title="' + esc((f.via && f.via.length ? 'Through ' + f.via.join(', ') + '. ' : '') + 'Open this flow') + '">' + esc(f.label) + '</span>').join('') + (s.impact.more ? '<span>+' + s.impact.more + ' more</span>' : '') + '</div>' : '';
+		// A changed entity says which table it is and how many endpoints use it: "and table orders (4 endpoints)"; a name that is a guess ends in "?".
+		const tablesSaid = s.impact && s.impact.tables ? s.impact.tables.map(t => 'table ' + esc(t.table) + (t.guess ? '?' : '') + ' (' + t.endpoints + (t.endpoints === 1 ? ' endpoint' : ' endpoints') + (t.partial ? ', partial' : '') + ')').join(', ') : '';
+		const impact = s.impact && (s.impact.flows.length || tablesSaid) ? '<div class="impact"><b>This turn touched ' + (s.impact.flows.length ? (s.impact.flows.length + s.impact.more) + (s.impact.flows.length + s.impact.more === 1 ? ' flow' : ' flows') : '') + (s.impact.flows.length && tablesSaid ? ' and ' : '') + tablesSaid + (s.impact.flows.length ? ':' : '') + '</b> ' + s.impact.flows.map((f, i) => '<span class="flow" role="button" tabindex="0" data-flow="' + i + '" title="' + esc((f.via && f.via.length ? 'Through ' + f.via.join(', ') + '. ' : '') + 'Open this flow') + '">' + esc(f.label) + '</span>').join('') + (s.impact.more ? '<span>+' + s.impact.more + ' more</span>' : '') + '</div>' : '';
 		const kind = s.attention;
 		// A need says what it waits for (an error you have seen still says what went wrong); a finished turn you have not opened only says so.
 		const chip = s.need ? s.need.kind : kind;
