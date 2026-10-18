@@ -37,22 +37,22 @@
           <p class="project">harbor-goods, a demo project: orders and shipping in Java, billing in Python</p>
           <ol class="steps">
             <li class="step on" data-step="1">
-              <h2>Pick an endpoint</h2>
+              <h2><button type="button" class="step-title" aria-expanded="true">Pick an endpoint</button></h2>
               <p>Each one opens as a chain of cards: controller, services, database.</p>
               <div class="picker" id="picker" role="group" aria-label="Endpoints"></div>
             </li>
             <li class="step" data-step="2">
-              <h2>Follow a call into another service</h2>
+              <h2><button type="button" class="step-title" aria-expanded="false">Follow a call into another service</button></h2>
               <p>Placing an order calls billing over HTTP. The dashed <b>HTTP?</b> link is a guess, made by matching the route, and drawn as one. The <b>topic?</b> link into shipping works the same way. Click a tag on a call line to open or fold that hop.</p>
               <button type="button" class="go" id="go-http">Show POST /orders</button>
             </li>
             <li class="step" data-step="3">
-              <h2>See what an agent changed</h2>
+              <h2><button type="button" class="step-title" aria-expanded="false">See what an agent changed</button></h2>
               <p>Claude Code added discount codes. Added lines are green, removed lines red, and each flow is cut down to the path that reaches a change. Review changes on the bar steps through them.</p>
               <button type="button" class="go" id="go-change">Show the change</button>
             </li>
             <li class="step" data-step="4">
-              <h2>See which endpoints use a table</h2>
+              <h2><button type="button" class="step-title" aria-expanded="false">See which endpoints use a table</button></h2>
               <p>The agent edited the Order entity, so the first card reads <b>Order changed, table orders</b> and the bar lists the <span id="impact-count">4</span> endpoints that read or write that table.</p>
               <button type="button" class="go" id="go-table">Show the table impact</button>
             </li>

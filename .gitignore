@@ -39,4 +39,5 @@ tools/sonarqube/.token
 
 # The playground: demo data is generated from the real index, the site is built from it
 /playground/public/data/
+/playground/src/generated/
 /playground/dist/

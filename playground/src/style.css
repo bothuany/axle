@@ -103,7 +103,9 @@ h1 .was { display: block; color: var(--muted); font-weight: 560; }
 .step p { margin-top: 6px; font-size: 14px; line-height: 1.5; }
 .step.on::before { border-color: var(--signal); background: var(--signal); color: #0a0c11; }
 .step:not(.on) p, .step:not(.on) .picker, .step:not(.on) .go { display: none; }
-.step:not(.on) h2 { color: var(--muted); cursor: pointer; }
+.step-title { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.step:not(.on) .step-title { color: var(--muted); }
+.step:not(.on) .step-title:hover { color: var(--text); }
 .go { margin-top: 12px; padding: 7px 14px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--raise-2); font-weight: 600; font-size: 13.5px; }
 .go:hover { border-color: var(--signal); }
 

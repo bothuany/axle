@@ -2,7 +2,7 @@
 // `acquireVsCodeApi().postMessage`, so this answers its requests from the demo data. Nothing is edited or saved here.
 // Imported before the canvas: it sets the globals the canvas reads when it loads.
 import type { FlowNode } from '../../protocol/flow'
-import { entryLabel, type DemoData, type Impact, type Target, type ToShell } from './demo'
+import { entryLabel, type DemoData, type Impact, type Target, type ToShell, type TurnSummary } from './demo'
 
 const READ_ONLY = 'This is a read-only demo. In the Axle app, edits on a card are applied to your files.'
 
@@ -25,28 +25,56 @@ function graphOf(t: Target, turn?: number): FlowNode {
   return turn !== undefined && flow.changed ? flow.changed : flow.graph
 }
 
+/** What the real host answers each op with (flow-view's panel.ts): the fake must give the canvas the same shapes. */
+interface Answers {
+  graph: FlowNode
+  callers: FlowNode | null
+  impact: Impact
+  timeline: TurnSummary[]
+  editHooks: string[]
+  typeChips: { chips: Record<string, never>; ready: boolean; diagramAvailable: boolean }
+  typeDetail: undefined
+  complete: { items: never[] }
+  signature: null
+  hover: null
+  definition: { ok: boolean; message?: string }
+  endEdit: { ok: boolean }
+  save: { ok: boolean; message?: string }
+  undo: { ok: boolean; message?: string }
+  undoFrom: { ok: boolean; message?: string }
+  keep: never
+}
+
+const handlers: { [Op in keyof Answers]: (m: Request) => Answers[Op] } = {
+  graph: m => graphOf(m.target!, m.turn),
+  callers: m => (m.target?.kind === 'poly' ? (data.flows[m.target.id]?.callers ?? null) : null),
+  impact: m => {
+    const impact = m.target?.kind === 'changes' ? data.changes.impact : data.flows[m.target!.id]?.impact
+    if (!impact) throw new Error('This endpoint is not part of the demo.')
+    return impact
+  },
+  timeline: () => data.changes.timeline,
+  editHooks: () => [],
+  // The demo has no type graph: cards draw without chips, and nothing to open.
+  typeChips: () => ({ chips: {}, ready: true, diagramAvailable: false }),
+  typeDetail: () => undefined,
+  complete: () => ({ items: [] }),
+  signature: () => null,
+  hover: () => null,
+  definition: () => ({ ok: false, message: 'Go to definition works in the Axle app, on your own code.' }),
+  endEdit: () => ({ ok: true }),
+  save: () => ({ ok: false, message: READ_ONLY }),
+  undo: () => ({ ok: false, message: READ_ONLY }),
+  undoFrom: () => ({ ok: false, message: READ_ONLY }),
+  keep: () => {
+    throw new Error(READ_ONLY)
+  },
+}
+
 function answer(m: Request): unknown {
-  const target = m.target
-  switch (m.op) {
-    case 'graph': return graphOf(target!, m.turn)
-    case 'callers': return target?.kind === 'poly' ? (data.flows[target.id]?.callers ?? null) : null
-    case 'impact': return (target?.kind === 'changes' ? data.changes.impact : data.flows[target!.id]?.impact) satisfies Impact | undefined
-    case 'timeline': return data.changes.timeline
-    case 'editHooks': return []
-    // The demo has no type graph: cards draw without chips, and nothing to open.
-    case 'typeChips': return { chips: {}, ready: true, diagramAvailable: false }
-    case 'typeDetail': return undefined
-    case 'complete': return { items: [] }
-    case 'signature':
-    case 'hover': return null
-    case 'definition': return { ok: false, message: 'Go to definition works in the Axle app, on your own code.' }
-    case 'endEdit': return { ok: true }
-    case 'save':
-    case 'undo':
-    case 'undoFrom': return { ok: false, message: READ_ONLY }
-    case 'keep': throw new Error(READ_ONLY)
-    default: throw new Error(`The demo does not answer "${m.op}".`)
-  }
+  const handler = (handlers as Record<string, ((m: Request) => unknown) | undefined>)[m.op]
+  if (!handler) throw new Error(`The demo does not answer "${m.op}".`)
+  return handler(m)
 }
 
 const host = {
