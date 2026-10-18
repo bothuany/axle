@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; media-src 'self'; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'" />
+    <meta name="description" content="Try Axle in your browser: see how a request runs through your code, who is working and who needs you, and what an agent touched when it changed the code. No install." />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <title>Axle: try it in your browser</title>
+  </head>
+  <body>
+    <header class="top">
+      <nav class="pill" aria-label="Sections">
+        <a class="brand" href="./" aria-label="Axle home">
+          <img src="./icon.svg" width="24" height="24" alt="" />
+          <span>Axle</span>
+        </a>
+        <span class="links">
+          <a href="#agents">Agents</a>
+          <a href="#changes">Changes</a>
+          <a href="#harness">Harness</a>
+          <a href="#real">What is real</a>
+        </span>
+        <span class="side">
+          <a class="gh" href="https://github.com/bothuany/axle">GitHub</a>
+          <a class="solid" href="https://github.com/bothuany/axle/releases/latest">Download</a>
+        </span>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="badge">A harness-first code editor, free and open source</p>
+        <h1>
+          <span class="was">Every editor shows where code is stored.</span>
+          <span class="is">Axle shows how it runs.</span>
+        </h1>
+        <svg class="wire" viewBox="0 0 640 44" aria-hidden="true" focusable="false">
+          <path d="M6 30 C 70 30, 84 10, 150 10 S 250 34, 320 30 S 450 8, 520 12 S 600 30, 634 24" />
+          <circle cx="6" cy="30" r="5" />
+          <circle cx="150" cy="10" r="5" />
+          <circle cx="320" cy="30" r="5" />
+          <circle cx="520" cy="12" r="5" />
+          <circle cx="634" cy="24" r="5" />
+        </svg>
+        <p class="lede">Open an endpoint and see the path a request takes through the code, down to the table it writes. Then watch an agent change it, and see exactly what it touched.</p>
+        <div class="cta">
+          <button type="button" class="primary" id="try">Watch Claude change it</button>
+          <a class="quiet" href="#flow-tile">Take the tour <span aria-hidden="true">↘</span></a>
+        </div>
+      </section>
+
+      <section class="tilewrap" aria-label="The flow canvas, live">
+        <div id="tile-flow"></div>
+      </section>
+
+      <section class="fallback" aria-label="Demo video">
+        <p>The live demo needs a larger screen. Here is what Axle does.</p>
+        <video controls preload="none" poster="./media/axle-poster.jpg" playsinline>
+          <source src="./media/axle-demo.mp4" type="video/mp4" />
+        </video>
+      </section>
+
+      <section class="langs" aria-label="Languages">
+        <p>Follows a request through</p>
+        <ul>
+          <li>Java</li>
+          <li>C#</li>
+          <li>Python</li>
+          <li>TypeScript</li>
+          <li>Go</li>
+          <li>PHP</li>
+          <li>Ruby</li>
+          <li>Rust</li>
+        </ul>
+      </section>
+
+      <section class="chapter" id="agents">
+        <p class="num"><b>01</b> agents</p>
+        <h2>Know who is working, and who is waiting for you.</h2>
+        <p class="lede">Claude Code, Codex and any CLI run as the real tools, in terminals. Axle ranks them in the Agents dock and in an overlay at the top of your screen, so an agent that waits for a yes does not hide in a tab.</p>
+        <div class="tilewrap"><div id="tile-agents"></div></div>
+      </section>
+
+      <section class="chapter" id="changes">
+        <p class="num"><b>02</b> changes</p>
+        <h2>See what an agent touched, not just what it typed.</h2>
+        <p class="lede">When a turn ends, the dock names the flows and the table it reached. Open one and the canvas draws the change on the cards of the flow, cut down to the path that reaches it. This is that change, ready to review.</p>
+        <div class="tilewrap"><div id="tile-changes"></div></div>
+      </section>
+
+      <section class="chapter" id="harness">
+        <p class="num"><b>03</b> harness</p>
+        <h2>Know what shapes your agent before it starts.</h2>
+        <p class="lede">Axle scans the project for everything an agent reads or runs: instructions, rules, skills, subagents, hooks and MCP servers. This is the scan of the demo project, and it found one rule that never loads.</p>
+        <div id="harness-root"></div>
+      </section>
+
+      <section class="chapter app" id="real">
+        <p class="num"><b>04</b> under the hood</p>
+        <h2>What is real here, and what is not.</h2>
+        <div class="cols">
+          <article>
+            <h3>Axle&rsquo;s own</h3>
+            <p>The flow canvas, the Agents dock and the overlay are the pages the app draws, driven by the app&rsquo;s own ranking code. The flows, the tables and the change come from Axle&rsquo;s code index run on the demo project, and the map above is the harness scan of it.</p>
+          </article>
+          <article>
+            <h3>Scripted</h3>
+            <p>Claude. Its steps and timing are a replay, so nothing here runs a model and nothing leaves your browser. In Axle the agent is the real Claude Code, or Codex, in a terminal.</p>
+          </article>
+          <article>
+            <h3>Left out</h3>
+            <p>The editor, the terminal, editing code on a card (the demo is read-only), other agents and projects. Download Axle to use them on your own code.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="closing">
+        <h2>Open your own code in Axle.</h2>
+        <p class="lede">Windows, macOS and Linux. Free and MIT licensed. It builds on VS Code.</p>
+        <div class="cta">
+          <a class="primary" href="https://github.com/bothuany/axle/releases/latest">Download Axle</a>
+          <a class="quiet" href="https://github.com/bothuany/axle">View on GitHub</a>
+          <a class="quiet" href="https://github.com/bothuany/axle/blob/main/docs/languages.md">Supported languages</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Axle is open source under the MIT license. It builds on VS Code.</p>
+    </footer>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

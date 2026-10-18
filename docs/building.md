@@ -101,6 +101,7 @@ editor/extensions/
   flow-harness/     harness map, hook studio, permission inbox, context budget
   flow-theme/       Axle's colour theme and defaults
 ui/                 the canvas (React Flow + Monaco), built into one script the extension inlines
+playground/         the browser playground: the canvas, the dock and a scripted agent on demo data from the real index (GitHub Pages)
 analyzer/           C# analyzer (.NET 10, Roslyn MSBuildWorkspace) serving flows over HTTP
 scripts/            setup, start, build-extensions, install-shortcut and installer (Windows .exe), the same on every OS (lib.mjs starts programs without a shell)
 ```
@@ -114,3 +115,20 @@ scripts/            setup, start, build-extensions, install-shortcut and install
 - After a pull that changes `editor/patches/flow-core.patch`, `editor/vscode` still carries the old patch: `npm run setup` stops with "does not apply", and `npm run installer` / `npm run package` say the patches are missing. When only `product.json` changed in the patch (as when Axle's macOS bundle id and Linux desktop and icon names replaced Code - OSS's), re-apply just that file, then run setup:
   `git -C editor/vscode checkout -- product.json && git -C editor/vscode apply --include=product.json ../patches/flow-core.patch`. After any other patch change, delete `editor/vscode` and run `npm run setup` for a clean checkout.
 - Tests: `cd editor/extensions/flow-view && npm test` builds the index worker and checks what it finds in every project under `test/fixtures` against `test/expected` (after an intended change: `UPDATE=1 npm test`, then read the diff). `npm run typecheck` there checks the types.
+
+## The browser playground
+
+`playground/` is the site at https://bothuany.github.io/axle/: a page that presents Axle with live tiles on a fictional demo project: the real flow canvas on an endpoint, a scripted Claude that the Agents dock and the status overlay follow, the agent's change on the canvas (green and red, Keep and Undo), and the harness scan of the project. The canvas, the dock page, the overlay page and the harness map are Axle's own, built from the demo project by the real code (what each part is, and what is scripted, in [playground/README.md](../playground/README.md)). From the repository root:
+
+```bash
+(cd ui && npm ci)
+(cd editor/extensions/flow-view && npm ci && node esbuild.mjs)
+(cd editor/extensions/flow-harness && npm ci)
+node scripts/playground-data.mjs        # writes playground/public/data and playground/public/pages (not committed)
+cd playground && npm ci
+npm run typecheck && npm run build      # the site is in playground/dist
+npm run test:e2e                        # plays the demo in headless Chrome
+npm run preview                         # http://127.0.0.1:4173/axle/ (the path GitHub Pages serves it under)
+```
+
+`npm run dev` in `playground/` serves it with hot reload. In Git Bash on Windows, `/axle/` in the preview script is rewritten to a Windows path: run `npm run preview` from PowerShell or set `MSYS_NO_PATHCONV=1`. `npm run arch` keeps `playground/` to imports from `ui/`, `protocol/` and four vscode-free files of flow-agent. `.github/workflows/playground.yml` deploys it on every push to `main` (and `ci.yml` builds and tests it on pull requests); Pages must be enabled once with the source "GitHub Actions".
