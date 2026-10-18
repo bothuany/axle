@@ -74,11 +74,16 @@ export const NOT_CHECKED = 'dynamic SQL, views, stored procedures and triggers; 
 const same = (a: string, b: string) => a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
 const nameOf = (e: Entry) => `${e.controller.replace(/Controller$/, '')}.${e.action}`;
 
-/** The entity declarations an edit's lines overlap: all of a file's when the lines are not known. */
-export function entitiesTouched(list: TableEntity[], file: string, ranges: LineRange[] | undefined): { entity: TableEntity; line: number }[] {
+/**
+ * The entity declarations an edit's lines overlap: all of a file's when the lines are not known. With the file's `text` a span is only
+ * trusted when it still holds the entity's name there: a span from a copy of the file older than the disk (the analyzer re-reads a file
+ * a moment after it changes) cannot place an edit, so that entity counts as changed.
+ */
+export function entitiesTouched(list: TableEntity[], file: string, ranges: LineRange[] | undefined, text?: string): { entity: TableEntity; line: number }[] {
 	const hit: { entity: TableEntity; line: number }[] = [];
+	const lines = text?.split(/\r?\n/);
 	for (const e of list) {
-		const span = e.spans.find(s => same(s.file, file) && (!ranges || ranges.some(r => s.line <= r.end && r.start <= s.endLine)));
+		const span = e.spans.find(s => same(s.file, file) && (!ranges || (lines && !lines.slice(s.line - 1, s.endLine).join('\n').includes(e.entity)) || ranges.some(r => s.line <= r.end && r.start <= s.endLine)));
 		if (span) {
 			hit.push({ entity: e, line: span.line });
 		}
@@ -187,7 +192,7 @@ export class TableIndex {
 	 * The tables an edit changed: the entities (or their ORM configuration) whose lines `ranges` overlap in each file, with the endpoints
 	 * that read or write each one. A file whose lines are unknown counts whole. The walk is only started when some file holds an entity.
 	 */
-	async changed(files: { file: string; ranges?: LineRange[] }[], limit: number, budgetMs: number): Promise<{ tables: ChangedTable[]; notes: string[] }> {
+	async changed(files: { file: string; ranges?: LineRange[]; text?: string }[], limit: number, budgetMs: number): Promise<{ tables: ChangedTable[]; notes: string[] }> {
 		if (!files.length) {
 			return { tables: [], notes: [] };
 		}
@@ -195,7 +200,7 @@ export class TableIndex {
 		const { list, notes } = await this.entities({ cs, other: files.some(f => !/\.cs$/i.test(f.file)) });
 		const found = new Map<string, { entity: TableEntity; file: string; line: number }>();
 		for (const f of files) {
-			for (const { entity, line } of entitiesTouched(list, f.file, f.ranges)) {
+			for (const { entity, line } of entitiesTouched(list, f.file, f.ranges, f.text)) {
 				found.set(`${entity.entity}|${tableKey(entity.table)}`, { entity, file: f.file, line });
 			}
 		}

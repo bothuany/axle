@@ -75,7 +75,7 @@ test('the change set draws a root item for the table and each endpoint cut down 
 	assert.equal(table.label, 'Order changed → table orders')
 	assert.equal(table.sub, '3 endpoints read or write it')
 	assert.equal(table.kind, 'db')
-	assert.match(root.sub, /1 changed file · 0 endpoints · 1 changed table \(3 endpoints read or write it; not checked: dynamic SQL/)
+	assert.match(root.sub, /1 changed file · 3 endpoints · 1 changed table \(3 endpoints read or write it; not checked: dynamic SQL/)
 	assert.equal(flows.length, 3)
 	const path = n => n.children.length ? `${n.label}${n.children.map(c => ` > ${path(c.node)}`).join('')}` : `${n.label}${n.tableChange ? ' [table changed]' : ''}`
 	assert.deepEqual(flows.map(f => path(f)).sort(), [
@@ -88,4 +88,63 @@ test('the change set draws a root item for the table and each endpoint cut down 
 	// The guessed link is drawn as a guess: the raw SQL edge carries `guess`.
 	const revenue = flows.find(f => f.label === 'OrderController.revenue')
 	assert.equal(revenue.children[0].node.children[0].guess, true)
+})
+
+// A file of models has no methods: where the edit landed still says which model it is in.
+test('an edit in one of two models in a file names that one table, in models.py and in schema.prisma', async () => {
+	const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs')
+	const { tmpdir } = await import('node:os')
+	const dir = mkdtempSync(join(tmpdir(), 'flow-models-'))
+	let own
+	try {
+		mkdirSync(join(dir, 'prisma'))
+		const py = join(dir, 'models.py')
+		const prisma = join(dir, 'prisma', 'schema.prisma')
+		writeFileSync(py, ['from sqlalchemy import Column, Integer', 'from sqlalchemy.orm import declarative_base', 'Base = declarative_base()', '', 'class Order(Base):', '    __tablename__ = "orders"', '    id = Column(Integer, primary_key=True)', '', 'class Customer(Base):', '    __tablename__ = "customers"', '    id = Column(Integer, primary_key=True)', ''].join('\n'))
+		writeFileSync(prisma, ['model Order {', '  id Int @id', '  @@map("orders")', '}', '', 'model Customer {', '  id Int @id', '  @@map("customers")', '}', ''].join('\n'))
+		own = new Index(dir)
+		await own.ready
+		const ents = await own.request('entities')
+		const mk = rangesOf => ({
+			analyzer: { isReady: false },
+			poly: { isReady: true, refresh: async () => undefined, methods: f => own.request('methods', f) },
+			endpoints: { cached: () => [] },
+			providerFor: () => ({ impact: async () => ({ label: 'endpoint', items: [] }) }),
+			rangesOf,
+			tables: new tableIndex.TableIndex({ entries: () => [], poly: { isReady: true, entities: async () => ents, tables: ms => own.request('tables', ms) }, analyzer: { isReady: false, entities: async () => undefined, tables: async () => undefined } }),
+		})
+		const named = async (file, ranges) => (await impact.turnImpact([file], mk(async () => ranges))).tables.map(t => t.entity).sort()
+		assert.deepEqual(await named(py, [{ start: 11, end: 11 }]), ['Customer'])
+		assert.deepEqual(await named(py, [{ start: 6, end: 6 }]), ['Order'])
+		assert.deepEqual(await named(prisma, [{ start: 7, end: 7 }]), ['Customer'])
+		assert.deepEqual(await named(prisma, [{ start: 3, end: 3 }]), ['Order'])
+		assert.deepEqual(await named(py, undefined), ['Customer', 'Order'], 'without lines the whole file counts')
+	} finally {
+		await own?.close()
+		rmSync(dir, { recursive: true, force: true })
+	}
+})
+
+test('a span the disk no longer agrees with cannot place an edit: that entity counts as changed', () => {
+	const list = [{ entity: 'Order', table: 'orders', schemaName: null, orm: 'EF Core', guess: false, spans: [{ file: '/w/E.cs', line: 3, endLine: 5 }] }]
+	const fresh = 'namespace S;\n\npublic class Order\n{\n}\n\npublic class Other\n{\n}\n'
+	const moved = 'namespace S;\n// a\n// b\n// c\n\npublic class Order\n{\n}\n'
+	const at = (text, line) => tableIndex.entitiesTouched(list, '/w/E.cs', [{ start: line, end: line }], text).length
+	assert.equal(at(fresh, 8), 0, 'the edit is in Other: Order is untouched')
+	assert.equal(at(fresh, 4), 1)
+	assert.equal(at(moved, 8), 1, 'the analyzer has not seen the extra line: its span is stale, so the entity counts')
+})
+
+test('the change set counts the endpoints a table reaches, in its chip and for the agent, when no method changed', async () => {
+	const provider = new changeSet.ChangeSetProvider({
+		impactOf: (files, limits) => impact.turnImpact(files, deps(async () => undefined), limits),
+		providerFor: () => ({ graph: async t => index.graph(t.id), callers: async () => null, impact: async () => ({ label: 'endpoint', items: [] }) }),
+		annotate: async () => undefined,
+	})
+	provider.use({ label: 'Changes since main', files: [file('Order.java')] })
+	await provider.graph()
+	const { items } = await provider.impact()
+	assert.deepEqual(items.sort(), ['GET /orders Order.list', 'GET /reports/revenue Order.revenue', 'POST /orders Order.create'].sort())
+	const trace = await provider.latest()
+	assert.deepEqual(impact.tableEndpoints(trace.impact).map(f => `${f.label} ${f.via[0]}`), ['GET /orders table orders', 'GET /reports/revenue table orders', 'POST /orders table orders'])
 })

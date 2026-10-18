@@ -60,6 +60,34 @@ export interface ImpactLimits {
 }
 const TURN_LIMITS: ImpactLimits = { files: 6, functionsPerFile: 25, flows: 12, budgetMs: 7000, tables: 4, tableBudgetMs: 4000 };
 
+/**
+ * Where the edits landed in each file, for the entity they are in. A C# file comes with its text so the analyzer's spans can be checked
+ * against the disk; the code index re-read the others a moment ago.
+ */
+async function placed(files: string[], d: { rangesOf?(file: string): Promise<LineRange[] | undefined> }) {
+	return Promise.all(files.map(async file => ({
+		file,
+		ranges: await d.rangesOf?.(file).catch(() => undefined),
+		text: /\.cs$/i.test(file) ? await fs.readFile(file, 'utf8').catch(() => undefined) : undefined,
+	})));
+}
+
+/** The endpoints a changed table reaches that no changed method does: the change set draws them and the agent is told their ids. */
+export function tableEndpoints(impact: Pick<TurnImpact, 'flows' | 'tables'>): AffectedFlow[] {
+	const seen = new Set(impact.flows.map(f => `${f.source}:${f.id}`));
+	const out: AffectedFlow[] = [];
+	for (const t of impact.tables) {
+		for (const u of t.uses) {
+			const key = `${u.endpoint.source}:${u.endpoint.id}`;
+			if (!seen.has(key)) {
+				seen.add(key);
+				out.push({ id: u.endpoint.id, label: u.endpoint.label, name: u.endpoint.name, source: u.endpoint.source, via: [`table ${t.table}`] });
+			}
+		}
+	}
+	return out.sort((a, b) => a.label.localeCompare(b.label));
+}
+
 /** The entry an impact line ("GET Users.Delete", "DELETE /users/{id} UsersController.Delete") stands for. */
 export function entryForItem(item: string, entries: Entry[]): Entry | undefined {
 	const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -77,8 +105,6 @@ export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly:
 	const unique = [...new Set(files)];
 	let skipped = Math.max(0, unique.length - limits.files);
 	let partial = false;
-	/** Where in each file the edits landed, when that is known: the entity an edit is in is told by the same lines. */
-	const placed: { file: string; ranges?: LineRange[] }[] = [];
 	// The agent wrote these moments ago: have the index read them now rather than after its watcher's delay.
 	if (d.poly.isReady) {
 		await d.poly.refresh(unique.slice(0, limits.files).filter(f => !/\.cs$/i.test(f))).catch(() => undefined);
@@ -89,7 +115,6 @@ export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly:
 			continue;
 		}
 		let targets: (FlowTarget & { name?: string })[] = [];
-		let ranges: LineRange[] | undefined;
 		try {
 			// Only when the analyzer is already up: asking for it here could start a solution load nobody wanted.
 			const cs = /\.cs$/i.test(file);
@@ -99,7 +124,7 @@ export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly:
 			partial ||= cs ? !d.analyzer.isReady : !d.poly.isReady;
 			// Spans from a copy of the file older than the disk would misplace the edit: then the whole file counts.
 			const fresh = methods.length > 0 && spansMatch(methods, await fs.readFile(file, 'utf8').catch(() => ''));
-			ranges = fresh ? await d.rangesOf?.(file).catch(() => undefined) : undefined;
+			const ranges = fresh ? await d.rangesOf?.(file).catch(() => undefined) : undefined;
 			// Without ranges nothing is known to be changed: every method counts, none is named.
 			const touched = ranges ? methodsTouched(methods, ranges) : { methods: [] as typeof methods, wholeFile: true };
 			// The changed methods first, so the cap never drops them for the rest of the file.
@@ -109,7 +134,6 @@ export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly:
 		} catch {
 			// a file the backends do not know (a config, a doc): it may still be an entity file
 		}
-		placed.push({ file, ranges });
 		for (const t of targets) {
 			if (Date.now() > deadline) {
 				partial = true;
@@ -134,7 +158,8 @@ export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly:
 	}
 	const flows = [...found.values()].sort((a, b) => a.label.localeCompare(b.label));
 	// An edit in an entity changes a table: who reads or writes it is asked of the table index, which walks the entry points on first use.
-	const entities = await d.tables?.changed(placed, limits.tables, limits.tableBudgetMs).catch(() => undefined);
+	// Where the edit landed is asked on its own, not through the methods: a file of models has none, and its edit is in one model.
+	const entities = d.tables ? await d.tables.changed(await placed(unique.slice(0, limits.files), d), limits.tables, Math.min(limits.tableBudgetMs, Math.max(500, deadline - Date.now()))).catch(() => undefined) : undefined;
 	return {
 		files: unique.length,
 		flows: flows.slice(0, limits.flows),

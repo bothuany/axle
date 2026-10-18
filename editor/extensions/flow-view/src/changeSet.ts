@@ -5,7 +5,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { changeSetRoot, markTableChanges, pruneToChanged, rekey, showsLine, tableRoot } from './changeSetTree';
-import type { ImpactLimits, TurnImpact } from './mcp/turnImpact';
+import { tableEndpoints, type ImpactLimits, type TurnImpact } from './mcp/turnImpact';
 import { NOT_CHECKED, usedBy } from './mcp/tableIndex';
 import type { FlowNode, FlowProvider, FlowTarget } from './providers';
 
@@ -95,15 +95,8 @@ export class ChangeSetProvider implements FlowProvider {
 		// A changed entity is one root item of its own; the endpoints that read or write its table are drawn with the ones a changed method reaches.
 		const marks = impact.tables.map(t => ({ entity: t.entity, table: t.table, guess: t.guess }));
 		branches.push(...impact.tables.map((t, i) => tableRoot(marks[i], `${usedBy(t)}${t.guess ? ' · table?' : ''}${t.checked < t.of ? ' · partial' : ''}`, `table${i}`)));
-		const tableFlows = new Map<string, { id: string; source: 'roslyn' | 'poly' }>();
-		for (const t of impact.tables) {
-			for (const u of t.uses) {
-				tableFlows.set(`${u.endpoint.source}:${u.endpoint.id}`, { id: u.endpoint.id, source: u.endpoint.source });
-			}
-		}
-		const methodFlows = new Set(impact.flows.map(f => `${f.source}:${f.id}`));
-		const extra = [...tableFlows.entries()].filter(([k]) => !methodFlows.has(k)).map(([, f]) => f);
-		const flows = [...impact.flows.map(f => ({ id: f.id, source: f.source })), ...extra.slice(0, MAX_TABLE_FLOWS)];
+		const extra = tableEndpoints(impact);
+		const flows = [...impact.flows, ...extra.slice(0, MAX_TABLE_FLOWS)];
 		const tableOnly = Math.max(0, extra.length - MAX_TABLE_FLOWS);
 		for (const [i, f] of flows.entries()) {
 			try {
@@ -141,8 +134,8 @@ export class ChangeSetProvider implements FlowProvider {
 		const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 		const sub = [
 			count(set.files.length, 'changed file'),
-			count(impact.flows.length + impact.more, 'endpoint'),
-			impact.tables.length ? `${count(impact.tables.length, 'changed table')} (${count(tableFlows.size, 'endpoint')} read or write ${impact.tables.length === 1 ? 'it' : 'them'}; not checked: ${NOT_CHECKED.split(';')[0]}, other services, migrations)` : '',
+			count(impact.flows.length + impact.more + extra.length, 'endpoint'),
+			impact.tables.length ? `${count(impact.tables.length, 'changed table')} (${count(new Set(impact.tables.flatMap(t => t.uses.map(u => `${u.endpoint.source}:${u.endpoint.id}`))).size, 'endpoint')} read or write ${impact.tables.length === 1 ? 'it' : 'them'}; not checked: ${NOT_CHECKED.split(';')[0]}, other services, migrations)` : '',
 			tableOnly ? `${tableOnly} table endpoints not drawn` : '',
 			loose ? count(loose + left, 'other changed method') : '',
 			impact.more ? `${impact.more} endpoints not drawn` : '',
@@ -159,8 +152,9 @@ export class ChangeSetProvider implements FlowProvider {
 	}
 
 	async impact(): Promise<{ label: string; items: string[] }> {
-		const flows = (await this.last?.catch(() => undefined))?.impact.flows ?? [];
-		// The canvas reads it as "Affects 3 endpoints".
+		const impact = (await this.last?.catch(() => undefined))?.impact;
+		// The canvas reads it as "Affects 3 endpoints": the ones a changed method reaches and the ones that use a changed table.
+		const flows = impact ? [...impact.flows, ...tableEndpoints(impact)] : [];
 		return { label: 'endpoint', items: flows.map(f => `${f.label} ${f.name}`) };
 	}
 }

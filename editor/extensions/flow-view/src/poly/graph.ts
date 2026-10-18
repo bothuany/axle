@@ -94,8 +94,10 @@ export class Project {
 	private schemaByTable = new Map<string, DbSchema & { orm: string }>();
 	/** Entities whose table name is not written in the code (a naming default): a card for one says "table?". */
 	private guessedTables = new Set<string>();
-	/** Where each entity is declared, whole class (or Prisma model): the span an edit has to land in to change it. */
-	private entitySpans = new Map<string, { file: string; line: number; endLine: number }>();
+	/** Every entity or model class the readers found, one per declaration (two services may both have a `User`): what an edit is resolved against. */
+	private entityFacts: TableEntity[] = [];
+	/** Entity names more than one class has: a card that names one cannot say which table it is, so it is a guess. */
+	private ambiguousEntities = new Set<string>();
 	/** The walk over the entry points that finds which tables they reach, built on first use and cleared with the index. */
 	private tableWalk: { next: number; uses: TableUseFact[] } | undefined;
 	private entries: Entry[] = [];
@@ -161,7 +163,8 @@ export class Project {
 		this.schemas.clear();
 		this.schemaByTable.clear();
 		this.guessedTables.clear();
-		this.entitySpans.clear();
+		this.entityFacts = [];
+		this.ambiguousEntities.clear();
 		this.tableWalk = undefined;
 		this.resolved.clear();
 		this.pkgIndex = undefined;
@@ -264,9 +267,10 @@ export class Project {
 			if (guess) {
 				this.guessedTables.add(s.entity);
 			}
-			if (s.file) {
-				this.entitySpans.set(s.entity, { file: s.file, line: s.line, endLine });
+			if (this.schemas.has(s.entity)) {
+				this.ambiguousEntities.add(s.entity);
 			}
+			this.entityFacts.push({ entity: s.entity, table: s.table, schemaName: s.dbSchemaName, orm, guess: !!guess, spans: s.file ? [{ file: s.file, line: s.line, endLine }] : [] });
 			this.schemas.set(s.entity, full);
 			this.schemaByTable.set(s.table.toLowerCase(), full);
 			this.schemaByTable.set(s.table.toLowerCase().split('.').pop()!, full);
@@ -600,7 +604,7 @@ export class Project {
 		const s = this.schemas.get(entity);
 		const writes = isWrite(ops, fn);
 		if (s) {
-			return { kind: 'db', schema: { ...s, ops, writes, context: context || s.orm }, label: s.table, file: s.file, line: s.line, ...(this.guessedTables.has(entity) ? { guess: true } : {}) };
+			return { kind: 'db', schema: { ...s, ops, writes, context: context || s.orm }, label: s.table, file: s.file, line: s.line, ...(this.guessedTables.has(entity) || this.ambiguousEntities.has(entity) ? { guess: true } : {}) };
 		}
 		// No entity of this name in the project: the repository's type argument stands in for the table.
 		return { kind: 'db', schema: { entity, table: entity, dbSchemaName: null, context, columns: [], relations: [], ops, writes, file: null, line: 0 }, label: entity, file: null, line: 0, guess: true };
@@ -1713,14 +1717,7 @@ export class Project {
 	/** Every entity or model class the schema readers found with its table: what an edit to an entity file is resolved against. */
 	entities(): TableEntity[] {
 		this.build();
-		return [...this.schemas.values()].map(s => ({
-			entity: s.entity,
-			table: s.table,
-			schemaName: s.dbSchemaName,
-			orm: s.orm,
-			guess: this.guessedTables.has(s.entity),
-			spans: this.entitySpans.has(s.entity) ? [this.entitySpans.get(s.entity)!] : [],
-		}));
+		return this.entityFacts.slice();
 	}
 
 	/**

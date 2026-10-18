@@ -23,6 +23,7 @@ import { errorResult, type ToolResult } from './protocol';
 import { resolveInWorkspace } from './registry';
 import { searchEntries } from './search';
 import { NOT_CHECKED, tableImpactText, usedBy, type TableIndex } from './tableIndex';
+import { tableEndpoints } from './turnImpact';
 import { NODE_STATUSES } from './tools';
 
 /** What the tools need from the rest of the extension. */
@@ -462,9 +463,13 @@ export class AgentTools {
 			return { ok: true, opened: true, message: `${opened} Which endpoints they reach is not known yet: ${(e as Error).message}.` };
 		}
 		const { impact, failed } = trace;
-		const reach = impact.flows.length
-			? ` Endpoints they reach: ${impact.flows.slice(0, 12).map(f => `${f.label} (id=${f.id})`).join(', ')}${impact.more ? ` and ${impact.more} more` : ''}; show_flow with an id opens one in full.`
-			: ' No endpoint reaches them; the changed methods are shown on their own.';
+		const byTable = tableEndpoints(impact);
+		const ids = (list: { label: string; id: string }[]) => list.slice(0, 12).map(f => `${f.label} (id=${f.id})`).join(', ') + (list.length > 12 ? ` and ${list.length - 12} more` : '');
+		const reach = [
+			impact.flows.length ? ` Endpoints they reach: ${ids(impact.flows)}${impact.more ? ` and ${impact.more} more` : ''}; show_flow with an id opens one in full.` : '',
+			byTable.length ? ` Endpoints that read or write a changed table: ${ids(byTable)}.` : '',
+			!impact.flows.length && !byTable.length ? ' No endpoint reaches them; the changed methods are shown on their own.' : '',
+		].join('');
 		const tables = impact.tables.length
 			? ` Changed tables: ${impact.tables.map(t => `${t.entity} → table ${t.table}${t.guess ? ' (table? name is a guess)' : ''}, ${usedBy(t)}`).join('; ')}; impact with the table name lists them. Not checked: ${NOT_CHECKED}.`
 			: '';
