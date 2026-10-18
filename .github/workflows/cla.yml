@@ -29,6 +29,6 @@ jobs:
           path-to-signatures: signatures/version1/cla.json
           path-to-document: https://github.com/bothuany/axle/blob/main/CLA.md
           branch: cla-signatures
-          # The maintainer's own accounts and bots do not need to sign.
-          allowlist: bothuany,dependabot[bot],github-actions[bot]
+          # The maintainer's own accounts and bots do not need to sign. `claude` is the account GitHub resolves the Claude Code co-author trailer to.
+          allowlist: bothuany,claude,dependabot[bot],github-actions[bot]
           custom-notsigned-prcomment: 'Thanks for your pull request! Before it can be merged, please read the [Contributor License Agreement](https://github.com/bothuany/axle/blob/main/CLA.md) and sign it by commenting the sentence below. You only do this once.'
