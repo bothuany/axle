@@ -32,7 +32,9 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 /** The canvas's pan and zoom, as React Flow writes it on its viewport. */
 const viewport = (doc: Document | null) => doc?.querySelector<HTMLElement>('.react-flow__viewport')?.style.transform ?? ''
-const zoomOf = (doc: Document | null) => Number(/scale(([d.]+))/.exec(viewport(doc))?.[1] ?? 0)
+/** A card's code reads comfortably from here up (the canvas's own tour opens a card at 1). */
+const READABLE = 1.35
+const zoomOf = (doc: Document | null) => Number(/scale\(([\d.]+)\)/.exec(viewport(doc))?.[1] ?? 0)
 
 /**
  * Starts the canvas's own “Review N changes” tour, which centres the first changed card at 100%, then zooms in with the canvas's own
@@ -48,24 +50,38 @@ async function startReview(frame: HTMLIFrameElement, timeout = 8000) {
       return null
     }
   }
-  const settle = async () => {
+  // Waits until the canvas has not moved for `quiet` ms: a click during one of its animations would only interrupt it.
+  const settle = async (quiet: number) => {
+    const from = Date.now()
     let last = viewport(doc())
-    let still = 0
-    while (still < 2 && Date.now() - t0 < timeout * 2) {
-      await sleep(160)
+    let since = Date.now()
+    while (Date.now() - since < quiet && Date.now() - from < 6000) {
+      await sleep(80)
       const now = viewport(doc())
-      still = now === last ? still + 1 : 0
-      last = now
+      if (now !== last) {
+        last = now
+        since = Date.now()
+      }
     }
   }
   while (Date.now() - t0 < timeout) {
     const chip = doc()?.querySelector<HTMLButtonElement>('.chip.agent')
     if (chip) {
       chip.click()
-      await settle()
-      for (let i = 0; i < 4 && zoomOf(doc()) < 1.3 && doc(); i++) {
+      await sleep(250)
+      await settle(700)
+      // The canvas fits the whole flow once its layout is done, over the tour's first move: go to the next card and back, so that the
+      // first changed card is the one in the middle, at 100%.
+      const [prev, next] = Array.from(doc()?.querySelectorAll<HTMLButtonElement>('.tour .icon-btn') ?? [])
+      if (prev && next && !next.disabled) {
+        next.click()
+        await settle(500)
+        prev.click()
+        await settle(500)
+      }
+      for (let i = 0; i < 3 && zoomOf(doc()) < READABLE && doc(); i++) {
         doc()?.querySelector<HTMLButtonElement>('.react-flow__controls-zoomin')?.click()
-        await settle()
+        await settle(350)
       }
       return
     }
