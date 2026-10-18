@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self'; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'" />
-    <meta name="description" content="Try Axle in your browser: follow an endpoint across services, see what an agent changed, and which endpoints use a table. No install." />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; media-src 'self'; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'" />
+    <meta name="description" content="Try Axle in your browser: the Agents dock, the status overlay, the harness map, a terminal and the flow canvas, on a demo project. No install." />
     <meta name="color-scheme" content="dark" />
     <link rel="icon" type="image/svg+xml" href="./icon.svg" />
     <title>Axle: try it in your browser</title>
@@ -24,50 +24,20 @@
     <main>
       <section class="hero">
         <h1><span class="was">Every editor shows where code is stored.</span> Axle shows how it runs.</h1>
-        <p class="lede">Pick an endpoint and read the chain it runs, card by card, across services and into the database. The demo is Axle&rsquo;s real canvas, working on a small project.</p>
+        <p class="lede">This is Axle in your browser: the Agents dock, the status overlay at the top of the screen, the harness map, a terminal and the flow canvas, on a small demo project. Start an agent and watch what it touches.</p>
         <div class="cta">
-          <button type="button" class="primary" id="try">Try it in your browser</button>
+          <button type="button" class="primary" id="try">Start the demo</button>
           <a class="quiet" href="https://github.com/bothuany/axle/releases/latest">Download Axle</a>
         </div>
-        <p class="fine">No install, no account. The demo is read-only.</p>
+        <p class="fine">No install, no account. The agent is a scripted replay; the rest is Axle&rsquo;s own code and pages.</p>
       </section>
 
-      <section class="stage" id="stage" aria-label="Axle canvas demo">
-        <aside class="rail">
-          <p class="project">harbor-goods, a demo project: orders and shipping in Java, billing in Python</p>
-          <ol class="steps">
-            <li class="step on" data-step="1">
-              <h2><button type="button" class="step-title" aria-expanded="true">Pick an endpoint</button></h2>
-              <p>Each one opens as a chain of cards: controller, services, database.</p>
-              <div class="picker" id="picker" role="group" aria-label="Endpoints"></div>
-            </li>
-            <li class="step" data-step="2">
-              <h2><button type="button" class="step-title" aria-expanded="false">Follow a call into another service</button></h2>
-              <p>Placing an order calls billing over HTTP. The dashed <b>HTTP?</b> link is a guess, made by matching the route, and drawn as one. The <b>topic?</b> link into shipping works the same way. Click a tag on a call line to open or fold that hop.</p>
-              <button type="button" class="go" id="go-http">Show POST /orders</button>
-            </li>
-            <li class="step" data-step="3">
-              <h2><button type="button" class="step-title" aria-expanded="false">See what an agent changed</button></h2>
-              <p>Claude Code added discount codes. Added lines are green, removed lines red, and each flow is cut down to the path that reaches a change. Review changes on the bar steps through them.</p>
-              <button type="button" class="go" id="go-change">Show the change</button>
-            </li>
-            <li class="step" data-step="4">
-              <h2><button type="button" class="step-title" aria-expanded="false">See which endpoints use a table</button></h2>
-              <p>The agent edited the Order entity, so the first card reads <b>Order changed, table orders</b> and the bar lists the <span id="impact-count">4</span> endpoints that read or write that table.</p>
-              <button type="button" class="go" id="go-table">Show the table impact</button>
-            </li>
-          </ol>
-        </aside>
-        <div class="view" id="view">
-          <img class="poster" src="./media/axle-poster.jpg" alt="The Axle canvas: a checkout flow that calls an inventory service over a dashed HTTP? link, down to two database tables." />
-          <button type="button" class="open" id="open">Open the canvas</button>
-          <iframe id="canvas" title="Axle canvas, running on the demo project" hidden></iframe>
-          <p class="note" id="note" role="status"></p>
-        </div>
+      <section class="stagewrap" aria-label="Axle demo">
+        <div id="screen-root"></div>
       </section>
 
       <section class="fallback" aria-label="Demo video">
-        <p>The interactive canvas needs a larger screen. Here is what it does.</p>
+        <p>The interactive demo needs a larger screen. Here is what Axle does.</p>
         <video controls preload="none" poster="./media/axle-poster.jpg" playsinline>
           <source src="./media/axle-demo.mp4" type="video/mp4" />
         </video>
@@ -75,19 +45,19 @@
       </section>
 
       <section class="app">
-        <h2>What a browser can&rsquo;t show</h2>
+        <h2>What is real here, and what is not</h2>
         <div class="cols">
           <article>
-            <h3>The Agents dock</h3>
-            <p>Claude Code, Codex and any CLI run as their real tools, in terminals. The dock ranks what needs you first: an approval, a question, an error, a finished turn you have not read.</p>
+            <h3>Axle&rsquo;s own</h3>
+            <p>The flow canvas, the Agents dock page and the status overlay are the pages the app draws, driven by the app&rsquo;s own ranking and mapping code. The flows come from Axle&rsquo;s code index, run on the demo project: the <b>HTTP?</b> and <b>topic?</b> links, the tables and the change set are what it finds.</p>
           </article>
           <article>
-            <h3>The harness map</h3>
-            <p>One map of CLAUDE.md, rules, skills, subagents, hooks, MCP servers and permissions, with a health score, lint without an LLM, and what each piece costs in tokens.</p>
+            <h3>Scripted</h3>
+            <p>The agent. Its words, its tool calls and its timing are a replay, so the terminal takes only the keys the replay expects, and says so for anything else. Nothing here runs a model, and nothing leaves your browser.</p>
           </article>
           <article>
-            <h3>Cards you can edit</h3>
-            <p>On the canvas every card is a real editor with completion, hover and go to definition from your language servers. Saves go to your files, so undo and Keep stay consistent.</p>
+            <h3>Left out</h3>
+            <p>Editing code on a card (the demo is read-only), other agents and languages, native menus, and the Codex and custom agents. Download Axle to use them on your own code.</p>
           </article>
         </div>
       </section>
@@ -97,6 +67,6 @@
       <p>Axle is open source under the MIT license. It builds on VS Code.</p>
       <p class="links"><a href="https://github.com/bothuany/axle">GitHub</a> <a href="https://github.com/bothuany/axle/releases/latest">Download</a> <a href="https://github.com/bothuany/axle/blob/main/docs/languages.md">Supported languages</a></p>
     </footer>
-    <script type="module" src="/src/shell.ts"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

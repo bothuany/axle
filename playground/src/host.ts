@@ -1,10 +1,10 @@
 // The editor host the canvas expects, played by a page: the canvas (ui/src/webview.tsx) talks to its host only through
-// `acquireVsCodeApi().postMessage`, so this answers its requests from the demo data. Nothing is edited or saved here.
+// `acquireVsCodeApi().postMessage`, so this answers its requests from the demo data. The project is in one of two states
+// (before the agent's change, and with it): the workbench around the page says which, and Keep and Undo change it there.
 // Imported before the canvas: it sets the globals the canvas reads when it loads.
 import type { FlowNode } from '../../protocol/flow'
+import { workbench } from './bridge'
 import { entryLabel, type DemoData, type Impact, type Target, type ToShell, type TurnSummary } from './demo'
-
-const READ_ONLY = 'This is a read-only demo. In the Axle app, edits on a card are applied to your files.'
 
 interface Request {
   type: 'request'
@@ -15,14 +15,24 @@ interface Request {
 }
 
 const data: DemoData = await fetch('./data/demo.json').then(r => r.json())
-const notifyShell = (m: ToShell) => window.parent !== window && window.parent.postMessage(m, location.origin)
+const say = (m: ToShell) => window.parent !== window && window.parent.postMessage(m, location.origin)
 
-/** The flow for a target. With a prompt picked in the timeline, the endpoints the agent's change reaches draw it on their cards. */
-function graphOf(t: Target, turn?: number): FlowNode {
-  if (t.kind === 'changes') return data.changes.root
-  const flow = data.flows[t.id]
+const state = () => {
+  const bridge = workbench()
+  // Alone on a page there is no workbench: the project is as the agent left it.
+  return { edited: bridge ? bridge.edited() : true, kept: bridge ? bridge.kept() : false }
+}
+
+/** The flow for a target. While the agent's change is waiting for Keep or Undo, the endpoints it reaches draw it on their cards. */
+function graphOf(t: Target): FlowNode {
+  const { edited, kept } = state()
+  if (t.kind === 'changes') {
+    if (!edited || kept) throw new Error('There are no changes to show: ask an agent to change something, or run the demo from the Agents dock.')
+    return data.changes.root
+  }
+  const flow = (edited ? data.after : data.before).flows[t.id]
   if (!flow) throw new Error('This endpoint is not part of the demo.')
-  return turn !== undefined && flow.changed ? flow.changed : flow.graph
+  return edited && !kept && flow.changed ? flow.changed : flow.graph
 }
 
 /** What the real host answers each op with (flow-view's panel.ts): the fake must give the canvas the same shapes. */
@@ -42,18 +52,36 @@ interface Answers {
   save: { ok: boolean; message?: string }
   undo: { ok: boolean; message?: string }
   undoFrom: { ok: boolean; message?: string }
-  keep: never
+  keep: { ok: boolean }
+}
+
+const READ_ONLY = 'The demo does not write files: in the Axle app a save is applied to your code.'
+
+/** Keep and Undo act on the workbench's state; the canvas then asks for its flow again. */
+function decide(what: 'keep' | 'undo') {
+  const bridge = workbench()
+  if (what === 'keep') bridge?.keep()
+  else bridge?.undo()
+  setTimeout(() => window.dispatchEvent(new MessageEvent('message', { data: { type: 'refresh' } })), 30)
 }
 
 const handlers: { [Op in keyof Answers]: (m: Request) => Answers[Op] } = {
-  graph: m => graphOf(m.target!, m.turn),
-  callers: m => (m.target?.kind === 'poly' ? (data.flows[m.target.id]?.callers ?? null) : null),
+  graph: m => graphOf(m.target!),
+  callers: m => {
+    if (m.target?.kind !== 'poly') return null
+    graphOf(m.target)
+    return (state().edited ? data.after : data.before).flows[m.target.id]?.callers ?? null
+  },
   impact: m => {
-    const impact = m.target?.kind === 'changes' ? data.changes.impact : data.flows[m.target!.id]?.impact
+    const { edited } = state()
+    const impact = m.target?.kind === 'changes' ? data.changes.impact : (edited ? data.after : data.before).flows[m.target!.id]?.impact
     if (!impact) throw new Error('This endpoint is not part of the demo.')
     return impact
   },
-  timeline: () => data.changes.timeline,
+  timeline: () => {
+    const { edited, kept } = state()
+    return edited && !kept ? data.changes.timeline : []
+  },
   editHooks: () => [],
   // The demo has no type graph: cards draw without chips, and nothing to open.
   typeChips: () => ({ chips: {}, ready: true, diagramAvailable: false }),
@@ -64,10 +92,17 @@ const handlers: { [Op in keyof Answers]: (m: Request) => Answers[Op] } = {
   definition: () => ({ ok: false, message: 'Go to definition works in the Axle app, on your own code.' }),
   endEdit: () => ({ ok: true }),
   save: () => ({ ok: false, message: READ_ONLY }),
-  undo: () => ({ ok: false, message: READ_ONLY }),
-  undoFrom: () => ({ ok: false, message: READ_ONLY }),
+  undo: () => {
+    decide('undo')
+    return { ok: true }
+  },
+  undoFrom: () => {
+    decide('undo')
+    return { ok: true }
+  },
   keep: () => {
-    throw new Error(READ_ONLY)
+    decide('keep')
+    return { ok: true }
   },
 }
 
@@ -91,15 +126,17 @@ const host = {
       setTimeout(() => window.dispatchEvent(new MessageEvent('message', { data: { type: 'response', id: req.id, ...result } })), 0)
       return
     }
-    // Everything else is the canvas asking the editor to do something the browser cannot: say so on the page.
+    // Opening a file is something the workbench can do; the rest needs an editor the browser does not have: say so on the page.
+    if ((m.type === 'open' || m.type === 'reveal') && typeof m.file === 'string' && typeof m.line === 'number') {
+      say({ source: 'axle-canvas', type: m.type, file: m.file, line: m.line })
+      return
+    }
     const what: Record<string, string> = {
-      open: 'In the Axle app this opens the file in the editor, at that line.',
-      reveal: 'In the Axle app this shows the line in the editor.',
       ask: 'In the Axle app this hands the flow to the agent you picked (Claude Code, Codex, any CLI).',
       mention: 'In the Axle app this @-mentions the card in your agent’s terminal.',
       answer: 'In the Axle app you accept or reject what an agent wants to edit here.',
     }
-    if (what[m.type]) notifyShell({ source: 'axle-canvas', type: 'note', text: what[m.type] })
+    if (what[m.type]) say({ source: 'axle-canvas', type: 'note', text: what[m.type] })
   },
 }
 
@@ -107,7 +144,9 @@ const host = {
 
 // Which flow opens first: `?t=<entry id>` or `?t=changes`, else the order flow.
 const wanted = new URLSearchParams(location.search).get('t')
-const entry = data.entries.find(e => e.id === wanted) ?? data.entries.find(e => e.http === 'POST /orders') ?? data.entries[0]
+const { edited } = state()
+const entries = (edited ? data.after : data.before).entries
+const entry = entries.find(e => e.id === wanted) ?? entries.find(e => e.http === 'POST /orders') ?? entries[0]
 const first: { target: Target; label: string } = wanted === 'changes' ? { target: { kind: 'changes', id: '1' }, label: data.changes.label } : { target: { kind: 'poly', id: entry.id }, label: entryLabel(entry) }
 ;(window as unknown as { __FLOW__: unknown }).__FLOW__ = { ...first, dark: true }
-notifyShell({ source: 'axle-canvas', type: 'ready' })
+say({ source: 'axle-canvas', type: 'ready' })
