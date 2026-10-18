@@ -570,7 +570,9 @@ function parseLiquibaseYaml(file: string, text: string): Migration | undefined {
  * The migration `text` is, or undefined when it is none of the supported formats. EF Core migrations (C#) are read by the analyzer
  * (`fromEfFact`). `ctx` lets Django's model names resolve to the tables the models map to.
  */
-export function parseMigration(file: string, text: string, ctx: MigrationContext = {}): Migration | undefined {
+export function parseMigration(file: string, source: string, ctx: MigrationContext = {}): Migration | undefined {
+	// A checkout with CRLF line endings reads the same as one with LF.
+	const text = source.replace(/\r\n/g, '\n');
 	const ext = path.extname(file).toLowerCase();
 	switch (ext) {
 		case '.sql': return parseSql(file, text);
