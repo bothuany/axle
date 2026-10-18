@@ -1,0 +1,19 @@
+{
+  "name": "axle-playground",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "data": "node ../scripts/playground-data.mjs",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "preview": "vite preview --base /axle/ --port 4173",
+    "dev": "vite --port 5173"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "5.9.3",
+    "vite": "^8.3.4"
+  },
+  "description": "Axle in the browser: the real canvas (ui/) on a fake editor host, with demo data made from the real index."
+}

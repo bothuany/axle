@@ -1,0 +1,160 @@
+/* The playground page. The canvas inside it is Axle's own (ui/src/styles.css); this is the page around it, in the same dark
+   surfaces and signal blue. Amber is the colour of a guessed link on the canvas, so it is also the wire that runs down the steps. */
+:root {
+  --ink: #0a0c11;
+  --raise: #11141b;
+  --raise-2: #171b24;
+  --line: #222836;
+  --line-2: #333c50;
+  --text: #dde2ec;
+  --muted: #8a93a5;
+  --signal: #7b8fff;
+  --guess: #e8a33d;
+  --add: #5fe0a1;
+  --pad: clamp(16px, 3vw, 40px);
+  --ui: 'Segoe UI Variable Text', 'SF Pro Text', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --display: 'Segoe UI Variable Display', 'SF Pro Display', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: 12px; }
+body {
+  margin: 0;
+  background: var(--ink);
+  background-image: radial-gradient(circle at 1px 1px, #ffffff14 1px, transparent 0);
+  background-size: 22px 22px;
+  background-repeat: repeat-x;
+  background-position: top left;
+  color: var(--text);
+  font: 16px/1.55 var(--ui);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+h1, h2, h3, p, ol { margin: 0; }
+b { font-weight: 600; color: var(--text); }
+
+.top, main > section, footer { max-width: 1440px; margin-inline: auto; padding-inline: var(--pad); }
+
+/* ---- top bar ------------------------------------------------------------------------------- */
+.top { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font: 650 18px/1 var(--display); letter-spacing: -.01em; }
+.top nav { display: flex; align-items: center; gap: 22px; font-size: 14px; }
+.top nav a { text-decoration: none; color: var(--muted); }
+.top nav a:hover { color: var(--text); }
+a.solid { padding: 7px 14px; border: 1px solid var(--line-2); border-radius: 8px; color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px; }
+.top nav a.solid { color: var(--text); }
+a.solid:hover { border-color: var(--signal); }
+
+/* ---- hero ---------------------------------------------------------------------------------- */
+.hero { position: relative; padding-top: clamp(40px, 8vh, 88px); padding-bottom: 72px; }
+h1 {
+  max-width: 17em;
+  font: 650 clamp(2.5rem, 5.6vw, 5rem)/1.02 var(--display);
+  letter-spacing: -.035em;
+  text-wrap: balance;
+}
+h1 .was { display: block; color: var(--muted); font-weight: 560; }
+.lede { max-width: 54ch; margin-top: 28px; font-size: clamp(1.05rem, 1.5vw, 1.2rem); color: #b4bccb; }
+.cta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 26px; margin-top: 32px; }
+.primary { padding: 13px 22px; border: 0; border-radius: 9px; background: var(--signal); color: #0a0c11; font-weight: 650; font-size: 1rem; transition: background .15s; }
+.primary:hover { background: #98a8ff; }
+.quiet { color: var(--text); text-underline-offset: 4px; text-decoration-color: var(--line-2); }
+.quiet:hover { text-decoration-color: var(--signal); }
+.fine { margin-top: 14px; font-size: 14px; color: var(--muted); }
+/* A guessed link on the canvas is a dashed amber wire; here it carries the eye from the button into the first step. */
+.hero::after { content: ''; position: absolute; left: calc(var(--pad) + 30px); bottom: 0; height: 72px; border-left: 2px dashed color-mix(in srgb, var(--guess) 70%, transparent); }
+
+/* ---- stage: steps and canvas --------------------------------------------------------------- */
+.stage {
+  display: grid;
+  grid-template-columns: 372px minmax(0, 1fr);
+  height: clamp(640px, 86vh, 920px);
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: var(--raise);
+  overflow: hidden;
+  /* The section's own padding is the page gutter; the frame itself is inset by it. */
+  width: calc(100% - 2 * var(--pad));
+  max-width: calc(1440px - 2 * var(--pad));
+  padding-inline: 0;
+  box-shadow: 0 30px 80px -30px #000c;
+}
+.rail { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: var(--raise); }
+.project { padding: 16px 22px 14px; border-bottom: 1px solid var(--line); font-size: 13px; line-height: 1.45; color: var(--muted); }
+.steps { flex: 1; min-height: 0; overflow: auto; padding: 22px 22px 28px; list-style: none; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.step { position: relative; padding: 0 0 26px 34px; color: var(--muted); }
+.step:last-child { padding-bottom: 0; }
+.step::before {
+  content: attr(data-step);
+  position: absolute; left: 0; top: 1px;
+  display: grid; place-items: center;
+  width: 16px; height: 16px;
+  border: 1px solid var(--line-2); border-radius: 50%;
+  background: var(--raise);
+  font: 600 10px/1 var(--mono);
+  color: var(--muted);
+}
+.step::after { content: ''; position: absolute; left: 7px; top: 22px; bottom: 4px; border-left: 2px dashed color-mix(in srgb, var(--guess) 55%, transparent); }
+.step:last-child::after { display: none; }
+.step h2 { font: 600 15px/1.35 var(--ui); color: var(--text); }
+.step p { margin-top: 6px; font-size: 14px; line-height: 1.5; }
+.step.on::before { border-color: var(--signal); background: var(--signal); color: #0a0c11; }
+.step:not(.on) p, .step:not(.on) .picker, .step:not(.on) .go { display: none; }
+.step:not(.on) h2 { color: var(--muted); cursor: pointer; }
+.go { margin-top: 12px; padding: 7px 14px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--raise-2); font-weight: 600; font-size: 13.5px; }
+.go:hover { border-color: var(--signal); }
+
+.picker { margin-top: 14px; }
+.group + .group { margin-top: 12px; }
+.group h3 { padding: 0 8px 4px; font: 500 12px/1.4 var(--mono); color: var(--muted); }
+.picker button { display: grid; grid-template-columns: 46px minmax(0, 1fr); align-items: baseline; width: 100%; padding: 5px 8px; border: 0; border-radius: 6px; background: none; text-align: left; font-size: 13.5px; }
+.picker button:hover { background: var(--raise-2); }
+.picker button.on { background: #1b2238; }
+.verb { font: 600 10.5px/1 var(--mono); color: #7fd19b; }
+.verb.post { color: var(--guess); }
+.verb.job, .verb.msg { color: var(--signal); }
+.route { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; color: var(--text); }
+
+.view { position: relative; min-width: 0; min-height: 0; background: #0c0e13; }
+.view iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #181818; }
+.poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left top; opacity: .5; transition: opacity .5s; }
+.open { position: absolute; left: 50%; top: 50%; translate: -50% -50%; padding: 14px 26px; border: 1px solid var(--signal); border-radius: 10px; background: #0a0c11e6; font-weight: 650; font-size: 1.05rem; transition: background .15s; }
+.open:hover { background: var(--signal); color: #0a0c11; }
+.view.live .poster, .view.live .open { opacity: 0; pointer-events: none; }
+.note { position: absolute; z-index: 2; left: 50%; top: 52px; translate: -50% -6px; max-width: min(520px, calc(100% - 32px)); padding: 9px 14px; border: 1px solid var(--line-2); border-radius: 9px; background: var(--raise-2); box-shadow: 0 12px 30px -10px #000c; font-size: 13.5px; line-height: 1.45; opacity: 0; pointer-events: none; transition: opacity .2s, translate .2s; }
+.note.on { opacity: 1; translate: -50% 0; }
+
+/* ---- the fallback below desktop width ------------------------------------------------------ */
+.fallback { display: none; padding-top: 8px; padding-bottom: 40px; }
+.fallback video { display: block; width: 100%; margin: 18px 0; border: 1px solid var(--line-2); border-radius: 12px; background: #000; }
+.fallback .links, footer .links { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center; }
+
+/* ---- what the app has that the browser does not -------------------------------------------- */
+.app { padding-top: 96px; padding-bottom: 96px; }
+.app h2 { font: 650 clamp(1.5rem, 2.6vw, 2.1rem)/1.15 var(--display); letter-spacing: -.02em; }
+.cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px clamp(24px, 4vw, 64px); margin-top: 32px; }
+.cols h3 { font: 600 1rem/1.4 var(--ui); }
+.cols p { margin-top: 8px; max-width: 42ch; color: var(--muted); font-size: 15px; }
+
+footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 40px; padding-block: 28px 44px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+footer a { color: var(--muted); }
+footer a:hover { color: var(--text); }
+footer .links { gap: 8px 22px; }
+
+@media (max-width: 899px) {
+  .stage { display: none; }
+  .fallback { display: block; }
+  .hero { padding-bottom: 40px; }
+  .hero::after { display: none; }
+  #try { display: none; }
+  .cols { grid-template-columns: 1fr; }
+  .app { padding-top: 56px; padding-bottom: 56px; }
+  .top nav a:not(.solid) { display: none; }
+}
+@media (max-width: 1100px) and (min-width: 900px) { .stage { grid-template-columns: 320px minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
