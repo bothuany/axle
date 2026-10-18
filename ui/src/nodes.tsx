@@ -457,7 +457,7 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
   const editable = !!(node.code && actions.edit)
   // Below this zoom the code is too small to aim at: the first click zooms in, the next one edits.
   const zoomedOut = useStore(st => st.transform[2] < 0.75)
-  const changed = !!(touched || node.diff)
+  const changed = !!(touched || node.diff || node.tableChange)
 
   // A press that moved is a pan, not a click: only a still click starts editing.
   const press = useRef<{ x: number; y: number } | null>(null)
@@ -512,7 +512,7 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
             {owner && <span className="owner">{owner}.</span>}
             <span className="member">{member}</span>
           </div>
-          <div className="sub">{schema ? `${schema.entity} in ${schema.context}` : node.kind === 'db' && /SaveChanges/.test(node.label) ? 'Saves tracked changes' : file ? `${file}:${node.startLine}` : node.sub}</div>
+          <div className="sub">{schema ? `${schema.entity} in ${schema.context}${node.tableChange ? ' · entity changed' : ''}` : node.kind === 'db' && /SaveChanges/.test(node.label) ? 'Saves tracked changes' : file ? `${file}:${node.startLine}` : node.sub}</div>
         </div>
         <div className="tools nodrag">
           {calls.length > 0 && (
