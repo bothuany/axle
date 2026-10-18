@@ -12,6 +12,7 @@ import { flowRoot } from './root';
 import type { EntryPoint } from '../../../../protocol/flow';
 import type { CsTypesResponse } from './types/wire';
 import type { TableEntity, TablesFact } from './poly/model';
+import type { EfFact } from './poly/migrations';
 
 export type { EntryPoint };
 
@@ -398,6 +399,22 @@ export class Analyzer implements vscode.Disposable {
 			throw new Error(`/api/tables: ${res.status}`);
 		}
 		return await res.json() as TablesFact & { version: number };
+	}
+
+	/** What an EF Core migration file does to tables (Migrations.cs); undefined when the file is not one. Never starts the analyzer: undefined when it is not ready. */
+	async migration(file: string): Promise<EfFact | undefined> {
+		if (!this.isReady || !this.ready) {
+			return undefined;
+		}
+		const port = await this.ready;
+		const res = await fetch(`http://127.0.0.1:${port}/api/migration?file=${encodeURIComponent(file)}`, { headers: { 'x-flow-token': this.token }, signal: AbortSignal.timeout(ASSIST_TIMEOUT_MS) });
+		if (res.status === 404) {
+			return undefined;
+		}
+		if (!res.ok) {
+			throw new Error(`/api/migration: ${res.status}`);
+		}
+		return await res.json() as EfFact | undefined ?? undefined;
 	}
 
 	/** One request at a time: callers that arrive while one runs share its answer. */

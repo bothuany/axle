@@ -27,10 +27,11 @@ export interface FlowNode {
 	/** Calls the static index could not resolve: the host asks the language server, then drops this field. */
 	pending?: { line: number; name: string }[];
 	/**
-	 * Database cards in a change set: the entity behind this table was edited (or its ORM configuration was), so every
-	 * endpoint that reaches the card may behave differently. `guess`: the table name is not written in the code.
+	 * Database cards in a change set: the entity behind this table was edited (`entity`, also its ORM configuration) or a migration
+	 * alters the table (`migration`), so every endpoint that reaches the card may behave differently. `guess`: the table name is
+	 * not written in the code. A migration says what it `added` and `dropped` and sums it up in `summary` ("adds key, drops legacy_ref").
 	 */
-	tableChange?: { entity: string; table: string; guess?: boolean };
+	tableChange?: { entity?: string; table: string; guess?: boolean; migration?: { name: string; summary: string; added: string[]; dropped: string[] }[] };
 }
 
 export interface FlowEdge {

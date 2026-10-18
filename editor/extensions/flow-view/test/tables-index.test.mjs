@@ -58,7 +58,7 @@ test('a table answer splits writes and reads, and a guessed card is not certain'
 	assert.match(text, /Writes \(1\):\n- POST \/orders Order\.create {2}via Svc\.go \(\/w\/Svc\.java:3\), card orders \[save\]\n/)
 	assert.match(text, /GET \/report Report\.run.*~table\? \(guessed\)/)
 	assert.match(text, /Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports/)
-	assert.match(text, /migrations \(not mapped yet\)/)
+	assert.match(text, /schema changes that no entity or migration file in the workspace declares/)
 })
 
 test('an entity is found by its class name or its table name, any case, schema prefix ignored', async () => {
@@ -194,4 +194,12 @@ test('an edit to an entity file rebuilds the answer: the table is renamed, the e
 	assert.equal(guessed.find(e => e.entity === 'Order').guess, true)
 	const uses = (await index.request('tables', 5000)).uses.filter(u => u.entity === 'Order')
 	assert.ok(uses.length > 0 && uses.every(u => u.guess), 'a card of an entity without @Table is a guess')
+})
+
+test('flow_text names what changed on a database card: the entity, the migrations', () => {
+	const card = tableChange => ({ callLine: 5, edgeKind: 'db', node: { key: 'o', symbolId: null, label: 'AppDb.Orders', sub: 'orders', kind: 'db', file: null, startLine: 0, endLine: 0, code: null, children: [], tableChange, schema: { entity: 'Order', table: 'orders', dbSchemaName: null, context: 'AppDb', columns: [], relations: [], ops: [], writes: false, file: null, line: 0 } } })
+	const root = { key: 'r', symbolId: 'r', label: 'Svc.run', sub: '', kind: 'method', file: '/w/Svc.cs', startLine: 1, endLine: 9, code: null, children: [card({ entity: 'Order', table: 'orders' }), card({ table: 'orders', migration: [{ name: '0007_x', summary: 'adds key, drops legacy_ref', added: ['key'], dropped: ['legacy_ref'] }] })] }
+	const lines = flowtext.flowToText(root, { rel: f => f }).text.split('\n')
+	assert.match(lines[1], /\[db\] AppDb\.Orders \(orders\) \[changed: entity Order\]$/)
+	assert.match(lines[2], /\[db\] AppDb\.Orders \(orders\) \[changed: migration 0007_x adds key, drops legacy_ref\]$/)
 })

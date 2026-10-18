@@ -89,6 +89,13 @@ public static class Server
             try { return Results.Ok(tables.Snapshot()); } finally { gate.Release(); }
         });
         app.MapGet("/api/entities", (CancellationToken ct) => Locked(async () => Results.Ok(new EntitiesFact(graph.Version, await graph.EntitiesAsync())), ct));
+        // An EF migration, read from its file alone (no gate: it touches no solution state). Only files inside a project folder.
+        app.MapGet("/api/migration", (string file) =>
+        {
+            var full = Path.GetFullPath(file);
+            if (!full.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || !File.Exists(full) || !sourceDirs.Any(d => IsBelow(full, d))) return Results.NotFound();
+            return Results.Ok(MigrationReader.Read(full));
+        });
         app.MapGet("/api/impact", (string id, CancellationToken ct) => Locked(async () => Results.Ok(await graph.ImpactAsync(id, ct: ct)), ct));
         app.MapGet("/api/methods", (string file, CancellationToken ct) => Locked(async () => Results.Ok(await graph.MethodsAsync(file)), ct));
         app.MapGet("/api/callers", (string id, int? depth, CancellationToken ct) => Locked(async () =>

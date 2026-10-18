@@ -441,7 +441,7 @@ function wireAgentBridge(flow: Flow) {
 		vscode.commands.registerCommand('flow.agent.turnImpact', async (files: string[]) => {
 			const { changed, tables: changedTables, ...impact } = await turnImpact(Array.isArray(files) ? files.filter(f => typeof f === 'string') : [], { analyzer, poly, endpoints: endpointList, providerFor: flow.providerFor, rangesOf: f => flow.changes.changedRanges(f), tables: flow.tables });
 			// The dock only says "and table orders (4 endpoints)": the endpoints themselves stay here.
-			return { ...impact, methods: changed.slice(0, 40).map(m => ({ file: m.file, name: m.name })), tables: changedTables.map(t => ({ table: t.table, entity: t.entity, endpoints: t.endpoints, guess: t.guess, partial: t.checked < t.of })) };
+			return { ...impact, methods: changed.slice(0, 40).map(m => ({ file: m.file, name: m.name })), tables: changedTables.map(t => ({ table: t.table, entity: t.entity ?? t.mapped, entityChanged: !!t.entity, migration: t.migrations[0]?.name, endpoints: t.endpoints, guess: t.guess, partial: t.checked < t.of })) };
 		}),
 	);
 	context.subscriptions.push(

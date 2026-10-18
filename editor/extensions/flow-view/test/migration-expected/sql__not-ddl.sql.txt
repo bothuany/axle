@@ -1,0 +1,1 @@
+sql/not-ddl.sql: not a migration

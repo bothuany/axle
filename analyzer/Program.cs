@@ -5,7 +5,7 @@ await Cli.RunAsync(args);
 
 static class Cli
 {
-    const string Usage = "usage: FlowAnalyzer serve <sln|csproj> [port] [parent-pid] --token <hex> | dump <sln|csproj> <controller.action|docId> [depth] | callers <sln|csproj> <file> <method> [depth] | list <sln|csproj> | tables <sln|csproj>";
+    const string Usage = "usage: FlowAnalyzer serve <sln|csproj> [port] [parent-pid] --token <hex> | dump <sln|csproj> <controller.action|docId> [depth] | callers <sln|csproj> <file> <method> [depth] | list <sln|csproj> | tables <sln|csproj> | migration <file.cs>";
 
     static int Fail(string message)
     {
@@ -24,6 +24,14 @@ static class Cli
             if (rawArgs[i] == "--token" && i + 1 < rawArgs.Length) token = rawArgs[++i];
             else if (rawArgs[i].StartsWith("--token=")) token = rawArgs[i]["--token=".Length..];
             else args.Add(rawArgs[i]);
+        }
+
+        // An EF migration is read from its one file: no solution to load.
+        if (args.FirstOrDefault() == "migration")
+        {
+            if (args.Count < 2 || !File.Exists(args[1])) { Fail(Usage); return; }
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(MigrationReader.Read(Path.GetFullPath(args[1])), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true }));
+            return;
         }
 
         // Say what is wrong before spending seconds loading a solution.

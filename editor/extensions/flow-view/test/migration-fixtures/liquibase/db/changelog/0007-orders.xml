@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog">
+    <changeSet id="7" author="a">
+        <addColumn tableName="orders">
+            <column name="key" type="varchar(40)"/>
+        </addColumn>
+        <dropColumn tableName="orders" columnName="legacy_ref"/>
+        <renameColumn tableName="orders" oldColumnName="status" newColumnName="state" columnDataType="varchar(20)"/>
+        <createTable tableName="order_notes">
+            <column name="id" type="bigint"/>
+            <column name="body" type="text"/>
+        </createTable>
+        <createIndex tableName="orders" indexName="ix_key">
+            <column name="key"/>
+        </createIndex>
+        <sql>ALTER TABLE orders ADD COLUMN extra int;</sql>
+        <rollback>
+            <dropTable tableName="order_notes"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

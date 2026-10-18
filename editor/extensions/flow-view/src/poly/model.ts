@@ -187,6 +187,43 @@ export interface TableUseFact {
 	ops: string[];
 }
 
+/** What a migration does to a table. `rename`: a table (`to` is the new name) or a column (`columns` holds "old → new"). */
+export type MigrationOpKind = 'create' | 'alter-add' | 'alter-drop' | 'alter' | 'rename' | 'drop' | 'index';
+
+export interface MigrationOp {
+	table: string;
+	op: MigrationOpKind;
+	columns: string[];
+	to?: string;
+	/** The table name is a convention (Django's app_model), not written in the migration. */
+	guess?: boolean;
+	/** 1-based line in the migration file. */
+	line: number;
+}
+
+export type MigrationFormat = 'ef' | 'sql' | 'flyway' | 'prisma' | 'liquibase' | 'alembic' | 'django' | 'typeorm' | 'rails';
+
+/** A migration file as the parsers of src/poly/migrations.ts (and Migrations.cs for EF) read it. */
+export interface Migration {
+	format: MigrationFormat;
+	/** The file's name without its extension: "0007_add_key", "V7__add_key", "20240101_AddKey". */
+	name: string;
+	file: string;
+	ops: MigrationOp[];
+	/** What could not be read (a table name built at run time, raw SQL the DDL reader did not understand). */
+	notes: string[];
+	/** Only table names are known, by the framework's convention: Rails (Ruby has no schema cards). */
+	namesOnly?: boolean;
+}
+
+/** A place in the code that mentions a column by name: what may still use a column a migration drops or renames. */
+export interface Mention {
+	file: string;
+	line: number;
+	column: string;
+	text: string;
+}
+
 /** What a walk over the entry points found so far; `done` is false while some have not been walked yet. */
 export interface TablesFact {
 	uses: TableUseFact[];

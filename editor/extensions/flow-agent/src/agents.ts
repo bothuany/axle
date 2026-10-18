@@ -82,7 +82,7 @@ export interface TurnImpact {
 	/** The methods the turn's edits landed in, where their lines are known. */
 	methods?: { file: string; name: string }[];
 	/** The tables whose entity the turn's edits landed in, with how many endpoints read or write each (`guess`: the table name is a guess; `partial`: not every entry point was checked). */
-	tables?: { table: string; entity: string; endpoints: number; guess?: boolean; partial?: boolean }[];
+	tables?: { table: string; entity?: string; entityChanged?: boolean; migration?: string; endpoints: number; guess?: boolean; partial?: boolean }[];
 }
 
 export interface CustomAgent {

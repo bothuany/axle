@@ -8,6 +8,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parentPort, workerData } from 'worker_threads';
 import { parsePrisma } from './db';
+import { escapeRe, isMigrationPath, mentionPattern } from './migrations';
+import type { Mention } from './model';
 import { Project, type Axis2Service } from './graph';
 import { extractJava } from './java';
 import { gitIgnored, isIgnored } from './ignored';
@@ -60,6 +62,8 @@ interface Found {
 	pages: string[];
 	/** XML that may declare Spring beans. */
 	xml: string[];
+	/** C# files: not indexed, but searched for a column a migration drops. */
+	cs: string[];
 }
 
 function walkDir(dir: string, out: Found, depth = 0) {
@@ -94,6 +98,8 @@ function walkDir(dir: string, out: Found, depth = 0) {
 				out.xml.push(full);
 			} else if (e.name.endsWith('.prisma')) {
 				out.prisma.push(full);
+			} else if (/\.cs$/i.test(e.name) && !/[\\/](obj|bin)[\\/]/i.test(full)) {
+				out.cs.push(full);
 			} else if (langOf(full) && !/\.min\.(js|mjs)$|\.bundle\.js$|-min\.js$/.test(e.name)) {
 				out.code.push(full);
 			}
@@ -209,6 +215,52 @@ function xmlBeans(file: string) {
 	}
 }
 
+/**
+ * Where code mentions a column by name, in the files that also mention the table or its entity (`words`): what may still use a column a
+ * migration drops or renames. Searches the indexed languages and C# within `budgetMs`; migration files themselves are left out.
+ */
+function findMentions(q: { columns: string[]; words: string[]; limit: number; budgetMs: number }): Mention[] {
+	const found: Found = { code: [], services: [], prisma: [], pages: [], xml: [], cs: [] };
+	for (const r of roots) {
+		walkDir(r, found);
+	}
+	const deadline = Date.now() + q.budgetMs;
+	const patterns = q.columns.map(column => ({ column, re: mentionPattern(column) }));
+	const near = q.words.filter(Boolean).map(w => new RegExp(`(?<![A-Za-z0-9_])${escapeRe(w)}`, 'i'));
+	const out: Mention[] = [];
+	let scanned = 0;
+	for (const file of [...found.code, ...found.cs]) {
+		if (out.length >= q.limit || Date.now() > deadline || ++scanned > 6000) {
+			break;
+		}
+		if (isMigrationPath(file)) {
+			continue;
+		}
+		let text: string;
+		try {
+			if (fs.statSync(file).size > MAX_BYTES) {
+				continue;
+			}
+			text = fs.readFileSync(file, 'utf8');
+		} catch {
+			continue;
+		}
+		if (near.length && !near.some(w => w.test(text))) {
+			continue;
+		}
+		const lines = text.split(/\r?\n/);
+		for (let i = 0; i < lines.length && out.length < q.limit; i++) {
+			for (const p of patterns) {
+				if (p.re.test(lines[i])) {
+					out.push({ file, line: i + 1, column: p.column, text: lines[i].trim().slice(0, 140) });
+					break;
+				}
+			}
+		}
+	}
+	return out;
+}
+
 function post(msg: object) {
 	parentPort!.postMessage(msg);
 }
@@ -225,7 +277,7 @@ async function index() {
 	} catch {
 		// first run
 	}
-	const found: Found = { code: [], services: [], prisma: [], pages: [], xml: [] };
+	const found: Found = { code: [], services: [], prisma: [], pages: [], xml: [], cs: [] };
 	ignored = new Set(roots.flatMap(r => [...gitIgnored(r)]));
 	for (const r of roots) {
 		walkDir(r, found);
@@ -307,6 +359,7 @@ parentPort!.on('message', async (m: { id: number; op: string; args: unknown[] })
 			case 'functionAt': result = project.functionAt(m.args[0] as string, m.args[1] as number); break;
 			case 'methods': result = project.methodsIn(m.args[0] as string); break;
 			case 'entities': result = project.entities(); break;
+			case 'mentions': result = findMentions(m.args[0] as Parameters<typeof findMentions>[0]); break;
 			case 'tables': result = project.tableUses(m.args[0] as number | undefined); break;
 			case 'stats': result = project.stats(); break;
 			case 'typeFacts': result = project.typeFacts(); break;

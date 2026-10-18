@@ -11,7 +11,8 @@
 
 import type { Entry } from '../backends';
 import { tableKey } from '../poly/db';
-import type { TableEntity, TablesFact, TableUseFact } from '../poly/model';
+import { fromEfFact, goneColumns, isMigrationPath, parseMigration, summarize, verbOf, type EfFact } from '../poly/migrations';
+import type { Mention, Migration, MigrationFormat, MigrationOp, TableEntity, TablesFact, TableUseFact } from '../poly/model';
 import type { LineRange } from './changedMethods';
 
 /** An entry point as a table answer names it (the same id, label and name `turnImpact` gives a flow). */
@@ -55,21 +56,53 @@ export interface TableUses {
 	notes: string[];
 }
 
-/** What a changed entity file resolved to. */
+/** What a changed migration does to one table, and the code that may still use what it removed. */
+export interface ChangedMigration {
+	name: string;
+	format: MigrationFormat;
+	file: string;
+	/** The line of the first thing it does to this table. */
+	line: number;
+	/** Only this table's operations. */
+	ops: MigrationOp[];
+	verb: string;
+	/** "adds key, drops legacy_ref". */
+	summary: string;
+	/** Only table names are known (Rails). */
+	namesOnly?: boolean;
+	/** Where a column this migration drops or renames away is still mentioned by name: a guess, found by reading the code. */
+	mayStillUse: Mention[];
+}
+
+/** What a changed entity file or migration resolved to: one table. */
 export interface ChangedTable extends TableUses {
-	entity: string;
+	/** The entity (or its ORM configuration) was edited; the entity the table maps to is `mapped`. */
+	entity?: string;
+	mapped?: string;
 	file: string;
 	line: number;
+	/** The changed migrations that touch this table. */
+	migrations: ChangedMigration[];
 }
 
 export interface TableDeps {
 	entries(): Entry[];
-	poly: { isReady: boolean; entities(): Promise<TableEntity[]>; tables(budgetMs: number): Promise<TablesFact> };
-	analyzer: { isReady: boolean; entities(): Promise<{ entities: TableEntity[] } | undefined>; tables(budgetMs: number): Promise<TablesFact | undefined> };
+	poly: {
+		isReady: boolean;
+		entities(): Promise<TableEntity[]>;
+		tables(budgetMs: number): Promise<TablesFact>;
+		mentions?(q: { columns: string[]; words: string[]; limit: number; budgetMs: number }): Promise<Mention[]>;
+	};
+	analyzer: {
+		isReady: boolean;
+		entities(): Promise<{ entities: TableEntity[] } | undefined>;
+		tables(budgetMs: number): Promise<TablesFact | undefined>;
+		migration?(file: string): Promise<EfFact | undefined>;
+	};
 }
 
 /** What a table answer cannot see, always said: the index follows ORM calls and string SQL only. */
-export const NOT_CHECKED = 'dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust)';
+export const NOT_CHECKED = 'dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust)';
 
 const same = (a: string, b: string) => a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
 const nameOf = (e: Entry) => `${e.controller.replace(/Controller$/, '')}.${e.action}`;
@@ -189,8 +222,9 @@ export class TableIndex {
 	}
 
 	/**
-	 * The tables an edit changed: the entities (or their ORM configuration) whose lines `ranges` overlap in each file, with the endpoints
-	 * that read or write each one. A file whose lines are unknown counts whole. The walk is only started when some file holds an entity.
+	 * The tables an edit changed: the entities (or their ORM configuration) whose lines `ranges` overlap in each file, and the tables the
+	 * migrations among the files alter, with the endpoints that read or write each one. A file whose lines are unknown counts whole.
+	 * `text` is the file as it is on disk: a migration is read from it. The walk is only started when some file holds an entity or a migration.
 	 */
 	async changed(files: { file: string; ranges?: LineRange[]; text?: string }[], limit: number, budgetMs: number): Promise<{ tables: ChangedTable[]; notes: string[] }> {
 		if (!files.length) {
@@ -198,20 +232,79 @@ export class TableIndex {
 		}
 		const cs = files.some(f => /\.cs$/i.test(f.file));
 		const { list, notes } = await this.entities({ cs, other: files.some(f => !/\.cs$/i.test(f.file)) });
-		const found = new Map<string, { entity: TableEntity; file: string; line: number }>();
+		interface Pending { table: string; entity?: string; mapped?: string; guess: boolean; file: string; line: number; migs: Map<Migration, MigrationOp[]> }
+		const found = new Map<string, Pending>();
 		for (const f of files) {
 			for (const { entity, line } of entitiesTouched(list, f.file, f.ranges, f.text)) {
-				found.set(`${entity.entity}|${tableKey(entity.table)}`, { entity, file: f.file, line });
+				found.set(tableKey(entity.table), { table: entity.table, entity: entity.entity, mapped: entity.entity, guess: entity.guess, file: f.file, line, migs: new Map() });
+			}
+		}
+		// A Django migration names a model, not a table: the models of the project say which table it is.
+		const djangoTable = (app: string, model: string) => {
+			const e = list.find(x => x.orm === 'Django ORM' && x.entity.toLowerCase() === model.toLowerCase() && x.spans.some(sp => sp.file.split(/[\\/]/).includes(app)));
+			return e && { table: e.table, guess: e.guess };
+		};
+		const migrations: Migration[] = [];
+		for (const f of files) {
+			if (f.text === undefined || !isMigrationPath(f.file)) {
+				continue;
+			}
+			let mig: Migration | undefined;
+			if (/\.cs$/i.test(f.file)) {
+				if (!/\bmigrationBuilder\b|MigrationBuilder/.test(f.text)) {
+					continue;
+				}
+				const fact = this.d.analyzer.isReady ? await this.d.analyzer.migration?.(f.file).catch(() => undefined) : undefined;
+				if (fact) {
+					mig = fromEfFact(f.file, fact);
+				} else {
+					notes.push(`the C# analyzer is not loaded, so the EF migration ${f.file.split(/[\\/]/).pop()} is not read`);
+				}
+			} else {
+				mig = parseMigration(f.file, f.text, { djangoTable });
+			}
+			if (mig) {
+				migrations.push(mig);
+				notes.push(...mig.notes.map(n => `${mig!.name}: ${n}`));
+			}
+		}
+		for (const mig of migrations) {
+			for (const op of mig.ops) {
+				const key = tableKey(op.table);
+				const p = found.get(key) ?? { table: op.table, mapped: list.find(e => tableKey(e.table) === key)?.entity, guess: !!op.guess, file: mig.file, line: op.line, migs: new Map() };
+				p.migs.set(mig, [...p.migs.get(mig) ?? [], op]);
+				found.set(key, p);
 			}
 		}
 		if (!found.size) {
 			return { tables: [], notes };
 		}
 		const facts = await this.facts(budgetMs);
-		const tables = [...found.values()].slice(0, limit).map(({ entity, file, line }) => ({ ...this.usesOf(entity.table, entity.entity, entity.guess, facts), entity: entity.entity, file, line }));
+		const tables: ChangedTable[] = [];
+		for (const p of [...found.values()].slice(0, limit)) {
+			const changes: ChangedMigration[] = [...p.migs].map(([mig, ops]) => ({
+				name: mig.name, format: mig.format, file: mig.file, line: ops[0].line, ops, verb: verbOf(ops, p.table), summary: summarize(ops, p.table), namesOnly: mig.namesOnly, mayStillUse: [],
+			}));
+			for (const c of changes) {
+				const gone = goneColumns(c.ops, p.table);
+				if (gone.length && this.d.poly.mentions && this.d.poly.isReady) {
+					c.mayStillUse = await this.d.poly.mentions({ columns: gone, words: [p.table.split('.').pop()!, ...p.mapped ? [p.mapped] : []], limit: 8, budgetMs: 1500 }).catch(() => []);
+				}
+			}
+			tables.push({ ...this.usesOf(p.table, p.mapped, p.guess, facts), entity: p.entity, mapped: p.mapped, file: p.file, line: p.line, migrations: changes });
+		}
 		const more = found.size - tables.length;
 		return { tables, notes: [...new Set([...notes, ...facts.notes, ...more > 0 ? [`${more} more changed tables not looked at`] : []])] };
 	}
+}
+
+/** One changed table in a sentence: "Order → table orders, migration 0007 alters it: adds key, 4 endpoints read or write it". */
+export function describeChanged(t: ChangedTable): string {
+	const what = [
+		t.entity ? `${t.entity} → table ${t.table}${t.guess ? ' (table? the name is a guess)' : ''}` : `table ${t.table}`,
+		...t.migrations.map(m => `migration ${m.name} ${m.verb === 'alters' ? 'alters it' : `${m.verb} it`}: ${m.summary}`),
+	];
+	return `${what.join(', ')}, ${usedBy(t)}`;
 }
 
 /** "4 endpoints read or write it" for a table's root item and the dock. */
@@ -226,12 +319,18 @@ export function usedBy(t: Pick<TableUses, 'endpoints' | 'writers' | 'readers'>):
  * The `impact` answer for a table: endpoints split into writes and reads, each with the method that makes the call and the card it
  * reaches, then what is only a guess and what was not checked.
  */
-export function tableImpactText(t: TableUses, rel: (file: string) => string): string[] {
+export function tableImpactText(t: TableUses & { migrations?: ChangedMigration[] }, rel: (file: string) => string): string[] {
 	const where = (u: TableUse) => u.file ? `${rel(u.file)}${u.line > 0 ? `:${u.line}` : ''}` : '';
 	const line = (u: TableUse) => `- ${u.endpoint.label} ${u.endpoint.name}  via ${u.from}${where(u) ? ` (${where(u)})` : ''}, card ${u.card}${u.ops.length ? ` [${u.ops.join(' → ')}]` : ''}${u.certain ? '' : '  ~table? (guessed)'}`;
 	const out = [`Impact of changing table ${t.table}${t.entity ? ` (entity ${t.entity})` : ''}:`];
 	if (t.guess) {
 		out.push(`The table name "${t.table}" is a naming default: the entity does not write it, so the mapping is a guess.`);
+	}
+	for (const m of t.migrations ?? []) {
+		out.push(`Migration ${m.name} (${m.format}${m.namesOnly ? ', table names only' : ''}) ${m.verb} ${t.table}: ${m.summary}.`);
+		if (m.mayStillUse.length) {
+			out.push(`May still use what it removes (a guess: the column's name is mentioned there): ${m.mayStillUse.map(x => `${x.column} in ${rel(x.file)}:${x.line}`).join(', ')}.`);
+		}
 	}
 	out.push(t.endpoints ? `${t.endpoints} endpoint${t.endpoints === 1 ? '' : 's'} read or write it (${t.writers} write, ${t.readers} read):` : 'No endpoint reads or writes it.');
 	for (const [title, mode] of [['Writes', 'write'], ['Reads', 'read']] as const) {

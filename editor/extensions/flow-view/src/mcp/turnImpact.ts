@@ -14,6 +14,7 @@ import type { PolyIndex } from '../poly/client';
 import type { FlowProvider, FlowTarget } from '../providers';
 import { promises as fs } from 'fs';
 import { methodsTouched, spansMatch, type LineRange, type MethodSpan } from './changedMethods';
+import { isMigrationPath } from '../poly/migrations';
 import type { ChangedTable, TableIndex } from './tableIndex';
 
 export interface AffectedFlow {
@@ -62,13 +63,13 @@ const TURN_LIMITS: ImpactLimits = { files: 6, functionsPerFile: 25, flows: 12, b
 
 /**
  * Where the edits landed in each file, for the entity they are in. A C# file comes with its text so the analyzer's spans can be checked
- * against the disk; the code index re-read the others a moment ago.
+ * against the disk, and a migration (any file it could be) with its text to be read; the code index re-read the others a moment ago.
  */
 async function placed(files: string[], d: { rangesOf?(file: string): Promise<LineRange[] | undefined> }) {
 	return Promise.all(files.map(async file => ({
 		file,
 		ranges: await d.rangesOf?.(file).catch(() => undefined),
-		text: /\.cs$/i.test(file) ? await fs.readFile(file, 'utf8').catch(() => undefined) : undefined,
+		text: /\.cs$/i.test(file) || isMigrationPath(file) ? await fs.readFile(file, 'utf8').catch(() => undefined) : undefined,
 	})));
 }
 

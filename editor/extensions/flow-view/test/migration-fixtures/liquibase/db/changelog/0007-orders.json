@@ -1,0 +1,15 @@
+{
+  "databaseChangeLog": [
+    {
+      "changeSet": {
+        "id": "7",
+        "author": "a",
+        "changes": [
+          { "addColumn": { "tableName": "orders", "columns": [ { "column": { "name": "key", "type": "varchar(40)" } } ] } },
+          { "dropColumn": { "tableName": "orders", "columnName": "legacy_ref" } },
+          { "dropTable": { "tableName": "tmp_orders" } }
+        ]
+      }
+    }
+  ]
+}

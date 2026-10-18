@@ -4,7 +4,7 @@ import * as monaco from 'monaco-editor'
 import { CODE_PAD, HEADER_H, KIND_COLOR, LINE_H, SCHEMA_MAX, SCHEMA_OPS_H, SCHEMA_ROW, type CardData, type FrameData } from './layout'
 import { chipList, linkOf, ROW_H, STRIP_H, type CardChips, type ChipRow, type TypeLink } from './chips'
 import { bindEditor, hoverCode, leaveCode, wordAtPoint } from './ide'
-import type { DbSchema, Kind } from './types'
+import type { DbSchema, FlowNode, Kind } from './types'
 
 /** Where a click on a card's code landed, in file coordinates (1-based), so editing starts right there. */
 export interface Caret {
@@ -89,6 +89,12 @@ function KindGlyph({ kind }: { kind: Kind }) {
 }
 
 /** "Orders.Service.Get" → owner "Orders.Service", member "Get": the member is what you read first. */
+/** What a changed database card says after its entity: "· entity changed · migration 0007: adds key, drops legacy_ref". */
+function changeNote(change: NonNullable<FlowNode['tableChange']> | undefined) {
+  if (!change) return ''
+  return `${change.entity ? ' · entity changed' : ''}${(change.migration ?? []).map(m => ` · migration ${m.name}: ${m.summary}`).join('')}`
+}
+
 function splitLabel(label: string) {
   const clean = label.replace(/\s*▸\s*/g, '.')
   const at = clean.lastIndexOf('.')
@@ -512,7 +518,7 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
             {owner && <span className="owner">{owner}.</span>}
             <span className="member">{member}</span>
           </div>
-          <div className="sub">{schema ? `${schema.entity} in ${schema.context}${node.tableChange ? ' · entity changed' : ''}` : node.kind === 'db' && /SaveChanges/.test(node.label) ? 'Saves tracked changes' : file ? `${file}:${node.startLine}` : node.sub}</div>
+          <div className="sub">{schema ? `${schema.entity} in ${schema.context}${changeNote(node.tableChange)}` : node.kind === 'db' && /SaveChanges/.test(node.label) ? 'Saves tracked changes' : file ? `${file}:${node.startLine}` : node.sub}</div>
         </div>
         <div className="tools nodrag">
           {calls.length > 0 && (

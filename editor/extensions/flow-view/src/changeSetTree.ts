@@ -7,12 +7,20 @@
 import { tableKey } from './poly/db';
 import type { FlowNode } from './providers';
 
-/** A changed table as the change set marks it: the entity that changed, and the table its endpoints reach. */
+/** A changed table as the change set marks it: the entity that changed and the migrations that alter it, and the table its endpoints reach. */
 export interface ChangedTableMark {
-	entity: string;
+	entity?: string;
 	table: string;
 	guess: boolean;
+	migration?: { name: string; summary: string; added: string[]; dropped: string[] }[];
 }
+
+const markOf = (t: ChangedTableMark): NonNullable<FlowNode['tableChange']> => ({
+	...(t.entity ? { entity: t.entity } : {}),
+	table: t.table,
+	...(t.guess ? { guess: true } : {}),
+	...(t.migration?.length ? { migration: t.migration } : {}),
+});
 
 /**
  * The part of a flow that leads to a change: a card stays when it changed or something it calls did. A changed card keeps
@@ -40,7 +48,7 @@ export function markTableChanges(node: FlowNode, tables: ChangedTableMark[]): nu
 	let marked = 0;
 	const hit = node.kind === 'db' && node.schema ? tables.find(t => tableKey(t.table) === tableKey(node.schema!.table)) : undefined;
 	if (hit) {
-		node.tableChange = { entity: hit.entity, table: hit.table, ...(hit.guess ? { guess: true } : {}) };
+		node.tableChange = markOf(hit);
 		marked++;
 	}
 	for (const c of node.children) {
@@ -49,12 +57,12 @@ export function markTableChanges(node: FlowNode, tables: ChangedTableMark[]): nu
 	return marked;
 }
 
-/** The root item of a changed table: "Order changed → table orders", with how many endpoints read or write it. */
-export function tableRoot(t: ChangedTableMark, sub: string, key: string): FlowNode {
+/** A root item of a changed table: "Order changed → table orders" or "migration 0007 alters orders (adds key)", with how many endpoints read or write it. */
+export function tableRoot(label: string, t: ChangedTableMark, sub: string, key: string): FlowNode {
 	return {
 		key,
 		symbolId: null,
-		label: `${t.entity} changed → table ${t.table.split('.').pop()}`,
+		label,
 		sub,
 		kind: 'db',
 		file: null,
@@ -62,7 +70,7 @@ export function tableRoot(t: ChangedTableMark, sub: string, key: string): FlowNo
 		endLine: 0,
 		code: null,
 		children: [],
-		tableChange: { entity: t.entity, table: t.table, ...(t.guess ? { guess: true } : {}) },
+		tableChange: markOf(t),
 	};
 }
 

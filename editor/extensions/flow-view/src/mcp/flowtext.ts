@@ -26,10 +26,17 @@ export interface FlowText {
 
 const where = (n: FlowNode, rel: FlowTextOptions['rel']) => n.file ? `${rel(n.file)}:${n.startLine}${n.endLine > n.startLine ? `-${n.endLine}` : ''}` : '';
 
+/** A database card a change set marked: the entity that changed, the migrations that alter its table. */
+const changedNote = (n: FlowNode) => {
+	const c = n.tableChange;
+	const parts = c ? [...c.entity ? [`entity ${c.entity}`] : [], ...(c.migration ?? []).map(m => `migration ${m.name} ${m.summary}`)] : [];
+	return parts.length ? ` [changed: ${parts.join('; ')}]` : '';
+};
+
 function describe(n: FlowNode, rel: FlowTextOptions['rel']): string {
 	const loc = where(n, rel);
 	if (n.kind === 'db') {
-		return `[db] ${n.label}${n.sub ? ` (${n.sub})` : ''}`;
+		return `[db] ${n.label}${n.sub ? ` (${n.sub})` : ''}${changedNote(n)}`;
 	}
 	const tag = n.kind === 'external' ? ' (external)' : n.kind === 'ambiguous' ? ' (ambiguous: several candidates)' : '';
 	// The entry's route is in `sub` for the roots of both backends ("GET /users/{id}"); lower down `sub` is a path or namespace.

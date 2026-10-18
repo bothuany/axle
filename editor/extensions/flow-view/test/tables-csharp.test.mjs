@@ -31,6 +31,7 @@ const skip = available()
 let t
 let dir
 let facts
+const migrationFacts = {}
 before(async () => {
 	if (skip) {
 		return
@@ -55,7 +56,7 @@ const index = () => new t.TableIndex({
 	entries: () => facts.entries.map(e => ({ ...e, source: 'roslyn' })),
 	// No other language here: the code index is up and has nothing to say.
 	poly: { isReady: true, entities: async () => [], tables: async () => ({ uses: [], done: true, checked: 0, total: 0 }) },
-	analyzer: { isReady: true, entities: async () => ({ entities: facts.entities }), tables: async () => facts.tables },
+	analyzer: { isReady: true, entities: async () => ({ entities: facts.entities }), tables: async () => facts.tables, migration: async f => migrationFacts[f] },
 })
 
 test('c#: the entities EF maps, each table, its endpoints, and which names are guesses', { skip }, async () => {
@@ -113,4 +114,26 @@ test('c#: two entities with the same name resolve by their full type, not by the
 	assert.deepEqual(accounts.map(e => e.table).sort(), ['billing_accounts', 'shop_accounts'])
 	const uses = facts.tables.uses.filter(u => u.entity === 'Account')
 	assert.deepEqual(uses.map(u => `${u.from} -> ${u.table} ${u.guess ? 'guess' : 'certain'}`).sort(), ['BillingAccountsController.Create -> billing_accounts certain', 'ShopAccountsController.List -> shop_accounts certain'])
+})
+
+test('c#: an EF migration is read by the analyzer and its tables resolve to the endpoints that use them', { skip }, async () => {
+	const file = join(dir, 'csharp-ef', 'Migrations', '20240101000000_AddKey.cs')
+	const out = run([DLL, 'migration', file])
+	migrationFacts[file] = JSON.parse(out.slice(out.indexOf('{')))
+	const r = await index().changed([{ file, text: readFileSync(file, 'utf8') }], 12, 1000)
+	const by = Object.fromEntries(r.tables.map(x => [x.table, x]))
+	assert.deepEqual(Object.keys(by).sort(), ['OrderNotes', 'Shipments', 'customers', 'orders'])
+	assert.deepEqual([by.orders.migrations[0].summary, by.orders.endpoints], ['adds Key, drops LegacyRef, changes Total, renames Status → State, indexes Key, CreatedAt', 2])
+	assert.deepEqual([by.Shipments.migrations[0].verb, by.Shipments.migrations[0].summary, by.Shipments.endpoints], ['renames', 'renames the table to Deliveries', 1])
+	assert.deepEqual([by.OrderNotes.migrations[0].verb, by.OrderNotes.endpoints], ['creates', 0])
+	assert.equal(by.customers.migrations[0].summary, 'adds vip', 'raw migrationBuilder.Sql goes through the DDL reader')
+	assert.equal(r.tables.every(x => x.migrations[0].format === 'ef' && x.migrations[0].name === '20240101000000_AddKey'), true)
+	// The designer partial of a migration has no Up: it is not one.
+	const designer = join(dir, 'csharp-ef', 'Migrations', '20240101000000_AddKey.Designer.cs')
+	assert.deepEqual((await index().changed([{ file: designer, text: readFileSync(designer, 'utf8') }], 12, 1000)).tables, [])
+	// Without the analyzer an EF migration is not read, and the answer says why instead of saying nothing.
+	const idle = new t.TableIndex({ entries: () => [], poly: { isReady: true, entities: async () => [], tables: async () => ({ uses: [], done: true, checked: 0, total: 0 }) }, analyzer: { isReady: false, entities: async () => undefined, tables: async () => undefined, migration: async () => { throw new Error('must not be asked') } } })
+	const none = await idle.changed([{ file, text: readFileSync(file, 'utf8') }], 12, 1000)
+	assert.deepEqual(none.tables, [])
+	assert.ok(none.notes.some(n => /C# analyzer is not loaded, so the EF migration 20240101000000_AddKey\.cs is not read/.test(n)), none.notes.join())
 })

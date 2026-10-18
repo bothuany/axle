@@ -43,6 +43,191 @@ export function sqlTables(sql: string): { tables: string[]; writes: boolean; ver
 	return { tables, writes: /^(INSERT|UPDATE|DELETE|MERGE|CALL|EXEC|BEGIN|DECLARE)$/.test(verb), verb };
 }
 
+/** One DDL statement's effect on a table (see `sqlDdl`). */
+export interface DdlOp {
+	table: string;
+	op: 'create' | 'alter-add' | 'alter-drop' | 'alter' | 'rename' | 'drop' | 'index';
+	columns: string[];
+	to?: string;
+	/** 1-based line of the statement in the text. */
+	line: number;
+}
+
+const IDENT = String.raw`(?:"[^"]+"|` + '`[^`]+`' + String.raw`|\[[^\]]+\]|[A-Za-z_][\w$#]*)`;
+const QNAME = String.raw`${IDENT}(?:\s*\.\s*${IDENT})*`;
+const CONSTRAINT_WORD = String.raw`(?:constraint|primary\s+key|foreign\s+key|unique|check|exclude|partition|period|like)`;
+
+const unquoteName = (raw: string) => raw.split(/\s*\.\s*/).map(p => p.replace(/^["`[]|["`\]]$/g, '')).join('.');
+const re = (source: string) => new RegExp(source, 'i');
+
+/** Comments blanked out, newlines kept: offsets in the result are the offsets in `sql`, so lines still count. */
+function blankComments(sql: string) {
+	return sql.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/--[^\n]*/g, m => ' '.repeat(m.length));
+}
+
+/** Statements split at `;` outside quotes and `$$` bodies, each with the line it starts on. */
+function splitStatements(sql: string): { text: string; line: number }[] {
+	const out: { text: string; line: number }[] = [];
+	let start = 0;
+	let line = 1;
+	let startLine = 1;
+	let quote = '';
+	let dollar = '';
+	const flush = (end: number) => {
+		const text = sql.slice(start, end);
+		const lead = text.length - text.trimStart().length;
+		if (text.trim()) {
+			out.push({ text: text.trim(), line: startLine + (text.slice(0, lead).match(/\n/g)?.length ?? 0) });
+		}
+	};
+	for (let i = 0; i < sql.length; i++) {
+		const c = sql[i];
+		if (c === '\n') {
+			line++;
+		}
+		if (dollar) {
+			if (sql.startsWith(dollar, i)) {
+				i += dollar.length - 1;
+				dollar = '';
+			}
+		} else if (quote) {
+			if (c === quote) {
+				quote = '';
+			}
+		} else if (c === "'" || c === '"' || c === '`') {
+			quote = c;
+		} else if (c === '$' && /^\$\w*\$/.test(sql.slice(i, i + 40))) {
+			dollar = sql.slice(i).match(/^\$\w*\$/)![0];
+			i += dollar.length - 1;
+		} else if (c === ';') {
+			flush(i);
+			start = i + 1;
+			startLine = line;
+		}
+	}
+	flush(sql.length);
+	return out;
+}
+
+/** Splits at commas that are not inside parentheses, brackets or quotes. */
+export function splitCommas(s: string): string[] {
+	const parts: string[] = [];
+	let depth = 0;
+	let quote = '';
+	let from = 0;
+	for (let i = 0; i < s.length; i++) {
+		const c = s[i];
+		if (quote) {
+			quote = c === quote ? '' : quote;
+		} else if (c === "'" || c === '"' || c === '`') {
+			quote = c;
+		} else if (c === '(' || c === '[' || c === '{') {
+			depth++;
+		} else if (c === ')' || c === ']' || c === '}') {
+			depth--;
+		} else if (c === ',' && depth === 0) {
+			parts.push(s.slice(from, i));
+			from = i + 1;
+		}
+	}
+	parts.push(s.slice(from));
+	return parts.map(p => p.trim()).filter(Boolean);
+}
+
+/** The text inside the parentheses (or brackets) that open at `s[open]`. */
+export function bracketBody(s: string, open: number): string {
+	let depth = 0;
+	let quote = '';
+	for (let i = open; i < s.length; i++) {
+		const c = s[i];
+		if (quote) {
+			quote = c === quote ? '' : quote;
+		} else if (c === "'" || c === '"' || c === '`') {
+			quote = c;
+		} else if (c === '(' || c === '[' || c === '{') {
+			depth++;
+		} else if ((c === ')' || c === ']' || c === '}') && --depth === 0) {
+			return s.slice(open + 1, i);
+		}
+	}
+	return s.slice(open + 1);
+}
+
+const firstIdent = (s: string) => {
+	const m = s.match(re(`^\\s*(${IDENT})`));
+	return m ? unquoteName(m[1]) : undefined;
+};
+
+/** Column names in the first parentheses of `s`: `(a, b DESC, lower(c))` gives a, b, c. */
+function parenColumns(s: string): string[] {
+	const open = s.indexOf('(');
+	return open < 0 ? [] : splitCommas(bracketBody(s, open)).map(c => c.replace(/^\w+\(\s*/, '')).map(c => firstIdent(c)).filter((c): c is string => !!c);
+}
+
+/**
+ * What DDL does to tables: CREATE / ALTER / DROP TABLE, CREATE / DROP INDEX, RENAME TABLE (PostgreSQL, MySQL, SQL Server and
+ * the usual Flyway, Prisma and plain-SQL migrations). Statements it does not know (data changes, functions) are skipped.
+ */
+export function sqlDdl(sql: string): DdlOp[] {
+	const ops: DdlOp[] = [];
+	for (const { text, line } of splitStatements(blankComments(sql))) {
+		let m: RegExpMatchArray | null;
+		if ((m = text.match(re(String.raw`^create\s+(?:or\s+replace\s+)?(?:(?:global\s+|local\s+)?(?:temporary|temp)\s+|unlogged\s+)?table\s+(?:if\s+not\s+exists\s+)?(${QNAME})\s*(\(|as\b|like\b)?`)))) {
+			const open = m[2] === '(' ? text.indexOf('(', m[0].length - 1) : -1;
+			const columns = open < 0 ? [] : splitCommas(bracketBody(text, open))
+				.filter(d => !re(`^(?:${CONSTRAINT_WORD}|key|index|fulltext|spatial)\\b`).test(d))
+				.map(d => firstIdent(d))
+				.filter((c): c is string => !!c);
+			ops.push({ table: unquoteName(m[1]), op: 'create', columns, line });
+		} else if ((m = text.match(re(String.raw`^alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(${QNAME})\s+([\s\S]*)$`)))) {
+			const table = unquoteName(m[1]);
+			for (const action of splitCommas(m[2])) {
+				let a: RegExpMatchArray | null;
+				if ((a = action.match(re(String.raw`^rename\s+to\s+(${QNAME})`)))) {
+					ops.push({ table, op: 'rename', columns: [], to: unquoteName(a[1]), line });
+				} else if ((a = action.match(re(String.raw`^rename\s+(?:column\s+)?(${IDENT})\s+to\s+(${IDENT})`)))) {
+					ops.push({ table, op: 'rename', columns: [`${unquoteName(a[1])} → ${unquoteName(a[2])}`], line });
+				} else if ((a = action.match(re(String.raw`^change\s+(?:column\s+)?(${IDENT})\s+(${IDENT})`)))) {
+					ops.push({ table, op: 'rename', columns: [`${unquoteName(a[1])} → ${unquoteName(a[2])}`], line });
+				} else if (/^add\s+(?:index|key|fulltext|spatial|unique\s+(?:index|key))\b/i.test(action)) {
+					ops.push({ table, op: 'index', columns: parenColumns(action), line });
+				} else if (re(String.raw`^add\s+${CONSTRAINT_WORD}\b`).test(action)) {
+					ops.push({ table, op: 'alter', columns: [], line });
+				} else if ((a = action.match(re(String.raw`^add\s+(?:column\s+)?(?:if\s+not\s+exists\s+)?(${IDENT})`)))) {
+					ops.push({ table, op: 'alter-add', columns: [unquoteName(a[1])], line });
+				} else if (/^drop\s+(?:index|key)\b/i.test(action)) {
+					ops.push({ table, op: 'index', columns: [], line });
+				} else if (re(String.raw`^drop\s+${CONSTRAINT_WORD}\b`).test(action) || /^drop\s+foreign\b/i.test(action)) {
+					ops.push({ table, op: 'alter', columns: [], line });
+				} else if ((a = action.match(re(String.raw`^drop\s+(?:column\s+)?(?:if\s+exists\s+)?(${IDENT})`)))) {
+					ops.push({ table, op: 'alter-drop', columns: [unquoteName(a[1])], line });
+				} else if ((a = action.match(re(String.raw`^(?:alter|modify)\s+(?:column\s+)?(${IDENT})`)))) {
+					ops.push({ table, op: 'alter', columns: [unquoteName(a[1])], line });
+				} else {
+					ops.push({ table, op: 'alter', columns: [], line });
+				}
+			}
+		} else if ((m = text.match(re(String.raw`^drop\s+table\s+(?:if\s+exists\s+)?(${QNAME}(?:\s*,\s*${QNAME})*)`)))) {
+			for (const t of splitCommas(m[1])) {
+				ops.push({ table: unquoteName(t), op: 'drop', columns: [], line });
+			}
+		} else if ((m = text.match(re(String.raw`^create\s+(?:(?:unique|clustered|nonclustered|fulltext|spatial)\s+)*index\s+(?:concurrently\s+)?(?:if\s+not\s+exists\s+)?(?:${IDENT}\s+)?on\s+(?:only\s+)?(${QNAME})`)))) {
+			ops.push({ table: unquoteName(m[1]), op: 'index', columns: parenColumns(text.slice(m[0].length)), line });
+		} else if ((m = text.match(re(String.raw`^drop\s+index\s+(?:if\s+exists\s+)?${IDENT}\s+on\s+(${QNAME})`)))) {
+			ops.push({ table: unquoteName(m[1]), op: 'index', columns: [], line });
+		} else if ((m = text.match(re(String.raw`^rename\s+table\s+(${QNAME})\s+to\s+(${QNAME})`)))) {
+			ops.push({ table: unquoteName(m[1]), op: 'rename', columns: [], to: unquoteName(m[2]), line });
+		} else if ((m = text.match(/^exec(?:ute)?\s+(?:sys\.)?sp_rename\s+N?'([^']+)'\s*,\s*N?'([^']+)'(?:\s*,\s*N?'COLUMN')?/i))) {
+			const [, from, to] = m;
+			const dot = from.lastIndexOf('.');
+			ops.push(/column/i.test(text) && dot > 0
+				? { table: unquoteName(from.slice(0, dot)), op: 'rename', columns: [`${unquoteName(from.slice(dot + 1))} → ${to}`], line }
+				: { table: unquoteName(from), op: 'rename', columns: [], to, line });
+		}
+	}
+	return ops;
+}
+
 export function looksLikeSql(s: string) {
 	return /\b(select\s[\s\S]+\sfrom|insert\s+into|update\s+\w[\w.]*\s+set|delete\s+from|merge\s+into)\b/i.test(s) || /^\s*(from|select)\s+[A-Z]\w*/.test(s);
 }

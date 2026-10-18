@@ -1,0 +1,9 @@
+liquibase/db/changelog/0007-orders.xml: liquibase 0007-orders
+  L4 alter-add orders [key]
+  L7 alter-drop orders [legacy_ref]
+  L8 rename orders [status → state]
+  L9 create order_notes [id, body]
+  L13 index orders [key]
+  L16 alter-add orders [extra]
+  alters orders: adds key, extra, drops legacy_ref, renames status → state, indexes key | gone: legacy_ref, status
+  creates order_notes: creates the table (id, body)

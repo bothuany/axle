@@ -1,0 +1,10 @@
+flyway/db/migration/V7__orders_key.sql: flyway V7__orders_key
+  L2 alter-add orders [key]
+  L3 alter-drop orders [legacy_ref]
+  L4 rename public.orders [status → state]
+  L5 index orders [key, created_at]
+  L6 create order_notes [id, order_id, body]
+  L12 drop tmp_orders
+  alters orders: adds key, drops legacy_ref, renames status → state, indexes key, created_at | gone: legacy_ref, status
+  creates order_notes: creates the table (id, order_id, body)
+  drops tmp_orders: drops the table

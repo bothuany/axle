@@ -6,6 +6,7 @@
 
 import { changeSetRoot, markTableChanges, pruneToChanged, rekey, showsLine, tableRoot } from './changeSetTree';
 import { tableEndpoints, type ImpactLimits, type TurnImpact } from './mcp/turnImpact';
+import { goneColumns } from './poly/migrations';
 import { NOT_CHECKED, usedBy } from './mcp/tableIndex';
 import type { FlowNode, FlowProvider, FlowTarget } from './providers';
 
@@ -93,8 +94,23 @@ export class ChangeSetProvider implements FlowProvider {
 		const branches: FlowNode[] = [];
 		let failed = 0;
 		// A changed entity is one root item of its own; the endpoints that read or write its table are drawn with the ones a changed method reaches.
-		const marks = impact.tables.map(t => ({ entity: t.entity, table: t.table, guess: t.guess }));
-		branches.push(...impact.tables.map((t, i) => tableRoot(marks[i], `${usedBy(t)}${t.guess ? ' · table?' : ''}${t.checked < t.of ? ' · partial' : ''}`, `table${i}`)));
+		const marks = impact.tables.map(t => ({
+			entity: t.entity,
+			table: t.table,
+			guess: t.guess,
+			migration: t.migrations.map(m => ({ name: m.name, summary: m.summary, added: m.ops.filter(o => o.op === 'alter-add' || o.op === 'create').flatMap(o => o.columns), dropped: goneColumns(m.ops, t.table) })),
+		}));
+		const short = (table: string) => table.split('.').pop();
+		for (const [i, t] of impact.tables.entries()) {
+			const common = `${usedBy(t)}${t.guess ? ' · table?' : ''}${t.checked < t.of ? ' · partial' : ''}`;
+			if (t.entity) {
+				branches.push(tableRoot(`${t.entity} changed → table ${short(t.table)}`, marks[i], common, `table${i}`));
+			}
+			for (const [j, m] of t.migrations.entries()) {
+				const still = m.mayStillUse.length ? ` · ${m.mayStillUse.length} ${m.mayStillUse.length === 1 ? 'place' : 'places'} may still use ${[...new Set(m.mayStillUse.map(x => x.column))].join(', ')} (guess)` : '';
+				branches.push(tableRoot(`migration ${m.name} ${m.verb} ${short(t.table)} (${m.summary})`, marks[i], `${common}${still}${m.namesOnly ? ' · table names only' : ''}`, `table${i}m${j}`));
+			}
+		}
 		const extra = tableEndpoints(impact);
 		const flows = [...impact.flows, ...extra.slice(0, MAX_TABLE_FLOWS)];
 		const tableOnly = Math.max(0, extra.length - MAX_TABLE_FLOWS);

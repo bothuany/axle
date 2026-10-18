@@ -22,7 +22,8 @@ import { flowToText } from './flowtext';
 import { errorResult, type ToolResult } from './protocol';
 import { resolveInWorkspace } from './registry';
 import { searchEntries } from './search';
-import { NOT_CHECKED, tableImpactText, usedBy, type TableIndex } from './tableIndex';
+import { isMigrationPath } from '../poly/migrations';
+import { describeChanged, NOT_CHECKED, tableImpactText, type TableIndex } from './tableIndex';
 import { tableEndpoints } from './turnImpact';
 import { NODE_STATUSES } from './tools';
 
@@ -445,7 +446,7 @@ export class AgentTools {
 	 */
 	async changesInFlow(changes?: Changes): Promise<{ ok: boolean; opened: boolean; message: string }> {
 		const { list, since, notes } = changes ?? await this.collectChanges();
-		const code = list.filter(r => r.modified && CODE_FILE.test(r.uri.fsPath));
+		const code = list.filter(r => r.modified && (CODE_FILE.test(r.uri.fsPath) || isMigrationPath(r.uri.fsPath)));
 		if (!code.length) {
 			return { ok: false, opened: false, message: ['No changed source files to show on the flow canvas.', ...notes].join(' ') };
 		}
@@ -471,7 +472,7 @@ export class AgentTools {
 			!impact.flows.length && !byTable.length ? ' No endpoint reaches them; the changed methods are shown on their own.' : '',
 		].join('');
 		const tables = impact.tables.length
-			? ` Changed tables: ${impact.tables.map(t => `${t.entity} → table ${t.table}${t.guess ? ' (table? name is a guess)' : ''}, ${usedBy(t)}`).join('; ')}; impact with the table name lists them. Not checked: ${NOT_CHECKED}.`
+			? ` Changed tables: ${impact.tables.map(describeChanged).join('; ')}; impact with the table name (or the changed file) lists them. Not checked: ${NOT_CHECKED}.`
 			: '';
 		const issues = [failed ? `${failed} flows or methods could not be traced` : '', impact.note ?? '', ...notes].filter(Boolean).join('; ');
 		return { ok: true, opened: true, message: `${opened}${reach}${tables}${issues ? ` (${issues})` : ''}` };
@@ -783,6 +784,23 @@ export class AgentTools {
 		return text(tableImpactText(found, f => this.rel(f)).join('\n'));
 	}
 
+	/** A file alone, without a method: an entity file or a migration says which tables it changes and who uses them. Undefined when it is neither. */
+	private async fileImpact(file: string): Promise<ToolResult | undefined> {
+		const content = await fs.readFile(file, 'utf8').catch(() => undefined);
+		const found = await within(this.d.tables.changed([{ file, text: content }], 12, 10_000), 90_000, 'the table lookup');
+		if (!found.tables.length) {
+			return undefined;
+		}
+		const out = [`Impact of changing ${this.rel(file)}:`];
+		for (const t of found.tables) {
+			out.push('', ...tableImpactText(t, f => this.rel(f)));
+		}
+		if (found.notes.length) {
+			out.push('', `Partial: ${found.notes.join('; ')}.`);
+		}
+		return text(out.join('\n'));
+	}
+
 	private async impact(a: Record<string, unknown>): Promise<ToolResult> {
 		const asked = [a.table, a.entity].find((v): v is string => typeof v === 'string' && !!v.trim());
 		if (asked) {
@@ -790,6 +808,12 @@ export class AgentTools {
 				throw new Error('Pass a `table` or `entity`, or a method (`id`, or `file` with `method` or `line`), not both.');
 			}
 			return this.tableImpact(asked.trim());
+		}
+		if (typeof a.file === 'string' && !a.id && !a.method && !a.line) {
+			const byFile = await this.fileImpact(await this.safeFile(a.file));
+			if (byFile) {
+				return byFile;
+			}
 		}
 		const r = await this.resolve(a);
 		const provider = this.d.providerFor(r.target);

@@ -1,0 +1,6 @@
+liquibase/db/changelog/0007-orders.json: liquibase 0007-orders
+  L8 alter-add orders [key]
+  L9 alter-drop orders [legacy_ref]
+  L10 drop tmp_orders
+  alters orders: adds key, drops legacy_ref | gone: legacy_ref
+  drops tmp_orders: drops the table

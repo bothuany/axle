@@ -1,0 +1,16 @@
+alembic/alembic/versions/0007_orders_key.py: alembic 0007_orders_key
+  L10 alter-add orders [key]
+  L11 alter-drop orders [legacy_ref]
+  L12 rename orders [status → state]
+  L13 alter orders [total]
+  L14 create order_notes [id, body]
+  L19 index orders [key]
+  L20 rename tmp_orders -> old_orders
+  L22 alter-add customers [vip]
+  L23 alter-drop customers [legacy_flag]
+  L24 alter-add invoices [note]
+  alters orders: adds key, drops legacy_ref, changes total, renames status → state, indexes key | gone: legacy_ref, status
+  creates order_notes: creates the table (id, body)
+  renames tmp_orders: renames the table to old_orders
+  alters customers: adds vip, drops legacy_flag | gone: legacy_flag
+  alters invoices: adds note

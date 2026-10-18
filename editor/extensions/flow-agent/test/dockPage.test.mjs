@@ -60,3 +60,15 @@ test('the turn-impact line names a changed table and how many endpoints use it, 
 	assert.match(only, /This turn touched table invoices\? \(1 endpoint, partial\)<\/b>/)
 	assert.doesNotMatch(draw({ files: 1, more: 0, flows: [], tables: [] }), /class="impact"/)
 })
+
+test('a changed migration is named in the turn-impact line', () => {
+	const script = /<script>([\s\S]*)<\/script>/.exec(html)[1]
+	const list = { innerHTML: '', querySelectorAll: () => [] }
+	const document = { getElementById: () => list, querySelectorAll: () => [] }
+	let onMessage
+	const window = { addEventListener: (_type, f) => { onMessage = f } }
+	window.window = window
+	vm.runInNewContext(script, { window, document, acquireVsCodeApi: () => ({ postMessage() { } }), setInterval() { }, Math, Object, isFinite, Date, String, Number, Map })
+	onMessage({ data: { type: 'data', list: [{ id: 'a1', cli: 'claude', name: 'Claude', state: 'done', attention: 'none', since: Date.now(), todos: [], unread: false, done: 0, impact: { files: 1, more: 0, flows: [], tables: [{ table: 'orders', entity: 'Order', migration: '0007_orders_key', endpoints: 4 }] } }], now: Date.now(), avatar: 'pixel' } })
+	assert.match(list.innerHTML, /This turn touched table orders \(migration 0007_orders_key, 4 endpoints\)<\/b>/)
+})

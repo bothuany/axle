@@ -1,0 +1,12 @@
+sql/changes.sql: sql changes
+  L2 alter-add customers [vip]
+  L2 index customers [vip]
+  L3 rename customers [mail → email]
+  L4 alter customers [name]
+  L5 rename customers -> clients
+  L6 alter-add dbo.Invoices [Total]
+  L7 alter-drop dbo.Invoices [Legacy]
+  L8 alter invoices
+  L9 rename dbo.Invoices [Total → Amount]
+  alters customers: adds vip, changes name, renames mail → email, renames the table to clients, indexes vip | gone: mail
+  alters invoices: adds Total, drops Legacy, changes its constraints, renames Total → Amount | gone: Legacy, Total

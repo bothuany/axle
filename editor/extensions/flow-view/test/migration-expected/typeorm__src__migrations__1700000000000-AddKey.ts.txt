@@ -1,0 +1,10 @@
+typeorm/src/migrations/1700000000000-AddKey.ts: typeorm 1700000000000-AddKey
+  L5 alter-add orders [key]
+  L6 alter-drop orders [legacy_ref]
+  L7 rename orders [status → state]
+  L8 create order_notes [id, body]
+  L12 index orders [key]
+  L13 alter-add customers [vip]
+  alters orders: adds key, drops legacy_ref, renames status → state, indexes key | gone: legacy_ref, status
+  creates order_notes: creates the table (id, body)
+  alters customers: adds vip

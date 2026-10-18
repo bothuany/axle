@@ -18,7 +18,7 @@ Reads (1):
 ~table? marks a guess: the table is named by a raw SQL string or a naming default, not by ORM metadata through a typed repository or DbSet.
 
 Checked 8 of 8 entry points.
-Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
 
 Impact of changing table billing_accounts (entity Account):
 1 endpoint read or write it (1 write, 0 read):
@@ -27,7 +27,7 @@ Writes (1):
 - POST BillingAccounts.Create  via BillingAccountsController.Create (Billing.cs:27), card BillingDb.Accounts [Add]
 
 Checked 8 of 8 entry points.
-Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
 
 Impact of changing table customers (entity Customer):
 1 endpoint read or write it (0 write, 1 read):
@@ -36,7 +36,7 @@ Reads (1):
 - GET Customers.List  via CustomersController.List (Controllers.cs:34), card ShopDb.Customers [ToList]
 
 Checked 8 of 8 entry points.
-Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
 
 Impact of changing table orders (entity Order):
 2 endpoints read or write it (1 write, 1 read):
@@ -48,7 +48,7 @@ Reads (1):
 - GET Orders.List  via OrdersController.List (Controllers.cs:21), card ShopDb.Orders [Where → ToList]
 
 Checked 8 of 8 entry points.
-Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
 
 Impact of changing table shop_accounts (entity Account):
 1 endpoint read or write it (0 write, 1 read):
@@ -57,7 +57,7 @@ Reads (1):
 - GET ShopAccounts.List  via ShopAccountsController.List (Controllers.cs:87), card ShopDb.Accounts [ToList]
 
 Checked 8 of 8 entry points.
-Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
 
 Impact of changing table suppliers (entity Supplier):
 1 endpoint read or write it (1 write, 0 read):
@@ -66,7 +66,7 @@ Writes (1):
 - POST Suppliers.Create  via SuppliersController.Create (Controllers.cs:73), card ShopDb.Suppliers [Add]
 
 Checked 8 of 8 entry points.
-Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
 
 Impact of changing table warehouses (entity Warehouse):
 1 endpoint read or write it (0 write, 1 read):
@@ -75,4 +75,4 @@ Reads (1):
 - GET Warehouses.List  via WarehousesController.List (Controllers.cs:60), card ShopDb.Warehouses [ToList]
 
 Checked 8 of 8 entry points.
-Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).

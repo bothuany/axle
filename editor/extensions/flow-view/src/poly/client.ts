@@ -13,7 +13,7 @@ import type { Place, Suggestion } from './assist';
 import { VsLsp } from './lspHost';
 import { LspRefiner, stripPending } from './lspResolve';
 import type { PolyTypeFacts } from '../types/wire';
-import { isExcludedPath, type EntryPoint, type TableEntity, type TablesFact } from './model';
+import { isExcludedPath, type EntryPoint, type Mention, type TableEntity, type TablesFact } from './model';
 
 export const POLY_LANGUAGES = new Set(['java', 'python', 'javascript', 'typescript', 'javascriptreact', 'typescriptreact', 'go', 'php', 'ruby', 'rust']);
 
@@ -253,6 +253,11 @@ export class PolyIndex implements vscode.Disposable {
 	/** The entity and model classes with their tables, for a change to one of them. */
 	entities() {
 		return this.request<TableEntity[]>('entities');
+	}
+
+	/** Where code mentions these columns by name (in files that also mention the table or its entity): what may still use a column a migration drops. */
+	mentions(q: { columns: string[]; words: string[]; limit: number; budgetMs: number }) {
+		return this.request<Mention[]>('mentions', q);
 	}
 
 	/**

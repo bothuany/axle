@@ -1,0 +1,14 @@
+django/shop/migrations/0007_orders_key.py: django 0007_orders_key
+  L8 alter-add orders [key]
+  L9 alter-drop orders [legacy_ref]
+  L10 rename orders [status → state]
+  L11 alter orders [total]
+  L12 create order_notes [id, body]
+  L17 create shop_tag? [id, label]
+  L18 index orders [key]
+  L19 drop shop_legacy?
+  alters orders: adds key, drops legacy_ref, changes total, renames status → state, indexes key | gone: legacy_ref, status
+  creates order_notes: creates the table (id, body)
+  creates shop_tag: creates the table (id, label)
+  drops shop_legacy: drops the table
+  note: RunPython changes data in code, which is not read

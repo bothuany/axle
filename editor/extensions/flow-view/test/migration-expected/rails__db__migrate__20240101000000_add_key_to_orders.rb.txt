@@ -1,0 +1,11 @@
+rails/db/migrate/20240101000000_add_key_to_orders.rb: rails 20240101000000_add_key_to_orders (table names only)
+  L3 alter-add orders [key]
+  L4 alter-drop orders [legacy_ref]
+  L5 rename orders [status → state]
+  L6 create order_notes [body, order_id]
+  L11 index orders [key]
+  L12 drop tmp_orders
+  alters orders: adds key, drops legacy_ref, renames status → state, indexes key | gone: legacy_ref, status
+  creates order_notes: creates the table (body, order_id)
+  drops tmp_orders: drops the table
+  note: Rails migrations name tables by convention only: Ruby has no schema cards, so no column is matched to code

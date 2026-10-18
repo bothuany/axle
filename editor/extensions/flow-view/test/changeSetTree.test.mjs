@@ -71,7 +71,7 @@ test('a database card whose entity changed is a changed card: the path to it sta
 })
 
 test('the root item of a changed table reads "Order changed → table orders" and carries the mark', () => {
-	const root = t.tableRoot({ entity: 'Order', table: 'dbo.orders', guess: false }, '4 endpoints read or write it', 'table0')
+	const root = t.tableRoot('Order changed → table orders', { entity: 'Order', table: 'dbo.orders', guess: false }, '4 endpoints read or write it', 'table0')
 	assert.equal(root.label, 'Order changed → table orders')
 	assert.equal(root.sub, '4 endpoints read or write it')
 	assert.equal(root.kind, 'db')
