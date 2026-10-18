@@ -1,4 +1,4 @@
-// What scripts/playground-data.mjs writes (public/data/demo.json) and what the workbench and the fake host read.
+// What scripts/playground-data.mjs writes (public/data/demo.json) and what the page and the fake host read.
 // The cards and entry points are the protocol types: the same ones flow-view sends the canvas.
 import type { EntryPoint, FlowNode } from '../../protocol/flow'
 
@@ -45,13 +45,6 @@ export interface AgentImpact {
   tables?: { table: string; entity?: string; entityChanged?: boolean; migration?: string; endpoints: number; guess?: boolean; partial?: boolean }[]
 }
 
-/** One file of the demo project; `after` is its text once the agent's change is made. */
-export interface DemoFile {
-  path: string
-  text: string
-  after?: string
-}
-
 /** The overlay's palette (editor/patches/flow-desktop.patch), read from the patch. */
 export interface IslandColors {
   background: string
@@ -66,12 +59,9 @@ export interface IslandColors {
   idle: string
 }
 
-/** One edit the agent makes, as hunks with a few lines of context (what the terminal draws). Lines start with ' ', '-' or '+'. */
+/** One file the agent edits: its path in the demo project. */
 export interface AgentEdit {
   path: string
-  plus: number
-  minus: number
-  hunks: { oldStart: number; newStart: number; lines: string[] }[]
 }
 
 /** One row of the harness map (flow-harness's HarnessItem, the fields the tree draws). Its file is a path in the demo project. */
@@ -101,13 +91,12 @@ export interface HarnessMap {
 }
 
 export interface DemoData {
-  /** The project as committed, and with the agent's change. The canvas draws the one the workbench is in. */
+  /** The project as committed, and with the agent's change. The canvas draws the one its page is in. */
   before: Version
   after: Version
   changes: { label: string; root: FlowNode; impact: Impact; timeline: TurnSummary[] }
   agentImpact: AgentImpact
   edits: AgentEdit[]
-  files: DemoFile[]
   harness: HarnessMap
   islandColors: IslandColors
 }

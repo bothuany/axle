@@ -1,7 +1,7 @@
 // The agent sessions of the demo, and what the Agents dock and the desktop overlay are told about them. The ranking ("what needs you
 // rises to the top"), the attention kinds and the overlay's model come from flow-agent's own vscode-free modules, so the two pages
 // draw what the real ones would draw for the same sessions.
-import { attentionKind, rank, type Need } from '../../editor/extensions/flow-agent/src/attention'
+import { attentionKind, rank } from '../../editor/extensions/flow-agent/src/attention'
 import { overlayModel, overlayOptions, readSettings, type OverlaySource } from '../../editor/extensions/flow-agent/src/desktopModel'
 import type { AgentImpact, IslandColors } from './demo'
 
@@ -37,8 +37,8 @@ export function subscribeSessions(l: Listener) {
     listeners.delete(l)
   }
 }
-export function updateSession(id: string, patch: Partial<DemoSession> | ((s: DemoSession) => Partial<DemoSession>)) {
-  sessions = sessions.map(s => (s.id === id ? { ...s, ...(typeof patch === 'function' ? patch(s) : patch) } : s))
+export function updateSession(id: string, patch: Partial<DemoSession>) {
+  sessions = sessions.map(s => (s.id === id ? { ...s, ...patch } : s))
   listeners.forEach(l => l())
 }
 export function addSession(s: DemoSession) {
@@ -49,8 +49,6 @@ export const clearSessions = () => {
   sessions = []
   listeners.forEach(l => l())
 }
-
-export const needsYou = (list: DemoSession[] = sessions) => list.filter(s => attentionKind(s)).length
 
 /** The rows the dock page draws: dock.ts's `post()`, for these sessions. */
 export function dockList(list: DemoSession[]) {
@@ -82,5 +80,3 @@ export function islandModel(list: DemoSession[], colors: IslandColors) {
     avatar: options.avatar,
   }
 }
-
-export type { Need }

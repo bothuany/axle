@@ -9,7 +9,7 @@ import { PROMPT, allow, deny, start, startOver, useStory, type Line } from './st
 
 const post = (frame: HTMLIFrameElement | null, message: unknown) => frame?.contentWindow?.postMessage(message, location.origin)
 
-/** Polls until the canvas inside `frame` has drawn a card: only then does it listen for messages. */
+/** Polls until the canvas inside `frame` has drawn a card: only then does it listen for messages. It stops when the iframe is gone (Replay, unmount). */
 function canvasReady(frame: HTMLIFrameElement, timeout = 60_000): Promise<boolean> {
   const t0 = Date.now()
   return new Promise(resolve => {
@@ -21,7 +21,7 @@ function canvasReady(frame: HTMLIFrameElement, timeout = 60_000): Promise<boolea
         ok = false
       }
       if (ok) resolve(true)
-      else if (Date.now() - t0 > timeout) resolve(false)
+      else if (!frame.isConnected || Date.now() - t0 > timeout) resolve(false)
       else setTimeout(tick, 100)
     }
     tick()
@@ -42,9 +42,9 @@ function useNear(eager: boolean) {
   return [ref, near] as const
 }
 
-function Tile({ id, name, tag, live, children, foot }: { id: string; name: string; tag: string; live?: boolean; children: ReactNode; foot?: ReactNode }) {
+function Tile({ id, name, tag, live, state, children, foot }: { id: string; name: string; tag: string; live?: boolean; state?: string; children: ReactNode; foot?: ReactNode }) {
   return (
-    <div className="tile" id={id}>
+    <div className={state ? `tile ${state}` : 'tile'} id={id}>
       <header>
         <span>{name}</span>
         <span className={live ? 'tag live' : 'tag'}>{tag}</span>
@@ -74,6 +74,7 @@ export function FlowTile({ id, mode, entries, first, hint, eager }: { id: string
   const frame = useRef<HTMLIFrameElement | null>(null)
   const ready = useRef<Promise<boolean>>(Promise.resolve(false))
   const shown = useRef(first)
+  const select = useRef<HTMLSelectElement>(null)
 
   // The canvas opens on the first flow through its address; later ones go as `show`, the message the editor sends its webview.
   const show = (entryId: string) => {
@@ -85,13 +86,16 @@ export function FlowTile({ id, mode, entries, first, hint, eager }: { id: string
     shown.current = entryId
     if (!f) return setInitial(entryId)
     const message: ToCanvas = { type: 'show', target: { kind: 'poly', id: entryId }, label: entryLabel(entry) }
-    void ready.current.then(() => post(f, message))
+    void ready.current.then(ok => ok && post(f, message))
   }
   useEffect(() => {
     if (!near || !frame.current) return
     ready.current = canvasReady(frame.current)
   }, [near, round])
-  useEffect(() => (mode === 'changed' ? onFlowRequest(show) : undefined))
+  // The dock's flow chips ask the change tile for a flow; the latest `show` answers (it reads this render's state).
+  const latest = useRef(show)
+  latest.current = show
+  useEffect(() => (mode === 'changed' ? onFlowRequest(id => latest.current(id)) : undefined), [mode])
 
   // What the canvas says to the page around it: a note about what the app would do, or Keep and Undo.
   useEffect(() => {
@@ -101,7 +105,7 @@ export function FlowTile({ id, mode, entries, first, hint, eager }: { id: string
       if (m?.source !== 'axle-canvas') return
       if (m.type === 'open' || m.type === 'reveal') setNote('In the Axle app this opens the file in the editor, at that line.')
       else if (m.type === 'note') setNote(m.text)
-      else if (m.type === 'decided') setDecided(m.what)
+      else if (m.type === 'decided' && (m.what === 'keep' || m.what === 'undo')) setDecided(m.what)
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
@@ -119,6 +123,8 @@ export function FlowTile({ id, mode, entries, first, hint, eager }: { id: string
     setDecided(undefined)
     setNote(undefined)
     setRound(r => r + 1)
+    // The button that was clicked is gone: keyboard focus goes to the select, the first control of the tile.
+    requestAnimationFrame(() => select.current?.focus({ preventScroll: true }))
   }
   const entry = entries.find(e => e.id === current)
   return (
@@ -129,7 +135,7 @@ export function FlowTile({ id, mode, entries, first, hint, eager }: { id: string
       live
       foot={
         <>
-          <p>{note ?? (decided ? SAYS[decided] : hint)}</p>
+          <p role="status">{note ?? (decided ? SAYS[decided] : hint)}</p>
           {mode === 'changed' && decided && (
             <button type="button" className="ghost replay" onClick={replay}>
               Replay the change
@@ -141,7 +147,7 @@ export function FlowTile({ id, mode, entries, first, hint, eager }: { id: string
       <div className="bar">
         <label>
           <span>Endpoint</span>
-          <select aria-label="Endpoint" value={current} onChange={e => show(e.target.value)}>
+          <select ref={select} aria-label="Endpoint" value={current} onChange={e => show(e.target.value)}>
             {entries.map(e => (
               <option key={e.id} value={e.id}>
                 {e.http}  ({serviceOf(e)})
@@ -151,7 +157,7 @@ export function FlowTile({ id, mode, entries, first, hint, eager }: { id: string
         </label>
         <span className="project">harbor-goods, a demo project</span>
       </div>
-      <div className="canvasbox" ref={wrap}>
+      <div className={mode === 'changed' ? 'canvasbox tall' : 'canvasbox'} ref={wrap}>
         {near && <iframe key={round} ref={frame} className="canvas" title={`Axle flow canvas, ${id}`} src={`./canvas.html?t=${encodeURIComponent(initial)}${mode === 'changed' ? '&mode=changed' : ''}`} />}
       </div>
     </Tile>
@@ -160,13 +166,17 @@ export function FlowTile({ id, mode, entries, first, hint, eager }: { id: string
 
 // ---- the agents ----------------------------------------------------------------------------------------------------
 
+const STATE_WORDS: Record<Line['state'], string> = { doing: 'in progress', done: 'done', waiting: 'waiting for you', no: 'refused' }
+
+/** The steps Claude takes. The list is always on the page, so a screen reader hears the first step too; each one says its state in words. */
 function Steps({ lines }: { lines: Line[] }) {
   return (
-    <ol className="steps" aria-live="polite">
+    <ol className="steps" aria-label="What Claude does" aria-live="polite">
       {lines.map((l, i) => (
         <li key={i} className={l.state}>
           <span className="mark" aria-hidden="true" />
           <span>{l.text}</span>
+          <span className="sr">, {STATE_WORDS[l.state]}</span>
         </li>
       ))}
     </ol>
@@ -184,47 +194,66 @@ export function AgentsTile() {
     const t = setTimeout(() => setNote(undefined), 7000)
     return () => clearTimeout(t)
   }, [note])
+  // A note is about now: the next step of the story replaces it.
+  useEffect(() => setNote(undefined), [phase])
+  // The button a keyboard user pressed is gone when the story moves on; focus goes to the next one, once there is one.
+  const refocus = useRef(false)
+  useEffect(() => {
+    if (!refocus.current) return
+    const next = document.querySelector<HTMLButtonElement>('#agents-tile .foot button')
+    if (next) {
+      next.focus({ preventScroll: true })
+      refocus.current = false
+    }
+  }, [phase])
+  const act = (f: () => void) => () => {
+    refocus.current = true
+    f()
+  }
   const foot =
     phase === 'idle' ? (
       <>
-        <p>{note ?? 'Claude Code, on the demo project, with a task. It is a scripted replay: the dock and the overlay are the app’s own.'}</p>
-        <button type="button" className="primary" id="play" onClick={start}>
+        <p role="status">{note ?? 'Claude Code, on the demo project, with a task. It is a scripted replay: the dock and the overlay are the app’s own.'}</p>
+        <button type="button" className="primary" id="play" onClick={act(start)}>
           Start the agent
         </button>
       </>
     ) : phase === 'asking' ? (
       <>
-        <p>{note ?? 'Claude is blocked until you answer. The overlay at the top and the dock say the same.'}</p>
+        <p role="status">{note ?? 'Claude is blocked until you answer. The overlay at the top and the dock say the same.'}</p>
         <div className="actions">
-          <button type="button" className="primary" id="allow" onClick={allow}>
+          <button type="button" className="primary" id="allow" onClick={act(allow)}>
             Allow the edit
           </button>
-          <button type="button" className="ghost" id="deny" onClick={deny}>
+          <button type="button" className="ghost" id="deny" onClick={act(deny)}>
             Say no
           </button>
         </div>
       </>
     ) : phase === 'working' ? (
-      <p>{note ?? 'Claude works. The dock row and the overlay change with it.'}</p>
+      <p role="status">{note ?? 'Claude works. The dock row and the overlay change with it.'}</p>
     ) : (
       <>
-        <p>{note ?? (phase === 'done' ? 'The turn is over, and the dock lists what it touched. Click a flow to see it.' : 'Nothing was changed. Claude waits for what you would rather it do.')}</p>
+        <p role="status">{note ?? (phase === 'done' ? 'The turn is over, and the dock lists what it touched. Click a flow to see it.' : 'Nothing was changed. Claude waits for what you would rather it do.')}</p>
         <div className="actions">
           {phase === 'done' && (
             <button type="button" className="primary" id="review" onClick={() => document.getElementById('changes-tile')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>
               See the change
             </button>
           )}
-          <button type="button" className="ghost" id="again" onClick={startOver}>
+          <button type="button" className="ghost" id="again" onClick={act(startOver)}>
             Start over
           </button>
         </div>
       </>
     )
   return (
-    <Tile id="agents-tile" name={`claude code · ${PROMPT}`} tag="scripted replay" foot={foot}>
+    <Tile id="agents-tile" name={`claude code · ${PROMPT}`} tag="scripted replay" state={phase === 'asking' ? 'asking' : undefined} foot={foot}>
       <div className="agentsbody" ref={wrap}>
-        <div className="log">{lines.length ? <Steps lines={lines} /> : <p className="empty">Press “Start the agent”. Each step Claude takes shows up here, and in the dock.</p>}</div>
+        <div className="log">
+          <Steps lines={lines} />
+          {!lines.length && <p className="empty">Press “Start the agent”. Each step Claude takes shows up here, and in the dock.</p>}
+        </div>
         <div className="dockwrap">{near && <Dock onNote={setNote} />}</div>
         {near && <Island />}
       </div>

@@ -27,14 +27,14 @@ const change = (patch: Partial<Story>) => {
   story = { ...story, ...patch }
   listeners.forEach(l => l())
 }
+function subscribe(cb: () => void) {
+  listeners.add(cb)
+  return () => {
+    listeners.delete(cb)
+  }
+}
 export function useStory<T>(select: (s: Story) => T): T {
-  return useSyncExternalStore(
-    cb => {
-      listeners.add(cb)
-      return () => listeners.delete(cb)
-    },
-    () => select(story),
-  )
+  return useSyncExternalStore(subscribe, () => select(story))
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))

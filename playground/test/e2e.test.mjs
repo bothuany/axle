@@ -64,8 +64,10 @@ const dockText = async page => textOf(await inside(page, 'iframe.dock'))
 const islandText = async page => textOf(await inside(page, 'iframe.island'))
 const foot = (page, tile) => page.evaluate(t => document.querySelector(`#${t} .foot p`)?.textContent ?? '', tile)
 const footHas = (page, tile, needle) => until(async () => (await foot(page, tile)).includes(needle), `the ${tile} to say "${needle}"`)
-const clickIn = (frame, label) => frame.evaluate(l => [...document.querySelectorAll('button')].find(b => b.textContent === l).click(), label)
-const steps = page => page.evaluate(() => [...document.querySelectorAll('.steps li')].map(li => li.textContent))
+/** Clicks the button with this label inside the iframe, once it is there. */
+const clickIn = (frame, label) => until(() => frame.evaluate(l => { const b = [...document.querySelectorAll('button')].find(b => b.textContent === l); b?.click(); return !!b }, label), `the "${label}" button`)
+const steps = page => page.evaluate(() => [...document.querySelectorAll('.steps li')].map(li => li.children[1].textContent))
+const dockSays = (page, pattern, what) => until(async () => pattern.test(await dockText(page)), what)
 
 /** Starts the agent from the page's first button and answers its question: the turn is then over. */
 async function playThrough(page) {
@@ -84,7 +86,7 @@ test('the page opens on the order flow, with the menu, the languages and no agen
 	assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.pill .links a')].map(a => a.textContent)), ['Agents', 'Changes', 'Harness', 'What is real'])
 	assert.ok((await page.evaluate(() => document.querySelector('.langs')?.textContent ?? '')).includes('Rust'))
 	await page.evaluate(() => document.getElementById('agents-tile').scrollIntoView())
-	assert.match(await dockText(page), /No agents running/)
+	await dockSays(page, /No agents running/, 'the dock to say no agent runs')
 	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.island')).opacity), '0', 'no agent, no overlay')
 	assert.deepEqual(problems, [])
 	await page.close()
@@ -118,8 +120,10 @@ test('the agent: it asks, the dock and the overlay say it waits, you allow, and 
 	await page.close()
 })
 
-test('a flow of the dock opens on the change tile, with the change on its cards', { skip }, async () => {
+test('a flow of the dock opens on the change tile (before and after the tile has loaded)', { skip }, async () => {
 	const { page, problems } = await open()
+	// The tile is far below the first screen: the canvas has not loaded when the chip is clicked.
+	assert.equal(await page.evaluate(() => !document.querySelector('#changes-tile iframe')), true, 'the change tile has not loaded yet')
 	await playThrough(page)
 	const dock = await inside(page, 'iframe.dock')
 	await until(() => dock.evaluate(() => document.querySelector('.flow')), 'the dock chips')
@@ -127,6 +131,9 @@ test('a flow of the dock opens on the change tile, with the change on its cards'
 	const canvas = await changesCanvas(page)
 	await until(async () => /OrderController\.list/.test(await textOf(canvas)), 'the change tile to show GET /orders')
 	assert.equal(await page.evaluate(() => document.querySelector('#changes-tile select').selectedOptions[0].textContent.startsWith('GET /orders  (')), true)
+	// Now that the tile is loaded, another chip is a `show` message to the running canvas.
+	await dock.evaluate(() => [...document.querySelectorAll('.flow')].find(c => c.textContent === 'GET /orders/{id}').click())
+	await until(async () => /OrderController.show/.test(await textOf(canvas)), 'the loaded canvas to show GET /orders/{id}')
 	assert.deepEqual(problems, [])
 	await page.close()
 })
@@ -137,7 +144,7 @@ test('the change tile: the order flow with its green and red, Keep, Undo, and th
 	const canvas = await changesCanvas(page)
 	await drawn(canvas)
 	await until(async () => /Review 2 changes/.test(await textOf(canvas)), 'the canvas to offer "Review 2 changes"')
-	assert.ok(await canvas.evaluate(() => [...document.querySelectorAll('.react-flow__node')].some(n => /applyDiscount/.test(n.textContent))), 'the new method is on the canvas')
+	assert.ok(await canvas.evaluate(() => [...document.querySelectorAll('.react-flow__node')].some(n => /applyDiscount/.test(n.textContent) && /Agent edit/.test(n.textContent))), 'the new method is on the canvas, marked as an agent edit')
 	await clickIn(canvas, 'Keep')
 	await footHas(page, 'changes-tile', 'Kept.')
 	await until(async () => !/Review 2 changes/.test(await textOf(canvas)), 'the canvas to stop marking the change')
@@ -161,7 +168,28 @@ test('saying no changes nothing, and Start over plays it again', { skip }, async
 	assert.equal(await page.evaluate(() => document.querySelector('.steps li:last-child').className), 'no')
 	await page.click('#again')
 	await until(() => page.$('#play'), 'the agent to be ready to start again')
-	await until(async () => /No agents running/.test(await dockText(page)), 'the dock to forget the agent')
+	await dockSays(page, /No agents running/, 'the dock to forget the agent')
+	assert.deepEqual(await steps(page), [], 'the list of steps is empty again')
+	// And it plays again, to the end.
+	await page.click('#play')
+	await until(() => page.$('#allow'), 'the permission question, the second time')
+	await page.click('#allow')
+	await until(() => page.$('#review'), 'the end of the second turn')
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('the buttons of the agents tile keep keyboard focus as the story moves on', { skip }, async () => {
+	const { page, problems } = await open()
+	await page.evaluate(() => document.getElementById('agents-tile').scrollIntoView())
+	await until(() => page.$('#play'), 'the start button')
+	await page.focus('#play')
+	await page.keyboard.press('Enter')
+	await until(() => page.$('#allow'), 'the permission question')
+	assert.equal(await page.evaluate(() => document.activeElement?.id), 'allow', 'focus moved to the next button')
+	await page.keyboard.press('Enter')
+	await until(() => page.$('#review'), 'the end of the turn')
+	assert.equal(await page.evaluate(() => document.activeElement?.id), 'review', 'focus moved to the next button')
 	assert.deepEqual(problems, [])
 	await page.close()
 })
@@ -171,7 +199,7 @@ test('the harness map is the real scan of the demo project, with its one warning
 	const text = await page.evaluate(() => document.querySelector('#harness-root')?.innerText ?? '')
 	for (const word of ['Instructions', 'Rules', 'Skills', 'Subagents', 'Hooks', 'MCP servers', 'CLAUDE.md', 'graphql-schema.md']) assert.ok(text.includes(word), `the map has ${word}`)
 	assert.match(text, /matches no file in the project/, 'the rule that matches nothing is flagged')
-	assert.ok(!/Batuhan|\/Users\/|C:\\/.test(text), 'nothing of the machine that built it is in the map')
+	assert.ok(!/Batuhan|\/Users\/|\/home\/|[A-Za-z]:\\/.test(text), 'nothing of the machine that built it is in the map')
 	assert.deepEqual(problems, [])
 	await page.close()
 })

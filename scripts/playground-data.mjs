@@ -2,7 +2,6 @@
 // `vscode`) headlessly on the fictional demo project in playground/demo, and writes what the editor's parts would have shown:
 //   - the endpoints, each one's flow, callers and impact, for the project before and after an agent's change;
 //   - one "an agent changed this" change set, drawn by flow-view's own changeSet code, and the dock's "this turn touched" summary;
-//   - the project's files (the Explorer, the code editor, the diff);
 //   - the two pages that sit around the canvas in the real app: the Agents dock page (flow-agent's dockPage.ts) and the desktop
 //     status overlay (the page inside editor/patches/flow-desktop.patch), each with a small shim so it runs in an iframe.
 //   node scripts/playground-data.mjs      writes playground/public/data/demo.json and playground/public/pages/
@@ -222,12 +221,14 @@ const WEBVIEW_BASE = `:root{--vscode-font-family:"Segoe UI Variable Text","Segoe
 
 /** The Agents dock page, with the theme variables and an `acquireVsCodeApi` that talks to the page around it. */
 function dockPage(dockHtml, themeCss) {
-	const shim = `<script>window.acquireVsCodeApi=function(){return{postMessage:function(m){parent.postMessage({source:'axle-dock',message:m},location.origin)}}}</script>`
+	// The dock page listens to every window that can post to it: it hears only the page around it (a site that frames this one could not feed it).
+	const guard = `<script>(function(){var add=window.addEventListener.bind(window);window.addEventListener=function(t,f,o){if(t==='message'){var g=f;f=function(e){if(e.source===parent&&e.origin===location.origin)g(e)}}add(t,f,o)}})()</script>`
+	const shim = `${guard}<script>window.acquireVsCodeApi=function(){return{postMessage:function(m){parent.postMessage({source:'axle-dock',message:m},location.origin)}}}</script>`
 	const head = `<style>${themeCss}</style><style>${WEBVIEW_BASE}</style>${shim}`
 	if (!dockHtml.includes('<head>')) {
 		throw new Error('The dock page has no <head>: flow-agent/src/dockPage.ts changed shape, and the playground has to follow.')
 	}
-	return dockHtml.replace('<head>', () => `<head>${head}`)
+	return dockHtml.replace('<head>', () => `<head>${head}`).replace("default-src 'none';", () => "default-src 'none'; base-uri 'none'; form-action 'none';")
 }
 
 /** The desktop status overlay page: it is a string inside the core patch, so it is cut out of the patch's added lines. */
@@ -257,7 +258,9 @@ function islandPage(avatars) {
 		throw new Error('The overlay page has no <head>.')
 	}
 	// Dark like the page around it: with another colour scheme the browser paints an opaque backdrop behind an iframe.
-	return { html: page.replace('<head>', () => `<head><meta name="color-scheme" content="dark">${shim}`), colors: new Function(`return ${palette[1]}`)() }
+	// No <base> and no form: the CSP says so (the real pages leave both open).
+	const html = page.replace('<head>', () => `<head><meta name="color-scheme" content="dark">${shim}`).replace("default-src 'none';", () => "default-src 'none'; base-uri 'none'; form-action 'none';")
+	return { html, colors: new Function(`return ${palette[1]}`)() }
 }
 
 // ---- the harness map -------------------------------------------------------------------------------------------------------
@@ -407,16 +410,8 @@ try {
 		flows: [...turn.flows, ...turnImpact.tableEndpoints(turn)],
 	}
 
-	// The project's files, as the Explorer and the code editor show them; the two the agent changes carry their new text.
-	const tree = walk(dirs.before).sort()
-	const changedRel = new Set(files.map(f => relative(dir, f).split(sep).join('/')))
-	const fileList = tree.map(path => ({ path, text: readFileSync(join(dirs.before, path), 'utf8'), ...(changedRel.has(path) ? { after: readFileSync(join(dir, path), 'utf8') } : {}) }))
-
-	// The agent's edits as the terminal shows them (a few lines of context around each change).
-	const edits = files.map(file => {
-		const patch = flowViewDeps('diff').structuredPatch('a', 'b', norm(was.get(file)), norm(readFileSync(file, 'utf8')), '', '', { context: 3 })
-		return { path: relative(dir, file).split(sep).join('/'), plus: plus(file), minus: minus(file), hunks: patch.hunks.map(h => ({ oldStart: h.oldStart, newStart: h.newStart, lines: h.lines })) }
-	})
+	// The files the agent edits, by their path in the demo project (what its permission question names).
+	const edits = files.map(file => ({ path: relative(dir, file).split(sep).join('/') }))
 
 	const harness = await scanHarness(dirs.before, scratch)
 
@@ -426,7 +421,7 @@ try {
 	writeFileSync(join(PUBLIC, 'pages', 'dock.html'), dockPage(dockModule.dockHtml(), theme))
 	writeFileSync(join(PUBLIC, 'pages', 'island.html'), island.html)
 
-	const data = relocate({ before, after: { entries, flows }, changes: { label: 'Claude Code: discount codes on orders', root, impact, timeline }, agentImpact, edits, files: fileList, harness, islandColors: island.colors }, dirs.before, dirs.after)
+	const data = relocate({ before, after: { entries, flows }, changes: { label: 'Claude Code: discount codes on orders', root, impact, timeline }, agentImpact, edits, harness, islandColors: island.colors }, dirs.before, dirs.after)
 	mkdirSync(join(OUT, '..'), { recursive: true })
 	writeFileSync(OUT, `${JSON.stringify(data)}\n`)
 	mkdirSync(join(CHECK, '..'), { recursive: true })
@@ -437,7 +432,7 @@ const checked = <T extends DemoData>(data: T) => data
 
 export const demo = checked(${JSON.stringify(data)})
 `)
-	console.log(`playground data: ${entries.length} endpoints, ${fileList.length} files, change set with ${files.length} files → ${OUT}`)
+	console.log(`playground data: ${entries.length} endpoints, change set with ${files.length} files → ${OUT}`)
 } finally {
 	await indexBefore.close()
 	await indexAfter.close()

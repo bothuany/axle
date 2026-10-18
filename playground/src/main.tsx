@@ -44,7 +44,7 @@ const mountTiles = () => {
       mode="changed"
       entries={touched}
       first={(touched.find(e => e.http === 'POST /orders') ?? touched[0]).id}
-      hint="Green is what Claude added, red what it removed. Keep the change, or Undo it. The flows are the ones its turn touched."
+      hint="Green is what Claude added, red what it removed. Keep the change, or Undo it. Scroll to zoom in, drag to move; the endpoints listed are the ones its turn touched."
     />,
   )
 }
