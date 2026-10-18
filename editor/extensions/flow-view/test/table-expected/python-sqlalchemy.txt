@@ -1,0 +1,15 @@
+entry points: 2
+entities:
+  Order -> orders (SQLAlchemy) models.py:8-13
+
+Impact of changing table orders (entity Order):
+2 endpoints read or write it (1 write, 1 read):
+
+Writes (1):
+- POST /orders main.create_order  via create_order (main.py:18), card orders [add]
+
+Reads (1):
+- GET /orders main.list_orders  via list_orders (main.py:11), card orders [query → filter → all]
+
+Checked 2 of 2 entry points.
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust).

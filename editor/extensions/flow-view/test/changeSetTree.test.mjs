@@ -51,3 +51,30 @@ test('the change set root holds every branch with keys made unique, and finds wh
 	assert.equal(t.showsLine(root, '\\W\\B.java', 12), true)
 	assert.equal(t.showsLine(root, '/w/B.java', 40), false)
 })
+
+const dbCard = (key, table, guess = false) => ({ ...card(key, '/w/E.java', 1), kind: 'db', schema: { entity: 'Order', table, dbSchemaName: null, context: 'JPA', columns: [], relations: [], ops: [], writes: false, file: '/w/E.java', line: 1 }, ...(guess ? {} : {}) })
+
+test('a database card whose entity changed is a changed card: the path to it stays, the rest of the flow goes', () => {
+	const flow = card('ctrl', '/w/C.java', 1, [
+		card('svc', '/w/S.java', 10, [dbCard('orders', 'sales.Orders'), dbCard('items', 'items')]),
+		card('cache', '/w/K.java', 60),
+	])
+	const marked = t.markTableChanges(flow, [{ entity: 'Order', table: 'orders', guess: true }])
+	assert.equal(marked, 1, 'schema prefix and case are ignored when the table is matched')
+	assert.deepEqual(shape(t.pruneToChanged(flow)), { ctrl: [{ svc: [{ orders: [] }] }] })
+	const hit = t.pruneToChanged(flow).children[0].node.children[0].node
+	assert.deepEqual(hit.tableChange, { entity: 'Order', table: 'orders', guess: true })
+	// Nothing marked, nothing kept.
+	const other = card('ctrl', '/w/C.java', 1, [dbCard('items', 'items')])
+	assert.equal(t.markTableChanges(other, [{ entity: 'Order', table: 'orders', guess: false }]), 0)
+	assert.equal(t.pruneToChanged(other), null)
+})
+
+test('the root item of a changed table reads "Order changed → table orders" and carries the mark', () => {
+	const root = t.tableRoot({ entity: 'Order', table: 'dbo.orders', guess: false }, '4 endpoints read or write it', 'table0')
+	assert.equal(root.label, 'Order changed → table orders')
+	assert.equal(root.sub, '4 endpoints read or write it')
+	assert.equal(root.kind, 'db')
+	assert.deepEqual(root.tableChange, { entity: 'Order', table: 'dbo.orders' })
+	assert.deepEqual(t.pruneToChanged(root)?.key, 'table0')
+})

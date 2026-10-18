@@ -1,0 +1,15 @@
+entry points: 2
+entities:
+  Order -> orders (TypeORM) src/order.entity.ts:4-13
+
+Impact of changing table orders (entity Order):
+2 endpoints read or write it (1 write, 1 read):
+
+Writes (1):
+- POST /orders Orders.create  via OrdersController.create (src/orders.controller.ts:17), card orders [save]
+
+Reads (1):
+- GET /orders Orders.list  via OrdersController.list (src/orders.controller.ts:12), card orders [find]
+
+Checked 2 of 2 entry points.
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust).

@@ -214,7 +214,7 @@ export function usedBy(t: Pick<TableUses, 'endpoints' | 'writers' | 'readers'>):
 	if (!t.endpoints) {
 		return 'no endpoint reads or writes it';
 	}
-	return `${t.endpoints} ${t.endpoints === 1 ? 'endpoint reads' : 'endpoints read'} or writes it`;
+	return t.endpoints === 1 ? '1 endpoint reads or writes it' : `${t.endpoints} endpoints read or write it`;
 }
 
 /**
