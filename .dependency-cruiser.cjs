@@ -33,9 +33,9 @@ module.exports = {
 		{
 			name: 'playground-imports-only-canvas-and-protocol',
 			severity: 'error',
-			comment: 'The browser playground is the canvas (ui/) on a fake host plus a page around it. It reads the wire types from protocol/, and from the extensions only these vscode-free modules, so the dock and the desktop overlay are driven by the real ranking and mapping code; everything else of the real editor is data that scripts/playground-data.mjs generates.',
+			comment: 'The browser playground is the canvas (ui/) on a fake host plus a page around it. It reads the wire types from protocol/, and from the extensions only these vscode-free modules, so the dock and the desktop overlay are driven by the real ranking and mapping code; everything else of the real editor is data that scripts/playground-data.mjs generates. React is allowed by name: this check runs where only the root dependencies are installed, and there the package does not resolve.',
 			from: { path: '^playground/' },
-			to: { pathNot: ['^(playground|ui|protocol)/', 'node_modules/', '^editor/extensions/flow-agent/src/(attention|desktopModel|avatars|dockPage)\\.ts$'], dependencyTypesNot: ['npm', 'npm-dev', 'npm-peer', 'npm-optional', 'npm-bundled', 'npm-no-pkg', 'npm-unknown'] },
+			to: { pathNot: ['^(playground|ui|protocol)/', 'node_modules/', '^react(-dom)?(/|$)', '^editor/extensions/flow-agent/src/(attention|desktopModel|avatars|dockPage)\\.ts$'], dependencyTypesNot: ['npm', 'npm-dev', 'npm-peer', 'npm-optional', 'npm-bundled', 'npm-no-pkg', 'npm-unknown'] },
 		},
 		{
 			name: 'playground-stays-off-vscode',

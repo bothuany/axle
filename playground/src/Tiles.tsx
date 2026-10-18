@@ -30,11 +30,16 @@ function canvasReady(frame: HTMLIFrameElement, timeout = 60_000): Promise<boolea
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
+/** The canvas's pan and zoom, as React Flow writes it on its viewport. */
+const viewport = (doc: Document | null) => doc?.querySelector<HTMLElement>('.react-flow__viewport')?.style.transform ?? ''
+const zoomOf = (doc: Document | null) => Number(/scale(([d.]+))/.exec(viewport(doc))?.[1] ?? 0)
+
 /**
- * Starts the canvas's own “Review N changes” tour, which centres the first changed card at 100%, and zooms in twice with the canvas's own
- * “+” button (about the middle, where that card is): at 100% a card's code is small, and the change is what this tile is for.
+ * Starts the canvas's own “Review N changes” tour, which centres the first changed card at 100%, then zooms in with the canvas's own
+ * “+” button (about the middle, where that card is) until the code is readable: at 100% a card's code is small, and the change is
+ * what this tile is for. Each step waits for the canvas to stop moving, so a slow machine does not swallow a click.
  */
-async function startReview(frame: HTMLIFrameElement, timeout = 6000) {
+async function startReview(frame: HTMLIFrameElement, timeout = 8000) {
   const t0 = Date.now()
   const doc = () => {
     try {
@@ -43,13 +48,24 @@ async function startReview(frame: HTMLIFrameElement, timeout = 6000) {
       return null
     }
   }
+  const settle = async () => {
+    let last = viewport(doc())
+    let still = 0
+    while (still < 2 && Date.now() - t0 < timeout * 2) {
+      await sleep(160)
+      const now = viewport(doc())
+      still = now === last ? still + 1 : 0
+      last = now
+    }
+  }
   while (Date.now() - t0 < timeout) {
     const chip = doc()?.querySelector<HTMLButtonElement>('.chip.agent')
     if (chip) {
       chip.click()
-      for (let i = 0; i < 2; i++) {
-        await sleep(i ? 320 : 480)
+      await settle()
+      for (let i = 0; i < 4 && zoomOf(doc()) < 1.3 && doc(); i++) {
         doc()?.querySelector<HTMLButtonElement>('.react-flow__controls-zoomin')?.click()
+        await settle()
       }
       return
     }
