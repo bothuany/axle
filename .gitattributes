@@ -7,3 +7,4 @@
 # core.autocrlf=true turned the expected files to CRLF and the Mermaid/PlantUML export tests failed there.
 editor/extensions/flow-view/test/expected/** text eol=lf
 editor/extensions/flow-view/test/types-expected/** text eol=lf
+editor/extensions/flow-view/test/table-expected/** text eol=lf
