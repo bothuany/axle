@@ -28,6 +28,36 @@ function canvasReady(frame: HTMLIFrameElement, timeout = 60_000): Promise<boolea
   })
 }
 
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+/**
+ * Starts the canvas's own “Review N changes” tour, which centres the first changed card at 100%, and zooms in twice with the canvas's own
+ * “+” button (about the middle, where that card is): at 100% a card's code is small, and the change is what this tile is for.
+ */
+async function startReview(frame: HTMLIFrameElement, timeout = 6000) {
+  const t0 = Date.now()
+  const doc = () => {
+    try {
+      return frame.isConnected ? frame.contentDocument : null
+    } catch {
+      return null
+    }
+  }
+  while (Date.now() - t0 < timeout) {
+    const chip = doc()?.querySelector<HTMLButtonElement>('.chip.agent')
+    if (chip) {
+      chip.click()
+      for (let i = 0; i < 2; i++) {
+        await sleep(i ? 320 : 480)
+        doc()?.querySelector<HTMLButtonElement>('.react-flow__controls-zoomin')?.click()
+      }
+      return
+    }
+    if (!doc()) return
+    await sleep(120)
+  }
+}
+
 /** True once the element has been near the screen: the canvas and the dock (several MB) load only for tiles a visitor scrolls to. */
 function useNear(eager: boolean) {
   const ref = useRef<HTMLDivElement>(null)
@@ -42,15 +72,23 @@ function useNear(eager: boolean) {
   return [ref, near] as const
 }
 
-function Tile({ id, name, tag, live, state, children, foot }: { id: string; name: string; tag: string; live?: boolean; state?: string; children: ReactNode; foot?: ReactNode }) {
+/** `skip` names the link that jumps over the iframes of the tile to its controls: a keyboard user would otherwise tab through every card. */
+function Tile({ id, name, tag, live, state, skip, children, foot }: { id: string; name: string; tag: string; live?: boolean; state?: string; skip: string; children: ReactNode; foot?: ReactNode }) {
   return (
     <div className={state ? `tile ${state}` : 'tile'} id={id}>
       <header>
         <span>{name}</span>
         <span className={live ? 'tag live' : 'tag'}>{tag}</span>
       </header>
+      <a className="skip" href={`#${id}-controls`}>
+        {skip}
+      </a>
       {children}
-      {foot && <div className="foot">{foot}</div>}
+      {foot && (
+        <div className="foot" id={`${id}-controls`} tabIndex={-1}>
+          {foot}
+        </div>
+      )}
     </div>
   )
 }
@@ -86,11 +124,18 @@ export function FlowTile({ id, mode, entries, first, hint, eager }: { id: string
     shown.current = entryId
     if (!f) return setInitial(entryId)
     const message: ToCanvas = { type: 'show', target: { kind: 'poly', id: entryId }, label: entryLabel(entry) }
-    void ready.current.then(ok => ok && post(f, message))
+    void ready.current.then(ok => {
+      if (!ok) return
+      post(f, message)
+      if (mode === 'changed') void startReview(f)
+    })
   }
   useEffect(() => {
     if (!near || !frame.current) return
-    ready.current = canvasReady(frame.current)
+    const f = frame.current
+    ready.current = canvasReady(f)
+    // The change is already in when this tile loads: step to its first card.
+    if (mode === 'changed') void ready.current.then(ok => { if (ok) void startReview(f) })
   }, [near, round])
   // The dock's flow chips ask the change tile for a flow; the latest `show` answers (it reads this render's state).
   const latest = useRef(show)
@@ -133,6 +178,7 @@ export function FlowTile({ id, mode, entries, first, hint, eager }: { id: string
       name={`flow · ${entry ? entry.http : ''}`}
       tag="live canvas"
       live
+      skip="Skip the canvas"
       foot={
         <>
           <p role="status">{note ?? (decided ? SAYS[decided] : hint)}</p>
@@ -248,7 +294,7 @@ export function AgentsTile() {
       </>
     )
   return (
-    <Tile id="agents-tile" name={`claude code · ${PROMPT}`} tag="scripted replay" state={phase === 'asking' ? 'asking' : undefined} foot={foot}>
+    <Tile id="agents-tile" name={`claude code · ${PROMPT}`} tag="scripted replay" skip="Skip the dock" state={phase === 'asking' ? 'asking' : undefined} foot={foot}>
       <div className="agentsbody" ref={wrap}>
         <div className="log">
           <Steps lines={lines} />
