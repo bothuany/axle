@@ -1,4 +1,4 @@
-// What scripts/playground-data.mjs writes (public/data/demo.json) and what the shell and the fake host read.
+// What scripts/playground-data.mjs writes (public/data/demo.json) and what the workbench and the fake host read.
 // The cards and entry points are the protocol types: the same ones flow-view sends the canvas.
 import type { EntryPoint, FlowNode } from '../../protocol/flow'
 
@@ -29,10 +29,87 @@ export interface FlowData {
   changed?: FlowNode
 }
 
-export interface DemoData {
+/** The endpoints and their flows for one state of the demo project. */
+export interface Version {
   entries: Entry[]
   flows: Record<string, FlowData>
+}
+
+/** What flow-view answers the Agents dock after a turn (`flow.agent.turnImpact`): the flows and tables the edits reached. */
+export interface AgentImpact {
+  files: number
+  flows: { id: string; label: string; name: string; source: 'roslyn' | 'poly'; via?: string[] }[]
+  more: number
+  note?: string
+  methods?: { file: string; name: string }[]
+  tables?: { table: string; entity?: string; entityChanged?: boolean; migration?: string; endpoints: number; guess?: boolean; partial?: boolean }[]
+}
+
+/** One file of the demo project; `after` is its text once the agent's change is made. */
+export interface DemoFile {
+  path: string
+  text: string
+  after?: string
+}
+
+/** The overlay's palette (editor/patches/flow-desktop.patch), read from the patch. */
+export interface IslandColors {
+  background: string
+  foreground: string
+  muted: string
+  border: string
+  working: string
+  approval: string
+  question: string
+  error: string
+  done: string
+  idle: string
+}
+
+/** One edit the agent makes, as hunks with a few lines of context (what the terminal draws). Lines start with ' ', '-' or '+'. */
+export interface AgentEdit {
+  path: string
+  plus: number
+  minus: number
+  hunks: { oldStart: number; newStart: number; lines: string[] }[]
+}
+
+/** One row of the harness map (flow-harness's HarnessItem, the fields the tree draws). Its file is a path in the demo project. */
+export interface HarnessItem {
+  kind: 'instructions' | 'rules' | 'skills' | 'agents' | 'hooks' | 'mcp' | 'permissions' | 'memory'
+  scope: 'user' | 'project' | 'local' | 'directory'
+  label: string
+  detail: string
+  agents: string[]
+  tokens?: number
+  onDemand?: number
+  issues: { severity: 'error' | 'warning' | 'info'; message: string; fix?: string; line?: number }[]
+  file: string
+  rule?: { effect: 'allow' | 'ask' | 'deny' }
+  hook?: { command: string }
+  mcp?: { id: string; state?: string }
+}
+
+/** The result of flow-harness's scan of the demo project. */
+export interface HarnessMap {
+  root: string
+  score: number
+  counts: { error: number; warning: number; info: number }
+  startupTokens: number
+  gaps: { key: string; label: string }[]
+  items: HarnessItem[]
+}
+
+export interface DemoData {
+  /** The project as committed, and with the agent's change. The canvas draws the one the workbench is in. */
+  before: Version
+  after: Version
   changes: { label: string; root: FlowNode; impact: Impact; timeline: TurnSummary[] }
+  agentImpact: AgentImpact
+  edits: AgentEdit[]
+  files: DemoFile[]
+  harness: HarnessMap
+  islandColors: IslandColors
 }
 
 /** What the canvas is asked to show: an endpoint's flow, or the agent's change set. */
@@ -44,6 +121,6 @@ export const entryLabel = (e: EntryPoint) => `${e.controller}.${e.action}`
 /** The service an entry lives in: the first folder under the demo project's root. */
 export const serviceOf = (e: EntryPoint) => e.file.split('/')[2] ?? 'demo'
 
-/** Messages the canvas page sends its parent (the shell), and the other way round (`show`, `cursor`). */
-export type ToShell = { source: 'axle-canvas'; type: 'note'; text: string } | { source: 'axle-canvas'; type: 'ready' }
+/** Messages the canvas page sends its parent, and the other way round (`show`, `cursor`). */
+export type ToShell = { source: 'axle-canvas'; type: 'note'; text: string } | { source: 'axle-canvas'; type: 'ready' } | { source: 'axle-canvas'; type: 'open' | 'reveal'; file: string; line: number }
 export type ToCanvas = { type: 'show'; target: Target; label: string } | { type: 'cursor'; file: string; line: number }

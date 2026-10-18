@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./mvnw:*)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(git diff:*)",
+      "Bash(git status)",
+      "Read(**)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Read(./.env)",
+      "Read(./secrets/**)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{ "type": "command", "command": "./mvnw -q spotless:apply -pl orders-service,shipping-service" }]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [{ "type": "command", "command": "git status --short" }]
+      }
+    ]
+  }
+}

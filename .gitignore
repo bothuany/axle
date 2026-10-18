@@ -39,5 +39,8 @@ tools/sonarqube/.token
 
 # The playground: demo data is generated from the real index, the site is built from it
 /playground/public/data/
+/playground/public/pages/
 /playground/src/generated/
 /playground/dist/
+# The demo project's own MCP config is a fixture (fictional servers), not a developer's local file.
+!/playground/demo/base/.mcp.json
