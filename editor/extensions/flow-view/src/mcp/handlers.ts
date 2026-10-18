@@ -22,6 +22,8 @@ import { flowToText } from './flowtext';
 import { errorResult, type ToolResult } from './protocol';
 import { resolveInWorkspace } from './registry';
 import { searchEntries } from './search';
+import { NOT_CHECKED, tableImpactText, usedBy, type TableIndex } from './tableIndex';
+import { tableEndpoints } from './turnImpact';
 import { NODE_STATUSES } from './tools';
 
 /** What the tools need from the rest of the extension. */
@@ -30,6 +32,8 @@ export interface ToolDeps {
 	endpoints: Endpoints;
 	analyzer: Analyzer;
 	poly: PolyIndex;
+	/** Which endpoints read or write a table. */
+	tables: TableIndex;
 	boards: BoardStore;
 	providerFor(target: FlowTarget): FlowProvider;
 	showEntry(id: string, label: string, source?: Source): Promise<void>;
@@ -65,7 +69,7 @@ interface GitApi {
 interface ChangeRow { uri: vscode.Uri; original?: vscode.Uri; modified?: vscode.Uri; mark: string; repo: string }
 interface Changes { list: ChangeRow[]; repos: number; /** What the base is called ("main", "HEAD~1"), when it is not HEAD. */ since?: string; notes: string[] }
 /** Files the flow canvas can draw: the languages of the code index and the C# analyzer. */
-const CODE_FILE = /\.(cs|ts|tsx|js|jsx|java|kt|py|go|rs|php|rb)$/i;
+const CODE_FILE = /\.(cs|ts|tsx|js|jsx|java|kt|py|go|rs|php|rb|prisma)$/i;
 /** The only filter commands a repository may configure: git-lfs's own, spelled exactly as `git lfs install` writes them. */
 const LFS_FILTER: Record<string, (v: string) => boolean> = {
 	clean: v => v === 'git-lfs clean -- %f',
@@ -459,11 +463,18 @@ export class AgentTools {
 			return { ok: true, opened: true, message: `${opened} Which endpoints they reach is not known yet: ${(e as Error).message}.` };
 		}
 		const { impact, failed } = trace;
-		const reach = impact.flows.length
-			? ` Endpoints they reach: ${impact.flows.slice(0, 12).map(f => `${f.label} (id=${f.id})`).join(', ')}${impact.more ? ` and ${impact.more} more` : ''}; show_flow with an id opens one in full.`
-			: ' No endpoint reaches them; the changed methods are shown on their own.';
+		const byTable = tableEndpoints(impact);
+		const ids = (list: { label: string; id: string }[]) => list.slice(0, 12).map(f => `${f.label} (id=${f.id})`).join(', ') + (list.length > 12 ? ` and ${list.length - 12} more` : '');
+		const reach = [
+			impact.flows.length ? ` Endpoints they reach: ${ids(impact.flows)}${impact.more ? ` and ${impact.more} more` : ''}; show_flow with an id opens one in full.` : '',
+			byTable.length ? ` Endpoints that read or write a changed table: ${ids(byTable)}.` : '',
+			!impact.flows.length && !byTable.length ? ' No endpoint reaches them; the changed methods are shown on their own.' : '',
+		].join('');
+		const tables = impact.tables.length
+			? ` Changed tables: ${impact.tables.map(t => `${t.entity} → table ${t.table}${t.guess ? ' (table? name is a guess)' : ''}, ${usedBy(t)}`).join('; ')}; impact with the table name lists them. Not checked: ${NOT_CHECKED}.`
+			: '';
 		const issues = [failed ? `${failed} flows or methods could not be traced` : '', impact.note ?? '', ...notes].filter(Boolean).join('; ');
-		return { ok: true, opened: true, message: `${opened}${reach}${issues ? ` (${issues})` : ''}` };
+		return { ok: true, opened: true, message: `${opened}${reach}${tables}${issues ? ` (${issues})` : ''}` };
 	}
 
 	// ── diagnostics, symbols, definitions, references ───────────────────────
@@ -751,14 +762,35 @@ export class AgentTools {
 		const t = flowToText(root, { depth: num(a.depth, 6, 12), rel: f => this.rel(f) });
 		return text([
 			open ? `Opened the flow of ${r.label} in Axle.` : `Flow of ${r.label}:`,
-			'Format: "-> L<n>" is the line in the caller where the call is made; [db] marks a table.',
+			'Format: "-> L<n>" is the line in the caller where the call is made; [db] marks a table; ~table after a [db] line means the table name is a guess (a naming default or raw SQL, not ORM metadata).',
 			'',
 			t.text,
-			t.tables.length ? `\nTables touched: ${t.tables.join(', ')}` : '',
+			t.tables.length ? `\nTables touched: ${t.tables.join(', ')}${t.guessed.length ? ` (guessed, ~table: ${t.guessed.join(', ')})` : ''}` : '',
 		].join('\n'));
 	}
 
+	/** A table name or an entity class: the endpoints that write and read it, from the code index and (when it is loaded) the C# analyzer. */
+	private async tableImpact(name: string): Promise<ToolResult> {
+		const found = await within(this.d.tables.lookup(name, 10_000), 90_000, 'the table lookup');
+		if (!found) {
+			const known = await this.d.tables.known().catch(() => [] as string[]);
+			return text([
+				`No entity or table named "${name}" is known to Axle's code index or, when it is loaded, the C# analyzer.`,
+				known.length ? `Tables it knows (${known.length}): ${known.slice(0, 40).join(', ')}${known.length > 40 ? ', ...' : ''}.` : 'It knows no tables yet: the index may still be building, or the project has no ORM entities in a language with schema cards.',
+				`Not checked: ${NOT_CHECKED}.`,
+			].join('\n'));
+		}
+		return text(tableImpactText(found, f => this.rel(f)).join('\n'));
+	}
+
 	private async impact(a: Record<string, unknown>): Promise<ToolResult> {
+		const asked = [a.table, a.entity].find((v): v is string => typeof v === 'string' && !!v.trim());
+		if (asked) {
+			if (a.id || a.file) {
+				throw new Error('Pass a `table` or `entity`, or a method (`id`, or `file` with `method` or `line`), not both.');
+			}
+			return this.tableImpact(asked.trim());
+		}
 		const r = await this.resolve(a);
 		const provider = this.d.providerFor(r.target);
 		const [callers, affected] = await Promise.all([

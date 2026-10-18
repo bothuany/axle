@@ -1,0 +1,18 @@
+entry points: 2
+entities:
+  Product -> shop_product (Django ORM, name is a guess) shop/models.py:5-7
+
+Impact of changing table shop_product (entity Product):
+The table name "shop_product" is a naming default: the entity does not write it, so the mapping is a guess.
+2 endpoints read or write it (1 write, 1 read):
+
+Writes (1):
+- POST /products ProductList.post  via ProductList.post (shop/views.py:11), card shop_product [create]  ~table? (guessed)
+
+Reads (1):
+- GET /products ProductList.get  via ProductList.get (shop/views.py:8), card shop_product [all]  ~table? (guessed)
+
+~table? marks a guess: the table is named by a raw SQL string or a naming default, not by ORM metadata through a typed repository or DbSet.
+
+Checked 2 of 2 entry points.
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust).

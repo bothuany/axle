@@ -5,7 +5,7 @@ await Cli.RunAsync(args);
 
 static class Cli
 {
-    const string Usage = "usage: FlowAnalyzer serve <sln|csproj> [port] [parent-pid] --token <hex> | dump <sln|csproj> <controller.action|docId> [depth] | callers <sln|csproj> <file> <method> [depth] | list <sln|csproj>";
+    const string Usage = "usage: FlowAnalyzer serve <sln|csproj> [port] [parent-pid] --token <hex> | dump <sln|csproj> <controller.action|docId> [depth] | callers <sln|csproj> <file> <method> [depth] | list <sln|csproj> | tables <sln|csproj>";
 
     static int Fail(string message)
     {
@@ -27,7 +27,7 @@ static class Cli
         }
 
         // Say what is wrong before spending seconds loading a solution.
-        var needed = args.FirstOrDefault() switch { "list" or "serve" => 2, "dump" => 3, "callers" => 4, _ => int.MaxValue };
+        var needed = args.FirstOrDefault() switch { "list" or "serve" or "tables" => 2, "dump" => 3, "callers" => 4, _ => int.MaxValue };
         if (args.Count < needed) { Fail(Usage); return; }
 
         var port = 5199;
@@ -53,6 +53,14 @@ static class Cli
             case "list":
                 foreach (var e in await graph.EntryPointsAsync())
                     Console.WriteLine($"{e.Http,-6} {e.Controller}.{e.Action}  {e.Id}");
+                break;
+            case "tables":
+                // The entities and the database cards each entry point reaches, as the editor's table index asks the server for them.
+                var walk = new TableWalk(graph);
+                while (!await walk.StepAsync(CancellationToken.None)) { }
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(
+                    new { entries = await graph.EntryPointsAsync(), entities = await graph.EntitiesAsync(), tables = walk.Snapshot() },
+                    new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true }));
                 break;
             case "dump":
                 var id = args[2].StartsWith("M:") ? args[2]

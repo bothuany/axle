@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json.Serialization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -11,7 +12,19 @@ public sealed record DbColumn(string Name, string Column, string Type, bool Key,
 public sealed record DbSchema(
     string Entity, string Table, string? DbSchemaName, string Context,
     List<DbColumn> Columns, List<string> Relations, List<string> Ops, bool Writes,
-    string? File, int Line);
+    string? File, int Line)
+{
+    /// <summary>The table name is not written in the code (no [Table], no ToTable): a naming default, so the card says "table?". Not sent to the canvas; the edge carries it.</summary>
+    [JsonIgnore] public bool Guess { get; init; }
+}
+
+/// <summary>Where an entity or its configuration is written: an edit that lands in one of these lines changes the entity.</summary>
+public sealed record TableSpan(string File, int Line, int EndLine);
+
+/// <summary>An entity and the table it maps to (the shape editor/extensions/flow-view/src/poly/model.ts calls TableEntity).</summary>
+public sealed record TableEntity(string Entity, string Table, string? SchemaName, string Orm, bool Guess, List<TableSpan> Spans);
+
+public sealed record EntitiesFact(int Version, List<TableEntity> Entities);
 
 /// <summary>
 /// Reads the EF Core model from source: entity properties, data annotations, and the fluent
@@ -24,7 +37,7 @@ public sealed class SchemaReader
     private readonly Func<SyntaxTree, Task<SemanticModel?>> _model;
     private readonly ConcurrentDictionary<string, Task<Entity>> _cache = new();
 
-    private sealed record Entity(string Table, string? Schema, List<DbColumn> Columns, List<string> Relations, string? File, int Line);
+    private sealed record Entity(string Table, string? Schema, List<DbColumn> Columns, List<string> Relations, string? File, int Line, bool Explicit, List<TableSpan> Spans);
 
     private static readonly HashSet<string> WriteOps = new() { "Add", "AddAsync", "AddRange", "AddRangeAsync", "Update", "UpdateRange", "Remove", "RemoveRange", "Attach", "ExecuteUpdate", "ExecuteUpdateAsync", "ExecuteDelete", "ExecuteDeleteAsync" };
 
@@ -48,7 +61,48 @@ public sealed class SchemaReader
         var writes = ops.Any(WriteOps.Contains) || ops.Any(o => o.StartsWith("SaveChanges"));
         if (entity == null) return null;
         var e = await _cache.GetOrAdd(entity.ToDisplayString(), _ => ReadAsync(entity, member));
-        return new DbSchema(entity.Name, e.Table, e.Schema, context.Name, e.Columns, e.Relations, ops.ToList(), writes, e.File, e.Line);
+        return new DbSchema(entity.Name, e.Table, e.Schema, context.Name, e.Columns, e.Relations, ops.ToList(), writes, e.File, e.Line) { Guess = !e.Explicit };
+    }
+
+    /// <summary>
+    /// Every entity the model maps, with its table: the DbSet&lt;T&gt; element types of every DbContext in source, and every T that has an
+    /// IEntityTypeConfiguration&lt;T&gt;. Where an entity is written (and its configuration classes) says which edits change it.
+    /// </summary>
+    public async Task<List<TableEntity>> EntitiesAsync()
+    {
+        var types = await _sourceTypes();
+        var found = new Dictionary<string, (ITypeSymbol Type, string? Member)>();
+        foreach (var t in types)
+        {
+            if (!InheritsFrom(t, "DbContext")) continue;
+            foreach (var p in AllMembers(t).OfType<IPropertySymbol>())
+                if (p.Type is INamedTypeSymbol { IsGenericType: true } set && set.Name == "DbSet" && set.TypeArguments.Length == 1)
+                    found.TryAdd(set.TypeArguments[0].ToDisplayString(), (set.TypeArguments[0], p.Name));
+        }
+        foreach (var t in types)
+            foreach (var i in t.AllInterfaces.Where(i => i.Name == "IEntityTypeConfiguration" && i.TypeArguments.Length == 1))
+                found.TryAdd(i.TypeArguments[0].ToDisplayString(), (i.TypeArguments[0], null));
+        var list = new List<TableEntity>();
+        foreach (var (entity, member) in found.Values)
+        {
+            var e = await _cache.GetOrAdd(entity.ToDisplayString(), _ => ReadAsync(entity, member));
+            if (e.Spans.Count > 0) list.Add(new TableEntity(entity.Name, e.Table, e.Schema, "EF Core", !e.Explicit, e.Spans));
+        }
+        return list;
+    }
+
+    private static bool InheritsFrom(ITypeSymbol? t, string name)
+    {
+        for (; t != null; t = t.BaseType)
+            if (t.Name == name) return true;
+        return false;
+    }
+
+    private static async Task<TableSpan?> SpanOfAsync(SyntaxReference r)
+    {
+        var node = await r.GetSyntaxAsync();
+        var span = node.GetLocation().GetLineSpan();
+        return span.Path is { Length: > 0 } path ? new TableSpan(path, span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1) : null;
     }
 
     private static IEnumerable<ISymbol> AllMembers(ITypeSymbol t)
@@ -90,6 +144,9 @@ public sealed class SchemaReader
     private async Task<Entity> ReadAsync(ITypeSymbol entity, string? member)
     {
         string? table = null, schema = null;
+        var spans = new List<TableSpan>();
+        foreach (var r in entity.DeclaringSyntaxReferences)
+            if (await SpanOfAsync(r) is { } own) spans.Add(own);
         var keys = new List<string>();
         var colName = new Dictionary<string, string>();
         var maxLen = new Dictionary<string, int>();
@@ -113,6 +170,7 @@ public sealed class SchemaReader
             if (cfg == null) continue;
             foreach (var syntaxRef in t.DeclaringSyntaxReferences)
             {
+                if (await SpanOfAsync(syntaxRef) is { } configured) spans.Add(configured);
                 var node = await syntaxRef.GetSyntaxAsync();
                 foreach (var inv in node.DescendantNodes().OfType<InvocationExpressionSyntax>())
                 {
@@ -178,6 +236,6 @@ public sealed class SchemaReader
 
         var loc = entity.Locations.FirstOrDefault(l => l.IsInSource);
         return new Entity(table ?? member ?? entity.Name, schema, columns.OrderByDescending(c => c.Key).ToList(), relations.Distinct().ToList(),
-            loc?.SourceTree?.FilePath, (loc?.GetLineSpan().StartLinePosition.Line ?? 0) + 1);
+            loc?.SourceTree?.FilePath, (loc?.GetLineSpan().StartLinePosition.Line ?? 0) + 1, table != null, spans);
     }
 }

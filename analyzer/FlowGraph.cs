@@ -23,7 +23,12 @@ public sealed record FlowNode(
     public DbSchema? Schema { get; init; }
 }
 
-public sealed record FlowEdge(int CallLine, string EdgeKind, FlowNode Node); // call | mediator | impl | db
+public sealed record FlowEdge(int CallLine, string EdgeKind, FlowNode Node) // call | mediator | impl | db
+{
+    /// <summary>A `db` edge whose table is a guess: the name is a naming default, not written in the code.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public bool? Guess { get; init; }
+}
 
 public sealed record MethodInfo(string Id, string Name, int Line, int StartLine, int EndLine, bool IsEntry);
 
@@ -86,6 +91,9 @@ public sealed class FlowGraph
         foreach (var n in t.GetTypeMembers())
             foreach (var x in WithNested(n)) yield return x;
     }
+
+    /// <summary>Every EF entity with its table and where it is written (see SchemaReader.EntitiesAsync).</summary>
+    public Task<List<TableEntity>> EntitiesAsync() => _schema.EntitiesAsync();
 
     public async Task<List<EntryPoint>> EntryPointsAsync() => (await EntrySymbolsAsync()).Select(e => e.Entry).ToList();
 
@@ -192,7 +200,7 @@ public sealed class FlowGraph
                         var schema = await _schema.ForAsync(db.Value.Context, db.Value.Member, db.Value.Ops, db.Value.SetTypes);
                         var dbSub = schema == null ? db.Value.Context.Name : $"{(schema.DbSchemaName != null ? schema.DbSchemaName + "." : "")}{schema.Table}";
                         node.Children.Add(new FlowEdge(callLine, "db",
-                            new FlowNode(nextKey(), null, db.Value.Label, dbSub, "db", schema?.File, schema?.Line ?? 0, schema?.Line ?? 0, null, new()) { Schema = schema }));
+                            new FlowNode(nextKey(), null, db.Value.Label, dbSub, "db", schema?.File, schema?.Line ?? 0, schema?.Line ?? 0, null, new()) { Schema = schema }) { Guess = schema?.Guess == true ? true : null });
                     }
                     continue;
                 }

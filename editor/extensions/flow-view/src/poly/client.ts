@@ -13,7 +13,7 @@ import type { Place, Suggestion } from './assist';
 import { VsLsp } from './lspHost';
 import { LspRefiner, stripPending } from './lspResolve';
 import type { PolyTypeFacts } from '../types/wire';
-import { isExcludedPath, type EntryPoint } from './model';
+import { isExcludedPath, type EntryPoint, type TableEntity, type TablesFact } from './model';
 
 export const POLY_LANGUAGES = new Set(['java', 'python', 'javascript', 'typescript', 'javascriptreact', 'typescriptreact', 'go', 'php', 'ruby', 'rust']);
 
@@ -23,6 +23,8 @@ function wasmDir(extensionPath: string) {
 }
 
 const MAX_RESTARTS = 5;
+/** How long the worker walks the entry points for tables before it lets another request in. */
+const WALK_SLICE_MS = 250;
 /** The files the index reads, as watcher globs, and the same as a test on a file name. */
 const WATCHED = ['*.java', '*.py', '*.js', '*.jsx', '*.mjs', '*.cjs', '*.ts', '*.tsx', '*.go', '*.php', '*.rb', '*.rs', '*.xhtml', '*.jsp', '*.jspx', '*.jsf', 'services.xml', '*.prisma'];
 const WATCHED_FILE = new RegExp(`^(${WATCHED.map(g => g.replace(/\./g, '\\.').replace('*', '.*')).join('|')})$`, 'i');
@@ -246,6 +248,27 @@ export class PolyIndex implements vscode.Disposable {
 
 	methods(file: string) {
 		return this.request<{ id: string; name: string; line: number; startLine: number; endLine: number; isEntry: boolean }[]>('methods', file);
+	}
+
+	/** The entity and model classes with their tables, for a change to one of them. */
+	entities() {
+		return this.request<TableEntity[]>('entities');
+	}
+
+	/**
+	 * Which tables the entry points reach, walked for at most `budgetMs` (see `Project.tableUses`). The worker answers one request at a
+	 * time, so the walk goes in short slices: a flow the canvas asks for in between waits for one slice, not for the whole budget.
+	 */
+	async tables(budgetMs = 4000) {
+		await this.flush();
+		const deadline = Date.now() + budgetMs;
+		for (;;) {
+			const left = deadline - Date.now();
+			const fact = await this.request<TablesFact>('tables', Math.max(1, Math.min(WALK_SLICE_MS, left)));
+			if (fact.done || Date.now() >= deadline) {
+				return fact;
+			}
+		}
 	}
 
 	/** Everything the type model is built from (see `Project.typeFacts`): the facts of every file without function bodies, the calls between classes, the entry points with their types. */

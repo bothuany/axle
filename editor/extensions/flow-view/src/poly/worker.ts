@@ -306,6 +306,8 @@ parentPort!.on('message', async (m: { id: number; op: string; args: unknown[] })
 			case 'impact': result = project.impact(m.args[0] as string); break;
 			case 'functionAt': result = project.functionAt(m.args[0] as string, m.args[1] as number); break;
 			case 'methods': result = project.methodsIn(m.args[0] as string); break;
+			case 'entities': result = project.entities(); break;
+			case 'tables': result = project.tableUses(m.args[0] as number | undefined); break;
 			case 'stats': result = project.stats(); break;
 			case 'typeFacts': result = project.typeFacts(); break;
 			case 'complete': result = project.completeAt(m.args[0] as Parameters<Project['completeAt']>[0]); break;

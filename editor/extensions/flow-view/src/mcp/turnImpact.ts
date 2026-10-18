@@ -3,8 +3,9 @@
  *  entry points (endpoints, jobs) that reach the methods the turn changed, using only backends that are
  *  ready (nothing is started or asked). With the turn's line ranges (`rangesOf`) only the methods an edit
  *  landed in count, and each flow says which of them it goes through; an edit outside every method, or a
- *  file without ranges, counts the whole file ("may be affected"). Capped in time and size because Roslyn
- *  answers one request at a time.
+ *  file without ranges, counts the whole file ("may be affected"). An edit that lands in an entity (or its ORM
+ *  configuration) also names the table it maps to and the endpoints that read or write that table (tableIndex.ts).
+ *  Capped in time and size because Roslyn answers one request at a time.
  *--------------------------------------------------------------------------------------------*/
 
 import type { Analyzer } from '../analyzer';
@@ -13,6 +14,7 @@ import type { PolyIndex } from '../poly/client';
 import type { FlowProvider, FlowTarget } from '../providers';
 import { promises as fs } from 'fs';
 import { methodsTouched, spansMatch, type LineRange, type MethodSpan } from './changedMethods';
+import type { ChangedTable, TableIndex } from './tableIndex';
 
 export interface AffectedFlow {
 	id: string;
@@ -38,6 +40,8 @@ export interface TurnImpact {
 	flows: AffectedFlow[];
 	/** The methods the edits landed in (only where the edits' lines are known), in file order. */
 	changed: ChangedMethod[];
+	/** The tables whose entity (or ORM configuration) the edits landed in, with who reads or writes each. */
+	tables: ChangedTable[];
 	/** More flows than fit in `flows`. */
 	more: number;
 	/** Why the answer may be incomplete. */
@@ -50,8 +54,39 @@ export interface ImpactLimits {
 	functionsPerFile: number;
 	flows: number;
 	budgetMs: number;
+	/** Changed tables looked at, and the time their endpoints may take on top of `budgetMs`. */
+	tables: number;
+	tableBudgetMs: number;
 }
-const TURN_LIMITS: ImpactLimits = { files: 6, functionsPerFile: 25, flows: 12, budgetMs: 7000 };
+const TURN_LIMITS: ImpactLimits = { files: 6, functionsPerFile: 25, flows: 12, budgetMs: 7000, tables: 4, tableBudgetMs: 4000 };
+
+/**
+ * Where the edits landed in each file, for the entity they are in. A C# file comes with its text so the analyzer's spans can be checked
+ * against the disk; the code index re-read the others a moment ago.
+ */
+async function placed(files: string[], d: { rangesOf?(file: string): Promise<LineRange[] | undefined> }) {
+	return Promise.all(files.map(async file => ({
+		file,
+		ranges: await d.rangesOf?.(file).catch(() => undefined),
+		text: /\.cs$/i.test(file) ? await fs.readFile(file, 'utf8').catch(() => undefined) : undefined,
+	})));
+}
+
+/** The endpoints a changed table reaches that no changed method does: the change set draws them and the agent is told their ids. */
+export function tableEndpoints(impact: Pick<TurnImpact, 'flows' | 'tables'>): AffectedFlow[] {
+	const seen = new Set(impact.flows.map(f => `${f.source}:${f.id}`));
+	const out: AffectedFlow[] = [];
+	for (const t of impact.tables) {
+		for (const u of t.uses) {
+			const key = `${u.endpoint.source}:${u.endpoint.id}`;
+			if (!seen.has(key)) {
+				seen.add(key);
+				out.push({ id: u.endpoint.id, label: u.endpoint.label, name: u.endpoint.name, source: u.endpoint.source, via: [`table ${t.table}`] });
+			}
+		}
+	}
+	return out.sort((a, b) => a.label.localeCompare(b.label));
+}
 
 /** The entry an impact line ("GET Users.Delete", "DELETE /users/{id} UsersController.Delete") stands for. */
 export function entryForItem(item: string, entries: Entry[]): Entry | undefined {
@@ -62,7 +97,7 @@ export function entryForItem(item: string, entries: Entry[]): Entry | undefined 
 		?? entries.find(e => ` ${want}`.endsWith(` ${norm(`${e.controller}.${e.action}`)}`) || ` ${want}`.endsWith(` ${norm(entryName(e))}`));
 }
 
-export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly: PolyIndex; endpoints: Endpoints; providerFor(t: FlowTarget): FlowProvider; rangesOf?(file: string): Promise<LineRange[] | undefined> }, limits: ImpactLimits = TURN_LIMITS): Promise<TurnImpact> {
+export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly: PolyIndex; endpoints: Endpoints; providerFor(t: FlowTarget): FlowProvider; rangesOf?(file: string): Promise<LineRange[] | undefined>; tables?: TableIndex }, limits: ImpactLimits = TURN_LIMITS): Promise<TurnImpact> {
 	const deadline = Date.now() + limits.budgetMs;
 	const entries = d.endpoints.cached();
 	const found = new Map<string, AffectedFlow>();
@@ -97,7 +132,7 @@ export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly:
 			targets = chosen.slice(0, limits.functionsPerFile).map(m => ({ kind: m.kind, id: m.id, name: touched.methods.includes(m) ? m.name : undefined }));
 			changed.push(...touched.methods.map(m => ({ target: { kind: m.kind, id: m.id }, name: m.name, file, line: m.line })));
 		} catch {
-			continue; // a file the backends do not know (a config, a doc)
+			// a file the backends do not know (a config, a doc): it may still be an entity file
 		}
 		for (const t of targets) {
 			if (Date.now() > deadline) {
@@ -122,11 +157,15 @@ export async function turnImpact(files: string[], d: { analyzer: Analyzer; poly:
 		}
 	}
 	const flows = [...found.values()].sort((a, b) => a.label.localeCompare(b.label));
+	// An edit in an entity changes a table: who reads or writes it is asked of the table index, which walks the entry points on first use.
+	// Where the edit landed is asked on its own, not through the methods: a file of models has none, and its edit is in one model.
+	const entities = d.tables ? await d.tables.changed(await placed(unique.slice(0, limits.files), d), limits.tables, Math.min(limits.tableBudgetMs, Math.max(500, deadline - Date.now()))).catch(() => undefined) : undefined;
 	return {
 		files: unique.length,
 		flows: flows.slice(0, limits.flows),
 		changed,
+		tables: entities?.tables ?? [],
 		more: Math.max(0, flows.length - limits.flows),
-		note: skipped || partial ? 'Partial: some files were not checked (index or analyzer not ready, or too many files).' : undefined,
+		note: [skipped || partial ? 'Partial: some files were not checked (index or analyzer not ready, or too many files).' : '', ...entities?.notes.map(n => `Tables: ${n}.`) ?? []].filter(Boolean).join(' ') || undefined,
 	};
 }

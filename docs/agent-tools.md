@@ -12,15 +12,15 @@ Claude Code over `/ide` only shows its model the `getDiagnostics` tool, so Axle 
 | `find_symbol` | Searches classes, methods, functions and fields by name |
 | `go_to_definition`, `find_references` | Where a symbol is defined (with its signature), and every place that uses it |
 | `find_entry_points` | Free-text search over endpoints and jobs ("delete user" finds `DELETE /users/{id}`) |
-| `show_flow`, `flow_text` | Opens the flow canvas, or returns the call chain as compact text (files, call lines, tables touched) |
-| `impact` | Who calls a method, and which entry points reach it (through interfaces, mediators and, as a guess, HTTP calls and messages between services) |
+| `show_flow`, `flow_text` | Opens the flow canvas, or returns the call chain as compact text (files, call lines, tables touched; `~table` after a database line means the table name is a guess) |
+| `impact` | Who calls a method, and which entry points reach it (through interfaces, mediators and, as a guess, HTTP calls and messages between services). With `table` or `entity` instead of a method: the endpoints that write that table and the endpoints that read it, each with the method and database card it goes through, a guess marked `~table?`, and a "not checked" line (see [Tables and entities](languages.md#tables-and-entities)) |
 | `get_context` | Active file, selection, flow on the canvas, open tabs, git changes, diagnostics, boards |
 | `draw_board`, `update_board` | The agent draws a flow, plan, class, ER or architecture board, and ticks its steps off as it works |
 
 - **Agents started from the Agents dock** get the server automatically (`flow.agents.mcp`, on by default; it adds `--mcp-config` and keeps your own MCP servers).
 - **A `claude` you start yourself** gets it after the command **Axle: Connect Claude Code Tools (MCP)**. It shows the exact `claude mcp add` it will run and changes your Claude Code user configuration only when you confirm; **Disconnect** removes it.
 - Each Axle window lists itself in `~/.axle/bridge/<pid>.json` (loopback port and token); the server picks the window whose workspace folder contains its working directory.
-- In plan mode, the plan an agent submits is drawn as a board (`flow.agents.planBoard`), its steps move to doing and done as files are edited, and when a turn ends the Agents dock lists the flows it touched (`flow.agents.turnImpact`). That list follows the methods the turn's edits landed in, and names them on hover; an edit outside every method (an import, a field) counts its whole file. Boards open as a Markdown preview with a Mermaid diagram; **Axle: Show Board…** lists them.
+- In plan mode, the plan an agent submits is drawn as a board (`flow.agents.planBoard`), its steps move to doing and done as files are edited, and when a turn ends the Agents dock lists the flows it touched (`flow.agents.turnImpact`), and the table, with its endpoint count, when an edit landed in an entity. That list follows the methods the turn's edits landed in, and names them on hover; an edit outside every method (an import, a field) counts its whole file. Boards open as a Markdown preview with a Mermaid diagram; **Axle: Show Board…** lists them.
 
 **Changes in flow.** Ask an agent to "show what you did in flow" (it calls `open_diff` with `flow: true`), or run **Axle: Show Git Changes in Flow** from the command palette, the Source Control title or a diff editor. Either way one canvas shows the whole change set: every endpoint flow the changed files reach, cut down to the paths that lead to a changed method, plus the changed methods no endpoint reaches. Changed cards show added lines in green and removed lines in red. Pick what to compare with:
 

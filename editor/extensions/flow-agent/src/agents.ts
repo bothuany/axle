@@ -81,6 +81,8 @@ export interface TurnImpact {
 	note?: string;
 	/** The methods the turn's edits landed in, where their lines are known. */
 	methods?: { file: string; name: string }[];
+	/** The tables whose entity the turn's edits landed in, with how many endpoints read or write each (`guess`: the table name is a guess; `partial`: not every entry point was checked). */
+	tables?: { table: string; entity: string; endpoints: number; guess?: boolean; partial?: boolean }[];
 }
 
 export interface CustomAgent {
@@ -1187,7 +1189,7 @@ export class Agents implements vscode.Disposable {
 			this.recordImpact(s, impact);
 		}
 		// A new prompt may have started while this was computed: its answer no longer describes the turn on screen.
-		if (impact?.flows?.length && s.state !== 'working' && this.touched.get(s.id)) {
+		if ((impact?.flows?.length || impact?.tables?.length) && s.state !== 'working' && this.touched.get(s.id)) {
 			s.impact = impact;
 			this.changed.fire();
 		}

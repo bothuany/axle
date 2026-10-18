@@ -201,3 +201,19 @@ test('mcp-protocol: the draw_board schema is valid JSON Schema-shaped and requir
 	assert.deepEqual(draw.inputSchema.properties.board.required, ['title', 'nodes'])
 	JSON.parse(JSON.stringify(tools.TOOLS)) // serializable as is
 })
+
+test('mcp-protocol: impact takes a table or an entity as well as a method, and says what it cannot see', async () => {
+	const calls = []
+	const { dir, server } = await fakeWindow(['/work/app'], async (tool, args) => { calls.push({ tool, args }); return { content: [{ type: 'text', text: 'ok' }] } })
+	const s = session({ AXLE_BRIDGE_DIR: dir, AXLE_WORKSPACE: '/work/app' })
+	const { result } = await s.send('tools/list')
+	const impact = result.tools.find(t => t.name === 'impact')
+	assert.equal(impact.inputSchema.additionalProperties, false)
+	assert.deepEqual(['table', 'entity', 'method', 'file', 'id'].filter(k => !(k in impact.inputSchema.properties)), [])
+	assert.match(impact.description, /endpoints that write it and the endpoints that read it/)
+	assert.match(impact.description, /dynamic SQL, views, other services, migrations/)
+	assert.equal((await s.send('tools/call', { name: 'impact', arguments: { table: 'orders' } })).result.content[0].text, 'ok')
+	assert.deepEqual(calls, [{ tool: 'impact', args: { table: 'orders' } }])
+	await s.close()
+	await server.close()
+})

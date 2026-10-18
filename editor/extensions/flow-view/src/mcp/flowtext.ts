@@ -16,8 +16,10 @@ export interface FlowTextOptions {
 
 export interface FlowText {
 	text: string;
-	/** Tables the flow touches, in order of first appearance. */
+	/** Tables the flow touches, in order of first appearance (the table's name, not the card's "AppDb.Orders"). */
 	tables: string[];
+	/** The ones among them whose name is a guess. */
+	guessed: string[];
 	nodes: number;
 	truncated: boolean;
 }
@@ -40,6 +42,7 @@ export function flowToText(root: FlowNode, opts: FlowTextOptions, direction: 'ca
 	const maxLines = opts.maxLines ?? 220;
 	const lines: string[] = [];
 	const tables: string[] = [];
+	const guessed: string[] = [];
 	const shown = new Set<string>();
 	let nodes = 0;
 	let truncated = false;
@@ -51,8 +54,9 @@ export function flowToText(root: FlowNode, opts: FlowTextOptions, direction: 'ca
 			return;
 		}
 		lines.push(prefix + describe(n, opts.rel));
-		if (n.kind === 'db' && !tables.includes(n.label)) {
-			tables.push(n.label);
+		const table = n.kind === 'db' ? n.schema?.table ?? n.label : undefined;
+		if (table && !tables.includes(table)) {
+			tables.push(table);
 		}
 		const key = n.symbolId ?? `${n.file}:${n.startLine}`;
 		const again = n.kind !== 'db' && n.children.length > 0 && shown.has(key);
@@ -75,7 +79,14 @@ export function flowToText(root: FlowNode, opts: FlowTextOptions, direction: 'ca
 				return;
 			}
 			const kind = c.edgeKind === 'mediator' ? ' ~mediator' : c.edgeKind === 'impl' ? ' ~impl' : c.edgeKind === 'http' ? ' ~http' : c.edgeKind === 'message' ? ' ~message' : '';
-			const guess = c.guess ? ' ~guess' : '';
+			// On a database edge a guess is about the table's name: it is not read from ORM metadata (a naming default, raw SQL).
+			const guess = c.guess ? (c.edgeKind === 'db' ? ' ~table' : ' ~guess') : '';
+			if (c.guess && c.edgeKind === 'db') {
+				const g = c.node.schema?.table ?? c.node.label;
+				if (!guessed.includes(g)) {
+					guessed.push(g);
+				}
+			}
 			const at = c.callLine > 0 ? `L${c.callLine} ` : '';
 			const start = lines.length;
 			walk(c.node, level + 1, `${'  '.repeat(level + 1)}${arrow} ${at}`);
@@ -88,5 +99,5 @@ export function flowToText(root: FlowNode, opts: FlowTextOptions, direction: 'ca
 	if (truncated) {
 		lines.push(`... output cut at ${maxLines} lines; pass a smaller depth or a more specific method.`);
 	}
-	return { text: lines.join('\n'), tables, nodes, truncated };
+	return { text: lines.join('\n'), tables, guessed, nodes, truncated };
 }

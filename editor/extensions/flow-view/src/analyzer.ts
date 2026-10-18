@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import { flowRoot } from './root';
 import type { EntryPoint } from '../../../../protocol/flow';
 import type { CsTypesResponse } from './types/wire';
+import type { TableEntity, TablesFact } from './poly/model';
 
 export type { EntryPoint };
 
@@ -365,6 +366,38 @@ export class Analyzer implements vscode.Disposable {
 			throw new Error(`/api/types: ${res.status}`);
 		}
 		return await res.json() as CsTypesResponse;
+	}
+
+	/**
+	 * The entities the EF model maps, with their tables (Schema.cs). Like `types` it never starts the analyzer: `undefined` when it is not
+	 * ready. `version` counts the refreshes that changed the solution, so a cached answer is stale once it moves.
+	 */
+	async entities(): Promise<{ version: number; entities: TableEntity[] } | undefined> {
+		if (!this.isReady || !this.ready) {
+			return undefined;
+		}
+		const port = await this.ready;
+		const res = await fetch(`http://127.0.0.1:${port}/api/entities`, { headers: { 'x-flow-token': this.token }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+		if (!res.ok) {
+			throw new Error(`/api/entities: ${res.status}`);
+		}
+		return await res.json() as { version: number; entities: TableEntity[] };
+	}
+
+	/**
+	 * The database cards the C# entry points reach (Tables.cs), walked for at most `budgetMs` more of them; the analyzer remembers where it
+	 * stopped and starts over after a refresh. Never starts the analyzer: `undefined` when it is not ready.
+	 */
+	async tables(budgetMs: number): Promise<(TablesFact & { version: number }) | undefined> {
+		if (!this.isReady || !this.ready) {
+			return undefined;
+		}
+		const port = await this.ready;
+		const res = await fetch(`http://127.0.0.1:${port}/api/tables?budgetMs=${Math.max(200, Math.floor(budgetMs))}`, { headers: { 'x-flow-token': this.token }, signal: AbortSignal.timeout(budgetMs + REQUEST_TIMEOUT_MS) });
+		if (!res.ok) {
+			throw new Error(`/api/tables: ${res.status}`);
+		}
+		return await res.json() as TablesFact & { version: number };
 	}
 
 	/** One request at a time: callers that arrive while one runs share its answer. */

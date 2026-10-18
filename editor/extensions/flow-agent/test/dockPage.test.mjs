@@ -40,3 +40,23 @@ test('the dock page script parses and draws an agent row with its avatar', () =>
 	assert.match(list.innerHTML, /<span class="av" data-k="[^"]+"><svg class="ax"/)
 	assert.match(list.innerHTML, /Claude 2/)
 })
+
+test('the turn-impact line names a changed table and how many endpoints use it, with or without flows', () => {
+	const script = /<script>([\s\S]*)<\/script>/.exec(html)[1]
+	const list = { innerHTML: '', querySelectorAll: () => [] }
+	const document = { getElementById: () => list, querySelectorAll: () => [] }
+	let onMessage
+	const window = { addEventListener: (_type, f) => { onMessage = f } }
+	window.window = window
+	vm.runInNewContext(script, { window, document, acquireVsCodeApi: () => ({ postMessage() { } }), setInterval() { }, Math, Object, isFinite, Date, String, Number, Map })
+	const draw = impact => {
+		onMessage({ data: { type: 'data', list: [{ id: 'a1', cli: 'claude', name: 'Claude', state: 'done', attention: 'none', since: Date.now(), todos: [], unread: false, done: 0, impact }], now: Date.now(), avatar: 'pixel' } })
+		return list.innerHTML
+	}
+	const both = draw({ files: 2, more: 0, flows: [{ label: 'GET /orders' }], tables: [{ table: 'orders', entity: 'Order', endpoints: 4 }] })
+	assert.match(both, /This turn touched 1 flow and table orders \(4 endpoints\):/)
+	assert.match(both, /data-flow="0"[^>]*>GET \/orders</)
+	const only = draw({ files: 1, more: 0, flows: [], tables: [{ table: 'invoices', entity: 'Invoice', endpoints: 1, guess: true, partial: true }] })
+	assert.match(only, /This turn touched table invoices\? \(1 endpoint, partial\)<\/b>/)
+	assert.doesNotMatch(draw({ files: 1, more: 0, flows: [], tables: [] }), /class="impact"/)
+})

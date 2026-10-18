@@ -209,10 +209,11 @@ export function layout(root: FlowNode, hidden: Set<string>, full: Set<string>, s
         type: 'smoothstep',
         zIndex: 1001,
         animated: edge.edgeKind === 'mediator' || edge.edgeKind === 'http' || edge.edgeKind === 'message',
-        label: edge.edgeKind === 'mediator' ? 'MediatR.Send' : edge.edgeKind === 'impl' ? 'impl' : edge.edgeKind === 'http' ? 'HTTP?' : edge.edgeKind === 'message' ? 'topic?' : undefined,
+        // A database edge is a guess when the table is named by a naming default or a raw SQL string, not by the ORM's metadata.
+        label: edge.edgeKind === 'mediator' ? 'MediatR.Send' : edge.edgeKind === 'impl' ? 'impl' : edge.edgeKind === 'http' ? 'HTTP?' : edge.edgeKind === 'message' ? 'topic?' : edge.edgeKind === 'db' && edge.guess ? 'table?' : undefined,
         labelStyle: { fill: color, fontSize: 10.5, fontWeight: 500 },
         labelBgStyle: { fill: 'var(--fl-canvas)' },
-        style: { stroke: color, strokeWidth: 1.4, strokeDasharray: edge.edgeKind === 'impl' || edge.edgeKind === 'http' || edge.edgeKind === 'message' ? '5 4' : undefined },
+        style: { stroke: color, strokeWidth: 1.4, strokeDasharray: edge.edgeKind === 'impl' || edge.edgeKind === 'http' || edge.edgeKind === 'message' || (edge.edgeKind === 'db' && edge.guess) ? '5 4' : undefined },
       })
     }
 

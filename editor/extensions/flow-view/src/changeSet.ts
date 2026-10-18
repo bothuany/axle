@@ -4,12 +4,15 @@
  *  paths that lead to a changed card (changeSetTree.ts), next to the changed methods no endpoint reaches.
  *--------------------------------------------------------------------------------------------*/
 
-import { changeSetRoot, pruneToChanged, rekey, showsLine } from './changeSetTree';
-import type { ImpactLimits, TurnImpact } from './mcp/turnImpact';
+import { changeSetRoot, markTableChanges, pruneToChanged, rekey, showsLine, tableRoot } from './changeSetTree';
+import { tableEndpoints, type ImpactLimits, type TurnImpact } from './mcp/turnImpact';
+import { NOT_CHECKED, usedBy } from './mcp/tableIndex';
 import type { FlowNode, FlowProvider, FlowTarget } from './providers';
 
 /** A whole branch can touch many files: wider than after one agent turn, still bounded (Roslyn answers one request at a time). */
-const SET_LIMITS: ImpactLimits = { files: 60, functionsPerFile: 40, flows: 30, budgetMs: 25_000 };
+const SET_LIMITS: ImpactLimits = { files: 60, functionsPerFile: 40, flows: 30, budgetMs: 25_000, tables: 12, tableBudgetMs: 15_000 };
+/** Endpoints drawn on behalf of changed tables, on top of the ones a changed method reaches. */
+const MAX_TABLE_FLOWS = 30;
 /** Changed methods no endpoint reaches, drawn on their own; beyond this the root card says how many were left out. */
 const MAX_LOOSE = 40;
 
@@ -89,11 +92,22 @@ export class ChangeSetProvider implements FlowProvider {
 		const impact = await this.d.impactOf(set.files, SET_LIMITS);
 		const branches: FlowNode[] = [];
 		let failed = 0;
-		for (const [i, f] of impact.flows.entries()) {
+		// A changed entity is one root item of its own; the endpoints that read or write its table are drawn with the ones a changed method reaches.
+		const marks = impact.tables.map(t => ({ entity: t.entity, table: t.table, guess: t.guess }));
+		branches.push(...impact.tables.map((t, i) => tableRoot(marks[i], `${usedBy(t)}${t.guess ? ' · table?' : ''}${t.checked < t.of ? ' · partial' : ''}`, `table${i}`)));
+		const extra = tableEndpoints(impact);
+		const flows = [...impact.flows, ...extra.slice(0, MAX_TABLE_FLOWS)];
+		const tableOnly = Math.max(0, extra.length - MAX_TABLE_FLOWS);
+		for (const [i, f] of flows.entries()) {
 			try {
 				const g = await this.d.providerFor({ kind: f.source, id: f.id }).graph({ kind: f.source, id: f.id });
+				markTableChanges(g, marks);
 				await this.d.annotate(g);
-				branches.push(rekey(pruneToChanged(g) ?? { ...g, children: [] }, `f${i}:`));
+				const pruned = pruneToChanged(g);
+				// A flow the table reaches only through a card the walk saw but this trace did not (a depth difference) has nothing to show.
+				if (pruned || impact.flows.some(x => x.id === f.id)) {
+					branches.push(rekey(pruned ?? { ...g, children: [] }, `f${i}:`));
+				}
 			} catch {
 				failed++; // one flow failing to trace must not lose the others
 			}
@@ -120,7 +134,9 @@ export class ChangeSetProvider implements FlowProvider {
 		const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 		const sub = [
 			count(set.files.length, 'changed file'),
-			count(impact.flows.length + impact.more, 'endpoint'),
+			count(impact.flows.length + impact.more + extra.length, 'endpoint'),
+			impact.tables.length ? `${count(impact.tables.length, 'changed table')} (${count(new Set(impact.tables.flatMap(t => t.uses.map(u => `${u.endpoint.source}:${u.endpoint.id}`))).size, 'endpoint')} read or write ${impact.tables.length === 1 ? 'it' : 'them'}; not checked: ${NOT_CHECKED.split(';')[0]}, other services, migrations)` : '',
+			tableOnly ? `${tableOnly} table endpoints not drawn` : '',
 			loose ? count(loose + left, 'other changed method') : '',
 			impact.more ? `${impact.more} endpoints not drawn` : '',
 			left ? `${left} methods not drawn` : '',
@@ -136,8 +152,9 @@ export class ChangeSetProvider implements FlowProvider {
 	}
 
 	async impact(): Promise<{ label: string; items: string[] }> {
-		const flows = (await this.last?.catch(() => undefined))?.impact.flows ?? [];
-		// The canvas reads it as "Affects 3 endpoints".
+		const impact = (await this.last?.catch(() => undefined))?.impact;
+		// The canvas reads it as "Affects 3 endpoints": the ones a changed method reaches and the ones that use a changed table.
+		const flows = impact ? [...impact.flows, ...tableEndpoints(impact)] : [];
 		return { label: 'endpoint', items: flows.map(f => `${f.label} ${f.name}`) };
 	}
 }
