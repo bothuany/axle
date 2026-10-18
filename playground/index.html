@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; media-src 'self'; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'" />
-    <meta name="description" content="Try Axle in your browser: the Agents dock, the status overlay, the harness map, a terminal and the flow canvas, on a demo project. No install." />
+    <meta name="description" content="Try Axle in your browser: see how a request runs through your code, and what an agent touched when it changed it. No install." />
     <meta name="color-scheme" content="dark" />
     <link rel="icon" type="image/svg+xml" href="./icon.svg" />
     <title>Axle: try it in your browser</title>
@@ -24,16 +24,16 @@
     <main>
       <section class="hero">
         <h1><span class="was">Every editor shows where code is stored.</span> Axle shows how it runs.</h1>
-        <p class="lede">This is Axle in your browser: the Agents dock, the status overlay at the top of the screen, the harness map, a terminal and the flow canvas, on a small demo project. Start an agent and watch what it touches.</p>
+        <p class="lede">Open an endpoint and see the path a request takes through the code, down to the table it writes. Then let an agent change it, and see exactly what it touched.</p>
         <div class="cta">
-          <button type="button" class="primary" id="try">Start the demo</button>
+          <button type="button" class="primary" id="try">Watch Claude change it</button>
           <a class="quiet" href="https://github.com/bothuany/axle/releases/latest">Download Axle</a>
         </div>
-        <p class="fine">No install, no account. The agent is a scripted replay; the rest is Axle&rsquo;s own code and pages.</p>
       </section>
 
       <section class="stagewrap" aria-label="Axle demo">
-        <div id="screen-root"></div>
+        <div id="stage-root"></div>
+        <p class="fine">Running in your browser on a small demo project. The flow canvas, the Agents dock and the overlay are Axle&rsquo;s own; Claude&rsquo;s part is a scripted replay.</p>
       </section>
 
       <section class="fallback" aria-label="Demo video">
@@ -44,20 +44,26 @@
         <p class="links"><a class="solid" href="https://github.com/bothuany/axle/releases/latest">Download Axle</a> <a class="quiet" href="https://github.com/bothuany/axle">View on GitHub</a></p>
       </section>
 
+      <section class="shapes" aria-labelledby="shapes-title">
+        <h2 id="shapes-title">Know what shapes your agent before it starts.</h2>
+        <p class="lede">Axle scans the project for everything an agent reads or runs: instructions, rules, skills, subagents, hooks and MCP servers. This is the scan of the demo project, and it found one rule that never loads.</p>
+        <div id="harness-root"></div>
+      </section>
+
       <section class="app">
         <h2>What is real here, and what is not</h2>
         <div class="cols">
           <article>
             <h3>Axle&rsquo;s own</h3>
-            <p>The flow canvas, the Agents dock page and the status overlay are the pages the app draws, driven by the app&rsquo;s own ranking and mapping code. The flows come from Axle&rsquo;s code index, run on the demo project: the <b>HTTP?</b> and <b>topic?</b> links, the tables and the change set are what it finds.</p>
+            <p>The flow canvas, the Agents dock and the overlay are the pages the app draws, driven by the app&rsquo;s own ranking code. The flows, the tables and the change come from Axle&rsquo;s code index run on the demo project, and the map above is the harness scan of it.</p>
           </article>
           <article>
             <h3>Scripted</h3>
-            <p>The agent. Its words, its tool calls and its timing are a replay, so the terminal takes only the keys the replay expects, and says so for anything else. Nothing here runs a model, and nothing leaves your browser.</p>
+            <p>Claude. Its steps and timing are a replay, so nothing here runs a model and nothing leaves your browser. The agent in Axle is the real Claude Code, or Codex, in a terminal.</p>
           </article>
           <article>
             <h3>Left out</h3>
-            <p>Editing code on a card (the demo is read-only), other agents and languages, native menus, and the Codex and custom agents. Download Axle to use them on your own code.</p>
+            <p>The editor, the terminal, editing code on a card (the demo is read-only), other languages and agents. Download Axle to use them on your own code.</p>
           </article>
         </div>
       </section>

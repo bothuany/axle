@@ -101,7 +101,7 @@ editor/extensions/
   flow-harness/     harness map, hook studio, permission inbox, context budget
   flow-theme/       Axle's colour theme and defaults
 ui/                 the canvas (React Flow + Monaco), built into one script the extension inlines
-playground/         the browser playground: the canvas on a fake host, over demo data from the real index (GitHub Pages)
+playground/         the browser playground: the canvas, the dock and a scripted agent on demo data from the real index (GitHub Pages)
 analyzer/           C# analyzer (.NET 10, Roslyn MSBuildWorkspace) serving flows over HTTP
 scripts/            setup, start, build-extensions, install-shortcut and installer (Windows .exe), the same on every OS (lib.mjs starts programs without a shell)
 ```
@@ -118,7 +118,7 @@ scripts/            setup, start, build-extensions, install-shortcut and install
 
 ## The browser playground
 
-`playground/` is the site at https://bothuany.github.io/axle/: a Mac screen with the Axle window on it, running on a fictional demo project. A visitor starts a (scripted) Claude from the Agents dock and watches the dock, the desktop overlay at the notch, the terminal and the real flow canvas follow it. The canvas, the dock page, the overlay page and the harness map are Axle's own, built from the demo project by the real code (what each part is, and what is scripted, in [playground/README.md](../playground/README.md)). From the repository root:
+`playground/` is the site at https://bothuany.github.io/axle/: the real flow canvas on a fictional demo project, a short story where a scripted Claude changes it (watch the Agents dock and the status overlay follow it, answer its permission question, see the change on the canvas), and the harness scan of that project. The canvas, the dock page, the overlay page and the harness map are Axle's own, built from the demo project by the real code (what each part is, and what is scripted, in [playground/README.md](../playground/README.md)). From the repository root:
 
 ```bash
 (cd ui && npm ci)

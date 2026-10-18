@@ -1,4 +1,4 @@
-// The playground in a real browser (headless Chrome): the whole loop a visitor goes through, and the paths around it. Run after
+// The playground in a real browser (headless Chrome): the whole story a visitor goes through, and the paths around it. Run after
 // `npm run build` (and `node scripts/playground-data.mjs` before that): `npm run test:e2e`. It serves dist/ the way GitHub Pages does,
 // under /axle/, and fails on any console error, 4xx/5xx response or page error.
 import { test, before, after } from 'node:test'
@@ -51,104 +51,129 @@ const until = async (probe, what, ms = 60_000) => {
 	}
 	assert.fail(`timed out waiting for ${what}`)
 }
-const term = page => page.evaluate(() => document.querySelector('.xterm-rows')?.textContent ?? '')
-const termHas = (page, needle) => until(async () => (await term(page)).includes(needle), `the terminal to show "${needle}"`)
 const canvas = page => frame(page, 'canvas.html')
 const canvasText = page => canvas(page).evaluate(() => document.body.innerText)
-const activity = (page, label) => page.evaluate(l => [...document.querySelectorAll('.act')].find(a => a.getAttribute('aria-label')?.startsWith(l))?.click(), label)
+const caption = page => page.evaluate(() => document.querySelector('.caption p')?.textContent ?? '')
+const captionHas = (page, needle) => until(async () => (await caption(page)).includes(needle), `the caption to say "${needle}"`)
+const drawn = page => until(() => canvas(page)?.evaluate(() => !!document.querySelector('.react-flow__node')), 'the canvas to draw a card')
+const dockText = page => frame(page, 'dock.html').evaluate(() => document.body.innerText)
+const islandText = page => frame(page, 'island.html').evaluate(() => document.body.innerText)
+const clickInCanvas = (page, label) => canvas(page).evaluate(l => [...document.querySelectorAll('button')].find(b => b.textContent === l).click(), label)
 
-test('the workbench opens on a flow, with the dock, the editor and the explorer', { skip }, async () => {
-	const { page, problems } = await open()
-	await until(() => canvas(page)?.evaluate(() => !!document.querySelector('.react-flow__node')), 'the canvas to draw a card')
-	assert.match(await canvasText(page), /OrderController\.place/)
-	const dock = frame(page, 'dock.html')
-	assert.ok(await dock.evaluate(() => /No agents running/.test(document.body.innerText)), 'the dock says no agents run')
-	assert.ok(await page.evaluate(() => !!document.querySelector('.tab.on')), 'a code tab is open')
-	assert.deepEqual(problems, [])
-	await page.close()
-})
-
-test('the whole loop: start Claude, answer its question, see what it touched, follow it onto the canvas', { skip }, async () => {
-	const { page, problems } = await open()
+/** Starts the story, allows the edit and opens the change on the canvas. */
+async function playThrough(page) {
 	await page.click('#try')
-	await termHas(page, 'Do you want to make this edit to')
-	// The dock, the overlay and the files all say the agent waits for you.
-	const dock = frame(page, 'dock.html')
-	await until(() => dock.evaluate(() => /APPROVAL|Approval/.test(document.body.innerText) && /Wants to: Editing Order\.java/.test(document.body.innerText)), 'the dock to show the approval')
-	const island = frame(page, 'island.html')
-	await until(() => island.evaluate(() => /Needs approval/.test(document.body.innerText)), 'the overlay to say "Needs approval"')
-	assert.equal(await page.evaluate(() => document.querySelector('.island').style.visibility), 'visible')
-	// Answer both edits in the terminal, as a visitor does.
-	await page.click('.xterm-helper-textarea')
-	await page.keyboard.press('1')
-	await termHas(page, 'OrderService.java?')
-	await page.keyboard.press('1')
-	await termHas(page, 'Done. An order can carry')
-	// What it touched: the dock lists the flows and the table, the explorer marks the files, source control counts them.
-	await until(() => dock.evaluate(() => /This turn touched 4 flows and table orders \(4 endpoints\)/.test(document.body.innerText)), 'the dock to list what the turn touched')
-	await until(() => island.evaluate(() => /Done/.test(document.body.innerText)), 'the overlay to say Done')
-	assert.equal(await page.evaluate(() => [...document.querySelectorAll('.row.m')].length > 0), true, 'the explorer marks changed files')
-	assert.equal(await page.evaluate(() => document.querySelector('[aria-label^="Source Control"] .badge')?.textContent), '2', 'source control counts the two changed files')
-	// Follow a flow chip from the dock: the canvas draws it with the change on its cards.
-	await dock.evaluate(() => [...document.querySelectorAll('.flow')].find(c => c.textContent === 'POST /orders').click())
+	await captionHas(page, 'wants to edit')
+	await page.click('#allow')
+	await captionHas(page, 'Done.')
+	await page.click('#review')
 	await until(async () => /Review 2 changes/.test(await canvasText(page)), 'the canvas to offer "Review 2 changes"')
+}
+
+test('the page opens on the order flow, with no agent running', { skip }, async () => {
+	const { page, problems } = await open()
+	await drawn(page)
+	assert.match(await canvasText(page), /OrderController\.place/)
+	assert.match(await dockText(page), /No agents running/)
+	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.island')).opacity), '0', 'no agent, no overlay')
+	assert.equal(await canvas(page).evaluate(() => getComputedStyle(document.querySelector('.react-flow__minimap')).display), 'none', 'the overview map is left out')
 	assert.deepEqual(problems, [])
 	await page.close()
 })
 
-test('Keep clears the marks on the canvas; Undo puts the files back', { skip }, async () => {
+test('the whole story: Claude asks, you allow, the dock and the overlay say what it touched, the canvas shows the change', { skip }, async () => {
+	const { page, problems } = await open()
+	await drawn(page)
+	await page.click('#try')
+	await captionHas(page, 'wants to edit Order.java and OrderService.java')
+	// The dock, the overlay and the caption all say the agent waits for you.
+	await until(async () => /Wants to: Editing Order\.java and OrderService\.java/.test(await dockText(page)) && /approval/i.test(await dockText(page)), 'the dock to show the approval')
+	await until(async () => /Needs approval/.test(await islandText(page)), 'the overlay to say "Needs approval"')
+	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.island')).opacity), '1')
+	await page.click('#allow')
+	await captionHas(page, 'Done. The change touched 4 flows and the orders table')
+	await until(async () => /This turn touched 4 flows and table orders \(4 endpoints\)/.test(await dockText(page)), 'the dock to list what the turn touched')
+	await until(async () => /Done/.test(await islandText(page)), 'the overlay to say Done')
+	// The change on the canvas: the order flow, with the green and red on its cards.
+	await page.click('#review')
+	await until(async () => /Review 2 changes/.test(await canvasText(page)), 'the canvas to offer "Review 2 changes"')
+	assert.ok(await canvas(page).evaluate(() => [...document.querySelectorAll('.react-flow__node')].some(n => /applyDiscount/.test(n.textContent))), 'the new method is on the canvas')
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('a flow chip of the dock opens that flow with the change on its cards', { skip }, async () => {
 	const { page, problems } = await open()
 	await page.click('#try')
-	await page.click('.xterm-helper-textarea')
-	await termHas(page, 'Do you want to make this edit to')
-	await page.keyboard.press('2') // allow all edits for the session
-	await termHas(page, 'Done. An order can carry')
+	await captionHas(page, 'wants to edit')
+	await page.click('#allow')
+	await captionHas(page, 'Done.')
 	const dock = frame(page, 'dock.html')
 	await until(() => dock.evaluate(() => document.querySelector('.flow')), 'the dock chips')
-	await dock.evaluate(() => [...document.querySelectorAll('.flow')].find(c => c.textContent === 'POST /orders').click())
-	await until(async () => /Review 2 changes/.test(await canvasText(page)), 'the change on the canvas')
-	// Undo on a changed card.
-	await canvas(page).evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent === 'Undo').click())
+	await dock.evaluate(() => [...document.querySelectorAll('.flow')].find(c => c.textContent === 'GET /orders').click())
+	await captionHas(page, 'GET /orders with Claude')
+	await until(async () => /OrderController\.list/.test(await canvasText(page)), 'the canvas to show GET /orders')
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('Keep clears the marks; Undo puts the code back and starts the story again', { skip }, async () => {
+	const { page, problems } = await open()
+	await drawn(page)
+	await playThrough(page)
+	await clickInCanvas(page, 'Keep')
+	await captionHas(page, 'Kept.')
+	await until(async () => !/Review 2 changes/.test(await canvasText(page)), 'the canvas to stop marking the change')
+	await page.click('#again')
+	await captionHas(page, 'This is the flow of POST /orders')
+	await playThrough(page)
+	await clickInCanvas(page, 'Undo')
+	await captionHas(page, 'This is the flow of POST /orders')
 	await until(async () => !/Review 2 changes/.test(await canvasText(page)), 'the canvas to forget the change')
-	assert.equal(await page.evaluate(() => [...document.querySelectorAll('.row.m')].length), 0, 'the explorer no longer marks files')
-	assert.equal(await page.evaluate(() => !!document.querySelector('[aria-label^="Source Control"] .badge')), false, 'source control has no changes')
+	await until(async () => /No agents running/.test(await dockText(page)), 'the dock to forget the agent')
+	assert.equal(await page.evaluate(() => !!document.querySelector('#play')), true, 'the story can be played again')
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('saying no changes nothing', { skip }, async () => {
+	const { page, problems } = await open()
+	await drawn(page)
+	await page.click('#try')
+	await captionHas(page, 'wants to edit')
+	await page.click('#deny')
+	await captionHas(page, 'Nothing was changed')
+	assert.doesNotMatch(await canvasText(page), /Review \d+ changes/)
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('another endpoint opens on the canvas', { skip }, async () => {
+	const { page, problems } = await open()
+	await drawn(page)
+	const id = await page.evaluate(() => [...document.querySelectorAll('.picks option')].find(o => o.textContent.startsWith('GET /orders  (')).value)
+	await page.select('.picks select', id)
+	await until(async () => /OrderController\.list/.test(await canvasText(page)), 'the canvas to show GET /orders')
 	assert.deepEqual(problems, [])
 	await page.close()
 })
 
 test('the harness map is the real scan of the demo project, with its one warning', { skip }, async () => {
 	const { page, problems } = await open()
-	await activity(page, 'Harness')
-	const text = await until(async () => {
-		const t = await page.evaluate(() => document.querySelector('.sidebar')?.innerText ?? '')
-		return /Health \d+/.test(t) ? t : ''
-	}, 'the harness map')
-	for (const word of ['Instructions', 'Rules', 'Skills', 'Subagents', 'Hooks', 'MCP servers', 'Permission rules', 'Permission requests', 'Friction inbox']) assert.ok(text.includes(word), `the map has ${word}`)
+	const text = await page.evaluate(() => document.querySelector('#harness-root')?.innerText ?? '')
+	for (const word of ['Instructions', 'Rules', 'Skills', 'Subagents', 'Hooks', 'MCP servers', 'CLAUDE.md', 'graphql-schema.md']) assert.ok(text.includes(word), `the map has ${word}`)
 	assert.match(text, /matches no file in the project/, 'the rule that matches nothing is flagged')
-	assert.ok(!/Batuhan|\/Users\/|C:\\\\/.test(text), 'nothing of the machine that built it is in the map')
+	assert.ok(!/Batuhan|\/Users\/|C:\\/.test(text), 'nothing of the machine that built it is in the map')
 	assert.deepEqual(problems, [])
 	await page.close()
 })
 
-test('the shell terminal knows a few commands and says so for the rest', { skip }, async () => {
+test('what the demo cannot do is said where a visitor reaches for it', { skip }, async () => {
 	const { page, problems } = await open()
-	await page.click('.xterm-helper-textarea')
-	await page.keyboard.type('git status')
-	await page.keyboard.press('Enter')
-	await termHas(page, 'nothing to commit, working tree clean')
-	await page.keyboard.type('whoami')
-	await page.keyboard.press('Enter')
-	await termHas(page, 'zsh: command not found: whoami')
-	assert.deepEqual(problems, [])
-	await page.close()
-})
-
-test('a card of the canvas opens its editor, as in the app', { skip }, async () => {
-	const { page, problems } = await open()
-	await until(() => canvas(page)?.evaluate(() => !!document.querySelector('.react-flow__node')), 'the canvas')
-	// A line of a card opens its editor; saving says why nothing is written.
-	await canvas(page).evaluate(() => document.querySelector('.react-flow__node .ln .src')?.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 10, clientY: 10 })))
-	await until(() => canvas(page).evaluate(() => !!document.querySelector('.monaco-editor')), 'the card editor')
+	await drawn(page)
+	// Handing the flow to an agent is the app's; here the page says so.
+	await clickInCanvas(page, 'Ask about this flow')
+	await until(() => page.evaluate(() => /hands the flow to the agent/.test(document.querySelector('.caption .note')?.textContent ?? '')), 'the note')
 	assert.deepEqual(problems, [])
 	await page.close()
 })
@@ -158,6 +183,8 @@ test('below desktop width the page shows the video and loads no canvas', { skip 
 	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.stagewrap')).display), 'none')
 	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.fallback')).display), 'block')
 	assert.equal(page.frames().filter(f => f.parentFrame() && f.url().includes('canvas.html')).length, 0, 'no canvas was loaded')
+	assert.ok((await page.evaluate(() => document.querySelector('#harness-root')?.innerText ?? '')).includes('Instructions'), 'the harness map is there')
+	assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'no horizontal scroll')
 	assert.deepEqual(problems, [])
 	await page.close()
 })

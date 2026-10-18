@@ -1,9 +1,10 @@
 // The agent sessions of the demo, and what the Agents dock and the desktop overlay are told about them. The ranking ("what needs you
 // rises to the top"), the attention kinds and the overlay's model come from flow-agent's own vscode-free modules, so the two pages
 // draw what the real ones would draw for the same sessions.
-import { attentionKind, rank, type Need } from '../../../editor/extensions/flow-agent/src/attention'
-import { overlayModel, overlayOptions, readSettings, type OverlaySource } from '../../../editor/extensions/flow-agent/src/desktopModel'
-import type { AgentImpact, IslandColors } from '../demo'
+import { useSyncExternalStore } from 'react'
+import { attentionKind, rank, type Need } from '../../editor/extensions/flow-agent/src/attention'
+import { overlayModel, overlayOptions, readSettings, type OverlaySource } from '../../editor/extensions/flow-agent/src/desktopModel'
+import type { AgentImpact, IslandColors } from './demo'
 
 export interface Todo {
   text: string
@@ -37,6 +38,10 @@ export function subscribeSessions(l: Listener) {
     listeners.delete(l)
   }
 }
+/** What a component needs of the sessions; it redraws when they change. */
+export function useSessions<T>(select: (list: DemoSession[]) => T): T {
+  return useSyncExternalStore(subscribeSessions, () => select(sessions))
+}
 export function updateSession(id: string, patch: Partial<DemoSession> | ((s: DemoSession) => Partial<DemoSession>)) {
   sessions = sessions.map(s => (s.id === id ? { ...s, ...(typeof patch === 'function' ? patch(s) : patch) } : s))
   listeners.forEach(l => l())
@@ -65,7 +70,7 @@ export function dockList(list: DemoSession[]) {
   }))
 }
 
-/** What the overlay page is told: flow-agent's mapping, with the settings the app starts with and the notch of a Mac's menu bar. */
+/** What the overlay page is told: flow-agent's mapping, with the settings the app starts with. On this page the island floats on the stage; in the app it hangs from the notch. */
 export function islandModel(list: DemoSession[], colors: IslandColors) {
   const settings = readSettings(key => (key === 'overlay.enabled' ? true : undefined))
   const model = overlayModel(list, settings)
@@ -77,8 +82,8 @@ export function islandModel(list: DemoSession[], colors: IslandColors) {
     size: options.size,
     opacity: options.opacity,
     colors,
-    notch: 32,
-    attached: options.position === 'top-center',
+    notch: 0,
+    attached: false,
     avatar: options.avatar,
   }
 }

@@ -7,11 +7,8 @@ import { defineConfig, type Plugin } from 'vite'
 const REPO_MEDIA: Record<string, string> = {
   'media/axle-poster.jpg': '../docs/media/axle-poster.jpg',
   'media/axle-demo.mp4': '../docs/media/axle-demo.mp4',
-  // The activity bar icons of Axle's own views, as the extensions ship them.
-  'media/flow.svg': '../editor/extensions/flow-view/media/flow.svg',
-  'media/harness.svg': '../editor/extensions/flow-harness/media/harness.svg',
 }
-const TYPES: Record<string, string> = { '.mp4': 'video/mp4', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml' }
+const TYPES: Record<string, string> = { '.mp4': 'video/mp4', '.jpg': 'image/jpeg' }
 function repoMedia(): Plugin {
   return {
     name: 'axle-repo-media',
@@ -31,9 +28,8 @@ function repoMedia(): Plugin {
   }
 }
 
-// Served from https://<owner>.github.io/axle/: every URL is relative. The canvas and editor pages import ui/ (a webview that expects
-// the editor's globals, which src/host.ts supplies), so the dev server may read the repository root. The code editor page takes
-// Monaco from ui/'s copy by path, so it and the canvas page share one chunk instead of bundling it twice.
+// Served from https://<owner>.github.io/axle/: every URL is relative. The canvas page imports ui/ (a webview that expects
+// the editor's globals, which src/host.ts supplies), so the dev server may read the repository root.
 export default defineConfig({
   base: './',
   // One tsconfig for every file: the extension modules the playground imports (flow-agent's attention.ts and friends) sit in a
@@ -46,6 +42,6 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     chunkSizeWarningLimit: 8000,
-    rollupOptions: { input: { index: resolve(__dirname, 'index.html'), canvas: resolve(__dirname, 'canvas.html'), editor: resolve(__dirname, 'editor.html') } },
+    rollupOptions: { input: { index: resolve(__dirname, 'index.html'), canvas: resolve(__dirname, 'canvas.html') } },
   },
 })
