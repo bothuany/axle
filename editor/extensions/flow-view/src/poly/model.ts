@@ -150,6 +150,51 @@ export interface FileFacts {
 /** The database card and endpoint shapes the canvas reads (declared in protocol/flow.ts). */
 export type { DbColumn, DbSchema, EntryPoint } from '../../../../../protocol/flow';
 
+/** Where an entity (or its ORM configuration) is written: a change that lands in one of these lines changes the entity. */
+export interface TableSpan {
+	file: string;
+	line: number;
+	endLine: number;
+}
+
+/** An entity or model class and the table it maps to, as the schema readers (here, and Schema.cs for EF Core) found it. */
+export interface TableEntity {
+	entity: string;
+	table: string;
+	schemaName: string | null;
+	orm: string;
+	/** The table name is not written in the code (a naming default): the answer is a guess. */
+	guess: boolean;
+	spans: TableSpan[];
+}
+
+/** One database card an entry point's flow reaches. */
+export interface TableUseFact {
+	/** The entry point (its `id`). */
+	entry: string;
+	table: string;
+	schemaName: string | null;
+	entity: string;
+	write: boolean;
+	/** The table is a guess: a naming default or a raw SQL string, not ORM metadata. */
+	guess: boolean;
+	/** The database card's own label ("OrderRepository" context, "OrdersDb.Orders"). */
+	card: string;
+	/** The method that makes the call, and where. */
+	from: string;
+	file: string | null;
+	line: number;
+	ops: string[];
+}
+
+/** What a walk over the entry points found so far; `done` is false while some have not been walked yet. */
+export interface TablesFact {
+	uses: TableUseFact[];
+	done: boolean;
+	checked: number;
+	total: number;
+}
+
 /** Directory names whose files are never indexed (dependencies, caches, editor state), wherever they are. */
 export const EXCLUDED_DIRS = new Set([
 	'node_modules', '.git', 'dist', '.venv', 'venv', '__pycache__',

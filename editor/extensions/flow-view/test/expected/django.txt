@@ -1,4 +1,4 @@
 GET /products     ProductList.get
-  db: shop_product [db]
+  (guess) db: shop_product [db]
 POST /products    ProductList.post
-  db: shop_product [db]
+  (guess) db: shop_product [db]

@@ -19,6 +19,7 @@ export interface PrismaModel {
 	table: string;
 	file: string;
 	line: number;
+	endLine: number;
 	columns: DbColumn[];
 	relations: string[];
 }
@@ -46,8 +47,14 @@ export function looksLikeSql(s: string) {
 	return /\b(select\s[\s\S]+\sfrom|insert\s+into|update\s+\w[\w.]*\s+set|delete\s+from|merge\s+into)\b/i.test(s) || /^\s*(from|select)\s+[A-Z]\w*/.test(s);
 }
 
+/** What a schema reader hands over: the card's table, and whether its name is a guess (not written in the code). */
+export type SchemaFact = Omit<DbSchema, 'ops' | 'writes' | 'context'> & { guess: boolean };
+
+/** The name of a table as it is compared: no quotes or brackets, no schema prefix, case folded. */
+export const tableKey = (table: string) => table.replace(/["'`\[\]]/g, '').split('.').pop()!.trim().toLowerCase();
+
 /** JPA / Hibernate entity: @Entity, @Table, @Column, @Id, relations. Superclass fields come in through `inherited`. */
-export function javaSchema(t: TypeFact, inherited: FieldFact[]): Omit<DbSchema, 'ops' | 'writes' | 'context'> | undefined {
+export function javaSchema(t: TypeFact, inherited: FieldFact[]): SchemaFact | undefined {
 	const entity = ann(t.annotations, 'Entity', 'Document', 'Table', 'MappedSuperclass');
 	if (!entity) {
 		return undefined;
@@ -80,9 +87,12 @@ export function javaSchema(t: TypeFact, inherited: FieldFact[]): Omit<DbSchema, 
 			maxLength: num(unq(col?.named.length)),
 		});
 	}
+	const named = unq(table?.named.name ?? table?.value ?? table?.named.collection);
 	return {
 		entity: t.name,
-		table: unq(table?.named.name ?? table?.value ?? table?.named.collection) || t.name,
+		table: named || t.name,
+		// Without a name in @Table the physical name comes from a naming strategy the code does not show.
+		guess: !named,
 		dbSchemaName: unq(table?.named.schema) ?? null,
 		columns: columns.sort((a, b) => Number(b.key) - Number(a.key)),
 		relations,
@@ -92,7 +102,7 @@ export function javaSchema(t: TypeFact, inherited: FieldFact[]): Omit<DbSchema, 
 }
 
 /** SQLAlchemy (Column / mapped_column / relationship) and Django (models.XField) models. */
-export function pythonSchema(t: TypeFact, module: string | undefined): Omit<DbSchema, 'ops' | 'writes' | 'context'> & { orm: string } | undefined {
+export function pythonSchema(t: TypeFact, module: string | undefined): SchemaFact & { orm: string } | undefined {
 	const tablename = t.fields.find(f => f.name === '__tablename__');
 	const django = t.supers.some(s => s === 'models.Model' || s === 'Model') && t.fields.some(f => /^models\.\w+Field|^models\.(ForeignKey|OneToOneField|ManyToManyField)/.test(f.init ?? ''));
 	const sqlalchemy = !!tablename || t.fields.some(f => /^(Column|mapped_column|sa\.Column|db\.Column)\(/.test(f.init ?? ''));
@@ -151,9 +161,12 @@ export function pythonSchema(t: TypeFact, module: string | undefined): Omit<DbSc
 	}
 	const dbTable = t.fields.find(f => f.name === 'Meta.db_table');
 	const app = (module ?? '').split('.').filter(p => p !== 'models').pop() ?? '';
+	const written = unq(tablename?.init) ?? unq(dbTable?.init);
 	return {
 		entity: t.name,
-		table: unq(tablename?.init) ?? unq(dbTable?.init) ?? (django ? `${app ? app + '_' : ''}${t.name.toLowerCase()}` : t.name),
+		table: written ?? (django ? `${app ? app + '_' : ''}${t.name.toLowerCase()}` : t.name),
+		// Django's app_model default comes from the app label, which the folder name only suggests.
+		guess: written === undefined,
 		dbSchemaName: null,
 		columns: columns.sort((a, b) => Number(b.key) - Number(a.key)),
 		relations,
@@ -169,7 +182,7 @@ function target(args: string) {
 }
 
 /** TypeORM / MikroORM / Sequelize-typescript entities. */
-export function jsSchema(t: TypeFact): Omit<DbSchema, 'ops' | 'writes' | 'context'> | undefined {
+export function jsSchema(t: TypeFact): SchemaFact | undefined {
 	const entity = ann(t.annotations, 'Entity', 'Table', 'Schema');
 	if (!entity) {
 		return undefined;
@@ -196,9 +209,12 @@ export function jsSchema(t: TypeFact): Omit<DbSchema, 'ops' | 'writes' | 'contex
 			maxLength: num(unq(col.named.length)),
 		});
 	}
+	const written = entity.value ?? unq(entity.named.name) ?? unq(entity.named.tableName);
 	return {
 		entity: t.name,
-		table: entity.value ?? unq(entity.named.name) ?? unq(entity.named.tableName) ?? t.name,
+		table: written ?? t.name,
+		// @Entity() alone leaves the table name to the naming strategy.
+		guess: written === undefined,
 		dbSchemaName: unq(entity.named.schema) ?? null,
 		columns: columns.sort((a, b) => Number(b.key) - Number(a.key)),
 		relations,
@@ -215,13 +231,14 @@ export function parsePrisma(text: string, file: string): PrismaModel[] {
 	lines.forEach((l, i) => {
 		const start = l.match(/^\s*model\s+(\w+)\s*\{/);
 		if (start) {
-			cur = { name: start[1], table: start[1], file, line: i + 1, columns: [], relations: [] };
+			cur = { name: start[1], table: start[1], file, line: i + 1, endLine: i + 1, columns: [], relations: [] };
 			return;
 		}
 		if (!cur) {
 			return;
 		}
 		if (/^\s*\}/.test(l)) {
+			cur.endLine = i + 1;
 			models.push(cur);
 			cur = undefined;
 			return;

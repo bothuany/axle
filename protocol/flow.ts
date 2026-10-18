@@ -26,12 +26,20 @@ export interface FlowNode {
 	schema?: DbSchema;
 	/** Calls the static index could not resolve: the host asks the language server, then drops this field. */
 	pending?: { line: number; name: string }[];
+	/**
+	 * Database cards in a change set: the entity behind this table was edited (or its ORM configuration was), so every
+	 * endpoint that reaches the card may behave differently. `guess`: the table name is not written in the code.
+	 */
+	tableChange?: { entity: string; table: string; guess?: boolean };
 }
 
 export interface FlowEdge {
 	callLine: number;
 	edgeKind: EdgeKind;
-	/** The link was made by name alone (the polyglot index found no declared type to follow), or by an HTTP route or message destination it matched. */
+	/**
+	 * The link was made by name alone (the polyglot index found no declared type to follow), or by an HTTP route or message
+	 * destination it matched. On a `db` edge: the table is a guess (a naming default or a raw SQL string, not ORM metadata).
+	 */
 	guess?: boolean;
 	node: FlowNode;
 }
