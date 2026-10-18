@@ -36,3 +36,4 @@ dotnet build analyzer
 - Match the file you are in: extension TypeScript uses tabs and semicolons; `ui/` uses 2 spaces and no semicolons; `scripts/*.mjs` use tabs and no semicolons. Comments explain why, in full sentences.
 - Spawning processes: argument arrays, no `shell: true` (use `launch`/`launchSync` from scripts/lib.mjs in scripts).
 - Never start GUI windows or steal focus from scripts or hooks.
+- A test that runs the C# analyzer on a copy in `os.tmpdir()` resolves it with `realpathSync.native` first: a Windows runner's temp folder has an 8.3 short name and the analyzer reports long names (checked by `npm run arch`).
