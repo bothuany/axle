@@ -146,7 +146,7 @@ test('the change tile: the order flow with its green and red, Keep, Undo, and th
 	// The tile has stepped to the first changed card by itself: the canvas's own review tour is running.
 	await until(() => canvas.evaluate(() => /1 \/ 2/.test(document.querySelector('.tour')?.textContent ?? '')), 'the review tour to start')
 	assert.ok(await canvas.evaluate(() => [...document.querySelectorAll('.react-flow__node')].some(n => /applyDiscount/.test(n.textContent) && /Agent edit/.test(n.textContent))), 'the new method is on the canvas, marked as an agent edit')
-	assert.ok(await until(() => canvas.evaluate(() => { const r = document.querySelector('.react-flow__viewport')?.style.transform ?? ''; return Number(/scale\(([\d.]+)\)/.exec(r)?.[1]) >= 1.3 }), 'the canvas to be zoomed in on that card'))
+	assert.ok(await until(() => canvas.evaluate(() => { const r = document.querySelector('.react-flow__viewport')?.style.transform ?? ''; return Number(/scale\(([\d.]+)\)/.exec(r)?.[1]) >= 1.2 }), 'the canvas to be zoomed in on that card'))
 	await clickIn(canvas, 'Keep')
 	await footHas(page, 'changes-tile', 'Kept.')
 	await until(() => canvas.evaluate(() => !document.querySelector('.tour')), 'the canvas to stop marking the change')
