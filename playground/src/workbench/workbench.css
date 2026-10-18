@@ -163,3 +163,6 @@
 .row .desc { white-space: pre; }
 .pane-h .desc { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
 .pane-h > span:first-of-type + span { flex: none; }
+/* Measured on the real app: the view icons sit 30px apart, the folder row of the Explorer is a section header in the sidebar's text. */
+.act { margin-right: 0; }
+.actrow { gap: 2px; padding-left: 10px; }

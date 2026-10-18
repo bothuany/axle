@@ -41,7 +41,7 @@ export function Explorer() {
         <Tb icon="ellipsis" title="Views and More Actions…" />
       </div>
       <div className="viewbody" role="tree">
-        <div className="row" style={{ paddingLeft: 4, fontWeight: 600, fontSize: 11 }} onClick={() => toggle('')}>
+        <div className="row" style={{ paddingLeft: 4, fontSize: 12 }} onClick={() => toggle('')}>
           <span className="tw"><Ci name={open.has('') ? 'chevron-down' : 'chevron-right'} /></span>
           <span className="label">harbor-goods</span>
         </div>

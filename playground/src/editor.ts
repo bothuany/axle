@@ -112,7 +112,7 @@ if (!file) {
       const original = monaco.editor.createModel(file.text, lang)
       const modified = monaco.editor.createModel(file.after, lang)
       models.push(original, modified)
-      diff = monaco.editor.createDiffEditor(host, { ...options, renderSideBySide: host.clientWidth > 900, originalEditable: false })
+      diff = monaco.editor.createDiffEditor(host, { ...options, renderSideBySide: host.clientWidth > 900, originalEditable: false, renderOverviewRuler: false, ignoreTrimWhitespace: false })
       diff.setModel({ original, modified })
       return
     }
