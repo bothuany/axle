@@ -95,3 +95,22 @@ test('c#: an edit to the entity, or to its IEntityTypeConfiguration, changes the
 	const changed = await index().changed([{ file: file('CustomerConfiguration.cs') }], 4, 1000)
 	assert.deepEqual(changed.tables.map(c => [c.entity, c.table, c.endpoints]), [['Customer', 'customers', 1]])
 })
+
+test('c#: ToTable written in OnModelCreating counts, and an edit in that statement changes that entity only', { skip }, async () => {
+	const file = name => join(dir, 'csharp-ef', name)
+	const { list } = await index().entities()
+	const table = name => list.find(e => e.entity === name && e.spans.some(s => s.file.endsWith('ShopDb.cs')))?.table
+	assert.deepEqual([table('Warehouse'), table('Supplier'), table('Account')], ['warehouses', 'suppliers', 'shop_accounts'])
+	const named = line => t.entitiesTouched(list, file('ShopDb.cs'), [{ start: line, end: line }]).map(h => h.entity.entity)
+	assert.deepEqual(named(16), ['Warehouse'], 'a chain on one line')
+	assert.deepEqual(named(19), ['Supplier'], 'inside the lambda')
+	assert.deepEqual(named(22), ['Account'])
+	assert.deepEqual(named(10), [], 'a DbSet property is not a configuration')
+})
+
+test('c#: two entities with the same name resolve by their full type, not by the name', { skip }, async () => {
+	const accounts = facts.entities.filter(e => e.entity === 'Account')
+	assert.deepEqual(accounts.map(e => e.table).sort(), ['billing_accounts', 'shop_accounts'])
+	const uses = facts.tables.uses.filter(u => u.entity === 'Account')
+	assert.deepEqual(uses.map(u => `${u.from} -> ${u.table} ${u.guess ? 'guess' : 'certain'}`).sort(), ['BillingAccountsController.Create -> billing_accounts certain', 'ShopAccountsController.List -> shop_accounts certain'])
+})

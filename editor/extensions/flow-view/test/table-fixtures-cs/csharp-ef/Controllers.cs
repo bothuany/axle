@@ -47,3 +47,43 @@ public class ShipmentsController : ControllerBase
         return _db.Shipments.ToList();
     }
 }
+
+public class WarehousesController : ControllerBase
+{
+    private readonly ShopDb _db;
+
+    public WarehousesController(ShopDb db) => _db = db;
+
+    [HttpGet]
+    public List<Warehouse> List()
+    {
+        return _db.Warehouses.ToList();
+    }
+}
+
+public class SuppliersController : ControllerBase
+{
+    private readonly ShopDb _db;
+
+    public SuppliersController(ShopDb db) => _db = db;
+
+    [HttpPost]
+    public Supplier Create(Supplier supplier)
+    {
+        _db.Suppliers.Add(supplier);
+        return supplier;
+    }
+}
+
+public class ShopAccountsController : ControllerBase
+{
+    private readonly ShopDb _db;
+
+    public ShopAccountsController(ShopDb db) => _db = db;
+
+    [HttpGet]
+    public List<Account> List()
+    {
+        return _db.Accounts.ToList();
+    }
+}

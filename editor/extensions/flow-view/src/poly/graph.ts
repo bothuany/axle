@@ -92,12 +92,12 @@ export class Project {
 	private impls = new Map<string, TypeFact[]>();
 	private schemas = new Map<string, DbSchema & { orm: string }>();
 	private schemaByTable = new Map<string, DbSchema & { orm: string }>();
-	/** Entities whose table name is not written in the code (a naming default): a card for one says "table?". */
+	/** Every declaration of each entity name, in file order: two services may both have an `Order`. */
+	private schemaList = new Map<string, (DbSchema & { orm: string })[]>();
+	/** Entities (by file and line) whose table name is not written in the code (a naming default): a card for one says "table?". */
 	private guessedTables = new Set<string>();
 	/** Every entity or model class the readers found, one per declaration (two services may both have a `User`): what an edit is resolved against. */
 	private entityFacts: TableEntity[] = [];
-	/** Entity names more than one class has: a card that names one cannot say which table it is, so it is a guess. */
-	private ambiguousEntities = new Set<string>();
 	/** The walk over the entry points that finds which tables they reach, built on first use and cleared with the index. */
 	private tableWalk: { next: number; uses: TableUseFact[] } | undefined;
 	private entries: Entry[] = [];
@@ -163,8 +163,8 @@ export class Project {
 		this.schemas.clear();
 		this.schemaByTable.clear();
 		this.guessedTables.clear();
+		this.schemaList.clear();
 		this.entityFacts = [];
-		this.ambiguousEntities.clear();
 		this.tableWalk = undefined;
 		this.resolved.clear();
 		this.pkgIndex = undefined;
@@ -265,11 +265,9 @@ export class Project {
 			const { guess, ...s } = read;
 			const full = { ...s, ops: [], writes: false, context: orm, orm };
 			if (guess) {
-				this.guessedTables.add(s.entity);
+				this.guessedTables.add(`${s.file}|${s.line}`);
 			}
-			if (this.schemas.has(s.entity)) {
-				this.ambiguousEntities.add(s.entity);
-			}
+			this.push(this.schemaList, s.entity, full);
 			this.entityFacts.push({ entity: s.entity, table: s.table, schemaName: s.dbSchemaName, orm, guess: !!guess, spans: s.file ? [{ file: s.file, line: s.line, endLine }] : [] });
 			this.schemas.set(s.entity, full);
 			this.schemaByTable.set(s.table.toLowerCase(), full);
@@ -597,14 +595,49 @@ export class Project {
 
 	// ── Databases ───────────────────────────────────────────────────────────────
 
-	private schema(entity: string | undefined, ops: string[], context: string, fn?: FuncFact): Target | undefined {
+	/**
+	 * The declaration an entity name stands for. A name one class has is that class; a name several have is resolved the way the
+	 * code resolves it (the import, the same package or module) from the file that writes it; a Prisma model by the nearest schema
+	 * file. `unsure` is only true when the code does not say which one it is.
+	 */
+	private pickSchema(entity: string, from: string | undefined, context: string): { s: DbSchema & { orm: string }; unsure: boolean } | undefined {
+		const all = this.schemaList.get(entity) ?? [];
+		const prisma = context === 'Prisma';
+		const list = all.filter(x => (x.orm === 'Prisma') === prisma);
+		if (!list.length) {
+			return undefined;
+		}
+		if (list.length === 1) {
+			return { s: list[0], unsure: false };
+		}
+		if (prisma && from) {
+			const near = (f: string | null) => {
+				const a = path.dirname(from).split(path.sep);
+				const b = path.dirname(f ?? '').split(path.sep);
+				let n = 0;
+				while (n < a.length && n < b.length && a[n] === b[n]) {
+					n++;
+				}
+				return n;
+			};
+			const best = Math.max(...list.map(x => near(x.file)));
+			const closest = list.filter(x => near(x.file) === best);
+			return closest.length === 1 ? { s: closest[0], unsure: false } : { s: closest[0], unsure: true };
+		}
+		const t = from ? this.type(entity, from) : undefined;
+		const hit = t && list.find(x => x.file === t.file && x.line === t.line);
+		return hit ? { s: hit, unsure: false } : { s: list[list.length - 1], unsure: true };
+	}
+
+	private schema(entity: string | undefined, ops: string[], context: string, fn?: FuncFact, from?: string): Target | undefined {
 		if (!entity) {
 			return undefined;
 		}
-		const s = this.schemas.get(entity);
+		const picked = this.pickSchema(entity, from ?? fn?.file, context);
+		const s = picked?.s;
 		const writes = isWrite(ops, fn);
 		if (s) {
-			return { kind: 'db', schema: { ...s, ops, writes, context: context || s.orm }, label: s.table, file: s.file, line: s.line, ...(this.guessedTables.has(entity) || this.ambiguousEntities.has(entity) ? { guess: true } : {}) };
+			return { kind: 'db', schema: { ...s, ops, writes, context: context || s.orm }, label: s.table, file: s.file, line: s.line, ...(picked!.unsure || this.guessedTables.has(`${s.file}|${s.line}`) ? { guess: true } : {}) };
 		}
 		// No entity of this name in the project: the repository's type argument stands in for the table.
 		return { kind: 'db', schema: { entity, table: entity, dbSchemaName: null, context, columns: [], relations: [], ops, writes, file: null, line: 0 }, label: entity, file: null, line: 0, guess: true };
@@ -659,15 +692,16 @@ export class Project {
 					return t;
 				}
 			}
-			return this.schema(repoEntity, ops, rtype!.name, m);
+			// The repository's type argument is written in the repository's file: that is where its package and imports say which entity it is.
+			return this.schema(repoEntity, ops, rtype!.name, m, rtype!.file);
 		}
 		const recvType = rt?.type ?? '';
 		// TypeORM Repository<User> / MikroORM EntityRepository<User>
 		if (/^(Repository|EntityRepository|MongoRepository|TreeRepository)$/.test(recvType)) {
-			return this.schema(rt!.args[0] ?? this.fieldArg(fn, c.recv!), ops, 'TypeORM');
+			return this.schema(rt!.args[0] ?? this.fieldArg(fn, c.recv!), ops, 'TypeORM', fn);
 		}
 		if (c.name === 'getRepository' && c.arg0) {
-			return this.schema(c.arg0.replace(/\.class$/, ''), ops.slice(1), 'TypeORM');
+			return this.schema(c.arg0.replace(/\.class$/, ''), ops.slice(1), 'TypeORM', fn);
 		}
 		// JPA / Hibernate / JDBC
 		if (lang === 'java') {
@@ -677,7 +711,7 @@ export class Project {
 					if (c.name === 'createQuery' || c.name === 'createNamedQuery' || /^\s*(from|select\s+\w+\s+from)\s+[A-Z]/.test(sql)) {
 						const entity = sql.match(/\b(?:from|join|update|delete\s+from)\s+([A-Z]\w*)/i)?.[1];
 						if (entity && this.schemas.has(entity)) {
-							return this.schema(entity, [sqlTables(sql).verb || 'SELECT', ...ops.slice(1)], recvType || 'JPA');
+							return this.schema(entity, [sqlTables(sql).verb || 'SELECT', ...ops.slice(1)], recvType || 'JPA', fn);
 						}
 					}
 					return this.sqlTarget(sql, ops, recvType || 'JDBC');
@@ -685,7 +719,7 @@ export class Project {
 				if (/^(find|getReference|persist|merge|remove|get|load|save|update|delete|saveOrUpdate|refresh|detach)$/.test(c.name) && c.arg0) {
 					const entity = c.arg0.match(/^(\w+)\.class$/)?.[1] ?? (own(fn.locals, c.arg0) ?? own(fn.params, c.arg0));
 					if (entity && this.schemas.has(entity)) {
-						return this.schema(entity, ops, recvType || 'JPA');
+						return this.schema(entity, ops, recvType || 'JPA', fn);
 					}
 				}
 				if ((recvType === 'EntityManager' || recvType === 'Session') && !/^(getDelegate|unwrap|getMetamodel|getProperties|setProperty|isOpen|close|getTransaction|joinTransaction|contains|detach|clear|getEntityManagerFactory|setFlushMode|getFlushMode|getCriteriaBuilder|getSessionFactory)$/.test(c.name)) {
@@ -697,26 +731,26 @@ export class Project {
 		if (lang === 'python') {
 			// SQLAlchemy: session.query(User).filter(...).first() / select(User) / session.add(obj)
 			if (c.name === 'query' && c.arg0 && this.schemas.has(c.arg0.split('.').pop()!)) {
-				return this.schema(c.arg0.split('.').pop(), ops, 'SQLAlchemy');
+				return this.schema(c.arg0.split('.').pop(), ops, 'SQLAlchemy', fn);
 			}
 			if ((c.name === 'select' || c.name === 'insert' || c.name === 'update' || c.name === 'delete') && !c.recv && c.arg0 && this.schemas.has(c.arg0)) {
-				return this.schema(c.arg0, [c.name, ...(c.chain ?? [])], 'SQLAlchemy');
+				return this.schema(c.arg0, [c.name, ...(c.chain ?? [])], 'SQLAlchemy', fn);
 			}
 			if (/^(add|delete|merge)$/.test(c.name) && c.arg0 && /session|db/i.test(c.recv ?? '')) {
 				const entity = own(fn.locals, c.arg0) ?? own(fn.params, c.arg0);
 				if (entity && this.schemas.has(entity)) {
-					return this.schema(entity, ops, 'SQLAlchemy');
+					return this.schema(entity, ops, 'SQLAlchemy', fn);
 				}
 			}
 			// Django: User.objects.filter(...)
 			const m = c.recv?.match(/^(\w+)\.objects$/);
 			if (m && this.schemas.has(m[1])) {
-				return this.schema(m[1], ops, 'Django ORM');
+				return this.schema(m[1], ops, 'Django ORM', fn);
 			}
 			if (c.recv && /^(save|delete|refresh_from_db)$/.test(c.name)) {
 				const entity = own(fn.locals, c.recv) ?? own(fn.params, c.recv);
 				if (entity && this.schemas.get(entity)?.orm === 'Django ORM') {
-					return this.schema(entity, ops, 'Django ORM');
+					return this.schema(entity, ops, 'Django ORM', fn);
 				}
 			}
 			if (/^(execute|executemany|exec_driver_sql|raw|fetch|fetchrow|fetchval)$/.test(c.name)) {
@@ -731,7 +765,7 @@ export class Project {
 			const model = seg.at(-1)!;
 			const p = this.prisma.find(x => x.name.toLowerCase() === model.toLowerCase());
 			if (p && seg.length >= 2 && /prisma|db|client/i.test(seg.at(-2)!)) {
-				return this.schema(p.name, ops, 'Prisma');
+				return this.schema(p.name, ops, 'Prisma', fn);
 			}
 		}
 		if (/^(query|execute|raw|run|all|get|prepare)$/.test(c.name) || c.name === 'sql') {

@@ -1,0 +1,28 @@
+entry points: 4
+entities:
+  Account -> billing_accounts (SQLAlchemy) billing/models.py:7-9
+  Account -> shop_accounts (SQLAlchemy) shop/models.py:7-9
+
+Impact of changing table billing_accounts (entity Account):
+2 endpoints read or write it (1 write, 1 read):
+
+Writes (1):
+- POST /billing/accounts routes.create_account  via create_account (billing/routes.py:20), card billing_accounts [add]
+
+Reads (1):
+- GET /billing/accounts routes.list_accounts  via list_accounts (billing/routes.py:13), card billing_accounts [query → all]
+
+Checked 4 of 4 entry points.
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
+
+Impact of changing table shop_accounts (entity Account):
+2 endpoints read or write it (1 write, 1 read):
+
+Writes (1):
+- POST /shop/accounts routes.create_account  via create_account (shop/routes.py:20), card shop_accounts [add]
+
+Reads (1):
+- GET /shop/accounts routes.list_accounts  via list_accounts (shop/routes.py:13), card shop_accounts [query → all]
+
+Checked 4 of 4 entry points.
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; migrations (not mapped yet); endpoints in languages without schema cards (Go, PHP, Ruby, Rust).

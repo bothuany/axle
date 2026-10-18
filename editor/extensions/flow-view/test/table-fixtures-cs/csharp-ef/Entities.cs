@@ -23,3 +23,23 @@ public class Shipment
     public int Id { get; set; }
     public int OrderId { get; set; }
 }
+
+// Configured in ShopDb.OnModelCreating, in a chain: modelBuilder.Entity<Warehouse>().ToTable("warehouses").
+public class Warehouse
+{
+    public int Id { get; set; }
+    public string City { get; set; } = "";
+}
+
+// Configured in ShopDb.OnModelCreating with a lambda: modelBuilder.Entity<Supplier>(b => { ... }).
+public class Supplier
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+}
+
+// Shop and Billing both have an Account: the DbSet's declared type says which one a query reaches.
+public class Account
+{
+    public int Id { get; set; }
+}

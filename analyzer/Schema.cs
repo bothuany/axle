@@ -82,6 +82,17 @@ public sealed class SchemaReader
         foreach (var t in types)
             foreach (var i in t.AllInterfaces.Where(i => i.Name == "IEntityTypeConfiguration" && i.TypeArguments.Length == 1))
                 found.TryAdd(i.TypeArguments[0].ToDisplayString(), (i.TypeArguments[0], null));
+        foreach (var t in types.Where(t => InheritsFrom(t, "DbContext")))
+            foreach (var syntaxRef in t.DeclaringSyntaxReferences)
+            {
+                var node = await syntaxRef.GetSyntaxAsync();
+                var model = await _model(node.SyntaxTree);
+                if (model == null) continue;
+                foreach (var call in node.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                    if (call.Expression is MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.Text: "Entity", TypeArgumentList.Arguments.Count: 1 } gn }
+                        && model.GetTypeInfo(gn.TypeArgumentList.Arguments[0]).Type is { } mapped && mapped.Locations.Any(l => l.IsInSource))
+                        found.TryAdd(mapped.ToDisplayString(), (mapped, null));
+            }
         var list = new List<TableEntity>();
         foreach (var (entity, member) in found.Values)
         {
@@ -98,9 +109,10 @@ public sealed class SchemaReader
         return false;
     }
 
-    private static async Task<TableSpan?> SpanOfAsync(SyntaxReference r)
+    private static async Task<TableSpan?> SpanOfAsync(SyntaxReference r) => SpanOf(await r.GetSyntaxAsync());
+
+    private static TableSpan? SpanOf(SyntaxNode node)
     {
-        var node = await r.GetSyntaxAsync();
         var span = node.GetLocation().GetLineSpan();
         return span.Path is { Length: > 0 } path ? new TableSpan(path, span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1) : null;
     }
@@ -162,51 +174,82 @@ public sealed class SchemaReader
                 schema = a.NamedArguments.FirstOrDefault(n => n.Key == "Schema").Value.Value as string;
             }
 
+        // What a fluent call says about the entity: the table, key, column names, lengths, relations.
+        void Apply(IEnumerable<InvocationExpressionSyntax> invocations)
+        {
+            foreach (var inv in invocations)
+            {
+                var name = MethodName(inv);
+                var arg0 = inv.ArgumentList.Arguments.FirstOrDefault()?.Expression;
+                switch (name)
+                {
+                    case "ToTable":
+                        table = StringArg(inv, 0) ?? table;
+                        schema = StringArg(inv, 1) ?? schema;
+                        break;
+                    case "HasKey":
+                        keys = LambdaMembers(arg0);
+                        break;
+                    case "Ignore":
+                        ignored.UnionWith(LambdaMembers(arg0));
+                        break;
+                    case "HasOne":
+                    case "HasMany":
+                        foreach (var nav in LambdaMembers(arg0)) relations.Add($"{(name == "HasOne" ? "one" : "many")} {nav}");
+                        break;
+                    case "HasColumnName":
+                    case "HasMaxLength":
+                    case "IsRequired":
+                        // Walk down the chain to the Property(e => e.X) call it configures.
+                        ExpressionSyntax? e = (inv.Expression as MemberAccessExpressionSyntax)?.Expression;
+                        while (e is InvocationExpressionSyntax inner && MethodName(inner) != "Property")
+                            e = (inner.Expression as MemberAccessExpressionSyntax)?.Expression;
+                        if (e is not InvocationExpressionSyntax prop) break;
+                        var p = LambdaMembers(prop.ArgumentList.Arguments.FirstOrDefault()?.Expression).FirstOrDefault();
+                        if (p == null) break;
+                        if (name == "HasColumnName" && StringArg(inv, 0) is { } c) colName[p] = c;
+                        if (name == "HasMaxLength" && arg0 is LiteralExpressionSyntax lit && lit.Token.Value is int n) maxLen[p] = n;
+                        if (name == "IsRequired") required.Add(p);
+                        break;
+                }
+            }
+        }
+
         // Fluent configuration classes for this entity.
+        var wanted = entity.OriginalDefinition.ToDisplayString();
         foreach (var t in await _sourceTypes())
         {
             var cfg = t.AllInterfaces.FirstOrDefault(i => i.Name == "IEntityTypeConfiguration" && i.TypeArguments.Length == 1 &&
-                i.TypeArguments[0].OriginalDefinition.ToDisplayString() == entity.OriginalDefinition.ToDisplayString());
+                i.TypeArguments[0].OriginalDefinition.ToDisplayString() == wanted);
             if (cfg == null) continue;
             foreach (var syntaxRef in t.DeclaringSyntaxReferences)
             {
                 if (await SpanOfAsync(syntaxRef) is { } configured) spans.Add(configured);
+                Apply((await syntaxRef.GetSyntaxAsync()).DescendantNodes().OfType<InvocationExpressionSyntax>());
+            }
+        }
+
+        // The same calls written in a DbContext: modelBuilder.Entity<T>().ToTable("x").HasKey(...) or modelBuilder.Entity<T>(b => { ... }).
+        // Each statement that configures this entity counts as part of it, so an edit there changes the entity.
+        foreach (var t in await _sourceTypes())
+        {
+            if (!InheritsFrom(t, "DbContext")) continue;
+            foreach (var syntaxRef in t.DeclaringSyntaxReferences)
+            {
                 var node = await syntaxRef.GetSyntaxAsync();
-                foreach (var inv in node.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                if (!node.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(i => i.Expression is MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.Text: "Entity" } })) continue;
+                var model = await _model(node.SyntaxTree);
+                if (model == null) continue;
+                foreach (var call in node.DescendantNodes().OfType<InvocationExpressionSyntax>())
                 {
-                    var name = MethodName(inv);
-                    var arg0 = inv.ArgumentList.Arguments.FirstOrDefault()?.Expression;
-                    switch (name)
-                    {
-                        case "ToTable":
-                            table = StringArg(inv, 0) ?? table;
-                            schema = StringArg(inv, 1) ?? schema;
-                            break;
-                        case "HasKey":
-                            keys = LambdaMembers(arg0);
-                            break;
-                        case "Ignore":
-                            ignored.UnionWith(LambdaMembers(arg0));
-                            break;
-                        case "HasOne":
-                        case "HasMany":
-                            foreach (var nav in LambdaMembers(arg0)) relations.Add($"{(name == "HasOne" ? "one" : "many")} {nav}");
-                            break;
-                        case "HasColumnName":
-                        case "HasMaxLength":
-                        case "IsRequired":
-                            // Walk down the chain to the Property(e => e.X) call it configures.
-                            ExpressionSyntax? e = (inv.Expression as MemberAccessExpressionSyntax)?.Expression;
-                            while (e is InvocationExpressionSyntax inner && MethodName(inner) != "Property")
-                                e = (inner.Expression as MemberAccessExpressionSyntax)?.Expression;
-                            if (e is not InvocationExpressionSyntax prop) break;
-                            var p = LambdaMembers(prop.ArgumentList.Arguments.FirstOrDefault()?.Expression).FirstOrDefault();
-                            if (p == null) break;
-                            if (name == "HasColumnName" && StringArg(inv, 0) is { } c) colName[p] = c;
-                            if (name == "HasMaxLength" && arg0 is LiteralExpressionSyntax lit && lit.Token.Value is int n) maxLen[p] = n;
-                            if (name == "IsRequired") required.Add(p);
-                            break;
-                    }
+                    if (call.Expression is not MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.Text: "Entity", TypeArgumentList.Arguments.Count: 1 } gn }) continue;
+                    if (model.GetTypeInfo(gn.TypeArgumentList.Arguments[0]).Type?.OriginalDefinition.ToDisplayString() != wanted) continue;
+                    var scope = new List<InvocationExpressionSyntax>();
+                    for (SyntaxNode cur = call; cur.Parent is MemberAccessExpressionSyntax up && up.Expression == cur && up.Parent is InvocationExpressionSyntax next; cur = next) scope.Add(next);
+                    if (call.ArgumentList.Arguments.FirstOrDefault()?.Expression is LambdaExpressionSyntax lambda)
+                        scope.AddRange(lambda.DescendantNodes().OfType<InvocationExpressionSyntax>());
+                    if (call.Ancestors().OfType<StatementSyntax>().FirstOrDefault() is { } statement && SpanOf(statement) is { } stated) spans.Add(stated);
+                    Apply(scope);
                 }
             }
         }
