@@ -39,7 +39,7 @@ async function open(viewport = { width: 1700, height: 1000 }) {
 	await page.goto(url, { waitUntil: 'networkidle0', timeout: 120_000 })
 	return { page, problems }
 }
-const frame = (page, part) => page.frames().find(f => f.parentFrame() && f.url().includes(part))
+
 const until = async (probe, what, ms = 60_000) => {
 	const t0 = Date.now()
 	while (Date.now() - t0 < ms) {
@@ -51,109 +51,117 @@ const until = async (probe, what, ms = 60_000) => {
 	}
 	assert.fail(`timed out waiting for ${what}`)
 }
-const canvas = page => frame(page, 'canvas.html')
-const canvasText = page => canvas(page).evaluate(() => document.body.innerText)
-const caption = page => page.evaluate(() => document.querySelector('.caption p')?.textContent ?? '')
-const captionHas = (page, needle) => until(async () => (await caption(page)).includes(needle), `the caption to say "${needle}"`)
-const drawn = page => until(() => canvas(page)?.evaluate(() => !!document.querySelector('.react-flow__node')), 'the canvas to draw a card')
-const dockText = page => frame(page, 'dock.html').evaluate(() => document.body.innerText)
-const islandText = page => frame(page, 'island.html').evaluate(() => document.body.innerText)
-const clickInCanvas = (page, label) => canvas(page).evaluate(l => [...document.querySelectorAll('button')].find(b => b.textContent === l).click(), label)
+/** The page inside the iframe that is in `selector` (a tile's canvas, the dock, the overlay). */
+const inside = async (page, selector) => {
+	const handle = await until(() => page.$(selector), `${selector} to exist`)
+	return until(() => handle.contentFrame(), `${selector} to load`)
+}
+const flowCanvas = page => inside(page, '#flow-tile iframe.canvas')
+const changesCanvas = page => inside(page, '#changes-tile iframe.canvas')
+const textOf = async frame => frame.evaluate(() => document.body.innerText)
+const drawn = async frame => until(() => frame.evaluate(() => !!document.querySelector('.react-flow__node')), 'the canvas to draw a card')
+const dockText = async page => textOf(await inside(page, 'iframe.dock'))
+const islandText = async page => textOf(await inside(page, 'iframe.island'))
+const foot = (page, tile) => page.evaluate(t => document.querySelector(`#${t} .foot p`)?.textContent ?? '', tile)
+const footHas = (page, tile, needle) => until(async () => (await foot(page, tile)).includes(needle), `the ${tile} to say "${needle}"`)
+const clickIn = (frame, label) => frame.evaluate(l => [...document.querySelectorAll('button')].find(b => b.textContent === l).click(), label)
+const steps = page => page.evaluate(() => [...document.querySelectorAll('.steps li')].map(li => li.textContent))
 
-/** Starts the story, allows the edit and opens the change on the canvas. */
+/** Starts the agent from the page's first button and answers its question: the turn is then over. */
 async function playThrough(page) {
 	await page.click('#try')
-	await captionHas(page, 'wants to edit')
+	await until(() => page.$('#allow'), 'the permission question')
 	await page.click('#allow')
-	await captionHas(page, 'Done.')
-	await page.click('#review')
-	await until(async () => /Review 2 changes/.test(await canvasText(page)), 'the canvas to offer "Review 2 changes"')
+	await until(() => page.$('#review'), 'the end of the turn')
 }
 
-test('the page opens on the order flow, with no agent running', { skip }, async () => {
+test('the page opens on the order flow, with the menu, the languages and no agent', { skip }, async () => {
 	const { page, problems } = await open()
-	await drawn(page)
-	assert.match(await canvasText(page), /OrderController\.place/)
+	const canvas = await flowCanvas(page)
+	await drawn(canvas)
+	assert.match(await textOf(canvas), /OrderController\.place/)
+	assert.equal(await canvas.evaluate(() => getComputedStyle(document.querySelector('.react-flow__minimap')).display), 'none', 'the overview map is left out')
+	assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.pill .links a')].map(a => a.textContent)), ['Agents', 'Changes', 'Harness', 'What is real'])
+	assert.ok((await page.evaluate(() => document.querySelector('.langs')?.textContent ?? '')).includes('Rust'))
+	await page.evaluate(() => document.getElementById('agents-tile').scrollIntoView())
 	assert.match(await dockText(page), /No agents running/)
 	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.island')).opacity), '0', 'no agent, no overlay')
-	assert.equal(await canvas(page).evaluate(() => getComputedStyle(document.querySelector('.react-flow__minimap')).display), 'none', 'the overview map is left out')
-	assert.deepEqual(problems, [])
-	await page.close()
-})
-
-test('the whole story: Claude asks, you allow, the dock and the overlay say what it touched, the canvas shows the change', { skip }, async () => {
-	const { page, problems } = await open()
-	await drawn(page)
-	await page.click('#try')
-	await captionHas(page, 'wants to edit Order.java and OrderService.java')
-	// The dock, the overlay and the caption all say the agent waits for you.
-	await until(async () => /Wants to: Editing Order\.java and OrderService\.java/.test(await dockText(page)) && /approval/i.test(await dockText(page)), 'the dock to show the approval')
-	await until(async () => /Needs approval/.test(await islandText(page)), 'the overlay to say "Needs approval"')
-	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.island')).opacity), '1')
-	await page.click('#allow')
-	await captionHas(page, 'Done. The change touched 4 flows and the orders table')
-	await until(async () => /This turn touched 4 flows and table orders \(4 endpoints\)/.test(await dockText(page)), 'the dock to list what the turn touched')
-	await until(async () => /Done/.test(await islandText(page)), 'the overlay to say Done')
-	// The change on the canvas: the order flow, with the green and red on its cards.
-	await page.click('#review')
-	await until(async () => /Review 2 changes/.test(await canvasText(page)), 'the canvas to offer "Review 2 changes"')
-	assert.ok(await canvas(page).evaluate(() => [...document.querySelectorAll('.react-flow__node')].some(n => /applyDiscount/.test(n.textContent))), 'the new method is on the canvas')
-	assert.deepEqual(problems, [])
-	await page.close()
-})
-
-test('a flow chip of the dock opens that flow with the change on its cards', { skip }, async () => {
-	const { page, problems } = await open()
-	await page.click('#try')
-	await captionHas(page, 'wants to edit')
-	await page.click('#allow')
-	await captionHas(page, 'Done.')
-	const dock = frame(page, 'dock.html')
-	await until(() => dock.evaluate(() => document.querySelector('.flow')), 'the dock chips')
-	await dock.evaluate(() => [...document.querySelectorAll('.flow')].find(c => c.textContent === 'GET /orders').click())
-	await captionHas(page, 'GET /orders with Claude')
-	await until(async () => /OrderController\.list/.test(await canvasText(page)), 'the canvas to show GET /orders')
-	assert.deepEqual(problems, [])
-	await page.close()
-})
-
-test('Keep clears the marks; Undo puts the code back and starts the story again', { skip }, async () => {
-	const { page, problems } = await open()
-	await drawn(page)
-	await playThrough(page)
-	await clickInCanvas(page, 'Keep')
-	await captionHas(page, 'Kept.')
-	await until(async () => !/Review 2 changes/.test(await canvasText(page)), 'the canvas to stop marking the change')
-	await page.click('#again')
-	await captionHas(page, 'This is the flow of POST /orders')
-	await playThrough(page)
-	await clickInCanvas(page, 'Undo')
-	await captionHas(page, 'This is the flow of POST /orders')
-	await until(async () => !/Review 2 changes/.test(await canvasText(page)), 'the canvas to forget the change')
-	await until(async () => /No agents running/.test(await dockText(page)), 'the dock to forget the agent')
-	assert.equal(await page.evaluate(() => !!document.querySelector('#play')), true, 'the story can be played again')
-	assert.deepEqual(problems, [])
-	await page.close()
-})
-
-test('saying no changes nothing', { skip }, async () => {
-	const { page, problems } = await open()
-	await drawn(page)
-	await page.click('#try')
-	await captionHas(page, 'wants to edit')
-	await page.click('#deny')
-	await captionHas(page, 'Nothing was changed')
-	assert.doesNotMatch(await canvasText(page), /Review \d+ changes/)
 	assert.deepEqual(problems, [])
 	await page.close()
 })
 
 test('another endpoint opens on the canvas', { skip }, async () => {
 	const { page, problems } = await open()
-	await drawn(page)
-	const id = await page.evaluate(() => [...document.querySelectorAll('.picks option')].find(o => o.textContent.startsWith('GET /orders  (')).value)
-	await page.select('.picks select', id)
-	await until(async () => /OrderController\.list/.test(await canvasText(page)), 'the canvas to show GET /orders')
+	const canvas = await flowCanvas(page)
+	await drawn(canvas)
+	const id = await page.evaluate(() => [...document.querySelectorAll('#flow-tile option')].find(o => o.textContent.startsWith('GET /orders  (')).value)
+	await page.select('#flow-tile select', id)
+	await until(async () => /OrderController\.list/.test(await textOf(canvas)), 'the canvas to show GET /orders')
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('the agent: it asks, the dock and the overlay say it waits, you allow, and they say what it touched', { skip }, async () => {
+	const { page, problems } = await open()
+	await page.click('#try')
+	await until(() => page.$('#allow'), 'the permission question')
+	assert.deepEqual((await steps(page)).slice(0, 3), ['Asked axle which endpoints there are', 'Read OrderService.java', 'Asked axle who else reads the orders table'])
+	await until(async () => /Wants to: Editing Order\.java and OrderService\.java/.test(await dockText(page)) && /approval/i.test(await dockText(page)), 'the dock to show the approval')
+	await until(async () => /Needs approval/.test(await islandText(page)), 'the overlay to say "Needs approval"')
+	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.island')).opacity), '1')
+	await page.click('#allow')
+	await until(() => page.$('#review'), 'the end of the turn')
+	assert.ok((await steps(page)).at(-1).startsWith('Done. It touched 4 flows and the orders table, which 4 endpoints use'))
+	await until(async () => /This turn touched 4 flows and table orders \(4 endpoints\)/.test(await dockText(page)), 'the dock to list what the turn touched')
+	await until(async () => /Done/.test(await islandText(page)), 'the overlay to say Done')
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('a flow of the dock opens on the change tile, with the change on its cards', { skip }, async () => {
+	const { page, problems } = await open()
+	await playThrough(page)
+	const dock = await inside(page, 'iframe.dock')
+	await until(() => dock.evaluate(() => document.querySelector('.flow')), 'the dock chips')
+	await dock.evaluate(() => [...document.querySelectorAll('.flow')].find(c => c.textContent === 'GET /orders').click())
+	const canvas = await changesCanvas(page)
+	await until(async () => /OrderController\.list/.test(await textOf(canvas)), 'the change tile to show GET /orders')
+	assert.equal(await page.evaluate(() => document.querySelector('#changes-tile select').selectedOptions[0].textContent.startsWith('GET /orders  (')), true)
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('the change tile: the order flow with its green and red, Keep, Undo, and the replay', { skip }, async () => {
+	const { page, problems } = await open()
+	await page.evaluate(() => document.getElementById('changes-tile').scrollIntoView())
+	const canvas = await changesCanvas(page)
+	await drawn(canvas)
+	await until(async () => /Review 2 changes/.test(await textOf(canvas)), 'the canvas to offer "Review 2 changes"')
+	assert.ok(await canvas.evaluate(() => [...document.querySelectorAll('.react-flow__node')].some(n => /applyDiscount/.test(n.textContent))), 'the new method is on the canvas')
+	await clickIn(canvas, 'Keep')
+	await footHas(page, 'changes-tile', 'Kept.')
+	await until(async () => !/Review 2 changes/.test(await textOf(canvas)), 'the canvas to stop marking the change')
+	await page.click('#changes-tile .replay')
+	const again = await changesCanvas(page)
+	await until(async () => /Review 2 changes/.test(await textOf(again)), 'the change to be back')
+	await clickIn(again, 'Undo')
+	await footHas(page, 'changes-tile', 'Undone.')
+	await until(async () => !/Review 2 changes/.test(await textOf(again)), 'the canvas to forget the change')
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('saying no changes nothing, and Start over plays it again', { skip }, async () => {
+	const { page, problems } = await open()
+	await page.click('#try')
+	await until(() => page.$('#deny'), 'the permission question')
+	await page.click('#deny')
+	await until(() => page.$('#again'), 'the end of the story')
+	assert.ok((await steps(page)).at(-1).startsWith('Wants to edit'))
+	assert.equal(await page.evaluate(() => document.querySelector('.steps li:last-child').className), 'no')
+	await page.click('#again')
+	await until(() => page.$('#play'), 'the agent to be ready to start again')
+	await until(async () => /No agents running/.test(await dockText(page)), 'the dock to forget the agent')
 	assert.deepEqual(problems, [])
 	await page.close()
 })
@@ -170,19 +178,20 @@ test('the harness map is the real scan of the demo project, with its one warning
 
 test('what the demo cannot do is said where a visitor reaches for it', { skip }, async () => {
 	const { page, problems } = await open()
-	await drawn(page)
-	// Handing the flow to an agent is the app's; here the page says so.
-	await clickInCanvas(page, 'Ask about this flow')
-	await until(() => page.evaluate(() => /hands the flow to the agent/.test(document.querySelector('.caption .note')?.textContent ?? '')), 'the note')
+	const canvas = await flowCanvas(page)
+	await drawn(canvas)
+	// Handing the flow to an agent is the app's; here the tile says so.
+	await clickIn(canvas, 'Ask about this flow')
+	await footHas(page, 'flow-tile', 'hands the flow to the agent')
 	assert.deepEqual(problems, [])
 	await page.close()
 })
 
-test('below desktop width the page shows the video and loads no canvas', { skip }, async () => {
+test('below desktop width the page shows the video and the harness map, and loads no canvas', { skip }, async () => {
 	const { page, problems } = await open({ width: 390, height: 844, isMobile: true, hasTouch: true })
-	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.stagewrap')).display), 'none')
 	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.fallback')).display), 'block')
-	assert.equal(page.frames().filter(f => f.parentFrame() && f.url().includes('canvas.html')).length, 0, 'no canvas was loaded')
+	assert.equal(await page.evaluate(() => !!document.querySelector('.tile')), false, 'no tile was mounted')
+	assert.equal(page.frames().filter(f => f.parentFrame()).length, 0, 'no iframe was loaded')
 	assert.ok((await page.evaluate(() => document.querySelector('#harness-root')?.innerText ?? '')).includes('Instructions'), 'the harness map is there')
 	assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'no horizontal scroll')
 	assert.deepEqual(problems, [])

@@ -118,7 +118,7 @@ scripts/            setup, start, build-extensions, install-shortcut and install
 
 ## The browser playground
 
-`playground/` is the site at https://bothuany.github.io/axle/: the real flow canvas on a fictional demo project, a short story where a scripted Claude changes it (watch the Agents dock and the status overlay follow it, answer its permission question, see the change on the canvas), and the harness scan of that project. The canvas, the dock page, the overlay page and the harness map are Axle's own, built from the demo project by the real code (what each part is, and what is scripted, in [playground/README.md](../playground/README.md)). From the repository root:
+`playground/` is the site at https://bothuany.github.io/axle/: a page that presents Axle with live tiles on a fictional demo project: the real flow canvas on an endpoint, a scripted Claude that the Agents dock and the status overlay follow, the agent's change on the canvas (green and red, Keep and Undo), and the harness scan of the project. The canvas, the dock page, the overlay page and the harness map are Axle's own, built from the demo project by the real code (what each part is, and what is scripted, in [playground/README.md](../playground/README.md)). From the repository root:
 
 ```bash
 (cd ui && npm ci)

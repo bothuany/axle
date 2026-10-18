@@ -1,44 +1,52 @@
-// The playground page: loads the demo data, mounts the harness section, and (on a screen wide enough) the stage with the real canvas.
+// The playground page: loads the demo data and mounts the live tiles into the page's text. The harness map is on every screen; the tiles
+// with the canvas and the dock only on a screen wide enough (on a phone the page shows the video, and nothing heavy is loaded).
 import { createRoot } from 'react-dom/client'
 import './theme/vscode-theme.css'
 import './style.css'
 import type { DemoData } from './demo'
 import { Harness } from './Harness'
-import { Stage } from './Stage'
-import { get, note, setData } from './store'
-import { keep, start, undo } from './story'
+import { AgentsTile, FlowTile, orderedEntries, touchedEntries } from './Tiles'
+import { setData } from './store'
+import { start } from './story'
 
 const data: DemoData = await fetch('./data/demo.json').then(r => r.json())
 setData(data)
 
-// What the canvas page (an iframe of this site) may ask of the page around it: whether the change is in, and the answer to Keep or Undo.
-window.__axle = {
-  edited: () => get().edited,
-  kept: () => get().kept,
-  keep,
-  undo,
-}
-
-// The canvas asks for things only the app can do (open the file in an editor, hand the flow to an agent): say what the app would do.
-window.addEventListener('message', e => {
-  if (e.origin !== location.origin) return
-  const m = e.data as { source?: string; type?: string; text?: string }
-  if (m?.source !== 'axle-canvas') return
-  if (m.type === 'open' || m.type === 'reveal') note('In the Axle app this opens the file in the editor, at that line.')
-  else if (m.type === 'note' && m.text) note(m.text)
-})
-
-createRoot(document.getElementById('harness-root')!).render(<Harness />)
+const mount = (id: string, node: React.ReactNode) => createRoot(document.getElementById(id)!).render(node)
+mount('harness-root', <Harness />)
 
 document.getElementById('try')?.addEventListener('click', start)
 
-// Only where the stage is shown: on a phone the page shows the video, and the canvas and the dock (several MB) are not loaded.
 const wide = matchMedia('(min-width: 900px)')
 let mounted = false
-const mountStage = () => {
+const mountTiles = () => {
   if (mounted) return
   mounted = true
-  createRoot(document.getElementById('stage-root')!).render(<Stage />)
+  const before = orderedEntries(data.before.entries)
+  const order = before.find(e => e.http === 'POST /orders') ?? before[0]
+  const touched = touchedEntries()
+  mount(
+    'tile-flow',
+    <FlowTile
+      id="flow-tile"
+      mode="before"
+      entries={before}
+      first={order.id}
+      eager
+      hint="Pick an endpoint. Its callers are on the left, what it runs on the right, down to the table it writes. A dashed link is a guess, and says so."
+    />,
+  )
+  mount('tile-agents', <AgentsTile />)
+  mount(
+    'tile-changes',
+    <FlowTile
+      id="changes-tile"
+      mode="changed"
+      entries={touched}
+      first={(touched.find(e => e.http === 'POST /orders') ?? touched[0]).id}
+      hint="Green is what Claude added, red what it removed. Keep the change, or Undo it. The flows are the ones its turn touched."
+    />,
+  )
 }
-if (wide.matches) mountStage()
-else wide.addEventListener('change', e => e.matches && mountStage())
+if (wide.matches) mountTiles()
+else wide.addEventListener('change', e => e.matches && mountTiles())

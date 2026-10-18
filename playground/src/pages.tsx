@@ -3,11 +3,11 @@
 // makes of the demo's sessions, and what they ask for is answered here.
 import { useEffect, useRef, useState } from 'react'
 import { allSessions, dockList, islandModel, subscribeSessions } from './sessions'
-import { demo, note } from './store'
-import { openTurnFlow } from './story'
+import { bringIntoView, demo, requestFlow } from './store'
+import { touchedFlowId } from './story'
 
 /** The Agents dock: one row per agent, ranked by what needs you. */
-export function Dock() {
+export function Dock({ onNote }: { onNote: (text: string) => void }) {
   const frame = useRef<HTMLIFrameElement>(null)
   const loaded = useRef(false)
   const send = () => {
@@ -23,8 +23,14 @@ export function Dock() {
       if (m.message.type === 'ready') {
         loaded.current = true
         send()
-      } else if (m.message.type === 'flow' && typeof m.message.index === 'number') openTurnFlow(m.message.index)
-      else note('This is the Agents dock of the app. In the demo only the flows it lists open.')
+      } else if (m.message.type === 'flow' && typeof m.message.index === 'number') {
+        // A flow chip: the canvas tile below opens that flow with the change on its cards.
+        const id = touchedFlowId(m.message.index)
+        if (id) {
+          requestFlow(id)
+          bringIntoView('changes-tile')
+        }
+      } else onNote('This is the Agents dock of the app. In the demo only the flows it lists open.')
     }
     window.addEventListener('message', onMessage)
     // The page's own clock (“Working · 12s”) ticks every few seconds; the rows are redrawn as often.

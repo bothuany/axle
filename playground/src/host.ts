@@ -1,9 +1,8 @@
 // The editor host the canvas expects, played by a page: the canvas (ui/src/webview.tsx) talks to its host only through
-// `acquireVsCodeApi().postMessage`, so this answers its requests from the demo data. The project is in one of two states
-// (before the agent's change, and with it): the workbench around the page says which, and Keep and Undo change it there.
+// `acquireVsCodeApi().postMessage`, so this answers its requests from the demo data. The project is in one of two states (before the
+// agent's change, and with it); `?mode=changed` starts with the change in, and Keep and Undo then act on this page's own state.
 // Imported before the canvas: it sets the globals the canvas reads when it loads.
 import type { FlowNode } from '../../protocol/flow'
-import { workbench } from './bridge'
 import { entryLabel, type DemoData, type Impact, type Target, type ToShell, type TurnSummary } from './demo'
 
 interface Request {
@@ -17,11 +16,10 @@ interface Request {
 const data: DemoData = await fetch('./data/demo.json').then(r => r.json())
 const say = (m: ToShell) => window.parent !== window && window.parent.postMessage(m, location.origin)
 
-const state = () => {
-  const bridge = workbench()
-  // Alone on a page there is no workbench: the project is as the agent left it.
-  return { edited: bridge ? bridge.edited() : true, kept: bridge ? bridge.kept() : false }
-}
+const params = new URLSearchParams(location.search)
+let edited = params.get('mode') === 'changed'
+let kept = false
+const state = () => ({ edited, kept })
 
 /** The flow for a target. While the agent's change is waiting for Keep or Undo, the endpoints it reaches draw it on their cards. */
 function graphOf(t: Target): FlowNode {
@@ -57,11 +55,14 @@ interface Answers {
 
 const READ_ONLY = 'The demo does not write files: in the Axle app a save is applied to your code.'
 
-/** Keep and Undo act on the workbench's state; the canvas then asks for its flow again. */
+/** Keep and Undo change this page's state, and the page around it hears of it; the canvas then asks for its flow again. */
 function decide(what: 'keep' | 'undo') {
-  const bridge = workbench()
-  if (what === 'keep') bridge?.keep()
-  else bridge?.undo()
+  if (what === 'keep') kept = true
+  else {
+    edited = false
+    kept = false
+  }
+  say({ source: 'axle-canvas', type: 'decided', what })
   setTimeout(() => window.dispatchEvent(new MessageEvent('message', { data: { type: 'refresh' } })), 30)
 }
 
@@ -126,7 +127,7 @@ const host = {
       setTimeout(() => window.dispatchEvent(new MessageEvent('message', { data: { type: 'response', id: req.id, ...result } })), 0)
       return
     }
-    // Opening a file is something the workbench can do; the rest needs an editor the browser does not have: say so on the page.
+    // Opening a file or handing the flow to an agent needs the app, not the browser: the page around the canvas says so.
     if ((m.type === 'open' || m.type === 'reveal') && typeof m.file === 'string' && typeof m.line === 'number') {
       say({ source: 'axle-canvas', type: m.type, file: m.file, line: m.line })
       return
@@ -143,8 +144,7 @@ const host = {
 ;(window as unknown as { acquireVsCodeApi: () => typeof host }).acquireVsCodeApi = () => host
 
 // Which flow opens first: `?t=<entry id>` or `?t=changes`, else the order flow.
-const wanted = new URLSearchParams(location.search).get('t')
-const { edited } = state()
+const wanted = params.get('t')
 const entries = (edited ? data.after : data.before).entries
 const entry = entries.find(e => e.id === wanted) ?? entries.find(e => e.http === 'POST /orders') ?? entries[0]
 const first: { target: Target; label: string } = wanted === 'changes' ? { target: { kind: 'changes', id: '1' }, label: data.changes.label } : { target: { kind: 'poly', id: entry.id }, label: entryLabel(entry) }
