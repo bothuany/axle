@@ -1,9 +1,9 @@
-// The Agents dock is one page built from strings in src/dock.ts; a quote lost in that string breaks the whole dock
+// The Agents dock is one page built from strings in src/dockPage.ts; a quote lost in that string breaks the whole dock
 // without a word. This builds the page and checks that its script parses and draws a row.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { build } from 'esbuild'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -14,13 +14,11 @@ let html
 let tmp
 before(async () => {
 	tmp = mkdtempSync(join(tmpdir(), 'flow-dock-'))
-	// html() needs nothing from vscode; any access returns a harmless stub.
-	const stub = join(tmp, 'vscode.cjs')
-	writeFileSync(stub, 'const s = new Proxy(function () {}, { get: () => s, apply: () => s }); module.exports = s;')
-	const outfile = join(tmp, 'dock.mjs')
-	await build({ entryPoints: [join(ROOT, 'src', 'dock.ts')], bundle: true, platform: 'node', format: 'esm', outfile, alias: { vscode: stub }, logLevel: 'silent' })
-	const { AgentsDock } = await import(pathToFileURL(outfile).href)
-	html = AgentsDock.prototype.html.call({})
+	// The page lives in dockPage.ts, which has no `vscode` (the browser playground renders it too): bundling it without a stub is the test that it stays so.
+	const outfile = join(tmp, 'dockPage.mjs')
+	await build({ entryPoints: [join(ROOT, 'src', 'dockPage.ts')], bundle: true, platform: 'node', format: 'esm', outfile, logLevel: 'silent' })
+	const { dockHtml } = await import(pathToFileURL(outfile).href)
+	html = dockHtml()
 })
 after(() => rmSync(tmp, { recursive: true, force: true }))
 
