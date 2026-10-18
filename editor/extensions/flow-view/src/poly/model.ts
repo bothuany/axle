@@ -97,6 +97,8 @@ export interface TypeFact {
 	file: string;
 	line: number;
 	endLine: number;
+	/** Where the declaration starts when decorators above `line` belong to it (TypeScript puts them on the export statement). */
+	declLine?: number;
 	kind: 'class' | 'interface' | 'enum';
 	isAbstract: boolean;
 	/** Superclass and interfaces, simple names. */

@@ -203,3 +203,61 @@ test('flow_text names what changed on a database card: the entity, the migration
 	assert.match(lines[1], /\[db\] AppDb\.Orders \(orders\) \[changed: entity Order\]$/)
 	assert.match(lines[2], /\[db\] AppDb\.Orders \(orders\) \[changed: migration 0007_x adds key, drops legacy_ref\]$/)
 })
+
+// An entity name two classes share is only certain where the code spells out which one: the same file, an import, a Java package.
+// What the index falls back to (the same folder in Python or TypeScript, or the first of several) is drawn as a guess.
+test('a same-named entity is certain when imported and a guess when the index had to fall back', async () => {
+	const kinds = async fixture => {
+		const own = new Index(join(ROOT, 'test', 'table-fixtures', fixture))
+		await own.ready
+		try {
+			const entries = await own.request('entries')
+			const label = id => entries.find(e => e.id === id).http
+			const { uses } = await own.request('tables', 5000)
+			return Object.fromEntries(uses.map(u => [label(u.entry), `${u.table} ${u.guess ? 'guess' : 'certain'}`]))
+		} finally {
+			await own.close()
+		}
+	}
+	assert.deepEqual(await kinds('python-same-name'), {
+		'GET /billing/accounts': 'billing_accounts certain',
+		'POST /billing/accounts': 'billing_accounts certain',
+		'GET /shop/accounts': 'shop_accounts certain',
+		'POST /shop/accounts': 'shop_accounts certain',
+	}, 'each route imports its own Account')
+	assert.deepEqual(await kinds('python-same-name-fallback'), {
+		'GET /billing/accounts': 'billing_accounts guess',
+		'GET /api/accounts': 'billing_accounts guess',
+	}, 'a star import and a file that knows no Account: the same folder, then the first of two, both guesses')
+	assert.deepEqual(await kinds('ts-same-name-fallback'), {
+		'GET /shop': 'shop_accounts certain',
+		'GET /billing': 'billing_accounts guess',
+		'GET /api': 'billing_accounts guess',
+	}, 'only the controller that imports Account is certain')
+	assert.deepEqual(await kinds('java-same-name'), {
+		'GET /billing/accounts': 'billing_accounts certain',
+		'POST /billing/accounts': 'billing_accounts certain',
+		'GET /shop/accounts': 'shop_accounts certain',
+		'POST /shop/accounts': 'shop_accounts certain',
+	}, 'Java: the package says which Account')
+	assert.deepEqual(await kinds('ts-prisma-monorepo'), {
+		'GET /admin/users': 'admin_users guess',
+		'POST /admin/users': 'admin_users guess',
+		'GET /web/users': 'web_users guess',
+		'POST /web/users': 'web_users guess',
+	}, 'Prisma: which schema a client was generated from is not in the call, the nearest one is a guess')
+})
+
+test('editing the decorator that names the table changes the TypeScript entity', async () => {
+	const own = new Index(join(ROOT, 'test', 'table-fixtures', 'ts-typeorm'))
+	await own.ready
+	try {
+		const list = await own.request('entities')
+		const file = list[0].spans[0].file
+		const named = line => t.entitiesTouched(list, file, [{ start: line, end: line }]).map(h => h.entity.entity)
+		assert.deepEqual(named(3), ['Order'], "@Entity('orders') is line 3, above `export class`")
+		assert.deepEqual(named(1), [], 'the imports are not the entity')
+	} finally {
+		await own.close()
+	}
+})

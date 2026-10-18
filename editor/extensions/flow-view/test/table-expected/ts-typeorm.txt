@@ -1,6 +1,6 @@
 entry points: 2
 entities:
-  Order -> orders (TypeORM) src/order.entity.ts:4-13
+  Order -> orders (TypeORM) src/order.entity.ts:3-13
 
 Impact of changing table orders (entity Order):
 2 endpoints read or write it (1 write, 1 read):

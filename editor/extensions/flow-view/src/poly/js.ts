@@ -142,6 +142,9 @@ export function extractJs(root: TsNode, file: string, mtime: number): FileFacts 
 			// Decorators can sit on the export statement instead.
 			if (n.parent?.type === 'export_statement') {
 				t.annotations.push(...decorators(n.parent));
+				if (line(n.parent) < t.line) {
+					t.declLine = line(n.parent);
+				}
 			}
 			for (const h of n.namedChildren.filter(c => c.type === 'class_heritage')) {
 				walk(h, x => {

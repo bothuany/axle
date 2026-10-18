@@ -1,0 +1,25 @@
+entry points: 3
+entities:
+  Account -> billing_accounts (TypeORM) src/billing/account.entity.ts:3-7
+  Account -> shop_accounts (TypeORM) src/shop/account.entity.ts:3-7
+
+Impact of changing table billing_accounts (entity Account):
+2 endpoints read or write it (0 write, 2 read):
+
+Reads (2):
+- GET /api Api.list  via ApiController.list (src/api/api.controller.ts:12), card billing_accounts [find]  ~table? (guessed)
+- GET /billing Billing.list  via BillingController.list (src/billing/billing.controller.ts:12), card billing_accounts [find]  ~table? (guessed)
+
+~table? marks a guess: the table is named by a raw SQL string or a naming default, or the code does not say which of several same-named entities or schemas the query reaches (not ORM metadata through a typed repository or DbSet that the code spells out).
+
+Checked 3 of 3 entry points.
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
+
+Impact of changing table shop_accounts (entity Account):
+1 endpoint read or write it (0 write, 1 read):
+
+Reads (1):
+- GET /shop Shop.list  via ShopController.list (src/shop/shop.controller.ts:12), card shop_accounts [find]
+
+Checked 3 of 3 entry points.
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).

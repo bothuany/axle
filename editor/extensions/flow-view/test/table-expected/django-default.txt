@@ -12,7 +12,7 @@ Writes (1):
 Reads (1):
 - GET /products ProductList.get  via ProductList.get (shop/views.py:8), card shop_product [all]  ~table? (guessed)
 
-~table? marks a guess: the table is named by a raw SQL string or a naming default, not by ORM metadata through a typed repository or DbSet.
+~table? marks a guess: the table is named by a raw SQL string or a naming default, or the code does not say which of several same-named entities or schemas the query reaches (not ORM metadata through a typed repository or DbSet that the code spells out).
 
 Checked 2 of 2 entry points.
 Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).

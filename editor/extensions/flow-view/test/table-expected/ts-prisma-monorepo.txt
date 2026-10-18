@@ -7,10 +7,12 @@ Impact of changing table admin_users (entity User):
 2 endpoints read or write it (1 write, 1 read):
 
 Writes (1):
-- POST /admin/users server./admin/users  via POST /admin/users (apps/admin/server.js:12), card admin_users [create]
+- POST /admin/users server./admin/users  via POST /admin/users (apps/admin/server.js:12), card admin_users [create]  ~table? (guessed)
 
 Reads (1):
-- GET /admin/users server./admin/users  via GET /admin/users (apps/admin/server.js:8), card admin_users [findMany]
+- GET /admin/users server./admin/users  via GET /admin/users (apps/admin/server.js:8), card admin_users [findMany]  ~table? (guessed)
+
+~table? marks a guess: the table is named by a raw SQL string or a naming default, or the code does not say which of several same-named entities or schemas the query reaches (not ORM metadata through a typed repository or DbSet that the code spells out).
 
 Checked 4 of 4 entry points.
 Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
@@ -19,10 +21,12 @@ Impact of changing table web_users (entity User):
 2 endpoints read or write it (1 write, 1 read):
 
 Writes (1):
-- POST /web/users server./web/users  via POST /web/users (apps/web/server.js:12), card web_users [create]
+- POST /web/users server./web/users  via POST /web/users (apps/web/server.js:12), card web_users [create]  ~table? (guessed)
 
 Reads (1):
-- GET /web/users server./web/users  via GET /web/users (apps/web/server.js:8), card web_users [findMany]
+- GET /web/users server./web/users  via GET /web/users (apps/web/server.js:8), card web_users [findMany]  ~table? (guessed)
+
+~table? marks a guess: the table is named by a raw SQL string or a naming default, or the code does not say which of several same-named entities or schemas the query reaches (not ORM metadata through a typed repository or DbSet that the code spells out).
 
 Checked 4 of 4 entry points.
 Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).

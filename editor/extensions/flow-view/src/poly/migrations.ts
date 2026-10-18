@@ -524,7 +524,19 @@ function parseLiquibaseJson(file: string, text: string): Migration | undefined {
 
 /** Liquibase YAML, read by indentation: a change is `- createTable:` and its properties are the deeper lines. */
 function parseLiquibaseYaml(file: string, text: string): Migration | undefined {
+	// A changeSet's `rollback:` block (beside `changes:`, not inside a change) is the way back: blank it, keeping the lines.
 	const lines = text.split('\n');
+	for (let i = 0; i < lines.length; i++) {
+		const roll = lines[i].match(/^(\s*)(?:-\s*)?rollback:/);
+		if (roll) {
+			const indent = roll[1].length;
+			lines[i] = '';
+			for (let j = i + 1; j < lines.length && (!lines[j].trim() || lines[j].search(/\S/) > indent); j++) {
+				lines[j] = '';
+				i = j;
+			}
+		}
+	}
 	const ops: MigrationOp[] = [];
 	for (let i = 0; i < lines.length; i++) {
 		const head = lines[i].match(/^(\s*)-\s*(\w+):\s*$/);

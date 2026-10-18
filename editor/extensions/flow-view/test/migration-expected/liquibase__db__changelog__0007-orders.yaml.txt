@@ -3,6 +3,5 @@ liquibase/db/changelog/0007-orders.yaml: liquibase 0007-orders
   L12 alter-drop orders [legacy_ref]
   L15 create order_notes [id, body]
   L24 rename order_notes -> notes
-  L28 drop order_notes
   alters orders: adds key, drops legacy_ref | gone: legacy_ref
-  alters order_notes: creates the table (id, body), renames the table to notes, drops the table
+  alters order_notes: creates the table (id, body), renames the table to notes

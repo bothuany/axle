@@ -258,7 +258,7 @@ export class Project {
 	}
 
 	private buildSchemas() {
-		const add = (read: SchemaFact | undefined, orm: string, endLine: number) => {
+		const add = (read: SchemaFact | undefined, orm: string, endLine: number, declLine?: number) => {
 			if (!read) {
 				return;
 			}
@@ -268,7 +268,7 @@ export class Project {
 				this.guessedTables.add(`${s.file}|${s.line}`);
 			}
 			this.push(this.schemaList, s.entity, full);
-			this.entityFacts.push({ entity: s.entity, table: s.table, schemaName: s.dbSchemaName, orm, guess: !!guess, spans: s.file ? [{ file: s.file, line: s.line, endLine }] : [] });
+			this.entityFacts.push({ entity: s.entity, table: s.table, schemaName: s.dbSchemaName, orm, guess: !!guess, spans: s.file ? [{ file: s.file, line: declLine ?? s.line, endLine }] : [] });
 			this.schemas.set(s.entity, full);
 			this.schemaByTable.set(s.table.toLowerCase(), full);
 			this.schemaByTable.set(s.table.toLowerCase().split('.').pop()!, full);
@@ -281,7 +281,7 @@ export class Project {
 					const s = pythonSchema(t, f.module);
 					add(s, s?.orm ?? '', t.endLine);
 				} else {
-					add(jsSchema(t), 'TypeORM', t.endLine);
+					add(jsSchema(t), 'TypeORM', t.endLine, t.declLine);
 				}
 			}
 		}
@@ -335,6 +335,29 @@ export class Project {
 		// Java: same package
 		const dir = path.dirname(from);
 		return list.find(t => path.dirname(t.file) === dir) ?? list[0];
+	}
+
+	/**
+	 * The type a name stands for where the code itself says so: declared in the same file, imported (and the import leads to a declaration of
+	 * it), or, in Java, in the same package (a folder is a package). What `type` falls back to (a type of the same folder in Python or
+	 * TypeScript, the first of several) is a guess and is not returned here.
+	 */
+	private typeStated(name: string, from: string): TypeFact | undefined {
+		const list = this.typesByName.get(name) ?? [];
+		const local = list.find(t => t.file === from);
+		if (local) {
+			return local;
+		}
+		const facts = this.files.get(from);
+		const imp = own(facts?.imports, name);
+		if (imp && facts) {
+			const file = this.importFile(facts, imp);
+			const hit = file && list.find(t => t.file === file);
+			if (hit) {
+				return hit;
+			}
+		}
+		return facts?.lang === 'java' && !imp ? list.find(t => path.dirname(t.file) === path.dirname(from)) : undefined;
 	}
 
 	/** Where an import points: Java FQN, Python `module:name`, JS `./path:name`. */
@@ -598,7 +621,7 @@ export class Project {
 	/**
 	 * The declaration an entity name stands for. A name one class has is that class; a name several have is resolved the way the
 	 * code resolves it (the import, the same package or module) from the file that writes it; a Prisma model by the nearest schema
-	 * file. `unsure` is only true when the code does not say which one it is.
+	 * file, which is only a guess. `unsure` is only false when the code does say which one it is.
 	 */
 	private pickSchema(entity: string, from: string | undefined, context: string): { s: DbSchema & { orm: string }; unsure: boolean } | undefined {
 		const all = this.schemaList.get(entity) ?? [];
@@ -622,11 +645,19 @@ export class Project {
 			};
 			const best = Math.max(...list.map(x => near(x.file)));
 			const closest = list.filter(x => near(x.file) === best);
-			return closest.length === 1 ? { s: closest[0], unsure: false } : { s: closest[0], unsure: true };
+			// Which schema a client was generated from is not in the call: the nearest one is the best guess, and is drawn as one.
+			return { s: [...closest].sort((a, b) => (a.file ?? '') < (b.file ?? '') ? -1 : 1)[0], unsure: true };
 		}
-		const t = from ? this.type(entity, from) : undefined;
+		const t = from ? this.typeStated(entity, from) : undefined;
 		const hit = t && list.find(x => x.file === t.file && x.line === t.line);
-		return hit ? { s: hit, unsure: false } : { s: list[list.length - 1], unsure: true };
+		if (hit) {
+			return { s: hit, unsure: false };
+		}
+		// The code does not say: the type of the same folder (or the first of several) is the best guess, and it is drawn as one.
+		// (The same folder, else the first by path, so that the guess does not depend on the order files were read.)
+		const sorted = [...list].sort((a, b) => (a.file ?? '') < (b.file ?? '') ? -1 : 1);
+		const near = from ? sorted.find(x => path.dirname(x.file ?? '') === path.dirname(from)) : undefined;
+		return { s: near ?? sorted[0], unsure: true };
 	}
 
 	private schema(entity: string | undefined, ops: string[], context: string, fn?: FuncFact, from?: string): Target | undefined {

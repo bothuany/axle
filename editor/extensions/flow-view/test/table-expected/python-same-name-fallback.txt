@@ -1,0 +1,22 @@
+entry points: 2
+entities:
+  Account -> billing_accounts (SQLAlchemy) billing/models.py:7-9
+  Account -> shop_accounts (SQLAlchemy) shop/models.py:7-9
+
+Impact of changing table billing_accounts (entity Account):
+2 endpoints read or write it (0 write, 2 read):
+
+Reads (2):
+- GET /api/accounts routes.list_accounts  via list_accounts (api/routes.py:11), card billing_accounts [query → all]  ~table? (guessed)
+- GET /billing/accounts routes.list_accounts  via list_accounts (billing/routes.py:13), card billing_accounts [query → all]  ~table? (guessed)
+
+~table? marks a guess: the table is named by a raw SQL string or a naming default, or the code does not say which of several same-named entities or schemas the query reaches (not ORM metadata through a typed repository or DbSet that the code spells out).
+
+Checked 2 of 2 entry points.
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).
+
+Impact of changing table shop_accounts (entity Account):
+No endpoint reads or writes it.
+
+Checked 2 of 2 entry points.
+Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).

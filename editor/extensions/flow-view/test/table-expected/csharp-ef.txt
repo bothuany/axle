@@ -15,7 +15,7 @@ The table name "Shipments" is a naming default: the entity does not write it, so
 Reads (1):
 - GET Shipments.List  via ShipmentsController.List (Controllers.cs:47), card ShopDb.Shipments [ToList]  ~table? (guessed)
 
-~table? marks a guess: the table is named by a raw SQL string or a naming default, not by ORM metadata through a typed repository or DbSet.
+~table? marks a guess: the table is named by a raw SQL string or a naming default, or the code does not say which of several same-named entities or schemas the query reaches (not ORM metadata through a typed repository or DbSet that the code spells out).
 
 Checked 8 of 8 entry points.
 Not checked: dynamic SQL, views, stored procedures and triggers; other services or reports that read the same database; schema changes that no entity or migration file in the workspace declares; endpoints in languages without schema cards (Go, PHP, Ruby, Rust).

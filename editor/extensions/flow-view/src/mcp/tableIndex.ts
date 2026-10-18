@@ -342,7 +342,7 @@ export function tableImpactText(t: TableUses & { mapped?: string; migrations?: C
 		}
 	}
 	if (t.uses.some(u => !u.certain)) {
-		out.push('', '~table? marks a guess: the table is named by a raw SQL string or a naming default, not by ORM metadata through a typed repository or DbSet.');
+		out.push('', '~table? marks a guess: the table is named by a raw SQL string or a naming default, or the code does not say which of several same-named entities or schemas the query reaches (not ORM metadata through a typed repository or DbSet that the code spells out).');
 	}
 	out.push('', `Checked ${t.checked} of ${t.of} entry points${t.notes.length ? ` (partial: ${t.notes.join('; ')})` : ''}.`, `Not checked: ${NOT_CHECKED}.`);
 	return out;
