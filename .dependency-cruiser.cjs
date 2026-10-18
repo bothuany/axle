@@ -33,9 +33,16 @@ module.exports = {
 		{
 			name: 'playground-imports-only-canvas-and-protocol',
 			severity: 'error',
-			comment: 'The browser playground is the canvas (ui/) on a fake host plus a page around it. It reads the wire types from protocol/ and nothing from the extensions: whatever it needs of the real editor is data that scripts/playground-data.mjs generates.',
+			comment: 'The browser playground is the canvas (ui/) on a fake host plus a page around it. It reads the wire types from protocol/, and from the extensions only these vscode-free modules, so the dock and the desktop overlay are driven by the real ranking and mapping code; everything else of the real editor is data that scripts/playground-data.mjs generates.',
 			from: { path: '^playground/' },
-			to: { pathNot: ['^(playground|ui|protocol)/', 'node_modules/'], dependencyTypesNot: ['npm', 'npm-dev', 'npm-peer', 'npm-optional', 'npm-bundled', 'npm-no-pkg', 'npm-unknown'] },
+			to: { pathNot: ['^(playground|ui|protocol)/', 'node_modules/', '^editor/extensions/flow-agent/src/(attention|desktopModel|avatars|dockPage)\\.ts$'], dependencyTypesNot: ['npm', 'npm-dev', 'npm-peer', 'npm-optional', 'npm-bundled', 'npm-no-pkg', 'npm-unknown'] },
+		},
+		{
+			name: 'playground-stays-off-vscode',
+			severity: 'error',
+			comment: 'The playground runs in a plain browser: no module it reaches, through the extension files it may use or otherwise, may import `vscode`.',
+			from: { path: '^playground/src/' },
+			to: { reachable: true, path: '^vscode$' },
 		},
 		{
 			name: 'no-playground-importers',

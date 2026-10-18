@@ -118,15 +118,17 @@ scripts/            setup, start, build-extensions, install-shortcut and install
 
 ## The browser playground
 
-`playground/` is the site at https://bothuany.github.io/axle/: the real canvas running in a browser on a fake editor host, with demo data made from the real index (details in [playground/README.md](../playground/README.md)). The data is generated from a fictional demo project (`playground/demo`, two commits' worth) by running flow-view's worker headlessly, so build that first. From the repository root:
+`playground/` is the site at https://bothuany.github.io/axle/: a Mac screen with the Axle window on it, running on a fictional demo project. A visitor starts a (scripted) Claude from the Agents dock and watches the dock, the desktop overlay at the notch, the terminal and the real flow canvas follow it. The canvas, the dock page, the overlay page and the harness map are Axle's own, built from the demo project by the real code (what each part is, and what is scripted, in [playground/README.md](../playground/README.md)). From the repository root:
 
 ```bash
 (cd ui && npm ci)
 (cd editor/extensions/flow-view && npm ci && node esbuild.mjs)
-node scripts/playground-data.mjs        # writes playground/public/data/demo.json (not committed)
+(cd editor/extensions/flow-harness && npm ci)
+node scripts/playground-data.mjs        # writes playground/public/data and playground/public/pages (not committed)
 cd playground && npm ci
 npm run typecheck && npm run build      # the site is in playground/dist
+npm run test:e2e                        # plays the demo in headless Chrome
 npm run preview                         # http://127.0.0.1:4173/axle/ (the path GitHub Pages serves it under)
 ```
 
-`npm run dev` in `playground/` serves it with hot reload. In Git Bash on Windows, `/axle/` in the preview script is rewritten to a Windows path: run `npm run preview` from PowerShell or set `MSYS_NO_PATHCONV=1`. `npm run arch` keeps `playground/` to imports from `ui/` and `protocol/`. `.github/workflows/playground.yml` deploys it on every push to `main`; Pages must be enabled once with the source "GitHub Actions".
+`npm run dev` in `playground/` serves it with hot reload. In Git Bash on Windows, `/axle/` in the preview script is rewritten to a Windows path: run `npm run preview` from PowerShell or set `MSYS_NO_PATHCONV=1`. `npm run arch` keeps `playground/` to imports from `ui/`, `protocol/` and four vscode-free files of flow-agent. `.github/workflows/playground.yml` deploys it on every push to `main` (and `ci.yml` builds and tests it on pull requests); Pages must be enabled once with the source "GitHub Actions".

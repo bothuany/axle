@@ -2,7 +2,7 @@
 # the canvas and the index. The owner enables Pages once: Settings, Pages, Source "GitHub Actions". Nothing here changes repo settings.
 #   canvas      ui/ type-checks and builds (the playground imports its source and would break with it)
 #   index       flow-view's worker is built and run on the demo project (scripts/playground-data.mjs) to make the demo data
-#   playground  type-checks against protocol/ (the fake host and the data's readers), then builds the site
+#   playground  type-checks against protocol/ (the fake host and the data's readers), builds the site and plays the demo in a browser
 name: playground
 
 on:
@@ -34,6 +34,7 @@ jobs:
           cache-dependency-path: |
             ui/package-lock.json
             editor/extensions/flow-view/package-lock.json
+            editor/extensions/flow-harness/package-lock.json
             playground/package-lock.json
 
       - name: Canvas
@@ -49,15 +50,21 @@ jobs:
           npm ci --no-audit --no-fund
           node esbuild.mjs
 
+      # The harness map of the demo is flow-harness's own scan, which needs its dependencies.
+      - name: Harness scan dependencies
+        working-directory: editor/extensions/flow-harness
+        run: npm ci --no-audit --no-fund
+
       - name: Demo data from the real index
         run: node scripts/playground-data.mjs
 
-      - name: Playground (type-check, then build)
+      - name: Playground (type-check, build, play the demo in Chrome)
         working-directory: playground
         run: |
           npm ci --no-audit --no-fund
           npm run typecheck
           npm run build
+          npm run test:e2e
 
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
 

@@ -96,22 +96,25 @@ jobs:
           cache-dependency-path: |
             ui/package-lock.json
             editor/extensions/flow-view/package-lock.json
+            editor/extensions/flow-harness/package-lock.json
             playground/package-lock.json
 
       - name: Canvas and index worker
         run: |
           (cd ui && npm ci --no-audit --no-fund)
           (cd editor/extensions/flow-view && npm ci --no-audit --no-fund && node esbuild.mjs)
+          (cd editor/extensions/flow-harness && npm ci --no-audit --no-fund)
 
       - name: Demo data from the real index
         run: node scripts/playground-data.mjs
 
-      - name: Playground (type-check against protocol/, then build)
+      - name: Playground (type-check against protocol/, build, play the demo in Chrome)
         working-directory: playground
         run: |
           npm ci --no-audit --no-fund
           npm run typecheck
           npm run build
+          npm run test:e2e
 
   semgrep:
     name: semgrep
