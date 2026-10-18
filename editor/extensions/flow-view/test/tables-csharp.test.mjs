@@ -4,7 +4,7 @@
 // Skipped where the analyzer is not built (`dotnet build analyzer`) or there is no .NET 10 SDK.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
@@ -38,7 +38,8 @@ before(async () => {
 	}
 	t = await load('src/mcp/tableIndex.ts')
 	// A copy: the restore writes obj/ next to the project.
-	dir = mkdtempSync(join(tmpdir(), 'flow-cs-'))
+	// The analyzer reports a file by its long name; a CI temp folder can be given by its 8.3 short name (RUNNER~1): compare like with like.
+	dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'flow-cs-')))
 	cpSync(FIXTURE, join(dir, 'csharp-ef'), { recursive: true })
 	const project = join(dir, 'csharp-ef', 'Shop.csproj')
 	run(['restore', project])
