@@ -2,16 +2,15 @@
 // switches the flow under the reader; the peek card is only a place to point at.
 import { CODE_PAD, HEADER_H, LINE_H } from '../layout'
 import type { TourStep } from '../types'
-import type { Box } from './geometry'
+import { highlightedLines, type Box } from './geometry'
 
 export const PEEK_W = 560
 export const PEEK_MAX_LINES = 40
 
 export function Peek({ step, box }: { step: TourStep; box: Box }) {
   const peek = step.peek!
-  const lines = peek.code.replace(/\t/g, '    ').replace(/\r/g, '').split('\n').slice(0, PEEK_MAX_LINES)
-  const lit = new Set<number>()
-  for (const [a, b = a] of step.highlights ?? []) for (let n = Math.min(a, b); n <= Math.max(a, b) && n < a + 80; n++) lit.add(n)
+  const lines = peek.code.replace(/\t/g, '    ').replace(/\r/g, '').split('\n').slice(0, PEEK_MAX_LINES).map(l => l.slice(0, 300))
+  const lit = new Set(highlightedLines(step.highlights))
   const file = step.at?.file.split(/[\\/]/).pop()
   return (
     <div className="tour-peek" style={{ left: box.x, top: box.y, width: box.w, height: box.h }}>

@@ -12,6 +12,7 @@ import { CAPTION_W, captionPlace, firstLine, highlightedLines, lineY, type Box, 
 import { Peek, PEEK_MAX_LINES, PEEK_W } from './Peek'
 import { idle, reduce } from './player'
 import { reviewSignature, tourFromChanges } from './review'
+import { sanitizeNote, sanitizeStep, sanitizeTour } from './sanitize'
 import { TourBar, type TourApi } from './TourBar'
 
 export interface TourEnv {
@@ -45,13 +46,6 @@ function useReducedMotion() {
   return reduced
 }
 
-/** What the host sends is checked here too: a malformed tour plays nothing rather than breaking the canvas. */
-function asTour(t: unknown): Tour | null {
-  const x = t as Tour | null
-  if (!x || typeof x.id !== 'string' || !Array.isArray(x.steps) || !x.steps.every(s => s && typeof s.caption === 'string')) return null
-  return { ...x, title: String(x.title ?? 'Tour'), origin: String(x.origin ?? ''), start: Number(x.start) || 0 }
-}
-
 const typing = (t: EventTarget | null) => t instanceof HTMLElement && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable || !!t.closest('.monaco-editor'))
 
 interface Motion {
@@ -83,12 +77,17 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       const m = e.data
+      // What the host sends is rebuilt field by field (sanitize.ts): a malformed tour, step or note is dropped, never rendered.
       if (m?.type === 'tour') {
-        const t = asTour(m.tour)
+        const t = sanitizeTour(m.tour)
         if (t) setPending(t)
-      } else if (m?.type === 'tourStep' && typeof m.id === 'string') dispatch({ type: 'step', id: m.id, index: m.index, step: m.step })
-      else if (m?.type === 'tourNote' && typeof m.id === 'string' && m.note) dispatch({ type: 'note', id: m.id, index: m.index, note: m.note })
-      else if (m?.type === 'tourEnd' && typeof m.id === 'string') {
+      } else if (m?.type === 'tourStep' && typeof m.id === 'string') {
+        const step = m.step === undefined ? undefined : sanitizeStep(m.step)
+        if (m.step === undefined || step) dispatch({ type: 'step', id: m.id, index: m.index, step: step ?? undefined })
+      } else if (m?.type === 'tourNote' && typeof m.id === 'string') {
+        const note = sanitizeNote(m.note)
+        if (note) dispatch({ type: 'note', id: m.id, index: m.index, note })
+      } else if (m?.type === 'tourEnd' && typeof m.id === 'string') {
         dispatch({ type: 'end', id: m.id })
         setPending(p => (p?.id === m.id ? null : p))
       }
@@ -105,8 +104,18 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
     }
   }, [pending, env.ready])
 
-  // Another flow replaced the one the tour was playing on.
-  useEffect(() => dispatch({ type: 'exit' }), [env.flowKey])
+  // Another flow replaced the one the tour was playing on: the tour is over, and the host that sent it is told (it is ignored when
+  // the host has already moved on to a newer tour).
+  const playing = useRef<Tour | null>(null)
+  playing.current = tour
+  const waiting = useRef<Tour | null>(null)
+  waiting.current = pending
+  useEffect(() => {
+    const t = playing.current
+    // Not when a tour of the same name is already on its way: the host would take it for the end of that one.
+    if (t && t.source !== 'review' && waiting.current?.id !== t.id) env.post({ type: 'tourExit', id: t.id })
+    dispatch({ type: 'exit' })
+  }, [env.flowKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // A card opened for editing: look away until the reader comes back.
   useEffect(() => {

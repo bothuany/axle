@@ -6,6 +6,7 @@ import { captionParts, idle, MAX_NOTES, reduce, stepMark } from '../src/tour/pla
 import { cardAt, cardOfTable, pathTo, resolveStep, samePath } from '../src/tour/cards.ts'
 import { captionPlace, firstLine, glidePath, highlightedLines, lineY } from '../src/tour/geometry.ts'
 import { rangesOf, reviewSignature, tourFromChanges } from '../src/tour/review.ts'
+import { sanitizeNote, sanitizeStep, sanitizeTour } from '../src/tour/sanitize.ts'
 
 const step = (title, extra = {}) => ({ title, caption: `about ${title}`, state: 'ok', ...extra })
 const tour = (n, extra = {}) => ({ id: 't1', title: 'A tour', origin: 'file', source: 'file', start: 0, steps: Array.from({ length: n }, (_, i) => step(`s${i + 1}`)), ...extra })
@@ -213,4 +214,50 @@ test('the cursor glides along a curve through its stops, ending exactly on the l
   assert.ok(path.length >= 4 && path[1].y !== 0, 'the first leg bows sideways')
   assert.ok(path.every((p, i) => i === 0 || p.offset >= path[i - 1].offset), 'offsets never go back')
   assert.equal(glidePath({ x: 5, y: 5 }, [{ x: 5, y: 5 }]).length, 2, 'no move, no detour')
+})
+
+// ---- what arrives from the host is rebuilt before it renders ---------------------------------------------------------
+
+test('sanitize: a good tour comes through field by field, and unknown fields do not', () => {
+  const raw = { ...tour(2), extra: '<img onerror=1>', agent: { label: 'Claude Code', color: '#ff9d7d', html: 'x' }, steps: [{ ...step('a', { at: { file: 'f.js', startLine: 3, endLine: 5, label: 'f', evil: 1 }, highlights: [[3, 4]], peek: { code: 'x', startLine: 1 } }), onClick: 'x' }, step('b')] }
+  const t = sanitizeTour(raw)
+  assert.deepEqual(Object.keys(t).sort(), ['agent', 'id', 'origin', 'source', 'start', 'steps', 'title'])
+  assert.deepEqual(t.agent, { label: 'Claude Code', color: '#ff9d7d' })
+  assert.deepEqual(Object.keys(t.steps[0]).sort(), ['at', 'caption', 'highlights', 'peek', 'state', 'title'])
+  assert.deepEqual(t.steps[0].at, { file: 'f.js', startLine: 3, endLine: 5, label: 'f' })
+})
+
+test('sanitize: a tour with one step it cannot read plays nothing; ids and shapes are checked', () => {
+  assert.equal(sanitizeTour({ ...tour(2), steps: [step('a'), { title: 'no caption' }] }), null)
+  assert.equal(sanitizeTour({ ...tour(1), id: '' }), null)
+  assert.equal(sanitizeTour({ ...tour(1), id: 7 }), null)
+  assert.equal(sanitizeTour(null), null)
+  assert.equal(sanitizeTour({ ...tour(1), steps: 'x' }), null)
+  assert.equal(sanitizeTour({ ...tour(1), steps: Array.from({ length: 101 }, () => step('x')) }), null)
+})
+
+test('sanitize: the agent colour is a colour literal, nothing that could carry a url() or a second declaration', () => {
+  for (const color of ['red', 'url(//evil)', '#fff; background: url(//evil)', 'var(--x)', '', 7]) assert.equal(sanitizeTour({ ...tour(1), agent: { label: 'a', color } }).agent, undefined, String(color))
+  assert.deepEqual(sanitizeTour({ ...tour(1), agent: { label: 'a'.repeat(99), color: '#FFF' } }).agent, { label: 'a'.repeat(40), color: '#FFF' })
+})
+
+test('sanitize: lines, ranges and sizes are bounded', () => {
+  const s = sanitizeStep({ caption: 'c'.repeat(5000), state: 'bogus', at: { file: 'f', startLine: -1, endLine: 2, label: 'l' }, highlights: [[5, 3], [0, 2], ['x'], [1e9, 2e9], [7], [8, 9], [10, 11]], peek: { code: 'z'.repeat(50_000), startLine: 2 } })
+  assert.equal(s.caption.length, 2000)
+  assert.equal(s.state, 'ok')
+  assert.equal(s.at, undefined, 'a negative line is not a place')
+  assert.deepEqual(s.highlights, [[3, 5]], 'a reversed range is read both ways, bad ones dropped, three looked at')
+  assert.equal(s.peek.code.length, 20_000)
+  assert.equal(sanitizeStep({ caption: 'c', peek: { code: 'x', startLine: 0 } }).peek, undefined)
+  assert.equal(sanitizeStep('text'), null)
+  assert.equal(sanitizeStep({ caption: 5 }), null)
+})
+
+test('sanitize: a note keeps its text, who wrote it and when', () => {
+  assert.deepEqual(sanitizeNote({ text: 'a', by: 'user', at: 5, question: 'q', x: 1 }), { text: 'a', by: 'user', at: 5, question: 'q' })
+  assert.deepEqual(sanitizeNote({ text: 'a', by: 'robot', at: 'now' }), { text: 'a', by: 'agent', at: 0 })
+  assert.equal(sanitizeNote({ by: 'user' }), null)
+  assert.equal(sanitizeNote({ text: 'x'.repeat(5000), by: 'agent', at: 1 }).text.length, 2000)
+  const withNotes = sanitizeStep({ caption: 'c', notes: [...Array.from({ length: 12 }, (_, i) => ({ text: `n${i}`, by: 'agent', at: i })), 'junk'] })
+  assert.equal(withNotes.notes.length, 10)
 })

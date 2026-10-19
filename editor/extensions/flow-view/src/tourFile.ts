@@ -4,13 +4,14 @@
  *  will carry the tours an agent sends.
  *--------------------------------------------------------------------------------------------*/
 
-import { promises as fs, readFileSync, statSync } from 'fs';
+import { promises as fs } from 'fs';
 import * as vscode from 'vscode';
 import { Analyzer, innermost } from './analyzer';
 import { entryName, type Endpoints } from './backends';
 import { Command } from './commands';
 import type { FlowPanel } from './panel';
 import { PolyIndex, POLY_LANGUAGES } from './poly/client';
+import { realInside, readTextIn } from './tour/files';
 import { parseTourFile, TourFileError, type TourFlow } from './tour/validate';
 
 /** What the command needs of the extension. */
@@ -28,15 +29,6 @@ export interface TourHost {
 const MAX_FILE_BYTES = 1_000_000;
 
 const sameRoute = (a: string, b: string) => a.trim().replace(/\s+/g, ' ').toUpperCase() === b.trim().replace(/\s+/g, ' ').toUpperCase();
-
-/** The text of a workspace file for a peek card, or nothing. Large files are not read. */
-function readText(file: string): string | undefined {
-	try {
-		return statSync(file).size > 5_000_000 ? undefined : readFileSync(file, 'utf8');
-	} catch {
-		return undefined;
-	}
-}
 
 /** Opens the flow of the method holding `line`, the way "Show Flow at Cursor" does. False: nothing to show a flow of. */
 async function showFlowAt(host: TourHost, file: string, line: number): Promise<boolean> {
@@ -66,7 +58,7 @@ async function showFlowAt(host: TourHost, file: string, line: number): Promise<b
 	return true;
 }
 
-async function openFlow(host: TourHost, flow: TourFlow | undefined, firstStep: { file: string; line: number } | undefined) {
+async function openFlow(host: TourHost, roots: string[], flow: TourFlow | undefined, firstStep: { file: string; line: number } | undefined) {
 	if (flow?.changes) {
 		throw new TourFileError('A tour on the change set is played by the `tour` tool, not from a file. Remove "flow.changes", or name an endpoint or a method.');
 	}
@@ -81,7 +73,11 @@ async function openFlow(host: TourHost, flow: TourFlow | undefined, firstStep: {
 	}
 	const at = flow?.file ? { file: flow.file, line: flow.line ?? 1 } : firstStep;
 	if (at) {
-		await showFlowAt(host, at.file, at.line);
+		const file = realInside(roots, at.file);
+		if (!file) {
+			throw new TourFileError(`${at.file} is not a file inside the workspace.`);
+		}
+		await showFlowAt(host, file, at.line);
 		return;
 	}
 	if (!host.panel.shown) {
@@ -121,8 +117,8 @@ export async function playTourFile(host: TourHost, source?: unknown): Promise<vo
 	} catch (e) {
 		throw new TourFileError(`${uri.fsPath} is not valid JSON: ${(e as Error).message}`);
 	}
-	const { tour, flow } = parseTourFile(json, { roots, readText });
+	const { tour, flow } = parseTourFile(json, { roots, readText: readTextIn(roots) });
 	const first = tour.steps.find(s => s.at?.file && s.at.startLine > 0);
-	await openFlow(host, flow, first?.at && { file: first.at.file, line: first.at.startLine });
+	await openFlow(host, roots, flow, first?.at && { file: first.at.file, line: first.at.startLine });
 	await host.panel.playTour(tour);
 }

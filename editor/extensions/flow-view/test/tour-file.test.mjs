@@ -4,7 +4,7 @@ import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { build } from 'esbuild'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -204,4 +204,55 @@ test('what the canvas reports is accepted only for the tour the host sent', () =
 	for (const index of [3, -1, 1.5, '1', null, undefined]) assert.equal(v.tourReport(playing, { type: 'tourState', id: 't1', index }), undefined, `index ${index}`)
 	assert.equal(v.tourReport(playing, { type: 'tourAsk', id: 't1', index: 1 }), undefined, 'only the two reports of phase 0')
 	assert.equal(v.tourReport(playing, null), undefined)
+})
+
+test('a peek is cut to a few KB with short lines, and a file named by several steps is read once', () => {
+	let reads = 0
+	const long = new Map([[join(work, 'src', 'bundle.js'), `${'x'.repeat(5000)}\n`.repeat(60)]])
+	const h = { roots: [work], readText: f => { reads++; return long.get(f) } }
+	const steps = Array.from({ length: 5 }, () => ({ caption: 'c', file: 'src/bundle.js', line: 2 }))
+	const { tour } = parse(file({ steps }), h)
+	assert.equal(reads, 1)
+	const peek = tour.steps[0].peek
+	assert.ok(peek.code.length <= 8000, `${peek.code.length} characters`)
+	assert.ok(peek.code.split('\n').every(l => l.length <= 300))
+})
+
+// ---- reading the code of a step (src/tour/files.ts): real files inside the workspace only -------------------------------
+
+let files_
+before(async () => {
+	const outfile = join(tmp, 'files.mjs')
+	await build({ entryPoints: [join(ROOT, 'src', 'tour', 'files.ts')], bundle: true, platform: 'node', format: 'esm', outfile, logLevel: 'silent' })
+	files_ = await import(pathToFileURL(outfile).href)
+})
+
+test('a path is judged by the real file behind it: a symlink out of the workspace is not read, a directory is not a file', t => {
+	const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'flow-tour-real-')))
+	const ws = join(root, 'ws')
+	mkdirSync(join(ws, 'src'), { recursive: true })
+	writeFileSync(join(ws, 'src', 'a.js'), 'one\ntwo\n')
+	writeFileSync(join(root, 'secret.txt'), 'top secret\n')
+	t.after(() => rmSync(root, { recursive: true, force: true }))
+	const read = files_.readTextIn([ws])
+	assert.equal(read(join(ws, 'src', 'a.js')), 'one\ntwo\n')
+	assert.equal(read(join(ws, 'src', 'gone.js')), undefined, 'a file that is not there')
+	assert.equal(read(join(ws, 'src')), undefined, 'a directory')
+	assert.equal(read(join(root, 'secret.txt')), undefined, 'a file next to the workspace')
+	assert.equal(files_.realInside([ws], join(ws, 'src', '..', 'src', 'a.js')), join(ws, 'src', 'a.js'))
+	try {
+		symlinkSync(join(root, 'secret.txt'), join(ws, 'src', 'link.txt'))
+	} catch (e) {
+		t.diagnostic(`no symlinks here (${e.code}): that case is not run`)
+		return
+	}
+	assert.equal(files_.realInside([ws], join(ws, 'src', 'link.txt')), undefined, 'the symlink points out of the workspace')
+	assert.equal(read(join(ws, 'src', 'link.txt')), undefined, 'so what is behind it is not read')
+})
+
+test('a big file is read only at its start', t => {
+	const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'flow-tour-big-')))
+	t.after(() => rmSync(root, { recursive: true, force: true }))
+	writeFileSync(join(root, 'big.js'), 'y'.repeat(2_000_000))
+	assert.equal(files_.readTextIn([root])(join(root, 'big.js')).length, files_.PEEK_READ_BYTES)
 })

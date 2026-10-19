@@ -16,6 +16,9 @@ export const MAX_STEP_TITLE = 80;
 const MAX_HIGHLIGHTS = 3;
 const MAX_HIGHLIGHT_LINES = 80;
 const PEEK_LINES = 40;
+/** A peek card shows code, not a minified bundle: each line is cut here, and the whole peek stays a few KB. */
+const PEEK_LINE_CHARS = 300;
+const PEEK_CHARS = 8_000;
 
 /** The canvas this tour wants to play on. Omitted: the canvas the user has open, else the flow of the first step's code. */
 export interface TourFlow {
@@ -122,7 +125,7 @@ function peekOf(text: string, startLine: number, endLine: number): TourStep['pee
 	const lines = text.replace(/\r\n/g, '\n').split('\n');
 	const from = Math.max(1, startLine - 2);
 	const to = Math.min(lines.length, Math.max(endLine, startLine + 12), from + PEEK_LINES - 1);
-	return from > lines.length ? undefined : { code: lines.slice(from - 1, to).join('\n'), startLine: from };
+	return from > lines.length ? undefined : { code: lines.slice(from - 1, to).map(l => l.slice(0, PEEK_LINE_CHARS)).join('\n').slice(0, PEEK_CHARS), startLine: from };
 }
 
 function parseStep(raw: unknown, i: number, host: TourFileHost): TourStep {
@@ -194,7 +197,10 @@ export function parseTourFile(raw: unknown, host: TourFileHost): ParsedTour {
 	if (raw.steps.length > MAX_STEPS) {
 		throw new TourFileError(`"steps" has ${raw.steps.length} steps; a tour has at most ${MAX_STEPS}. A longer one is a document: split it into two tours.`);
 	}
-	const steps = raw.steps.map((s, i) => parseStep(s, i, host));
+	// A file named by several steps is read once.
+	const cache = new Map<string, string | undefined>();
+	const cached: TourFileHost = { roots: host.roots, readText: f => (cache.has(f) ? cache.get(f) : cache.set(f, host.readText(f)).get(f)) };
+	const steps = raw.steps.map((s, i) => parseStep(s, i, cached));
 	const tour: Tour = {
 		id,
 		title,
