@@ -38,7 +38,7 @@ export function makeForward(o: Required<Pick<StdioOptions, 'env' | 'argv' | 'cwd
 		let lastError: Error | undefined;
 		for (const w of windows) {
 			try {
-				return await callBridge(w as BridgeInfo, tool, args, o.timeoutMs);
+				return await callBridge(w as BridgeInfo, tool, args, o.timeoutMs, o.env.AXLE_SESSION);
 			} catch (e) {
 				lastError = e as Error;
 				if (!(e instanceof Unreachable)) {

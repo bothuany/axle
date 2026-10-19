@@ -391,7 +391,12 @@ function wireAgentBridge(flow: Flow) {
 		},
 		currentFlow: () => flow.currentFlow,
 		shownTarget: () => panel.shown?.target,
-		tours: { play: tour => panel.playTour(tour), state: () => panel.tourState(), go: index => panel.tourGo(index), end: () => panel.endTour() },
+		tours: { play: (tour, session) => panel.playTour(tour, session), state: () => panel.tourState(), go: index => panel.tourGo(index), note: (index, text) => panel.pinNote(index, text), resume: () => panel.tourResume(), end: () => panel.endTour() },
+		// The Agents dock (flow-agent) knows each session's name and colour; an agent it did not start is not known.
+		describeAgent: async session => {
+			const look = await Promise.resolve(vscode.commands.executeCommand<{ label?: unknown; color?: unknown } | undefined>('flow.agent.describe', session)).catch(() => undefined);
+			return typeof look?.label === 'string' && typeof look.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(look.color) ? { label: look.label.slice(0, 40), color: look.color } : undefined;
+		},
 		trackChanges: async (entries, base) => {
 			await flow.changes.trackAgainst(base ? `Changes since ${base}` : 'Git changes', GIT_AGENT, entries, base);
 			panel.refreshSoon();

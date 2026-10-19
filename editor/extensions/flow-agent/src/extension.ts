@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { AgentHost, type AgentKind } from './acp';
+import { agentLook } from './agentLook';
 import { Agents } from './agents';
 import { AskRouter } from './ask';
 import { DesktopStatus } from './desktop';
@@ -60,8 +61,14 @@ export function activate(context: vscode.ExtensionContext) {
 		// chosen agent gets it (ask.ts). `origin` names the feature for the picker; `files` are referred to as each target reads them;
 		// `options.plan` asks it to plan first, in the form that target understands.
 		vscode.commands.registerCommand('flow.agents.ask', (text: unknown, submit: unknown, origin: unknown, files: unknown, options: unknown) => typeof text === 'string'
-			? router.ask(text, submit === true, typeof origin === 'string' ? origin : undefined, Array.isArray(files) ? files.filter((f): f is string => typeof f === 'string') : [], (options as { plan?: unknown } | undefined)?.plan === true)
+			? router.ask(text, submit === true, typeof origin === 'string' ? origin : undefined, Array.isArray(files) ? files.filter((f): f is string => typeof f === 'string') : [], (options as { plan?: unknown } | undefined)?.plan === true, typeof (options as { session?: unknown } | undefined)?.session === 'string' ? (options as { session: string }).session : undefined)
 			: false),
+		// Called by flow-view when an agent's tour arrives with the session it came from (AXLE_SESSION): the name and colour the ghost
+		// cursor takes. Only a session this window knows; nothing for any other id.
+		vscode.commands.registerCommand('flow.agent.describe', (id: unknown) => {
+			const s = typeof id === 'string' ? agents.sessions.get(id) : undefined;
+			return s && s.state !== 'ended' ? agentLook(s) : undefined;
+		}),
 		// Called by core when the user clicks an agent in the desktop status overlay (desktop.ts): only a live agent this
 		// window knows is shown, so a stale or made-up id does nothing (and never resumes an ended session).
 		vscode.commands.registerCommand('flow.agents.reveal', (id: unknown) => {

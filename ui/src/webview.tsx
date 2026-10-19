@@ -14,6 +14,7 @@ import { HEADER_H, initialHidden, layout, layoutCallers, setEditMaxWidth, type E
 import { definitionInFile, notify, registerIde } from './ide'
 import { ActionsCtx, LANG_BY_EXT, nodeTypes, type CanvasActions, type Caret } from './nodes'
 import { cardAt, samePath } from './tour/cards'
+import { PointAsk, selectedLines, type Pointing } from './tour/PointAsk'
 import { useTourPlayer } from './tour/TourPlayer'
 import type { FlowNode } from './types'
 
@@ -141,6 +142,8 @@ function Flow() {
   const [timelineOpen, setTimelineOpen] = useState(false)
   /** The target whose graph `down` holds: a tour that arrives while another flow loads waits until it is this one. */
   const [drawnFor, setDrawnFor] = useState<Target | null>(null)
+  /** The card the reader points at to ask the agent about it (tour/PointAsk.tsx). */
+  const [pointing, setPointing] = useState<Pointing | null>(null)
   const [proposal, setProposal] = useState<{ id?: string; answerable?: boolean; agent: string; title: string; spans: { file: string; start: number; end: number }[]; files: string[] } | null>(null)
   const [editHooks, setEditHooks] = useState<string[]>([])
   const turnRef = useRef(turn)
@@ -149,7 +152,23 @@ function Flow() {
   const [selected, setSelected] = useState<string | null>(null)
   const { fitView, setCenter, getNode, getNodes, getViewport } = useReactFlow()
   const editingRef = useRef(editing)
+  const actionsRef = useRef<CanvasActions>({ toggle() {}, toggleAll() {}, open() {}, toggleFull() {} })
   editingRef.current = editing
+
+  // `?` with lines selected in a card's code: ask the agent about them (without a selection, `?` is the tour's ask box).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '?' || e.ctrlKey || e.altKey || e.metaKey || editingRef.current) return
+      if (e.target instanceof HTMLElement && (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable)) return
+      const sel = selectedLines(window.getSelection())
+      if (sel) {
+        e.preventDefault()
+        actionsRef.current.ask?.(sel.key)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   // Short notes from the editor help (no definition found, completion paused): shown on the bar for a few seconds.
   useEffect(() => {
@@ -206,6 +225,7 @@ function Flow() {
     // The previous flow's impact must not stand over a flow that has not loaded, or that failed.
     setImpact(null)
     setImpactOpen(false)
+    setPointing(null)
     load(target.target, false)
   }, [target, load])
 
@@ -460,6 +480,14 @@ function Flow() {
       },
       openType: (file, line) => vscode.postMessage({ type: 'open', file, line }),
       typeDiagram: diagramOk ? id => vscode.postMessage({ type: 'typeDiagram', id }) : undefined,
+      ask: key => {
+        const n = find(down, key) ?? find(up, key)
+        if (!n?.file) return
+        // Lines selected in this card's code are what is asked about; without a selection, the whole method.
+        const sel = selectedLines(window.getSelection())
+        const lines = sel?.key === key ? sel : undefined
+        setPointing({ key, file: n.file, startLine: lines?.startLine ?? n.startLine, endLine: lines?.endLine ?? n.endLine, label: n.label.replace(/\s*▸\s*/g, '.') })
+      },
       mention: key => {
         const n = find(down, key) ?? find(up, key)
         if (n?.file) vscode.postMessage({ type: 'mention', file: n.file, start: n.startLine - 1, end: n.endLine - 1 })
@@ -504,6 +532,8 @@ function Flow() {
     }),
     [down, up, getNode, setCenter, load, target, caret, loadDetail, diagramOk],
   )
+
+  actionsRef.current = actions
 
   // Changed cards in call order: the outermost caller first, then down the flow as it runs.
   const changed = useMemo(() => {
@@ -564,6 +594,10 @@ function Flow() {
     visit(up)
     return hits
   }, [proposal, down, up, nodes]) // eslint-disable-line react-hooks/exhaustive-deps
+  // The lines the reader points at to ask about them: a band, in the style of a tour's highlights.
+  const pointCss = pointing && (pointing.startLine > 0 && pointing.endLine - pointing.startLine < 400)
+    ? `.react-flow__node[data-id="${pointing.key.replace(/["\\]/g, '\\$&')}"] .ln:is(${Array.from({ length: pointing.endLine - pointing.startLine + 1 }, (_, i) => `[data-line="${pointing.startLine + i}"]`).join(',')}) { background: color-mix(in srgb, var(--fl-signal) 20%, transparent); box-shadow: inset 2px 0 0 var(--fl-signal) }`
+    : ''
   const proposedCss = proposed.map(n => `.react-flow__node[data-id="${n.key}"] .card { outline: 1.5px dashed var(--fl-signal); outline-offset: 3px; }`).join('\n')
 
   // Bring the first marked card into view, so the question in the dialog has its answer on screen.
@@ -613,7 +647,7 @@ function Flow() {
   const impactText = impact && `${impactCount ? `Affects ${impactCount}` : 'No'} ${impact.label}${impactCount === 1 ? '' : 's'}`
   return (
     <div className={`wv${tour.touring ? ' wv-touring' : ''}`}>
-      <style>{traceCss + proposedCss + tour.css}</style>
+      <style>{traceCss + proposedCss + pointCss + tour.css}</style>
       <header className="wv-bar">
         <div className="wv-title" title={target.label}>
           <span className="owner">{owner}</span>
@@ -732,6 +766,17 @@ function Flow() {
           </ReactFlow>
         </ActionsCtx.Provider>
         {tour.captionLayer}
+        {pointing && (
+          <PointAsk
+            pointing={pointing}
+            onClose={() => setPointing(null)}
+            onSend={question => {
+              vscode.postMessage({ type: 'pointAsk', file: pointing.file, startLine: pointing.startLine, endLine: pointing.endLine, label: pointing.label, question: question.replace(/\s+/g, ' ').trim().slice(0, 1000) })
+              setPointing(null)
+              notify.show('Question sent to the agent: its answer plays here as a tour.')
+            }}
+          />
+        )}
       </div>
     </div>
   )

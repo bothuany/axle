@@ -84,6 +84,8 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
       } else if (m?.type === 'tourStep' && typeof m.id === 'string') {
         const step = m.step === undefined ? undefined : sanitizeStep(m.step)
         if (m.step === undefined || step) dispatch({ type: 'step', id: m.id, index: m.index, step: step ?? undefined })
+      } else if (m?.type === 'tourResume' && typeof m.id === 'string') {
+        dispatch({ type: 'resume', id: m.id })
       } else if (m?.type === 'tourNote' && typeof m.id === 'string') {
         const note = sanitizeNote(m.note)
         if (note) dispatch({ type: 'note', id: m.id, index: m.index, note })
@@ -146,6 +148,15 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
     if (tour && tour.source !== 'review') env.post({ type: 'tourExit', id: tour.id })
     dispatch({ type: 'exit' })
   }
+  // The reader asks about the step they are on: the tour waits (paused, the step stays lit) and the host puts the question to the agent that made it.
+  const ask = (question: string) => {
+    const q = question.replace(/\s+/g, ' ').trim().slice(0, 1000)
+    if (!tour || tour.source === 'review' || !q) return false
+    dispatch({ type: 'ask' })
+    env.post({ type: 'tourAsk', id: tour.id, index: state.index, question: q })
+    return true
+  }
+  const askRef = useRef<HTMLInputElement>(null)
   const api: TourApi = { next: () => dispatch({ type: 'next' }), back: () => dispatch({ type: 'back' }), goto: index => dispatch({ type: 'goto', index }), toggle: () => dispatch({ type: 'toggle' }), exit }
   const apiRef = useRef(api)
   apiRef.current = api
@@ -165,6 +176,8 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
       else if (e.key === 'Escape') a.exit()
       // Space on a focused button already presses it.
       else if (e.key === ' ' && !onButton) a.toggle()
+      // The ask box (a review of changes has no author to ask).
+      else if ((e.key === '/' || (e.key === '?' && window.getSelection()?.isCollapsed !== false)) && askRef.current) askRef.current.focus()
       else if (/^[1-9]$/.test(e.key)) a.goto(Number(e.key) - 1)
       else return
       e.preventDefault()
@@ -286,7 +299,9 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
   /** The motion on hand is the current step's (a step waiting for its card to be laid out still shows the last one). */
   const current = !!tour && motion.sig.startsWith(`${stepKey}|`)
   const here = current && arrived === motion.sig
-  const touring = here && !state.paused && target.kind !== 'none'
+  /** The step is lit: not paused, or paused because the reader asked about it (the answer comes onto it). */
+  const lit = here && (!state.paused || !!state.asking)
+  const touring = lit && target.kind !== 'none'
 
   // ---- the spotlight: per-card CSS by data-id, so no card's layout is touched ---------------------------------
   const css = useMemo(() => {
@@ -314,11 +329,11 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
   const flowLayer = tour && (
     <ViewportPortal>
       {current && motion.peek && <Peek step={motion.peek.step} box={motion.peek.box} />}
-      <Cursor seq={motion.seq} stops={motion.stops} agent={tour.agent} visible={!state.paused} instant={reduced || document.hidden} />
+      <Cursor seq={motion.seq} stops={motion.stops} agent={tour.agent} visible={!state.paused || !!state.asking} instant={reduced || document.hidden} />
     </ViewportPortal>
   )
 
-  const captionLayer = tour && step && here && !state.paused ? <CaptionLayer step={target.kind === 'peek' && step.state === 'ok' ? { ...step, state: 'offflow' } : step} focus={target.kind === 'none' ? null : motion.focus} /> : null
+  const captionLayer = tour && step && lit ? <CaptionLayer asking={state.asking === 'waiting' ? tour.agent?.label ?? 'the agent' : undefined} step={target.kind === 'peek' && step.state === 'ok' ? { ...step, state: 'offflow' } : step} focus={target.kind === 'none' ? null : motion.focus} /> : null
 
   return {
     state,
@@ -330,7 +345,7 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
     startReview,
     onClickCapture,
     /** Rendered before the canvas, so it stays the first of its kind in the page. */
-    bar: (extras?: ReactNode): ReactNode => tour && <TourBar tour={tour} state={state} api={api} extras={extras} />,
+    bar: (extras?: ReactNode): ReactNode => tour && <TourBar tour={tour} state={state} api={api} extras={extras} ask={tour.source === 'review' ? undefined : { ask, inputRef: askRef }} />,
     /** Rendered inside <ReactFlow>: the cursor and the peek card live in flow coordinates. */
     flowLayer,
     /** Rendered after <ReactFlow>, inside the canvas: the caption lives in screen coordinates, so it stays readable at any zoom. */
@@ -339,14 +354,14 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
 }
 
 /** The caption beside its card, in canvas pixels, whatever the zoom. */
-function CaptionLayer({ step, focus }: { step: TourStep; focus: Box | null }) {
+function CaptionLayer({ step, focus, asking }: { step: TourStep; focus: Box | null; asking?: string }) {
   const { x, y, zoom } = useViewport()
   const w = useStore(s => s.width)
   const h = useStore(s => s.height)
   const place = focus ? captionPlace({ x: focus.x * zoom + x, y: focus.y * zoom + y, w: focus.w * zoom, h: focus.h * zoom }, { w, h }) : 'centre'
   return (
     <div className="tour-layer">
-      <Caption key={`${step.title}|${step.caption}`} step={step} place={place} />
+      <Caption key={`${step.title}|${step.caption}`} step={step} place={place} asking={asking} />
     </div>
   )
 }

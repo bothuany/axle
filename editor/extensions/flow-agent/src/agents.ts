@@ -583,7 +583,7 @@ export class Agents implements vscode.Disposable {
 	 * server of the flow-view extension for this folder. Undefined, and the agent starts without it, when the setting is off,
 	 * flow-view or its server script is missing, or the file cannot be written: the tools are a bonus, never a reason not to start.
 	 */
-	private async mcpConfig(cwd: string | undefined): Promise<string | undefined> {
+	private async mcpConfig(cwd: string | undefined, session?: string): Promise<string | undefined> {
 		if (!this.dir || !vscode.workspace.getConfiguration('flow.agents').get<boolean>('mcp', true)) {
 			return undefined;
 		}
@@ -595,8 +595,10 @@ export class Agents implements vscode.Disposable {
 			}
 			// Like the hooks: on the desktop process.execPath is the editor, which runs a script only as Node.
 			const electron = !!process.versions.electron;
-			const config = { mcpServers: { axle: { command: process.execPath, args: [script], env: { ...(electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}), ...(cwd ? { AXLE_WORKSPACE: cwd } : {}) } } } };
-			const file = path.join(this.dir, 'axle-mcp.json');
+			const config = { mcpServers: { axle: { command: process.execPath, args: [script], env: { ...(electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}), ...(cwd ? { AXLE_WORKSPACE: cwd } : {}), ...(session ? { AXLE_SESSION: session } : {}) } } } };
+			// One file per agent session: the `axle` tools then know which session a tour came from, and a question the reader asks about
+			// it goes back to that session. The shared file is for the claude shim, which cannot know.
+			const file = path.join(this.dir, session ? `axle-mcp-${session}.json` : 'axle-mcp.json');
 			await fs.mkdir(this.dir, { recursive: true });
 			await fs.writeFile(file, JSON.stringify(config, null, 2), { mode: 0o600 });
 			return file;
@@ -651,7 +653,7 @@ export class Agents implements vscode.Disposable {
 		const quote = (x: string) => `"${x}"`;
 		// --mcp-config takes any number of files, so it goes last; it adds to the user's own MCP servers (no --strict-mcp-config).
 		// The `axle` tools find this window by its folder, so a worktree agent gets the main folder's config.
-		const mcp = cli === 'claude' ? await this.mcpConfig(folder) : undefined;
+		const mcp = cli === 'claude' ? await this.mcpConfig(folder, id) : undefined;
 		const codexHooks = cli === 'codex' && await this.codexTakesHooks();
 		const profile = codexHooks ? ` -p ${CODEX_PROFILE}` : '';
 		const command = cli === 'claude'
@@ -849,6 +851,9 @@ export class Agents implements vscode.Disposable {
 
 	/** Removes a finished agent from the list (its terminal, if any, closes too). */
 	forget(id: string) {
+		if (this.dir) {
+			void fs.rm(path.join(this.dir, `axle-mcp-${id}.json`), { force: true }).catch(() => undefined);
+		}
 		this.terminals.get(id)?.dispose();
 		this.terminals.delete(id);
 		this.sessions.delete(id);

@@ -7,7 +7,7 @@ import { captionParts, stepMark } from './player'
 /** A caption longer than this is cut to three lines, with "more". */
 const LONG = 170
 
-export function Caption({ step, place }: { step: TourStep; place: { left: number; top: number; side: string } | 'centre' }) {
+export function Caption({ step, place, asking }: { step: TourStep; place: { left: number; top: number; side: string } | 'centre'; asking?: string }) {
   const [open, setOpen] = useState(false)
   const mark = stepMark(step)
   const long = step.caption.length > LONG
@@ -26,6 +26,7 @@ export function Caption({ step, place }: { step: TourStep; place: { left: number
           {open ? 'less' : 'more'}
         </button>
       )}
+      {asking && <p className="tour-asking">asking {asking}…</p>}
       {step.state === 'missing' && <p className="tour-warn">Can't find this code any more.</p>}
       {step.drift && step.state !== 'missing' && <p className="tour-warn">The code changed since this tour was made.</p>}
       {step.notes?.map((n, i) => (

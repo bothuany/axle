@@ -46,7 +46,7 @@ export class AgentBridge implements vscode.Disposable {
 	/** A failure (no port, an unwritable home folder) is logged and leaves Axle working without the bridge. */
 	async start() {
 		try {
-			const server = await startBridgeServer((tool, args) => this.tools.call(tool, args), { log: m => this.log.warn(m), info: () => ({ pid: process.pid }) });
+			const server = await startBridgeServer((tool, args, ctx) => this.tools.call(tool, args, ctx), { log: m => this.log.warn(m), info: () => ({ pid: process.pid }) });
 			if (this.disposed) {
 				await server.close();
 				return;

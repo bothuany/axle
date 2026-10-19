@@ -54,13 +54,25 @@ export interface ToolDeps {
 	shownTarget(): FlowTarget | undefined;
 	/** The tour player on the canvas. */
 	tours: TourPlayer;
+	/** Who an agent session is (its name and colour in the dock), for the tour's cursor; nothing when the session is not known. */
+	describeAgent(session: string): Promise<{ label: string; color: string } | undefined>;
+}
+
+/** What a bridge call says about who made it. */
+export interface CallContext {
+	/** The agent session (AXLE_SESSION of the MCP server's environment), when the agent was started by Axle. */
+	session?: string;
 }
 
 /** What the tour tools need of the canvas (the flow panel): play a tour, where the reader is, move them, close it. */
 export interface TourPlayer {
-	play(tour: Tour): Promise<void>;
-	state(): { id: string; steps: number; index: number | undefined; paused: boolean } | undefined;
+	/** `session`: the agent session that made it, when it said (AXLE_SESSION): the reader's questions go back to it. */
+	play(tour: Tour, session?: string): Promise<void>;
+	state(): { id: string; steps: number; index: number | undefined; paused: boolean; asking: boolean } | undefined;
 	go(index: number): Promise<void>;
+	/** Pins an agent's answer to a step; a message says what is wrong, nothing when it was pinned. */
+	note(index: number, text: string): Promise<string | undefined>;
+	resume(): Promise<void>;
 	end(): Promise<void>;
 }
 
@@ -119,7 +131,7 @@ interface Resolved { target: FlowTarget; label: string; source: Source | 'lsp'; 
 export class AgentTools {
 	constructor(private readonly d: ToolDeps) { }
 
-	async call(tool: string, a: Record<string, unknown>): Promise<ToolResult> {
+	async call(tool: string, a: Record<string, unknown>, ctx: CallContext = {}): Promise<ToolResult> {
 		try {
 			switch (tool) {
 				case 'open': return await this.open(a);
@@ -135,7 +147,7 @@ export class AgentTools {
 				case 'get_context': return await this.context();
 				case 'draw_board': return await this.draw(a);
 				case 'update_board': return await this.update(a);
-				case 'tour': return await this.tour(a);
+				case 'tour': return await this.tour(a, ctx);
 				case 'tour_control': return await this.tourControl(a);
 				default: return errorResult(`Unknown tool: ${tool}`);
 			}
@@ -952,19 +964,24 @@ export class AgentTools {
 		return { target: r.target, label: r.label };
 	}
 
-	private async tour(a: Record<string, unknown>): Promise<ToolResult> {
+	private async tour(a: Record<string, unknown>, ctx: CallContext): Promise<ToolResult> {
 		const roots = this.folders;
 		const methods = new Map<string, readonly Method[] | undefined>();
 		// The methods of every file the steps name, within a budget: a file that is not listed in time is placed by its line.
 		await within(Promise.all(stepFiles(a, roots).map(async f => {
 			methods.set(f, realInside(roots, f) ? await methodsOf(this.d, f).catch(() => undefined) : undefined);
 		})), 8000, 'listing the methods').catch(() => undefined);
-		const { tour, flow, notes } = parseTourArgs(a, { roots, readText: readTextIn(roots), methodsIn: f => methods.get(f) }, 'Agent tour');
+		const look = ctx.session ? await this.d.describeAgent(ctx.session).catch(() => undefined) : undefined;
+		const { tour, flow, notes } = parseTourArgs(a, { roots, readText: readTextIn(roots), methodsIn: f => methods.get(f) }, look?.label ?? 'Agent tour');
+		// The cursor is the agent's: its name and colour from the dock. An agent Axle did not start has a plain pointer.
+		if (look) {
+			tour.agent = look;
+		}
 		const { target, label } = await this.tourFlow(flow, tour.steps);
 		const provider = this.d.providerFor(target);
 		const [root, callers] = await Promise.all([within(provider.graph(target), 60_000, 'the flow'), within(provider.callers(target), 20_000, 'the callers').catch(() => null)]);
 		const off = markOffFlow(tour.steps, drawnOf(root, callers));
-		await this.d.tours.play(tour);
+		await this.d.tours.play(tour, ctx.session);
 		const lines = tour.steps.map((s, i) => {
 			const at = s.at;
 			const where = !at ? '(caption only)' : at.table ? `table ${at.table}` : at.file ? `${this.rel(at.file)}${at.startLine ? `:${at.startLine}${at.endLine > at.startLine ? `-${at.endLine}` : ''}` : ''}` : '';
@@ -992,8 +1009,20 @@ export class AgentTools {
 			await this.d.tours.end();
 			return text(`Tour "${id}" closed. ${where}`);
 		}
+		if (a.action === 'resume') {
+			await this.d.tours.resume();
+			return text(`Tour "${id}" goes on. ${where}`);
+		}
+		if (a.action === 'note') {
+			const index = (typeof a.step === 'number' ? Math.floor(a.step) : (state.index ?? 0) + 1) - 1;
+			const problem = await this.d.tours.note(index, typeof a.text === 'string' ? a.text : '');
+			if (problem) {
+				throw new Error(problem);
+			}
+			return text(`Pinned your note to step ${index + 1} of ${state.steps}. ${state.asking ? 'Now call tour_control resume (and go first if another step answers the question better).' : where}`);
+		}
 		if (a.action !== 'go') {
-			throw new Error('`action` must be go or end.');
+			throw new Error('`action` must be go, note, resume or end.');
 		}
 		const step = typeof a.step === 'number' ? Math.floor(a.step) : 0;
 		if (step < 1 || step > state.steps) {

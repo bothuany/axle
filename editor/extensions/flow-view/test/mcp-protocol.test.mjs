@@ -229,7 +229,7 @@ test('mcp-protocol: the server tells the agent to show code with `tour`, and lis
 	const got = await s.send('prompts/get', { name: 'tour_guide' })
 	const guide = got.result.messages[0].content.text
 	assert.equal(got.result.messages[0].role, 'user')
-	for (const advice of [/flow_text/, /WHY/, /same `id`/, /user's language|language the user/, /moved/, /offflow/, /missing/]) assert.match(guide, advice)
+	for (const advice of [/flow_text/, /WHY/, /same `id`/, /user's language|language the user/, /action `note`/, /action `resume`/, /moved/, /offflow/, /missing/]) assert.match(guide, advice)
 	const unknown = await s.send('prompts/get', { name: 'nope' })
 	assert.equal(unknown.error.code, -32602)
 	assert.match(unknown.error.message, /tour_guide/)
@@ -265,7 +265,21 @@ test('mcp-protocol: the tour tools are described for a model and their schemas a
 	assert.match(t.description, /tour_guide/)
 	assert.match(t.description, /missing/)
 	const c = tool('tour_control')
-	assert.deepEqual(c.inputSchema.properties.action.enum, ['go', 'end'])
+	assert.deepEqual(c.inputSchema.properties.action.enum, ['go', 'note', 'resume', 'end'])
+	assert.equal(c.inputSchema.properties.text.maxLength, 2000)
+	assert.match(c.description, /note/)
 	assert.equal(c.inputSchema.additionalProperties, false)
 	for (const x of [t, c]) assert.equal(x.annotations.readOnlyHint, true)
+})
+
+test('mcp-protocol: the agent session the server was started for reaches the window with each call; an odd one is dropped', async () => {
+	const seen = []
+	const { dir, server } = await fakeWindow(['/work/app'], async (tool, args, caller) => { seen.push(caller); return { content: [{ type: 'text', text: 'ok' }] } })
+	for (const [id, expected] of [['27251515-ce1e-4d1f-bfec-1c55ae092a4b', { session: '27251515-ce1e-4d1f-bfec-1c55ae092a4b' }], ['../../etc', {}], ['a b', {}], ['x'.repeat(65), {}], [undefined, {}]]) {
+		const s = session(id === undefined ? { AXLE_BRIDGE_DIR: dir } : { AXLE_BRIDGE_DIR: dir, AXLE_SESSION: id }, { cwd: '/work/app' })
+		await s.send('tools/call', { name: 'tour_control', arguments: { id: 'x', action: 'end' } })
+		await s.close()
+		assert.deepEqual(seen.pop(), expected, String(id))
+	}
+	await server.close()
 })

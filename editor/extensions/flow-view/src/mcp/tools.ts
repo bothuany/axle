@@ -246,13 +246,14 @@ export const TOOLS: ToolDef[] = [
 	},
 	{
 		name: 'tour_control',
-		description: "Drive the tour you started with `tour`. go: jump the user to a step (only while they are paused, or after they asked a question: the user paces the tour, so do not fight them) · end: close the tour. Returns where the user is and whether they paused.",
+		description: "Drive the tour you started with `tour`, or answer the user's question during it. go: jump the user to a step (only while they are paused or waiting for your answer: the user paces the tour, so do not fight them) · note: pin your answer to a step's card, shown until the tour ends (plain text) · resume: continue after a question · end: close it. When the user asks a question during the tour it comes to you as a message: answer with note (for the step they asked about, and go to a step that answers it better), then resume; if the answer needs more than a note, start a new tour. Returns where the user is and whether they paused.",
 		inputSchema: {
 			type: 'object',
 			properties: {
 				id: str('Tour id.'),
-				action: { type: 'string', enum: ['go', 'end'] },
-				step: int('go: the step to jump to (1-based).'),
+				action: { type: 'string', enum: ['go', 'note', 'resume', 'end'] },
+				step: int('go: the step to jump to; note: the step the note is for (default: the step the user is on). 1-based.'),
+				text: { type: 'string', maxLength: 2000, description: 'note: your answer, plain text, a few sentences.' },
 			},
 			required: ['id', 'action'],
 			additionalProperties: false,

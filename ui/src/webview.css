@@ -194,6 +194,16 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .tour-item-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tour-mark { color: var(--fl-muted); font: 11px var(--fl-mono); cursor: help; }
 .tour-paused { color: var(--fl-muted); }
+.tour-ask { display: flex; flex: 1 1 160px; min-width: 110px; max-width: 260px; margin: 0 4px; }
+.tour-ask input { width: 100%; min-width: 0; padding: 3px 8px; border: 1px solid var(--fl-line-strong); border-radius: 6px; background: var(--fl-card); color: var(--fl-text); font: 12px var(--fl-mono); }
+.tour-ask input:focus { outline: 1.5px solid var(--fl-signal); outline-offset: 0; }
+.tour-asking { color: var(--fl-signal); font-size: 11.5px; }
+.point-ask { position: absolute; z-index: 16; padding: 8px 10px 9px; border: 1px solid color-mix(in srgb, var(--fl-signal) 55%, transparent); border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); color: var(--fl-text); pointer-events: auto; max-width: calc(100% - 16px); }
+.point-ask-what { margin-bottom: 6px; color: var(--fl-muted); font: 11.5px var(--fl-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.point-ask-what b { color: var(--fl-text); }
+.point-ask input { width: 100%; padding: 5px 8px; border: 1px solid var(--fl-line-strong); border-radius: 6px; background: var(--fl-card); color: var(--fl-text); font: 12.5px var(--fl-mono); }
+.point-ask input:focus { outline: 1.5px solid var(--fl-signal); outline-offset: 0; }
+.point-ask-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 7px; }
 
 /* ---- guided tours: the ghost cursor, the lit lines, the caption, the peek card (src/tour) ---- */
 /* Cards sit at z-index 1000 (selected cards above that is React Flow's own), so the cursor and the peek card are above them. */

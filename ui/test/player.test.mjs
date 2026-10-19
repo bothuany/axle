@@ -261,3 +261,28 @@ test('sanitize: a note keeps its text, who wrote it and when', () => {
   const withNotes = sanitizeStep({ caption: 'c', notes: [...Array.from({ length: 12 }, (_, i) => ({ text: `n${i}`, by: 'agent', at: i })), 'junk'] })
   assert.equal(withNotes.notes.length, 10)
 })
+
+// ---- asking about a step -----------------------------------------------------------------------------------
+
+test('a question pauses the tour on its step, the answer (a note) arrives on it, and a resume continues', () => {
+  let s = play({ type: 'start', tour: tour(3) }, { type: 'next' }, { type: 'ask' })
+  assert.deepEqual([s.index, s.paused, s.asking], [1, true, 'waiting'])
+  s = reduce(s, { type: 'note', id: 't1', index: 0, note: { text: 'about another step', by: 'agent', at: 1 } })
+  assert.equal(s.asking, 'waiting', 'a note on another step is not the answer')
+  s = reduce(s, { type: 'note', id: 't1', index: 1, note: { text: 'because', by: 'agent', at: 2 } })
+  assert.deepEqual([s.paused, s.asking, s.tour.steps[1].notes.length], [true, 'answered', 1])
+  assert.equal(reduce(s, { type: 'resume', id: 'other' }), s, 'a resume for another tour is ignored')
+  const back = reduce(s, { type: 'resume', id: 't1' })
+  assert.deepEqual([back.paused, back.asking], [false, null])
+  assert.deepEqual([reduce(s, { type: 'resume' }).paused, reduce(s, { type: 'resume' }).asking], [false, null], 'the reader presses play')
+})
+
+test('moving on, pausing and playing all end a question; there is nothing to ask without a tour', () => {
+  const asked = play({ type: 'start', tour: tour(3) }, { type: 'ask' })
+  assert.equal(reduce(asked, { type: 'next' }).asking, null)
+  assert.equal(reduce(asked, { type: 'goto', index: 2 }).asking, null)
+  assert.equal(reduce(asked, { type: 'toggle' }).asking, null)
+  assert.equal(reduce(asked, { type: 'step', id: 't1', index: 2 }).asking, null, 'the agent moved the reader')
+  assert.equal(reduce(idle, { type: 'ask' }), idle)
+  assert.equal(reduce(asked, { type: 'exit' }), idle)
+})

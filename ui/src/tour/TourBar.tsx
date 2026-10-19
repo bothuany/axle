@@ -1,6 +1,6 @@
 // The tour bar: back, "3 / 7" (a step list), next, pause, the step's title, the source's own actions (Keep/Undo for a review of
 // changes) and exit. The reader steps by hand; there is no autoplay timer.
-import { useState, type ReactNode } from 'react'
+import { useState, type ReactNode, type RefObject } from 'react'
 import type { Tour } from '../types'
 import { stepMark, type PlayerState } from './player'
 
@@ -12,8 +12,15 @@ export interface TourApi {
   exit(): void
 }
 
-export function TourBar({ tour, state, api, extras }: { tour: Tour; state: PlayerState; api: TourApi; extras?: ReactNode }) {
+export interface AskBox {
+  /** Sends the question; false when there is nothing to send. */
+  ask(question: string): boolean
+  inputRef: RefObject<HTMLInputElement | null>
+}
+
+export function TourBar({ tour, state, api, extras, ask }: { tour: Tour; state: PlayerState; api: TourApi; extras?: ReactNode; ask?: AskBox }) {
   const [list, setList] = useState(false)
+  const [question, setQuestion] = useState('')
   const { index, paused } = state
   const step = tour.steps[index]
   const last = tour.steps.length - 1
@@ -45,6 +52,25 @@ export function TourBar({ tour, state, api, extras }: { tour: Tour; state: Playe
         {step?.title}
         {paused && <span className="tour-paused"> · paused</span>}
       </span>
+      {ask && (
+        <form
+          className="tour-ask"
+          onSubmit={e => {
+            e.preventDefault()
+            if (ask.ask(question)) setQuestion('')
+          }}
+        >
+          <input
+            ref={ask.inputRef}
+            value={question}
+            maxLength={1000}
+            placeholder={state.asking === 'waiting' ? 'Asking…' : 'Ask about this step… (/)'}
+            aria-label="Ask the agent about this step"
+            onChange={e => setQuestion(e.target.value)}
+            onKeyDown={e => e.key === 'Escape' && (e.stopPropagation(), e.currentTarget.blur())}
+          />
+        </form>
+      )}
       {extras}
       <button className="icon-btn" onClick={api.exit} title="Close the tour (Esc)">×</button>
     </div>

@@ -134,6 +134,8 @@ export type HostToCanvasTour =
 	| { type: 'tourStep'; id: string; index: number; step?: TourStep } // the agent moved it, or a lazily resolved step arrived
 	| { type: 'tourNote'; id: string; index: number; note: TourNote }
 	| { type: 'tourEnd'; id: string; reason: 'agent' | 'replaced' }
+	/** The agent answered the reader's question and the tour goes on (the reader may also press play). */
+	| { type: 'tourResume'; id: string }
 	| { type: 'gaze'; events: GazeEvent[] }
 	| { type: 'gazeClear'; session?: string };
 
