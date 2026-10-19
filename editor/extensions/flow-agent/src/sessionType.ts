@@ -15,6 +15,7 @@ import type {
 } from '@agentclientprotocol/sdk';
 import { AgentHost, explain, type AgentKind } from './acp';
 import { agentCwd } from './env';
+import { gazeAcp, gazeTurn } from './gazeHost';
 
 type Update = SessionNotification['update'];
 
@@ -481,6 +482,8 @@ export class AgentSessionType implements vscode.Disposable {
 			return { errorDetails: { message: explain(this.kind, e) } };
 		}
 
+		// A new trail for the gaze, before anything the agent looks at during this prompt.
+		gazeTurn(id);
 		// Axle's timeline: every prompt is one step, so its edits can be shown and undone on their own.
 		await Promise.resolve(vscode.commands.executeCommand('flow.agentTurn', req.prompt, LABEL[this.kind])).catch(() => undefined);
 		const edits = new EditTracker();
@@ -512,6 +515,7 @@ export class AgentSessionType implements vscode.Disposable {
 					part.enablePartialUpdate = true;
 					const files = (u.locations ?? []).map(l => l.path);
 					tools.set(u.toolCallId, { part, kind: u.kind ?? undefined, files });
+					gazeAcp(id, LABEL[this.kind], this.kind, u.kind, u.locations);
 					stream.push(part);
 					break;
 				}
@@ -522,6 +526,7 @@ export class AgentSessionType implements vscode.Disposable {
 					}
 					if (u.locations?.length) {
 						t.files = u.locations.map(l => l.path);
+						gazeAcp(id, LABEL[this.kind], this.kind, t.kind, u.locations);
 					}
 					if (u.title) {
 						t.part.invocationMessage = u.title;

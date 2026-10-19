@@ -67,7 +67,7 @@ test('mcp-protocol: initialize echoes the client protocol version and offers too
 	const s = session({ AXLE_BRIDGE_DIR: temp('axle-empty-') })
 	const res = await s.send('initialize', { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'claude-code', version: '2.1.296' } })
 	assert.equal(res.result.protocolVersion, '2025-11-25')
-	assert.deepEqual(res.result.capabilities, { tools: {} })
+	assert.deepEqual(res.result.capabilities, { tools: {}, prompts: {} })
 	assert.equal(res.result.serverInfo.name, 'axle')
 	assert.match(res.result.instructions, /show_flow/)
 	s.raw(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }))
@@ -76,10 +76,10 @@ test('mcp-protocol: initialize echoes the client protocol version and offers too
 	assert.equal(s.lines.length, 2, 'a notification gets no answer')
 })
 
-test('mcp-protocol: tools/list has the thirteen tools, each annotated read-only with a schema', async () => {
+test('mcp-protocol: tools/list has the fifteen tools, each annotated read-only with a schema', async () => {
 	const s = session({ AXLE_BRIDGE_DIR: temp('axle-empty-') })
 	const { result } = await s.send('tools/list')
-	assert.deepEqual(result.tools.map(t => t.name), ['open', 'open_diff', 'get_diagnostics', 'find_symbol', 'go_to_definition', 'find_references', 'find_entry_points', 'show_flow', 'flow_text', 'impact', 'get_context', 'draw_board', 'update_board'])
+	assert.deepEqual(result.tools.map(t => t.name), ['open', 'open_diff', 'get_diagnostics', 'find_symbol', 'go_to_definition', 'find_references', 'find_entry_points', 'show_flow', 'flow_text', 'impact', 'get_context', 'draw_board', 'update_board', 'tour', 'tour_control'])
 	for (const t of result.tools) {
 		assert.equal(t.inputSchema.type, 'object', t.name)
 		assert.equal(t.annotations.readOnlyHint, true, t.name)
@@ -215,5 +215,71 @@ test('mcp-protocol: impact takes a table or an entity as well as a method, and s
 	assert.equal((await s.send('tools/call', { name: 'impact', arguments: { table: 'orders' } })).result.content[0].text, 'ok')
 	assert.deepEqual(calls, [{ tool: 'impact', args: { table: 'orders' } }])
 	await s.close()
+	await server.close()
+})
+
+test('mcp-protocol: the server tells the agent to show code with `tour`, and lists the tour_guide prompt', async () => {
+	const s = session({ AXLE_BRIDGE_DIR: temp('axle-empty-') })
+	const init = await s.send('initialize', {})
+	assert.match(init.result.instructions, /SHOW it with `tour`/)
+	const list = await s.send('prompts/list')
+	assert.deepEqual(list.result.prompts.map(p => p.name), ['tour_guide', 'explain_change'])
+	const explain = (await s.send('prompts/get', { name: 'explain_change' })).result.messages[0].content.text
+	for (const part of [/`tour`/, /"changes": true/, /get_context/, /impact/, /`table` step/, /risks/, /tour_guide/]) assert.match(explain, part)
+	const got = await s.send('prompts/get', { name: 'tour_guide' })
+	const guide = got.result.messages[0].content.text
+	assert.equal(got.result.messages[0].role, 'user')
+	for (const advice of [/flow_text/, /WHY/, /same `id`/, /user's language|language the user/, /action `note`/, /action `resume`/, /moved/, /offflow/, /missing/]) assert.match(guide, advice)
+	const unknown = await s.send('prompts/get', { name: 'nope' })
+	assert.equal(unknown.error.code, -32602)
+	assert.match(unknown.error.message, /tour_guide/)
+	await s.close()
+})
+
+test('mcp-protocol: tour and tour_control reach the window as they are; a call without the required fields never does', async () => {
+	const calls = []
+	const { dir, server } = await fakeWindow(['/work/app'], async (tool, args) => { calls.push({ tool, args }); return { content: [{ type: 'text', text: `${tool} ok` }] } })
+	const s = session({ AXLE_BRIDGE_DIR: dir }, { cwd: '/work/app' })
+	const tour = { id: 'place-order', title: 'T', steps: [{ caption: 'c', file: 'src/a.cs', method: 'A.B', line: 3, lines: [[3, 4]] }], flow: { changes: true } }
+	assert.equal((await s.send('tools/call', { name: 'tour', arguments: tour })).result.content[0].text, 'tour ok')
+	assert.equal((await s.send('tools/call', { name: 'tour_control', arguments: { id: 'place-order', action: 'end' } })).result.content[0].text, 'tour_control ok')
+	const bad = await s.send('tools/call', { name: 'tour', arguments: { title: 'no steps' } })
+	assert.equal(bad.result.isError, true)
+	assert.match(bad.result.content[0].text, /missing required argument: steps/)
+	assert.deepEqual(calls.map(c => c.tool), ['tour', 'tour_control'])
+	assert.deepEqual(calls[0].args, tour)
+	await s.close()
+	await server.close()
+})
+
+test('mcp-protocol: the tour tools are described for a model and their schemas are closed', async () => {
+	const tool = name => tools.TOOLS.find(t => t.name === name)
+	const t = tool('tour')
+	assert.deepEqual(t.inputSchema.required, ['title', 'steps'])
+	assert.equal(t.inputSchema.additionalProperties, false)
+	assert.equal(t.inputSchema.properties.steps.maxItems, 30)
+	assert.equal(t.inputSchema.properties.steps.items.properties.caption.maxLength, 600)
+	assert.equal(t.inputSchema.properties.steps.items.additionalProperties, false)
+	assert.equal(t.inputSchema.properties.flow.additionalProperties, false)
+	assert.deepEqual(t.inputSchema.properties.steps.items.required, ['caption'])
+	assert.match(t.description, /tour_guide/)
+	assert.match(t.description, /missing/)
+	const c = tool('tour_control')
+	assert.deepEqual(c.inputSchema.properties.action.enum, ['go', 'note', 'resume', 'end'])
+	assert.equal(c.inputSchema.properties.text.maxLength, 2000)
+	assert.match(c.description, /note/)
+	assert.equal(c.inputSchema.additionalProperties, false)
+	for (const x of [t, c]) assert.equal(x.annotations.readOnlyHint, true)
+})
+
+test('mcp-protocol: the agent session the server was started for reaches the window with each call; an odd one is dropped', async () => {
+	const seen = []
+	const { dir, server } = await fakeWindow(['/work/app'], async (tool, args, caller) => { seen.push(caller); return { content: [{ type: 'text', text: 'ok' }] } })
+	for (const [id, expected] of [['27251515-ce1e-4d1f-bfec-1c55ae092a4b', { session: '27251515-ce1e-4d1f-bfec-1c55ae092a4b' }], ['../../etc', {}], ['a b', {}], ['x'.repeat(65), {}], [undefined, {}]]) {
+		const s = session(id === undefined ? { AXLE_BRIDGE_DIR: dir } : { AXLE_BRIDGE_DIR: dir, AXLE_SESSION: id }, { cwd: '/work/app' })
+		await s.send('tools/call', { name: 'tour_control', arguments: { id: 'x', action: 'end' } })
+		await s.close()
+		assert.deepEqual(seen.pop(), expected, String(id))
+	}
 	await server.close()
 })

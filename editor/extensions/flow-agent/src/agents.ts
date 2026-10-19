@@ -19,10 +19,12 @@ import { findConflicts, key, type Conflict, type SessionEdits } from './conflict
 import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexProfile, codexProfileFile } from './codexHooks';
 import { agentCwd, agentProcessEnv, inheritedAgentEnv } from './env';
 import { CostTracker, statusUsd, type SessionCost } from './cost';
+import { disposeGaze, gazeHook, gazeTurn } from './gazeHost';
 import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
-import { canType, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
+import { canExplain, explainPrompt } from './explain';
+import { canType, notReady, oneLine, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 import { createWorktree, sameDir, validBranch, worktreeSlug, type Worktree } from './worktrees';
 
@@ -137,6 +139,8 @@ const PATCH_TOOL = 'apply_patch';
 const PRE_TOOLS = `${EDIT_TOOLS}|ExitPlanMode|AskUserQuestion`;
 /** The most files of one turn that are checked for the flows they affect. */
 const MAX_TOUCHED = 40;
+/** How long after a typed line the Enter that submits it is sent (see typeInto). */
+const SUBMIT_DELAY_MS = 300;
 /** The turn-end impact may take this long: Roslyn answers one request at a time. */
 const IMPACT_WAIT_MS = 9000;
 const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'Stop', 'StopFailure', 'SubagentStop', 'SessionEnd'];
@@ -296,6 +300,8 @@ export class Agents implements vscode.Disposable {
 	private readonly costs = new Map<string, CostTracker>();
 	private readonly prs = new PrWatcher(cwd => this.prChanged(cwd));
 	private prTimer: NodeJS.Timeout | undefined;
+	/** What the turn-end check found for a session's last turn, for "Explain this" (the files are in `touched`); dropped with the next prompt. */
+	private readonly turns = new Map<string, { impact?: TurnImpact }>();
 	/** Everything a session has edited since it started (files, and the methods and flows once a turn's impact is known), for conflicts.ts. */
 	private readonly edits = new Map<string, SessionEdits>();
 
@@ -580,7 +586,7 @@ export class Agents implements vscode.Disposable {
 	 * server of the flow-view extension for this folder. Undefined, and the agent starts without it, when the setting is off,
 	 * flow-view or its server script is missing, or the file cannot be written: the tools are a bonus, never a reason not to start.
 	 */
-	private async mcpConfig(cwd: string | undefined): Promise<string | undefined> {
+	private async mcpConfig(cwd: string | undefined, session?: string): Promise<string | undefined> {
 		if (!this.dir || !vscode.workspace.getConfiguration('flow.agents').get<boolean>('mcp', true)) {
 			return undefined;
 		}
@@ -592,8 +598,10 @@ export class Agents implements vscode.Disposable {
 			}
 			// Like the hooks: on the desktop process.execPath is the editor, which runs a script only as Node.
 			const electron = !!process.versions.electron;
-			const config = { mcpServers: { axle: { command: process.execPath, args: [script], env: { ...(electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}), ...(cwd ? { AXLE_WORKSPACE: cwd } : {}) } } } };
-			const file = path.join(this.dir, 'axle-mcp.json');
+			const config = { mcpServers: { axle: { command: process.execPath, args: [script], env: { ...(electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}), ...(cwd ? { AXLE_WORKSPACE: cwd } : {}), ...(session ? { AXLE_SESSION: session } : {}) } } } };
+			// One file per agent session: the `axle` tools then know which session a tour came from, and a question the reader asks about
+			// it goes back to that session. The shared file is for the claude shim, which cannot know.
+			const file = path.join(this.dir, session ? `axle-mcp-${session}.json` : 'axle-mcp.json');
 			await fs.mkdir(this.dir, { recursive: true });
 			await fs.writeFile(file, JSON.stringify(config, null, 2), { mode: 0o600 });
 			return file;
@@ -648,7 +656,7 @@ export class Agents implements vscode.Disposable {
 		const quote = (x: string) => `"${x}"`;
 		// --mcp-config takes any number of files, so it goes last; it adds to the user's own MCP servers (no --strict-mcp-config).
 		// The `axle` tools find this window by its folder, so a worktree agent gets the main folder's config.
-		const mcp = cli === 'claude' ? await this.mcpConfig(folder) : undefined;
+		const mcp = cli === 'claude' ? await this.mcpConfig(folder, id) : undefined;
 		const codexHooks = cli === 'codex' && await this.codexTakesHooks();
 		const profile = codexHooks ? ` -p ${CODEX_PROFILE}` : '';
 		const command = cli === 'claude'
@@ -713,11 +721,25 @@ export class Agents implements vscode.Disposable {
 	typeInto(id: string, line: string, submit: boolean, customs: CustomCli[]): boolean {
 		const t = this.terminals.get(id);
 		const s = this.askSessions().find(x => x.id === id);
-		if (!t || !s || !canType(s, customs) || !line) {
+		// One line of plain characters, whoever built it: a file name or a method name may hold a line break or a terminal's escape or
+		// control keys (Ctrl+C, Ctrl+D), and none of them may reach the prompt or the shell behind it.
+		const typed = oneLine(line);
+		if (!t || !s || !canType(s, customs) || !typed) {
 			return false;
 		}
 		t.show();
-		t.sendText(line, submit);
+		t.sendText(typed, false);
+		if (submit) {
+			// Claude Code takes a long line for a paste, and an Enter that arrives in the same write only adds a line to the draft
+			// (found with a real session): the Enter goes on its own, a moment later.
+			setTimeout(() => {
+				try {
+					t.sendText('', true);
+				} catch {
+					// the terminal was closed in between
+				}
+			}, SUBMIT_DELAY_MS);
+		}
 		return true;
 	}
 
@@ -846,10 +868,14 @@ export class Agents implements vscode.Disposable {
 
 	/** Removes a finished agent from the list (its terminal, if any, closes too). */
 	forget(id: string) {
+		if (this.dir) {
+			void fs.rm(path.join(this.dir, `axle-mcp-${id}.json`), { force: true }).catch(() => undefined);
+		}
 		this.terminals.get(id)?.dispose();
 		this.terminals.delete(id);
 		this.sessions.delete(id);
 		this.touched.delete(id);
+		this.turns.delete(id);
 		this.planDrawn.delete(id);
 		this.attention.delete(id);
 		this.costs.delete(id);
@@ -1050,7 +1076,9 @@ export class Agents implements vscode.Disposable {
 				s.todos = [];
 				s.impact = undefined;
 				this.touched.delete(s.id);
+				this.turns.delete(s.id);
 				this.planDrawn.delete(s.id);
+				gazeTurn(s.id);
 				set('working', 'Thinking');
 				void this.markPrompt(s);
 				await Promise.resolve(vscode.commands.executeCommand('flow.agentTurn', s.prompt ?? 'Prompt', agentLabel(s))).catch(() => undefined);
@@ -1085,6 +1113,7 @@ export class Agents implements vscode.Disposable {
 				this.settleAsked(s, 'allowed');
 				set('working', describe(tool, p.tool_input));
 				if (p.hook_event_name === 'PostToolUse') {
+					gazeHook(s.id, s.name, s.cli, tool, p.tool_input, p.tool_response, p.cwd, s.worktree?.path);
 					if (isEdit(tool)) {
 						const files = filesOf(tool, p.tool_input, p.cwd);
 						void Promise.resolve(vscode.commands.executeCommand('flow.agentDidEdit', files)).catch(() => undefined);
@@ -1187,11 +1216,37 @@ export class Agents implements vscode.Disposable {
 		// The methods and flows count for conflicts whatever the agent does next: it did change them.
 		if (impact) {
 			this.recordImpact(s, impact);
+			if (s.state !== 'working' && this.touched.get(s.id)) {
+				this.turns.set(s.id, { impact });
+			}
 		}
 		// A new prompt may have started while this was computed: its answer no longer describes the turn on screen.
 		if ((impact?.flows?.length || impact?.tables?.length) && s.state !== 'working' && this.touched.get(s.id)) {
 			s.impact = impact;
 			this.changed.fire();
+		}
+	}
+
+	/** Whether the row offers "Explain this": the agent is at its prompt (a Claude or Codex session that is alive) and its last turn edited a file. */
+	canExplain(s: AgentSession): boolean {
+		return canExplain(this.touched.get(s.id)?.size ?? 0) && (s.state === 'done' || s.state === 'idle') && s.cli !== 'custom' && this.terminals.has(s.id);
+	}
+
+	/**
+	 * "Explain this": asks the agent that made the last turn's change to explain it as a tour on the change set. It goes to that same
+	 * session (the author explains its own change), typed only when it is at its prompt, never into one that is working or asking.
+	 */
+	explain(id: string, customs: CustomCli[]) {
+		const s = this.sessions.get(id);
+		const files = [...(this.touched.get(id) ?? [])];
+		if (!s || !this.canExplain(s)) {
+			void vscode.window.showInformationMessage(s && canExplain(files.length) ? `Axle: ${s.name} is not at its prompt: choose Explain this again when it is.` : 'Axle: nothing to explain: this agent has not edited a file since its last prompt.');
+			return;
+		}
+		const text = explainPrompt(files, this.turns.get(id)?.impact, this.rootOf(s));
+		if (!this.typeInto(id, text, true, customs)) {
+			const now = this.askSessions().find(x => x.id === id);
+			void vscode.window.showInformationMessage(`Axle: ${now ? notReady(now) : `${s.name} has closed`}: choose Explain this again when it is back at its prompt.`);
 		}
 	}
 
@@ -1576,6 +1631,7 @@ export class Agents implements vscode.Disposable {
 	}
 
 	dispose() {
+		disposeGaze();
 		this.server?.close();
 		// Hooks read the port at call time: leave it blank rather than pointing at a dead port, but not when a newer
 		// window of this folder has already put its own there.

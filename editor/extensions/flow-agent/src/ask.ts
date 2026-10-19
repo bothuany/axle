@@ -8,7 +8,7 @@
 
 import * as vscode from 'vscode';
 import type { Agents } from './agents';
-import { choices, isTarget, notReady, oneLine, parseSetting, planFirst, resolve, sameTarget, targetName, withFiles, type AskTarget, type Choice, type CustomCli } from './askTarget';
+import { choices, customOf, isTarget, notReady, oneLine, parseSetting, planFirst, resolve, sameTarget, targetName, withFiles, type AskTarget, type Choice, type CustomCli } from './askTarget';
 import { savedAgents } from './pick';
 
 const REMEMBERED = 'flow.agents.askTarget';
@@ -39,7 +39,7 @@ export class AskRouter implements vscode.Disposable {
 	 * when the user closed the picker, so the caller never opens a chat panel on top; false only for nothing to send.
 	 * `plan` asks the agent to plan before it edits, said the way the chosen target understands it (planFirst).
 	 */
-	async ask(text: string, submit: boolean, origin?: string, files: string[] = [], plan = false): Promise<boolean> {
+	async ask(text: string, submit: boolean, origin?: string, files: string[] = [], plan = false, session?: string): Promise<boolean> {
 		const line = oneLine(text);
 		if (!line && !files.length) {
 			return false;
@@ -48,7 +48,10 @@ export class AskRouter implements vscode.Disposable {
 		const customs = this.customs();
 		const chat = await chatAvailable();
 		const canStart = vscode.workspace.isTrusted;
-		const r = resolve({ setting, remembered: this.remembered(), sessions: this.agents.askSessions(), customs, chat, canStart });
+		// A question about a tour goes to the agent that made it, when that session is still open: it knows the tour. If it is busy the
+		// send below says so and puts the question on the clipboard, as for any session. A session that is gone falls back to the rules.
+		const author = session ? this.agents.askSessions().find(x => x.id === session && x.alive && x.state !== 'ended') : undefined;
+		const r = author ? { use: { kind: 'session', id: author.id, cli: author.cli, custom: customOf(author, customs)?.name } as AskTarget } : resolve({ setting, remembered: this.remembered(), sessions: this.agents.askSessions(), customs, chat, canStart });
 		let target: AskTarget | undefined;
 		if ('use' in r) {
 			target = r.use;
@@ -60,7 +63,7 @@ export class AskRouter implements vscode.Disposable {
 		}
 		const sent = await this.send(target, plan ? planFirst(line, target) : line, submit, files, customs);
 		// Only "remember" learns from use; a fixed setting or "ask" keeps its own rule.
-		if (setting === 'remember' && sent) {
+		if (setting === 'remember' && sent && !author) {
 			await this.context.workspaceState.update(REMEMBERED, sent);
 		}
 		return true;

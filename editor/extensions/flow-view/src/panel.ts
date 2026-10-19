@@ -7,13 +7,19 @@ import { randomBytes } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import type { CanvasToHostTour, Tour } from '../../../../protocol/flow';
 import type { AgentChanges } from './agentDiff';
+import { askInDock } from './askAgent';
 import { Command } from './commands';
 import { agentContext } from './harness';
 import { CardLanguage, cardQuery } from './language';
 import { CardOverlays } from './overlay';
 import type { FlowNode, FlowProvider, FlowTarget } from './providers';
 import { flowRoot } from './root';
+import { MAX_NOTES, noteText, parsePointAsk, parseTourAsk, place, pointAskPrompt, tourAskPrompt } from './tour/ask';
+import { readTextIn } from './tour/files';
+import { GazeLog, gazeTour, parseGaze } from './tour/gaze';
+import { tourReport } from './tour/validate';
 import { TypeService } from './types/typeService';
 
 interface Request {
@@ -54,9 +60,12 @@ function workspaceFile(file: unknown): string | undefined {
 	if (typeof file !== 'string' || !file) {
 		return undefined;
 	}
-	const uri = vscode.Uri.file(file);
+	// `..` and `.` are collapsed first: the folder check below is on the spelling, and `C:\ws\..\secret` is not inside C:\ws.
+	const uri = vscode.Uri.file(path.resolve(file));
 	return vscode.workspace.getWorkspaceFolder(uri) ? uri.fsPath : undefined;
 }
+
+const roots = () => vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) ?? [];
 
 /**
  * A flow shows how the application runs; tests calling into it are noise there. Callers and callees in
@@ -86,6 +95,18 @@ export class FlowPanel implements vscode.Disposable {
 	private opening: Promise<void> | undefined;
 	/** The webview has sent its first message, so it is listening. */
 	private webviewReady = false;
+	/** Callers waiting for the webview to listen (a tour sent to a canvas that was just opened). */
+	private readonly listening: (() => void)[] = [];
+	/** The tour the canvas was last sent, and where the reader is in it: the canvas may only report on a tour that came from here. */
+	private playing: { id: string; steps: number; tour: Tour; session?: string } | undefined;
+	tourAt: { index: number; paused: boolean } | undefined;
+	/** The reader's last question about a step, and whether the agent has answered it yet (an answer is a note and a resume). */
+	private asked: { index: number; question: string } | undefined;
+	private asking = false;
+	/** Notes an agent pinned to each step of the playing tour. */
+	private readonly noteCount = new Map<number, number>();
+	/** A question the reader pointed at a card: the tour the agent answers it with starts with it as its first note. */
+	private pointed: { question: string; at: number } | undefined;
 
 	/** The flow the canvas was last asked to show: what "Pin Flow as Board" pins. */
 	shown: { target: FlowTarget; label: string } | undefined;
@@ -122,6 +143,11 @@ export class FlowPanel implements vscode.Disposable {
 		panel.onDidDispose(() => {
 			this.webviewReady = false;
 			this.panel = undefined;
+			this.playing = undefined;
+			this.tourAt = undefined;
+			this.asked = undefined;
+			this.asking = false;
+			this.listening.splice(0).forEach(done => done());
 			// A card still being edited goes back to the file as it was: the canvas that would have saved it is gone.
 			void this.overlays.closeAll();
 		});
@@ -130,6 +156,8 @@ export class FlowPanel implements vscode.Disposable {
 			if (!this.webviewReady) {
 				this.webviewReady = true;
 				this.postWaiting();
+				this.postRecentGaze();
+				this.listening.splice(0).forEach(done => done());
 			}
 			this.onMessage(m).catch(e => vscode.window.showErrorMessage(`Axle: ${(e as Error).message ?? e}`));
 		});
@@ -200,12 +228,141 @@ export class FlowPanel implements vscode.Disposable {
 		this.postWaiting();
 	}
 
+	/**
+	 * Plays a tour on the canvas that is open (or has just been asked to open: `show` first). It replaces the tour that was playing.
+	 * The canvas starts it once the flow it shows is drawn; nothing here opens, reveals or focuses anything.
+	 */
+	async playTour(tour: Tour, session?: string) {
+		if (this.opening) {
+			await this.opening;
+		}
+		const panel = this.panel;
+		if (!panel) {
+			throw new Error('There is no flow canvas to play the tour on. Open a flow first.');
+		}
+		if (!this.webviewReady) {
+			await new Promise<void>(done => this.listening.push(done));
+		}
+		if (this.panel !== panel) {
+			throw new Error('The flow canvas was closed before the tour could start.');
+		}
+		// The question the reader pointed at a card is the first note of the tour that answers it.
+		const pointed = this.pointed;
+		this.pointed = undefined;
+		if (pointed && Date.now() - pointed.at < 15 * 60_000 && tour.source === 'agent' && tour.steps[0]) {
+			tour.steps[0].notes = [{ text: pointed.question, by: 'user' as const, at: pointed.at }, ...(tour.steps[0].notes ?? [])].slice(0, MAX_NOTES);
+		}
+		this.playing = { id: tour.id, steps: tour.steps.length, tour, session };
+		this.tourAt = undefined;
+		this.asked = undefined;
+		this.asking = false;
+		this.noteCount.clear();
+		await panel.webview.postMessage({ type: 'tour', tour });
+	}
+
+	/** The tour playing on the canvas and where the reader is in it (the canvas reports it), for an agent that asks. */
+	tourState(): { id: string; steps: number; index: number | undefined; paused: boolean; asking: boolean; session?: string } | undefined {
+		return this.playing && { id: this.playing.id, steps: this.playing.steps, index: this.tourAt?.index, paused: this.tourAt?.paused ?? false, asking: this.asking, session: this.playing.session };
+	}
+
+	/** Pins an agent's answer to a step (a note on its card, shown until the tour ends). A message names what is wrong, nothing when it was pinned. */
+	async pinNote(index: number, text: string): Promise<string | undefined> {
+		const playing = this.playing;
+		const clean = noteText(text);
+		if (!playing || !this.panel) {
+			return 'No tour is playing.';
+		}
+		if (!clean) {
+			return '`text` is required: the note to pin.';
+		}
+		if (!Number.isInteger(index) || index < 0 || index >= playing.steps) {
+			return `step must be between 1 and ${playing.steps}.`;
+		}
+		const count = this.noteCount.get(index) ?? 0;
+		if (count >= MAX_NOTES) {
+			return `Step ${index + 1} already has ${MAX_NOTES} notes.`;
+		}
+		this.noteCount.set(index, count + 1);
+		// The note answers the question that was asked about this step, when there was one: the bubble shows both.
+		const question = this.asked?.index === index ? this.asked.question : undefined;
+		await this.panel.webview.postMessage({ type: 'tourNote', id: playing.id, index, note: { text: clean, by: 'agent', at: Date.now(), ...(question ? { question } : {}) } });
+		return undefined;
+	}
+
+	/** The agent answered: the tour goes on (the reader may also press play first). */
+	async tourResume() {
+		this.asking = false;
+		if (this.playing && this.panel) {
+			await this.panel.webview.postMessage({ type: 'tourResume', id: this.playing.id });
+		}
+	}
+
+	/** The reader's question goes to the agent that made the tour when the host knows it, else to the agent the user chose for questions. */
+	private async askAgent(prompt: string, origin: string, files: string[], session?: string) {
+		if (await askInDock(prompt, true, origin, files, { session })) {
+			return;
+		}
+		await vscode.commands.executeCommand('workbench.action.chat.open', { query: prompt, isPartialQuery: false, attachFiles: files.map(f => vscode.Uri.file(f)) });
+	}
+
+	private rel(file: string) {
+		return vscode.workspace.asRelativePath(file, false).replace(/\\/g, '/');
+	}
+
+	/** Moves the reader of the playing tour to a step (the agent answers a question and points at the code that does). */
+	async tourGo(index: number) {
+		if (this.playing && this.panel && index >= 0 && index < this.playing.steps) {
+			await this.panel.webview.postMessage({ type: 'tourStep', id: this.playing.id, index });
+		}
+	}
+
+	/** Closes the playing tour, from the agent's side. */
+	async endTour() {
+		const playing = this.playing;
+		this.playing = undefined;
+		this.tourAt = undefined;
+		this.asked = undefined;
+		this.asking = false;
+		if (playing && this.panel) {
+			await this.panel.webview.postMessage({ type: 'tourEnd', id: playing.id, reason: 'agent' });
+		}
+	}
+
+	/** Where agents looked, in memory only: what a canvas opened later still shows, and what "Replay trail" plays. */
+	private readonly gazeLog = new GazeLog();
+
+	/**
+	 * flow-agent's looks (`flow.agent.gaze`): checked, kept, and painted on the canvas when one is open. Gaze never opens,
+	 * reveals or focuses anything: without a canvas the looks are only kept.
+	 */
+	gaze(batch: unknown) {
+		// The setting was turned off: forget the trails, here and on the canvas.
+		if ((batch as { clear?: unknown } | null)?.clear === true) {
+			this.gazeLog.clear();
+			void this.panel?.webview.postMessage({ type: 'gazeClear' });
+			return;
+		}
+		const kept = parseGaze(batch, roots());
+		this.gazeLog.add(kept);
+		if (kept.length && this.panel && this.webviewReady) {
+			// `burst`: flow-agent saw more than 20 looks in a second; the canvas then jumps instead of gliding.
+			void this.panel.webview.postMessage({ type: 'gaze', events: kept.map(k => k.event), burst: (batch as { burst?: unknown }).burst === true });
+		}
+	}
+
+	private postRecentGaze() {
+		const events = this.gazeLog.recent(Date.now());
+		if (events.length) {
+			void this.panel?.webview.postMessage({ type: 'gaze', events });
+		}
+	}
+
 	/** Editor → canvas: the canvas highlights the card holding this line. */
 	cursorMoved(file: string, line: number) {
 		void this.panel?.webview.postMessage({ type: 'cursor', file, line });
 	}
 
-	private async onMessage(m: Request | { type: 'open' | 'reveal'; file: string; line: number } | { type: 'ask'; label: string; context: string } | { type: 'answer'; id: string; accept: boolean } | { type: 'mention'; file: string; start: number; end: number } | { type: 'typeDiagram'; id: string }) {
+	private async onMessage(m: Request | { type: 'open' | 'reveal'; file: string; line: number } | { type: 'ask'; label: string; context: string } | { type: 'answer'; id: string; accept: boolean } | { type: 'mention'; file: string; start: number; end: number } | { type: 'typeDiagram'; id: string } | Extract<CanvasToHostTour, { type: 'tourState' | 'tourExit' | 'tourAsk' | 'pointAsk' | 'gazeReplay' }>) {
 		if (m.type === 'open' || m.type === 'reveal') {
 			// open: jump there and type; reveal: show the line but keep the canvas focused.
 			const file = workspaceFile(m.file);
@@ -215,6 +372,54 @@ export class FlowPanel implements vscode.Disposable {
 			const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
 			const start = new vscode.Position(Math.max(0, Number(m.line) - 1 || 0), 0);
 			await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.One, selection: new vscode.Range(start, start), preview: true, preserveFocus: m.type === 'reveal' });
+			return;
+		}
+		if (m.type === 'tourState' || m.type === 'tourExit') {
+			// Only about the tour this host sent: an id the canvas made up, or a step that does not exist, is ignored.
+			const report = tourReport(this.playing, m);
+			if (report?.exit) {
+				this.playing = undefined;
+				this.tourAt = undefined;
+				this.asked = undefined;
+				this.asking = false;
+			} else if (report) {
+				this.tourAt = { index: report.index, paused: report.paused };
+				// The reader pressed play (or moved on): the question is not waiting any more.
+				if (!report.paused) {
+					this.asking = false;
+				}
+			}
+			return;
+		}
+		if (m.type === 'tourAsk') {
+			const playing = this.playing;
+			const ask = parseTourAsk(m, playing);
+			const step = playing && ask && playing.tour.steps[ask.index];
+			if (playing && ask && step) {
+				this.asked = ask;
+				this.asking = true;
+				this.tourAt = { index: ask.index, paused: true };
+				const where = step.at?.file ? place(this.rel(step.at.file), step.at.startLine, step.at.endLine) : undefined;
+				await this.askAgent(tourAskPrompt(playing.tour, ask.index + 1, playing.steps, { label: step.at?.label || step.title, where }, ask.question), 'tour', step.at?.file ? [step.at.file] : [], playing.session);
+			}
+			return;
+		}
+		if (m.type === 'pointAsk') {
+			const p = parsePointAsk(m, f => workspaceFile(f));
+			if (p) {
+				this.pointed = { question: p.question, at: Date.now() };
+				await this.askAgent(pointAskPrompt({ label: p.label, where: place(this.rel(p.file), p.startLine, p.endLine), flow: this.shown?.label, question: p.question }), 'canvas', [p.file]);
+			}
+			return;
+		}
+		if (m.type === 'gazeReplay') {
+			// Only a session the log holds: the canvas names it, the host builds the tour from its own record.
+			if (this.gazeLog.has(m.session)) {
+				const tour = gazeTour(this.gazeLog.lastTurn(m.session), roots(), readTextIn(roots()));
+				if (tour) {
+					await this.playTour(tour);
+				}
+			}
 			return;
 		}
 		if (m.type === 'answer') {

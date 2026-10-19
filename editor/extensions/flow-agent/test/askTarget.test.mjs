@@ -136,6 +136,7 @@ test('oneLine removes everything a terminal would act on', () => {
 	assert.equal(a.oneLine('draft\r'), 'draft', 'a lone CR is Enter')
 	assert.equal(a.oneLine('x\x03y\x1b[A'), 'x y [A')
 	assert.equal(a.oneLine('  \n '), '')
+	assert.equal(a.oneLine(`x\x03\x04y\x85z${String.fromCharCode(0x2028)}w`), 'x y z w', 'Ctrl+C, Ctrl+D, C1 controls and the Unicode line separators')
 })
 
 test('files: @-mentions for Claude, plain paths for the rest', () => {

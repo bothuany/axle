@@ -277,7 +277,7 @@ export function resolve(o: { setting: AskSetting; remembered?: AskTarget; sessio
 /** Strips what a terminal would act on: a newline or lone CR is Enter (it would send a draft), other control keys (Ctrl-C) as well. */
 export function oneLine(text: string): string {
 	// eslint-disable-next-line no-control-regex
-	return text.replace(/\s*[\r\n]+\s*/g, ' ').replace(/[\x00-\x1f\x7f]/g, ' ').replace(/ {2,}/g, ' ').trim();
+	return text.replace(/\s*[\r\n]+\s*/g, ' ').replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029]/g, ' ').replace(/ {2,}/g, ' ').trim();
 }
 
 /** How files are referred to in the text for each target: Claude reads an @-mentioned file itself; Codex's @ opens a picker, so a plain path. */

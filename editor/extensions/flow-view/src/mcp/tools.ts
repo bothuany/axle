@@ -155,13 +155,13 @@ export const TOOLS: ToolDef[] = [
 	},
 	{
 		name: 'show_flow',
-		description: 'Open the Axle flow canvas for an entry point or method, so the user SEES the runtime call chain (callers on the left, the method, everything it calls on the right, with the database tables it touches), and return the same call chain as text. Use this when the user asks to open or show a flow in the IDE ("open the delete-users flow"). Pass an `id` from find_entry_points, or `file` plus `method` or `line`.',
+		description: 'Open the Axle flow canvas for an entry point or method, so the user SEES the runtime call chain (callers on the left, the method, everything it calls on the right, with the database tables it touches), and return the same call chain as text. Use this when the user asks to open a flow in the IDE ("open the delete-users flow"). To explain how it works, walk the user through it with `tour`. Pass an `id` from find_entry_points, or `file` plus `method` or `line`.',
 		inputSchema: { type: 'object', properties: { ...TARGET, depth: int('How many call levels to include in the returned text (default 6).') }, additionalProperties: false },
 		annotations: ro('Show flow in Axle'),
 	},
 	{
 		name: 'flow_text',
-		description: 'Return the runtime call chain of an entry point or method as indented text: each step with file:line, calls through interfaces and mediators resolved, and the database tables touched. Does not open anything. Call this BEFORE reading many files to understand how a feature works; one call replaces dozens of reads. Pass an `id` from find_entry_points, or `file` plus `method` or `line`.',
+		description: 'Return the runtime call chain of an entry point or method as indented text: each step with file:line, calls through interfaces and mediators resolved, and the database tables touched. Does not open anything. Call this BEFORE reading many files to understand how a feature works; one call replaces dozens of reads. To explain a feature to the user, do not paste this text: SHOW it with `tour`. Pass an `id` from find_entry_points, or `file` plus `method` or `line`.',
 		inputSchema: { type: 'object', properties: { ...TARGET, depth: int('Call levels to include (default 6).') }, additionalProperties: false },
 		annotations: ro('Flow as text'),
 	},
@@ -198,6 +198,67 @@ export const TOOLS: ToolDef[] = [
 			additionalProperties: false,
 		},
 		annotations: ro('Update a board node'),
+	},
+	{
+		name: 'tour',
+		description: "The way to EXPLAIN code to the user in Axle: a narrated walkthrough on the flow canvas, where a cursor moves from card to card, dims the rest, highlights lines and shows your caption. Use it INSTEAD of a long text answer whenever the user asks how something works or to be walked through it (\"walk me through how an order is placed\", \"how does X work\", \"explain this flow\", \"show me\", \"anlat\", \"bana göster\", \"nasıl çalışıyor\"), after finishing work (\"explain what you changed\"), or to answer a question about code by SHOWING it; then keep your own message to one line. Get file:line from flow_text or find_symbol first. 3-12 steps, one idea each, in the order the code runs; captions say WHY and what to watch, not what the code says, in the user's language. Name each step's code by `file` + `method` (preferred: it survives edits) with a `line` hint, and `lines` for the few lines the caption talks about; a step with only a caption is an intro or an outro; `table` points at a database card. The tool returns at once with each step marked ok / moved / missing / offflow: fix a missing step by calling tour again with the same id. The user steps through it; questions they ask come back to you as a new message. Run the `tour_guide` prompt for the full advice.",
+		inputSchema: {
+			type: 'object',
+			properties: {
+				id: str('Stable name (letters, digits, - _ .). Reuse it to replace the tour.'),
+				title: { type: 'string', maxLength: 120, description: 'What the tour is about.' },
+				flow: {
+					type: 'object',
+					description: 'The canvas to play on. Omit to stay on the canvas the user has open, or to let Axle open the flow of the first step. Use {"changes": true} for the current git changes.',
+					properties: {
+						id: str('Entry point id from find_entry_points.'),
+						file: str('Source file of the method whose flow to show. Use with `method` or `line`.'),
+						method: str('Method or function name in `file`.'),
+						line: int('1-based line inside the method.'),
+						changes: { type: 'boolean', description: 'Play on the change set (the flows the changed files reach, cut down to the changed cards).' },
+						base: { type: 'string', enum: ['uncommitted', 'branch', 'last_commit'], description: 'With changes: what they are measured against (default uncommitted).' },
+					},
+					additionalProperties: false,
+				},
+				steps: {
+					type: 'array', minItems: 1, maxItems: 30,
+					items: {
+						type: 'object',
+						properties: {
+							file: str('Workspace file of the code this step points at.'),
+							method: str('Method or function, e.g. "OrderService.Place". Preferred: survives edits.'),
+							line: int('1-based line inside the method (a hint when method is given).'),
+							lines: { type: 'array', maxItems: 3, description: 'Line ranges to highlight, current-file 1-based, e.g. [[42,47]].', items: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1, maxItems: 2 } },
+							table: str('A database card instead of code: the table name.'),
+							title: { type: 'string', maxLength: 80, description: 'Short label for the step list; defaults to the method.' },
+							caption: { type: 'string', maxLength: 600, description: 'What to say here: one or two sentences on WHY, not a restatement of the code. Plain text; `code` in backticks is shown as code.' },
+						},
+						required: ['caption'],
+						additionalProperties: false,
+					},
+				},
+				start: int('Step to open on (default 1).'),
+			},
+			required: ['title', 'steps'],
+			additionalProperties: false,
+		},
+		annotations: ro('Play a tour in Axle'),
+	},
+	{
+		name: 'tour_control',
+		description: "Drive the tour you started with `tour`, or answer the user's question during it. go: jump the user to a step (only while they are paused or waiting for your answer: the user paces the tour, so do not fight them) · note: pin your answer to a step's card, shown until the tour ends (plain text) · resume: continue after a question · end: close it. When the user asks a question during the tour it comes to you as a message: answer with note (for the step they asked about, and go to a step that answers it better), then resume; if the answer needs more than a note, start a new tour. Returns where the user is and whether they paused.",
+		inputSchema: {
+			type: 'object',
+			properties: {
+				id: str('Tour id.'),
+				action: { type: 'string', enum: ['go', 'note', 'resume', 'end'] },
+				step: int('go: the step to jump to; note: the step the note is for (default: the step the user is on). 1-based.'),
+				text: { type: 'string', maxLength: 2000, description: 'note: your answer, plain text, a few sentences.' },
+			},
+			required: ['id', 'action'],
+			additionalProperties: false,
+		},
+		annotations: ro('Control the tour', false),
 	},
 ];
 

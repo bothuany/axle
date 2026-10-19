@@ -26,6 +26,11 @@ import { isMigrationPath } from '../poly/migrations';
 import { describeChanged, NOT_CHECKED, tableImpactText, type TableIndex } from './tableIndex';
 import { tableEndpoints } from './turnImpact';
 import { NODE_STATUSES } from './tools';
+import type { Tour, TourStep } from '../../../../../protocol/flow';
+import { readTextIn, realInside } from '../tour/files';
+import { methodsOf } from '../tourMethods';
+import { drawnOf, markOffFlow, type Method } from '../tour/resolve';
+import { parseTourArgs, stepFiles, type TourFlow } from '../tour/validate';
 
 /** What the tools need from the rest of the extension. */
 export interface ToolDeps {
@@ -45,6 +50,30 @@ export interface ToolDeps {
 	trackChanges(entries: { file: string; before: string | undefined }[], base?: string): Promise<void>;
 	/** Opens the change set on the canvas (every flow the files reach, cut down to the changed cards); resolves with what it traced. */
 	showChanges(set: ChangeSet): Promise<ChangeSetTrace>;
+	/** The flow the canvas was last asked to show, as a target the providers can draw. */
+	shownTarget(): FlowTarget | undefined;
+	/** The tour player on the canvas. */
+	tours: TourPlayer;
+	/** Who an agent session is (its name and colour in the dock), for the tour's cursor; nothing when the session is not known. */
+	describeAgent(session: string): Promise<{ label: string; color: string } | undefined>;
+}
+
+/** What a bridge call says about who made it. */
+export interface CallContext {
+	/** The agent session (AXLE_SESSION of the MCP server's environment), when the agent was started by Axle. */
+	session?: string;
+}
+
+/** What the tour tools need of the canvas (the flow panel): play a tour, where the reader is, move them, close it. */
+export interface TourPlayer {
+	/** `session`: the agent session that made it, when it said (AXLE_SESSION): the reader's questions go back to it. */
+	play(tour: Tour, session?: string): Promise<void>;
+	state(): { id: string; steps: number; index: number | undefined; paused: boolean; asking: boolean; session?: string } | undefined;
+	go(index: number): Promise<void>;
+	/** Pins an agent's answer to a step; a message says what is wrong, nothing when it was pinned. */
+	note(index: number, text: string): Promise<string | undefined>;
+	resume(): Promise<void>;
+	end(): Promise<void>;
 }
 
 /** The Git extension's API, as far as the diff view uses it (its `Status` enum, numbered the same). */
@@ -102,7 +131,7 @@ interface Resolved { target: FlowTarget; label: string; source: Source | 'lsp'; 
 export class AgentTools {
 	constructor(private readonly d: ToolDeps) { }
 
-	async call(tool: string, a: Record<string, unknown>): Promise<ToolResult> {
+	async call(tool: string, a: Record<string, unknown>, ctx: CallContext = {}): Promise<ToolResult> {
 		try {
 			switch (tool) {
 				case 'open': return await this.open(a);
@@ -118,6 +147,8 @@ export class AgentTools {
 				case 'get_context': return await this.context();
 				case 'draw_board': return await this.draw(a);
 				case 'update_board': return await this.update(a);
+				case 'tour': return await this.tour(a, ctx);
+				case 'tour_control': return await this.tourControl(a, ctx);
 				default: return errorResult(`Unknown tool: ${tool}`);
 			}
 		} catch (e) {
@@ -896,6 +927,117 @@ export class AgentTools {
 			diagnostics: this.diagnostics(),
 			boards: this.d.boards.list().slice(0, 10).map(b => ({ id: b.id, title: b.spec.title, kind: b.spec.kind })),
 		}, null, 1));
+	}
+
+	// ── tours ───────────────────────────────────────────────────────────────
+
+	/** Opens the flow a tour plays on: the one it names, the changes, the canvas the user already has, or the flow of its first step. */
+	private async tourFlow(flow: TourFlow | undefined, steps: TourStep[]): Promise<{ target: FlowTarget; label: string }> {
+		if (flow?.changes) {
+			const r = await this.changesInFlow(await this.changesOf(undefined, flow.base ?? 'uncommitted'));
+			const target = this.d.shownTarget();
+			if (!r.opened || !target) {
+				throw new Error(r.message);
+			}
+			return { target, label: this.d.currentFlow()?.label ?? 'the changes' };
+		}
+		let named: Record<string, unknown> | undefined = flow && (flow.id || flow.file) ? { id: flow.id, file: flow.file, method: flow.method, line: flow.line } : undefined;
+		if (!named && !this.d.shownTarget()) {
+			const first = steps.find(s => s.at?.file && s.at.startLine > 0 && s.state !== 'missing');
+			if (!first?.at) {
+				throw new Error('No flow is open and no step points at code: pass `flow` (an entry point `id`, or `file` with `method`).');
+			}
+			named = { file: first.at.file, line: first.at.startLine };
+		}
+		if (!named) {
+			return { target: this.d.shownTarget()!, label: this.d.currentFlow()?.label ?? 'the open flow' };
+		}
+		const r = await this.resolve(named);
+		// The canvas stays as it is when it already shows this flow: the user may have folded or panned it.
+		if (this.d.currentFlow()?.id !== r.id || !this.d.shownTarget()) {
+			if (r.source === 'lsp') {
+				await this.d.showTarget(r.target, r.label);
+			} else {
+				await this.d.showEntry(r.id!, r.label, r.source);
+			}
+		}
+		return { target: r.target, label: r.label };
+	}
+
+	private async tour(a: Record<string, unknown>, ctx: CallContext): Promise<ToolResult> {
+		const roots = this.folders;
+		const methods = new Map<string, readonly Method[] | undefined>();
+		// The methods of every file the steps name, within a budget: a file that is not listed in time is placed by its line.
+		await within(Promise.all(stepFiles(a, roots).map(async f => {
+			methods.set(f, realInside(roots, f) ? await methodsOf(this.d, f).catch(() => undefined) : undefined);
+		})), 8000, 'listing the methods').catch(() => undefined);
+		const look = ctx.session ? await this.d.describeAgent(ctx.session).catch(() => undefined) : undefined;
+		const { tour, flow, notes } = parseTourArgs(a, { roots, readText: readTextIn(roots), methodsIn: f => methods.get(f) }, look?.label ?? 'Agent tour');
+		// The cursor is the agent's: its name and colour from the dock. An agent Axle did not start has a plain pointer.
+		if (look) {
+			tour.agent = look;
+		}
+		const { target, label } = await this.tourFlow(flow, tour.steps);
+		const provider = this.d.providerFor(target);
+		const [root, callers] = await Promise.all([within(provider.graph(target), 60_000, 'the flow'), within(provider.callers(target), 20_000, 'the callers').catch(() => null)]);
+		const off = markOffFlow(tour.steps, drawnOf(root, callers));
+		await this.d.tours.play(tour, ctx.session);
+		const lines = tour.steps.map((s, i) => {
+			const at = s.at;
+			const where = !at ? '(caption only)' : at.table ? `table ${at.table}` : at.file ? `${this.rel(at.file)}${at.startLine ? `:${at.startLine}${at.endLine > at.startLine ? `-${at.endLine}` : ''}` : ''}` : '';
+			const lit = s.highlights?.length ? `  (highlight ${s.highlights.map(h => (h[0] === h[1] ? h[0] : `${h[0]}-${h[1]}`)).join(', ')})` : '';
+			const note = [notes[i], off.get(i)].filter(Boolean).join('; ');
+			return `${i + 1} ${s.state.padEnd(7)} ${(at?.label || s.title).padEnd(24)} ${where}${lit}${note ? `  (${note})` : ''}`;
+		});
+		const bad = tour.steps.filter(s => s.state === 'missing').length;
+		return text([
+			`Tour "${tour.id}" (${tour.steps.length} steps) playing on ${label}. The user is on step ${tour.start + 1}.`,
+			...lines,
+			bad ? `${bad} step${bad === 1 ? ' was' : 's were'} not found and show${bad === 1 ? 's' : ''} greyed with the caption only: fix ${bad === 1 ? 'it' : 'them'} by calling tour again with the same id.` : '',
+			'The user steps through it. Their questions come back to you as a message; answer with tour_control.',
+		].filter(Boolean).join('\n'));
+	}
+
+	private async tourControl(a: Record<string, unknown>, ctx: CallContext): Promise<ToolResult> {
+		const id = typeof a.id === 'string' ? a.id : '';
+		const state = this.d.tours.state();
+		if (!state || state.id !== id) {
+			throw new Error(state ? `No tour "${id}" is playing; the one playing is "${state.id}".` : `No tour "${id}" is playing (it was closed, or the canvas is gone). Start one with \`tour\`.`);
+		}
+		// A tour an agent session made is driven by that session: another agent answering its user's question would pin a note "from the agent" it did not write.
+		if (state.session && ctx.session !== state.session) {
+			throw new Error(`Tour "${id}" was started by another agent session: only that session can drive it.`);
+		}
+		const where = `The user is on step ${(state.index ?? 0) + 1} of ${state.steps}${state.paused ? ' and has paused' : ''}.`;
+		if (a.action === 'end') {
+			await this.d.tours.end();
+			return text(`Tour "${id}" closed. ${where}`);
+		}
+		if (a.action === 'resume') {
+			await this.d.tours.resume();
+			return text(`Tour "${id}" goes on. ${where}`);
+		}
+		if (a.action === 'note') {
+			const index = (typeof a.step === 'number' ? Math.floor(a.step) : (state.index ?? 0) + 1) - 1;
+			const problem = await this.d.tours.note(index, typeof a.text === 'string' ? a.text : '');
+			if (problem) {
+				throw new Error(problem);
+			}
+			return text(`Pinned your note to step ${index + 1} of ${state.steps}. ${state.asking ? 'Now call tour_control resume (and go first if another step answers the question better).' : where}`);
+		}
+		if (a.action !== 'go') {
+			throw new Error('`action` must be go, note, resume or end.');
+		}
+		const step = typeof a.step === 'number' ? Math.floor(a.step) : 0;
+		if (step < 1 || step > state.steps) {
+			throw new Error(`\`step\` must be between 1 and ${state.steps}.`);
+		}
+		// The user paces the tour: an agent that kept jumping would be fighting them.
+		if (!state.paused) {
+			return text(`${where} \`go\` is for answering a question while the tour waits for you; the user paces the tour. Nothing was changed.`);
+		}
+		await this.d.tours.go(step - 1);
+		return text(`Moved the user to step ${step} of ${state.steps}.`);
 	}
 
 	// ── boards ──────────────────────────────────────────────────────────────

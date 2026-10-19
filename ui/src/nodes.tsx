@@ -34,6 +34,8 @@ export interface CanvasActions {
   editHooks?: string[]
   /** Put this method into the prompt of a connected Claude Code terminal. */
   mention?: (nodeKey: string) => void
+  /** Point at this card and ask the agent about it (the lines selected in it, else the whole method). */
+  ask?: (nodeKey: string) => void
   /** Ctrl/Cmd+click on a symbol of a card that is only read: go to where it is defined (file position, 1-based). */
   definition?: (nodeKey: string, at: Caret) => void
   /** Type chips: open or close the fields under a chip (`path` names the chip in its card, see chips.ts). */
@@ -507,6 +509,14 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
       className={`card kind-${node.kind}${selected ? ' selected' : ''}${changed ? ' changed' : ''}${editing ? ' editing' : ''}${editable ? (zoomedOut ? ' zoomable' : ' editable') : ''}`}
       style={{ '--k': color } as CSSProperties}
       onPointerDown={onDown}
+      onClickCapture={e => {
+        // Alt+click anywhere on a card: point at it and ask.
+        if (e.altKey && node.code && actions.ask) {
+          e.preventDefault()
+          e.stopPropagation()
+          actions.ask(node.key)
+        }
+      }}
     >
       <Handle type="target" position={Position.Left} id="in" style={{ top: HEADER_H / 2 }} />
       <div
@@ -533,6 +543,11 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
           {compactable && !node.diff && !editing && (
             <button className="tool" title={full ? 'Show only the flow lines' : 'Show every line'} onClick={() => actions.toggleFull(node.key)}>
               {full ? '⇤' : '⇥'}
+            </button>
+          )}
+          {node.code && actions.ask && (
+            <button className="tool" title="Ask the agent about this method (Alt+click the card; select lines first to ask about them)" onMouseDown={e => e.preventDefault()} onClick={e => (e.stopPropagation(), actions.ask!(node.key))}>
+              ?
             </button>
           )}
           {node.code && actions.mention && (
@@ -578,6 +593,7 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
             return (
               <div
                 key={l.no}
+                data-line={l.no}
                 className={`ln${lineCalls ? ' call' : ''}${node.diff?.added.includes(l.no) ? ' add' : ''}`}
                 style={{ height: LINE_H, ...(callee ? ({ '--c': KIND_COLOR[callee.kind] } as CSSProperties) : {}) }}
                 onClick={e => editAt(e, l.no)}

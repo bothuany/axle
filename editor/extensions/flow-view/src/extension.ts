@@ -32,6 +32,7 @@ import { FlowPanel } from './panel';
 import { PolyIndex, PolyProvider, POLY_LANGUAGES } from './poly/client';
 import { RoslynProvider, type FlowProvider, type FlowTarget } from './providers';
 import { registerResolveNames } from './resolveNames';
+import { playTourFile } from './tourFile';
 import { FlowTrail } from './trail';
 
 /** Everything the commands need, built once in `activate`. */
@@ -167,6 +168,8 @@ function registerCommands(flow: Flow) {
 			return panel.show(target, label).catch(fail);
 		}),
 		vscode.commands.registerCommand('flow.pickSolution', () => analyzer.pickSolution().catch(fail)),
+		// A hand-written tour file played on the canvas (guided tours, phase 0): the player an agent's tours will use too.
+		vscode.commands.registerCommand('flow.tour.playFile', (file?: unknown) => playTourFile(flow, file).catch(fail)),
 
 		vscode.commands.registerCommand('flow.showAtCursor', async () => {
 			const editor = vscode.window.activeTextEditor;
@@ -274,6 +277,8 @@ function registerAgentCommands({ context, panel, changes }: Flow) {
 		vscode.commands.registerCommand('flow.agentProposes', (p: Parameters<FlowPanel['propose']>[0]) => panel.propose(p)),
 		vscode.commands.registerCommand('flow.agentProposalDone', () => panel.proposalDone()),
 		vscode.commands.registerCommand('flow.agentTurn', (prompt: string, agent: string) => changes.startTurn(prompt, agent)),
+		// flow-agent's gaze: where its agents read and edit, painted on an open canvas only (panel.ts).
+		vscode.commands.registerCommand('flow.agent.gaze', (batch: unknown) => panel.gaze(batch)),
 
 		// "Ask the agent about this flow": the flow as a markdown file handed to the chosen agent, so it reads
 		// exact file:line spans instead of searching for them.
@@ -387,6 +392,13 @@ function wireAgentBridge(flow: Flow) {
 			await panel.show(target, label);
 		},
 		currentFlow: () => flow.currentFlow,
+		shownTarget: () => panel.shown?.target,
+		tours: { play: (tour, session) => panel.playTour(tour, session), state: () => panel.tourState(), go: index => panel.tourGo(index), note: (index, text) => panel.pinNote(index, text), resume: () => panel.tourResume(), end: () => panel.endTour() },
+		// The Agents dock (flow-agent) knows each session's name and colour; an agent it did not start is not known.
+		describeAgent: async session => {
+			const look = await Promise.resolve(vscode.commands.executeCommand<{ label?: unknown; color?: unknown } | undefined>('flow.agent.describe', session)).catch(() => undefined);
+			return typeof look?.label === 'string' && typeof look.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(look.color) ? { label: look.label.slice(0, 40), color: look.color } : undefined;
+		},
 		trackChanges: async (entries, base) => {
 			await flow.changes.trackAgainst(base ? `Changes since ${base}` : 'Git changes', GIT_AGENT, entries, base);
 			panel.refreshSoon();

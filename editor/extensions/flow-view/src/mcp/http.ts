@@ -21,7 +21,15 @@ export function sameSecret(given: unknown, expected: string): boolean {
 
 export const newToken = () => randomBytes(24).toString('hex');
 
-export type Handler = (tool: string, args: Record<string, unknown>) => Promise<ToolResult>;
+/** What the caller said about itself. Only the shape is checked: the session is a name the window looks up, never a path or a command. */
+export interface Caller {
+	session?: string;
+}
+
+export type Handler = (tool: string, args: Record<string, unknown>, caller: Caller) => Promise<ToolResult>;
+
+export const SESSION_HEADER = 'x-axle-session';
+const SESSION = /^[A-Za-z0-9_-]{1,64}$/;
 
 export interface BridgeServer {
 	port: number;
@@ -87,7 +95,8 @@ export async function startBridgeServer(handle: Handler, opts: { token?: string;
 				}
 				const args = typeof msg.args === 'object' && msg.args !== null && !Array.isArray(msg.args) ? msg.args as Record<string, unknown> : {};
 				try {
-					reply(res, 200, await handle(msg.tool, args));
+					const session = req.headers[SESSION_HEADER];
+					reply(res, 200, await handle(msg.tool, args, typeof session === 'string' && SESSION.test(session) ? { session } : {}));
 				} catch (e) {
 					opts.log?.(`bridge: ${msg.tool} failed: ${(e as Error)?.stack ?? e}`);
 					reply(res, 200, { content: [{ type: 'text', text: `${msg.tool} failed: ${(e as Error)?.message ?? e}` }], isError: true } satisfies ToolResult);
@@ -116,12 +125,12 @@ export async function startBridgeServer(handle: Handler, opts: { token?: string;
 /** The window did not answer at all (gone, wrong port): the caller may try another window. */
 export class Unreachable extends Error { }
 
-export function callBridge(info: Pick<BridgeInfo, 'port' | 'token'>, tool: string, args: Record<string, unknown>, timeoutMs = 150_000): Promise<ToolResult> {
+export function callBridge(info: Pick<BridgeInfo, 'port' | 'token'>, tool: string, args: Record<string, unknown>, timeoutMs = 150_000, session?: string): Promise<ToolResult> {
 	return new Promise((resolve, reject) => {
 		const payload = JSON.stringify({ tool, args });
 		const req = http.request({
 			host: '127.0.0.1', port: info.port, path: '/call', method: 'POST', timeout: timeoutMs, agent: false,
-			headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload), [TOKEN_HEADER]: info.token },
+			headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload), [TOKEN_HEADER]: info.token, ...(session && SESSION.test(session) ? { [SESSION_HEADER]: session } : {}) },
 		}, res => {
 			let body = '';
 			res.setEncoding('utf8');

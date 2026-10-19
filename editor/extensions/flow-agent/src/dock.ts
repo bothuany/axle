@@ -11,6 +11,7 @@ import { readAvatar } from './desktopModel';
 import { conflictText } from './conflicts';
 import { dockAction } from './dockMessage';
 import { dockHtml } from './dockPage';
+import { savedAgents } from './pick';
 import type { WorktreeRows } from './worktreeActions';
 
 export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable {
@@ -49,6 +50,8 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				// Through the worktree rows: an agent's worktree must not drop out of sight with its row.
 				case 'forget': return void (this.worktrees ? this.worktrees.forget(m.id) : this.agents.forget(m.id));
 				case 'compact': return this.agents.compact(m.id);
+				// The prompt is built here from the host's own record of the turn: the page only names the row.
+				case 'explain': return this.agents.explain(m.id, savedAgents());
 				case 'rename': return void this.rename(m.id);
 				case 'wt': return void this.worktrees?.act(m.id, m.action);
 				case 'pick': return void vscode.commands.executeCommand('flow.agents.new');
@@ -91,7 +94,7 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 		this.timer = setTimeout(() => {
 			const conflicts = this.agents.conflicts();
 			const list = rank([...this.agents.sessions.values()])
-				.map(s => ({ ...s, attention: attentionKind(s), done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })), tables: s.impact.tables },
+				.map(s => ({ ...s, attention: attentionKind(s), done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, explain: this.agents.canExplain(s), impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })), tables: s.impact.tables },
 					// Worktree and conflicts are explicit fields: the session's own record (paths, the base branch) stays here.
 					worktree: s.worktree ? this.worktrees?.view(s) : undefined,
 					clash: s.state === 'ended' ? undefined : conflicts.get(s.id)?.map(c => ({ text: conflictText(c), same: c.sameCheckout, files: c.files.slice(0, 12) })) }));
