@@ -224,7 +224,7 @@ function dockPage(dockHtml, themeCss) {
 	// The dock page listens to every window that can post to it: it hears only the page around it (a site that frames this one could not feed it).
 	const guard = `<script>(function(){var add=window.addEventListener.bind(window);window.addEventListener=function(t,f,o){if(t==='message'){var g=f;f=function(e){if(e.source===parent&&e.origin===location.origin)g(e)}}add(t,f,o)}})()</script>`
 	const shim = `${guard}<script>window.acquireVsCodeApi=function(){return{postMessage:function(m){parent.postMessage({source:'axle-dock',message:m},location.origin)}}}</script>`
-	const head = `<style>${themeCss}</style><style>${WEBVIEW_BASE}</style>${shim}`
+	const head = `<meta name="robots" content="noindex"><style>${themeCss}</style><style>${WEBVIEW_BASE}</style>${shim}`
 	if (!dockHtml.includes('<head>')) {
 		throw new Error('The dock page has no <head>: flow-agent/src/dockPage.ts changed shape, and the playground has to follow.')
 	}
@@ -259,7 +259,7 @@ function islandPage(avatars) {
 	}
 	// Dark like the page around it: with another colour scheme the browser paints an opaque backdrop behind an iframe.
 	// No <base> and no form: the CSP says so (the real pages leave both open).
-	const html = page.replace('<head>', () => `<head><meta name="color-scheme" content="dark">${shim}`).replace("default-src 'none';", () => "default-src 'none'; base-uri 'none'; form-action 'none';")
+	const html = page.replace('<head>', () => `<head><meta name="robots" content="noindex"><meta name="color-scheme" content="dark">${shim}`).replace("default-src 'none';", () => "default-src 'none'; base-uri 'none'; form-action 'none';")
 	return { html, colors: new Function(`return ${palette[1]}`)() }
 }
 

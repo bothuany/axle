@@ -209,6 +209,53 @@ test('a keyboard user can skip the canvas and the dock', { skip }, async () => {
 	await page.close()
 })
 
+test('the page can be found: a searchable title, a description, a canonical address and a sitemap that names it', { skip }, async () => {
+	const { page, problems } = await open()
+	const head = await page.evaluate(() => {
+		const meta = (sel, attr = 'content') => document.querySelector(sel)?.getAttribute(attr) ?? ''
+		return {
+			title: document.title,
+			description: meta('meta[name="description"]'),
+			canonical: meta('link[rel="canonical"]', 'href'),
+			robots: meta('meta[name="robots"]'),
+			ogTitle: meta('meta[property="og:title"]'),
+			ogImage: meta('meta[property="og:image"]'),
+			ogUrl: meta('meta[property="og:url"]'),
+			card: meta('meta[name="twitter:card"]'),
+			verification: meta('meta[name="google-site-verification"]'),
+			ld: JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent),
+			h1: document.querySelector('h1')?.textContent ?? '',
+			badge: document.querySelector('.badge')?.textContent ?? '',
+		}
+	})
+	assert.equal(head.title, 'Axle: harness-first code editor for Claude Code and Codex')
+	assert.ok(head.title.length <= 60, 'the title fits a search result')
+	assert.ok(head.description.length >= 70 && head.description.length <= 160, `the description fits a search result (${head.description.length} characters)`)
+	assert.match(head.description, /Claude Code/)
+	assert.equal(head.canonical, 'https://bothuany.github.io/axle/')
+	assert.equal(head.ogUrl, head.canonical)
+	assert.equal(head.ogTitle, head.title)
+	assert.equal(head.ogImage, 'https://bothuany.github.io/axle/media/axle-poster.jpg')
+	assert.equal(head.card, 'summary_large_image')
+	assert.match(head.robots, /^index/)
+	assert.ok(head.verification.length > 20, 'the search console verification tag is there')
+	assert.equal(head.ld['@type'], 'SoftwareApplication')
+	assert.equal(head.ld.url, head.canonical)
+	assert.match(head.h1, /Axle shows how it runs/)
+	assert.match(head.badge, /Claude Code and Codex/, 'the page text names the agents')
+	// The sitemap is served next to the page, and lists exactly the page.
+	const sitemap = await (await fetch(new URL('sitemap.xml', url))).text()
+	assert.match(sitemap, /^<\?xml version="1.0" encoding="UTF-8"\?>/)
+	assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1]), [head.canonical])
+	assert.match(sitemap, /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/)
+	// The pages that only exist to be framed are not for a search to find.
+	for (const part of ['canvas.html', 'pages/dock.html', 'pages/island.html']) {
+		assert.match(await (await fetch(new URL(part, url))).text(), /<meta name="robots" content="noindex"/, `${part} asks not to be indexed`)
+	}
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
 test('the harness map is the real scan of the demo project, with its one warning', { skip }, async () => {
 	const { page, problems } = await open()
 	const text = await page.evaluate(() => document.querySelector('#harness-root')?.innerText ?? '')

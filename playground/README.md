@@ -27,6 +27,16 @@ The page says so itself: each tile names what it is in its corner ("live canvas"
 - `scripts/playground-data.mjs` builds the data: it runs the worker on two copies of the project (before the agent's change and with it), builds the change set and the turn's impact with flow-view's own code, scans the harness, and writes the dock and overlay pages into `public/pages/`. `public/data/`, `public/pages/` and `src/generated/` are generated and not committed.
 - `playground/` may import only `ui/`, `protocol/` and these vscode-free files of flow-agent: `attention.ts`, `desktopModel.ts`, `avatars.ts`, `dockPage.ts`; and nothing it reaches may import `vscode` (`npm run arch`). The generated `src/generated/demo-check.ts` makes `npm run typecheck` fail when the data and the types of `protocol/flow.ts` disagree.
 
+## Being found
+
+The page is one URL, so search and sharing are set in `index.html` and `vite.config.ts`:
+
+- **Title and description:** "Axle: harness-first code editor for Claude Code and Codex" (57 characters) and a 158-character description. The test keeps both inside what a search result shows.
+- **Canonical address, social cards and structured data:** `og:` and `twitter:` tags (the poster of the README video is the card image) and a `SoftwareApplication` block in JSON-LD. The address is the `{{site}}` placeholder, which the `site` plugin of `vite.config.ts` fills from `SITE_URL` (default `https://bothuany.github.io/axle`): set it if the site moves, for instance to a custom domain.
+- **`sitemap.xml`:** emitted by the same plugin next to the page, listing the one URL with the build date as `lastmod`. Submit `https://bothuany.github.io/axle/sitemap.xml` in Search Console for the URL-prefix property `https://bothuany.github.io/axle/`; the `google-site-verification` tag in the page proves ownership of it.
+- **No `robots.txt`:** on a project site it would have to sit at `https://bothuany.github.io/robots.txt`, which this repository does not serve. The pages that only exist to be framed (`canvas.html`, `pages/dock.html`, `pages/island.html`) carry `<meta name="robots" content="noindex">` instead.
+- **`test/e2e.test.mjs`** checks all of it against the built site.
+
 ## Run it
 
 ```bash

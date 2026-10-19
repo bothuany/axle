@@ -48,7 +48,7 @@ a.solid:hover { border-color: var(--signal); }
 
 /* ---- hero ------------------------------------------------------------------------------------ */
 .hero { width: min(1320px, 100%); padding-top: clamp(28px, 5vh, 56px); padding-bottom: 32px; text-align: center; }
-.badge { display: inline-flex; align-items: center; gap: 9px; padding: 5px 14px; border: 1px solid var(--line-2); border-radius: 999px; background: #ffffff08; color: #b4bccb; font-size: 13.5px; }
+.badge { display: inline-flex; align-items: center; gap: 9px; text-align: center; text-wrap: balance; padding: 5px 14px; border: 1px solid var(--line-2); border-radius: 999px; background: #ffffff08; color: #b4bccb; font-size: 13.5px; }
 .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 10px var(--signal); }
 h1 { margin: 22px auto 0; font: 650 clamp(2.3rem, 4vw, 3.7rem)/1.04 var(--display); letter-spacing: -.04em; text-wrap: balance; }
 h1 span { display: block; }
