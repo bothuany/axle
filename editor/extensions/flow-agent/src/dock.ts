@@ -11,6 +11,7 @@ import { AVATAR_CSS, AVATAR_SCRIPT } from './avatars';
 import { readAvatar } from './desktopModel';
 import { conflictText } from './conflicts';
 import { dockAction } from './dockMessage';
+import { savedAgents } from './pick';
 import type { WorktreeRows } from './worktreeActions';
 
 /** The real marks: Claude's spark (from the Claude Code extension) and the Codex cloud (lobe-icons). */
@@ -55,6 +56,8 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				// Through the worktree rows: an agent's worktree must not drop out of sight with its row.
 				case 'forget': return void (this.worktrees ? this.worktrees.forget(m.id) : this.agents.forget(m.id));
 				case 'compact': return this.agents.compact(m.id);
+				// The prompt is built here from the host's own record of the turn: the page only names the row.
+				case 'explain': return this.agents.explain(m.id, savedAgents());
 				case 'rename': return void this.rename(m.id);
 				case 'wt': return void this.worktrees?.act(m.id, m.action);
 				case 'pick': return void vscode.commands.executeCommand('flow.agents.new');
@@ -97,7 +100,7 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 		this.timer = setTimeout(() => {
 			const conflicts = this.agents.conflicts();
 			const list = rank([...this.agents.sessions.values()])
-				.map(s => ({ ...s, attention: attentionKind(s), done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })), tables: s.impact.tables },
+				.map(s => ({ ...s, attention: attentionKind(s), done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, explain: this.agents.canExplain(s), impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })), tables: s.impact.tables },
 					// Worktree and conflicts are explicit fields: the session's own record (paths, the base branch) stays here.
 					worktree: s.worktree ? this.worktrees?.view(s) : undefined,
 					clash: s.state === 'ended' ? undefined : conflicts.get(s.id)?.map(c => ({ text: conflictText(c), same: c.sameCheckout, files: c.files.slice(0, 12) })) }));
@@ -156,6 +159,9 @@ ${AVATAR_CSS}
 .wt .ab { font-variant-numeric: tabular-nums; }
 .wt .act { padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font: 11px/1.5 var(--vscode-font-family, system-ui); cursor: pointer; }
 .wt .act:hover { background: var(--hover); color: var(--text); }
+.explain { margin: 6px 0 0 34px; }
+.explain .act { padding: 0 8px; border: 1px solid color-mix(in srgb, var(--working) 55%, transparent); border-radius: 5px; color: var(--working); font: 11px/1.5 var(--vscode-font-family, system-ui); cursor: pointer; }
+.explain .act:hover { background: color-mix(in srgb, var(--working) 14%, transparent); }
 .clash { margin: 6px 0 0 34px; padding: 4px 7px; border-radius: 6px; background: color-mix(in srgb, var(--blocked) 10%, transparent); color: var(--blocked); font-size: 11.5px; line-height: 1.45; }
 .clash.same { background: color-mix(in srgb, #ff6b7d 12%, transparent); color: #ff8c99; }
 .clash small { display: block; color: var(--muted); }
@@ -255,6 +261,8 @@ function render() {
 		// A changed entity says which table it is and how many endpoints use it: "and table orders (4 endpoints)"; a name that is a guess ends in "?".
 		const tablesSaid = s.impact && s.impact.tables ? s.impact.tables.map(t => 'table ' + esc(t.table) + (t.guess ? '?' : '') + ' (' + (t.migration ? 'migration ' + esc(t.migration) + ', ' : '') + t.endpoints + (t.endpoints === 1 ? ' endpoint' : ' endpoints') + (t.partial ? ', partial' : '') + ')').join(', ') : '';
 		const impact = s.impact && (s.impact.flows.length || tablesSaid) ? '<div class="impact"><b>This turn touched ' + (s.impact.flows.length ? (s.impact.flows.length + s.impact.more) + (s.impact.flows.length + s.impact.more === 1 ? ' flow' : ' flows') : '') + (s.impact.flows.length && tablesSaid ? ' and ' : '') + tablesSaid + (s.impact.flows.length ? ':' : '') + '</b> ' + s.impact.flows.map((f, i) => '<span class="flow" role="button" tabindex="0" data-flow="' + i + '" title="' + esc((f.via && f.via.length ? 'Through ' + f.via.join(', ') + '. ' : '') + 'Open this flow') + '">' + esc(f.label) + '</span>').join('') + (s.impact.more ? '<span>+' + s.impact.more + ' more</span>' : '') + '</div>' : '';
+		// Once the turn has ended with an edit: the agent that made the change explains it as a tour on the canvas.
+		const explain = s.explain ? '<div class="explain"><span class="act" role="button" tabindex="0" data-explain="1" title="Ask ' + esc(s.name) + ' to explain what it just changed, as a tour on the flow canvas">Explain this</span></div>' : '';
 		const kind = s.attention;
 		// A need says what it waits for (an error you have seen still says what went wrong); a finished turn you have not opened only says so.
 		const chip = s.need ? s.need.kind : kind;
@@ -295,6 +303,7 @@ function render() {
 			+ todos
 			+ clash
 			+ impact
+			+ explain
 			+ wt
 			+ ctx
 			+ meta
@@ -312,7 +321,8 @@ function render() {
 		const wa = e.target.closest('[data-wt]');
 		const pr = e.target.closest('[data-pr]');
 		const xr = e.target.closest('[data-xray]');
-		vscode.postMessage(wa ? { type: 'wt', id: b.dataset.id, action: wa.dataset.wt } : pr ? { type: 'pr', id: b.dataset.id } : cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : xr ? { type: 'xray', id: b.dataset.id } : { type: 'show', id: b.dataset.id });
+		const ex = e.target.closest('[data-explain]');
+		vscode.postMessage(ex ? { type: 'explain', id: b.dataset.id } : wa ? { type: 'wt', id: b.dataset.id, action: wa.dataset.wt } : pr ? { type: 'pr', id: b.dataset.id } : cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : xr ? { type: 'xray', id: b.dataset.id } : { type: 'show', id: b.dataset.id });
 	});
 }
 document.querySelectorAll('.new button').forEach(b => b.onclick = () => vscode.postMessage(b.dataset.cli === 'pick' ? { type: 'pick' } : { type: 'new', cli: b.dataset.cli }));

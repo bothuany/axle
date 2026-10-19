@@ -22,7 +22,8 @@ import { CostTracker, statusUsd, type SessionCost } from './cost';
 import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
-import { canType, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
+import { canExplain, explainPrompt } from './explain';
+import { canType, notReady, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 import { createWorktree, sameDir, validBranch, worktreeSlug, type Worktree } from './worktrees';
 
@@ -296,6 +297,8 @@ export class Agents implements vscode.Disposable {
 	private readonly costs = new Map<string, CostTracker>();
 	private readonly prs = new PrWatcher(cwd => this.prChanged(cwd));
 	private prTimer: NodeJS.Timeout | undefined;
+	/** What the turn-end check found for a session's last turn, for "Explain this" (the files are in `touched`); dropped with the next prompt. */
+	private readonly turns = new Map<string, { impact?: TurnImpact }>();
 	/** Everything a session has edited since it started (files, and the methods and flows once a turn's impact is known), for conflicts.ts. */
 	private readonly edits = new Map<string, SessionEdits>();
 
@@ -850,6 +853,7 @@ export class Agents implements vscode.Disposable {
 		this.terminals.delete(id);
 		this.sessions.delete(id);
 		this.touched.delete(id);
+		this.turns.delete(id);
 		this.planDrawn.delete(id);
 		this.attention.delete(id);
 		this.costs.delete(id);
@@ -1050,6 +1054,7 @@ export class Agents implements vscode.Disposable {
 				s.todos = [];
 				s.impact = undefined;
 				this.touched.delete(s.id);
+				this.turns.delete(s.id);
 				this.planDrawn.delete(s.id);
 				set('working', 'Thinking');
 				void this.markPrompt(s);
@@ -1187,11 +1192,37 @@ export class Agents implements vscode.Disposable {
 		// The methods and flows count for conflicts whatever the agent does next: it did change them.
 		if (impact) {
 			this.recordImpact(s, impact);
+			if (s.state !== 'working' && this.touched.get(s.id)) {
+				this.turns.set(s.id, { impact });
+			}
 		}
 		// A new prompt may have started while this was computed: its answer no longer describes the turn on screen.
 		if ((impact?.flows?.length || impact?.tables?.length) && s.state !== 'working' && this.touched.get(s.id)) {
 			s.impact = impact;
 			this.changed.fire();
+		}
+	}
+
+	/** Whether the row offers "Explain this": the agent is at its prompt (a Claude or Codex session that is alive) and its last turn edited a file. */
+	canExplain(s: AgentSession): boolean {
+		return canExplain(this.touched.get(s.id)?.size ?? 0) && (s.state === 'done' || s.state === 'idle') && s.cli !== 'custom' && this.terminals.has(s.id);
+	}
+
+	/**
+	 * "Explain this": asks the agent that made the last turn's change to explain it as a tour on the change set. It goes to that same
+	 * session (the author explains its own change), typed only when it is at its prompt, never into one that is working or asking.
+	 */
+	explain(id: string, customs: CustomCli[]) {
+		const s = this.sessions.get(id);
+		const files = [...(this.touched.get(id) ?? [])];
+		if (!s || !canExplain(files.length)) {
+			void vscode.window.showInformationMessage('Axle: nothing to explain: this agent has not edited a file since its last prompt.');
+			return;
+		}
+		const text = explainPrompt(files, this.turns.get(id)?.impact, this.rootOf(s));
+		if (!this.typeInto(id, text, true, customs)) {
+			const now = this.askSessions().find(x => x.id === id);
+			void vscode.window.showInformationMessage(`Axle: ${now ? notReady(now) : `${s.name} has closed`}: choose Explain this again when it is back at its prompt.`);
 		}
 	}
 
