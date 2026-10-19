@@ -32,6 +32,7 @@ import { FlowPanel } from './panel';
 import { PolyIndex, PolyProvider, POLY_LANGUAGES } from './poly/client';
 import { RoslynProvider, type FlowProvider, type FlowTarget } from './providers';
 import { registerResolveNames } from './resolveNames';
+import { playTourFile } from './tourFile';
 import { FlowTrail } from './trail';
 
 /** Everything the commands need, built once in `activate`. */
@@ -167,6 +168,8 @@ function registerCommands(flow: Flow) {
 			return panel.show(target, label).catch(fail);
 		}),
 		vscode.commands.registerCommand('flow.pickSolution', () => analyzer.pickSolution().catch(fail)),
+		// A hand-written tour file played on the canvas (guided tours, phase 0): the player an agent's tours will use too.
+		vscode.commands.registerCommand('flow.tour.playFile', (file?: unknown) => playTourFile(flow, file).catch(fail)),
 
 		vscode.commands.registerCommand('flow.showAtCursor', async () => {
 			const editor = vscode.window.activeTextEditor;

@@ -1,0 +1,49 @@
+{
+	"axleTour": 1,
+	"id": "place-order",
+	"title": "How an order is placed",
+	"author": "Hand-written sample (probe demo shop)",
+	"flow": { "http": "POST /api/orders" },
+	"agent": { "label": "Claude Code", "color": "#ff9d7d" },
+	"steps": [
+		{
+			"title": "Placing an order",
+			"caption": "This walks one request through the shop: from the click in the browser to the row that is stored. Step with → and ← , press Esc to leave."
+		},
+		{
+			"title": "The browser starts it",
+			"caption": "`placeOrder` posts the cart to `/api/orders`. Nothing is validated on this side, so the server has to.",
+			"file": "web/src/api.js",
+			"line": 9,
+			"lines": [[9, 9]]
+		},
+		{
+			"title": "The handler",
+			"method": "createOrder",
+			"caption": "The whole request body goes straight to the repository, then a `201` is answered. There is no validation here: that is the first thing to add.",
+			"file": "server/orders.js",
+			"line": 11,
+			"lines": [[12, 13]]
+		},
+		{
+			"title": "Where it is stored",
+			"method": "insert",
+			"caption": "The id is the size of the map plus one. Two requests at once could get the same id once this moves to a real database.",
+			"file": "server/repo.js",
+			"line": 4,
+			"lines": [[4, 4]]
+		},
+		{
+			"title": "Billing is not on this flow",
+			"method": "create_invoice",
+			"caption": "The billing service reads the order afterwards, over HTTP. It is a different service, so it is a side card here, not part of the drawn flow.",
+			"file": "billing/main.py",
+			"line": 9,
+			"lines": [[10, 11]]
+		},
+		{
+			"title": "What to check next",
+			"caption": "Add input validation in `createOrder`, then decide where the invoice should be created."
+		}
+	]
+}

@@ -578,6 +578,7 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
             return (
               <div
                 key={l.no}
+                data-line={l.no}
                 className={`ln${lineCalls ? ' call' : ''}${node.diff?.added.includes(l.no) ? ' add' : ''}`}
                 style={{ height: LINE_H, ...(callee ? ({ '--c': KIND_COLOR[callee.kind] } as CSSProperties) : {}) }}
                 onClick={e => editAt(e, l.no)}

@@ -76,3 +76,71 @@ export interface DbSchema {
 	file: string | null;
 	line: number;
 }
+
+// ---- Guided tours and the agent's gaze (docs/design/guided-tours.md, section 2) ---------------------------------------
+// The canvas plays a Tour step by step; the host sends it whole, with every step already resolved to current-file lines.
+// Nothing here names a card: card keys are positional and change on every draw, so the canvas maps file+line to a card itself.
+
+/** One resolved step, as the canvas receives it: current-file lines, never a card key. */
+export interface TourStep {
+	title: string;
+	/** Plain text. `code` in backticks is shown as code; nothing else is formatted. */
+	caption: string;
+	/** Absent for an intro/outro step: the cursor stays put and the caption is centred. */
+	at?: { file: string; startLine: number; endLine: number; label: string; table?: string };
+	highlights?: [number, number][];
+	state: 'ok' | 'moved' | 'missing' | 'offflow';
+	/** The method changed since a saved tour was made. */
+	drift?: boolean;
+	/** The method's code, for a peek card when no drawn card holds it. */
+	peek?: { code: string; startLine: number };
+	notes?: TourNote[];
+}
+
+export interface TourNote {
+	question?: string;
+	text: string;
+	by: 'agent' | 'user';
+	at: number;
+}
+
+export interface Tour {
+	id: string;
+	title: string;
+	/** Who made it, shown in the toolbar: "Claude Code (terminal)", "Saved tour", "Review changes". */
+	origin: string;
+	source: 'agent' | 'file' | 'review' | 'gaze';
+	steps: TourStep[];
+	/** The step to open on, 0-based. */
+	start: number;
+	/** The agent that made it, when known: the ghost cursor takes its colour and name. A plain pointer otherwise. */
+	agent?: { label: string; color: string };
+}
+
+/** One thing an agent looked at or changed, for the gaze. A file and lines only: never content or search text. */
+export interface GazeEvent {
+	session: string;
+	/** The dock's colour and name for that agent. */
+	agent: { label: string; color: string };
+	act: 'read' | 'edit' | 'search';
+	file: string;
+	startLine?: number;
+	endLine?: number;
+	at: number;
+}
+
+export type HostToCanvasTour =
+	| { type: 'tour'; tour: Tour }
+	| { type: 'tourStep'; id: string; index: number; step?: TourStep } // the agent moved it, or a lazily resolved step arrived
+	| { type: 'tourNote'; id: string; index: number; note: TourNote }
+	| { type: 'tourEnd'; id: string; reason: 'agent' | 'replaced' }
+	| { type: 'gaze'; events: GazeEvent[] }
+	| { type: 'gazeClear'; session?: string };
+
+export type CanvasToHostTour =
+	| { type: 'tourState'; id: string; index: number; paused: boolean } // the host keeps this for tour_control's answer
+	| { type: 'tourAsk'; id: string; index: number; question: string }
+	| { type: 'tourSave'; id: string }
+	| { type: 'tourExit'; id: string }
+	| { type: 'pointAsk'; file: string; startLine: number; endLine: number; label: string; question: string }
+	| { type: 'gazeReplay'; session: string };

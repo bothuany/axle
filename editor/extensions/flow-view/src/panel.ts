@@ -7,6 +7,7 @@ import { randomBytes } from 'crypto';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import type { CanvasToHostTour, Tour } from '../../../../protocol/flow';
 import type { AgentChanges } from './agentDiff';
 import { Command } from './commands';
 import { agentContext } from './harness';
@@ -14,6 +15,7 @@ import { CardLanguage, cardQuery } from './language';
 import { CardOverlays } from './overlay';
 import type { FlowNode, FlowProvider, FlowTarget } from './providers';
 import { flowRoot } from './root';
+import { tourReport } from './tour/validate';
 import { TypeService } from './types/typeService';
 
 interface Request {
@@ -86,6 +88,11 @@ export class FlowPanel implements vscode.Disposable {
 	private opening: Promise<void> | undefined;
 	/** The webview has sent its first message, so it is listening. */
 	private webviewReady = false;
+	/** Callers waiting for the webview to listen (a tour sent to a canvas that was just opened). */
+	private readonly listening: (() => void)[] = [];
+	/** The tour the canvas was last sent, and where the reader is in it: the canvas may only report on a tour that came from here. */
+	private playing: { id: string; steps: number } | undefined;
+	tourAt: { index: number; paused: boolean } | undefined;
 
 	/** The flow the canvas was last asked to show: what "Pin Flow as Board" pins. */
 	shown: { target: FlowTarget; label: string } | undefined;
@@ -122,6 +129,9 @@ export class FlowPanel implements vscode.Disposable {
 		panel.onDidDispose(() => {
 			this.webviewReady = false;
 			this.panel = undefined;
+			this.playing = undefined;
+			this.tourAt = undefined;
+			this.listening.splice(0).forEach(done => done());
 			// A card still being edited goes back to the file as it was: the canvas that would have saved it is gone.
 			void this.overlays.closeAll();
 		});
@@ -130,6 +140,7 @@ export class FlowPanel implements vscode.Disposable {
 			if (!this.webviewReady) {
 				this.webviewReady = true;
 				this.postWaiting();
+				this.listening.splice(0).forEach(done => done());
 			}
 			this.onMessage(m).catch(e => vscode.window.showErrorMessage(`Axle: ${(e as Error).message ?? e}`));
 		});
@@ -200,12 +211,35 @@ export class FlowPanel implements vscode.Disposable {
 		this.postWaiting();
 	}
 
+	/**
+	 * Plays a tour on the canvas that is open (or has just been asked to open: `show` first). It replaces the tour that was playing.
+	 * The canvas starts it once the flow it shows is drawn; nothing here opens, reveals or focuses anything.
+	 */
+	async playTour(tour: Tour) {
+		if (this.opening) {
+			await this.opening;
+		}
+		const panel = this.panel;
+		if (!panel) {
+			throw new Error('There is no flow canvas to play the tour on. Open a flow first.');
+		}
+		if (!this.webviewReady) {
+			await new Promise<void>(done => this.listening.push(done));
+		}
+		if (this.panel !== panel) {
+			throw new Error('The flow canvas was closed before the tour could start.');
+		}
+		this.playing = { id: tour.id, steps: tour.steps.length };
+		this.tourAt = undefined;
+		await panel.webview.postMessage({ type: 'tour', tour });
+	}
+
 	/** Editor → canvas: the canvas highlights the card holding this line. */
 	cursorMoved(file: string, line: number) {
 		void this.panel?.webview.postMessage({ type: 'cursor', file, line });
 	}
 
-	private async onMessage(m: Request | { type: 'open' | 'reveal'; file: string; line: number } | { type: 'ask'; label: string; context: string } | { type: 'answer'; id: string; accept: boolean } | { type: 'mention'; file: string; start: number; end: number } | { type: 'typeDiagram'; id: string }) {
+	private async onMessage(m: Request | { type: 'open' | 'reveal'; file: string; line: number } | { type: 'ask'; label: string; context: string } | { type: 'answer'; id: string; accept: boolean } | { type: 'mention'; file: string; start: number; end: number } | { type: 'typeDiagram'; id: string } | Extract<CanvasToHostTour, { type: 'tourState' | 'tourExit' }>) {
 		if (m.type === 'open' || m.type === 'reveal') {
 			// open: jump there and type; reveal: show the line but keep the canvas focused.
 			const file = workspaceFile(m.file);
@@ -215,6 +249,17 @@ export class FlowPanel implements vscode.Disposable {
 			const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
 			const start = new vscode.Position(Math.max(0, Number(m.line) - 1 || 0), 0);
 			await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.One, selection: new vscode.Range(start, start), preview: true, preserveFocus: m.type === 'reveal' });
+			return;
+		}
+		if (m.type === 'tourState' || m.type === 'tourExit') {
+			// Only about the tour this host sent: an id the canvas made up, or a step that does not exist, is ignored.
+			const report = tourReport(this.playing, m);
+			if (report?.exit) {
+				this.playing = undefined;
+				this.tourAt = undefined;
+			} else if (report) {
+				this.tourAt = { index: report.index, paused: report.paused };
+			}
 			return;
 		}
 		if (m.type === 'answer') {

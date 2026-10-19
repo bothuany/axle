@@ -13,6 +13,8 @@ import { placeOf, type CardChips, type ChipsView, type Detail, type TypeTree } f
 import { HEADER_H, initialHidden, layout, layoutCallers, setEditMaxWidth, type EditTarget } from './layout'
 import { definitionInFile, notify, registerIde } from './ide'
 import { ActionsCtx, LANG_BY_EXT, nodeTypes, type CanvasActions, type Caret } from './nodes'
+import { cardAt, samePath } from './tour/cards'
+import { useTourPlayer } from './tour/TourPlayer'
 import type { FlowNode } from './types'
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void }
@@ -27,12 +29,6 @@ declare global {
 self.MonacoEnvironment = { getWorker: () => new editorWorker() }
 monaco.editor.setTheme(window.__FLOW__.dark ? 'vs-dark' : 'vs')
 const vscode = acquireVsCodeApi()
-
-/** Paths from a backend (`C:\x\a.cs`) and from the editor (`c:\x\a.cs`, `c:/x/a.cs`) name the same file: compare them by this. */
-const samePath = (a: string, b: string) => {
-  const key = (p: string) => p.replace(/\\/g, '/').replace(/^[A-Za-z]:/, d => d.toLowerCase())
-  return key(a) === key(b)
-}
 
 // ---- request/response over postMessage ------------------------------------------------------
 let seq = 0
@@ -143,7 +139,8 @@ function Flow() {
   const [turns, setTurns] = useState<TurnSummary[]>([])
   const [turn, setTurn] = useState<number>()
   const [timelineOpen, setTimelineOpen] = useState(false)
-  const [tour, setTour] = useState<number | null>(null)
+  /** The target whose graph `down` holds: a tour that arrives while another flow loads waits until it is this one. */
+  const [drawnFor, setDrawnFor] = useState<Target | null>(null)
   const [proposal, setProposal] = useState<{ id?: string; answerable?: boolean; agent: string; title: string; spans: { file: string; start: number; end: number }[]; files: string[] } | null>(null)
   const [editHooks, setEditHooks] = useState<string[]>([])
   const turnRef = useRef(turn)
@@ -183,6 +180,7 @@ function Flow() {
       if (d.file) request<string[]>('editHooks', { file: d.file }).then(setEditHooks, () => setEditHooks([]))
       setDown(d)
       setUp(u)
+      setDrawnFor(t)
       if (!keepFolds) {
         // Callees two levels deep, callers one level: enough to read, not enough to drown. A change set is already cut down
         // to the paths that lead to a change, so all of it is open.
@@ -241,15 +239,7 @@ function Flow() {
   const treesRef = useRef<{ down: FlowNode | null; up: FlowNode | null }>({ down: null, up: null })
   treesRef.current = { down, up }
   const followCursor = (file: string, line: number) => {
-    let best: FlowNode | null = null
-    const visit = (n: FlowNode | null) => {
-      if (!n) return
-      if (n.file && samePath(n.file, file) && n.startLine <= line && line <= n.endLine && (!best || n.endLine - n.startLine < best.endLine - best.startLine)) best = n
-      n.children.forEach(c => visit(c.node))
-    }
-    visit(treesRef.current.down)
-    visit(treesRef.current.up)
-    const hit = best as FlowNode | null
+    const hit = cardAt([treesRef.current.down, treesRef.current.up], file, line)
     setSelected(hit?.key ?? null)
     const card = hit && getNode(hit.key)
     if (!card) return
@@ -534,38 +524,23 @@ function Flow() {
     return [...ups.sort((a, b) => b.depth - a.depth).map(x => x.n), ...downs].filter(n => drawn.has(n.key))
   }, [down, up, showUp, hidden, nodes]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const goTo = useCallback((i: number) => {
-    const n = changed[i]
-    const card = n && getNode(n.key)
-    if (!card) return
-    setTour(i)
-    setSelected(n.key)
-    const el = document.querySelector('.wv-canvas') as HTMLElement
-    const w = Number(card.style?.width) || 400
-    const h = Number(card.style?.height) || 200
-    setCenter(card.position.x + Math.min(w / 2, el.clientWidth / 2 - 24), card.position.y + Math.min(h / 2, el.clientHeight / 2 - 60), { zoom: 1, duration: 280 })
-  }, [changed, getNode, setCenter])
-
-  // A tour that ran out of changes (all kept or undone) ends; one that shrank stays in range.
-  useEffect(() => {
-    if (tour === null) return
-    if (!changed.length) setTour(null)
-    else if (tour >= changed.length) goTo(changed.length - 1)
-  }, [changed.length]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (tour === null) return
-    const onKey = (e: KeyboardEvent) => {
-      if (editingRef.current) return
-      if (e.key === ']' || e.key === 'ArrowRight') goTo(Math.min(tour + 1, changed.length - 1))
-      else if (e.key === '[' || e.key === 'ArrowLeft') goTo(Math.max(tour - 1, 0))
-      else if (e.key === 'Escape') setTour(null)
-      else return
-      e.preventDefault()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [tour, changed.length, goTo])
+  // The tour player: the review of changes below, an agent's tour or a tour file all play through it (src/tour).
+  const tour = useTourPlayer({
+    down,
+    up,
+    showUp,
+    ready: !!down && drawnFor === target.target,
+    flowKey: JSON.stringify(target.target),
+    nodes,
+    edges,
+    editing: !!editing,
+    setHidden,
+    setFull,
+    post: msg => vscode.postMessage(msg),
+    changed,
+  })
+  const isReview = tour.state.tour?.source === 'review'
+  const reviewNode = isReview && turn === undefined && tour.cardKey ? (find(down, tour.cardKey) ?? find(up, tour.cardKey)) : null
 
   const undoFrom = async (id: number) => {
     const res = await request<{ ok: boolean; message?: string }>('undoFrom', { turn: id })
@@ -637,8 +612,8 @@ function Flow() {
   const impactCount = impact?.items.length ?? 0
   const impactText = impact && `${impactCount ? `Affects ${impactCount}` : 'No'} ${impact.label}${impactCount === 1 ? '' : 's'}`
   return (
-    <div className="wv">
-      <style>{traceCss + proposedCss}</style>
+    <div className={`wv${tour.touring ? ' wv-touring' : ''}`}>
+      <style>{traceCss + proposedCss + tour.css}</style>
       <header className="wv-bar">
         <div className="wv-title" title={target.label}>
           <span className="owner">{owner}</span>
@@ -676,8 +651,8 @@ function Flow() {
             {timelineOpen && <Timeline turns={turns} active={turn} onPick={id => setTurn(id)} onUndo={undoFrom} />}
           </span>
         )}
-        {changed.length > 0 && tour === null && (
-          <button className="chip agent" onClick={() => goTo(0)} title="Step through the changed cards in call order">
+        {changed.length > 0 && tour.state.tour === null && (
+          <button className="chip agent" onClick={tour.startReview} title="Step through the changed cards in call order">
             Review {changed.length} {changed.length === 1 ? 'change' : 'changes'}
           </button>
         )}
@@ -690,7 +665,7 @@ function Flow() {
           Ask about this flow
         </button>
       </header>
-      <div className={`wv-canvas${locked ? ' locked' : ''}`}>
+      <div className={`wv-canvas${locked ? ' locked' : ''}`} onClickCapture={tour.onClickCapture}>
         {!down && (
           <div className="wv-empty">
             {error ? (
@@ -721,20 +696,13 @@ function Flow() {
             )}
           </div>
         )}
-        {tour !== null && changed[tour] && (
-          <div className="tour" role="toolbar" aria-label="Review changes">
-            <button className="icon-btn" onClick={() => goTo(Math.max(tour - 1, 0))} disabled={tour === 0} title="Previous change ([)">‹</button>
-            <span className="tour-pos">{tour + 1} / {changed.length}</span>
-            <button className="icon-btn" onClick={() => goTo(Math.min(tour + 1, changed.length - 1))} disabled={tour === changed.length - 1} title="Next change (])">›</button>
-            <span className="tour-label">{changed[tour].label.replace(/\s*▸\s*/g, '.')}</span>
-            {turn === undefined && (
-              <>
-                {!changed[tour].diff?.base && <button className="btn ghost" onClick={() => actions.undo?.(changed[tour].key)}>Undo</button>}
-                <button className="btn solid" onClick={() => actions.keep?.(changed[tour].key)}>Keep</button>
-              </>
-            )}
-            <button className="icon-btn" onClick={() => setTour(null)} title="Stop reviewing (Esc)">×</button>
-          </div>
+        {tour.bar(
+          reviewNode && (
+            <>
+              {!reviewNode.diff?.base && <button className="btn ghost" onClick={() => actions.undo?.(reviewNode.key)}>Undo</button>}
+              <button className="btn solid" onClick={() => actions.keep?.(reviewNode.key)}>Keep</button>
+            </>
+          ),
         )}
         <ActionsCtx.Provider value={cardActions}>
           <ReactFlow
@@ -754,6 +722,7 @@ function Flow() {
             proOptions={{ hideAttribution: true }}
           >
             <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+            {tour.flowLayer}
             <Controls showInteractive={false} showFitView={false} position="bottom-left">
               <ControlButton onClick={frame} title="Fit view" aria-label="Fit view">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 30"><path d="M3.692 4.63c0-.53.4-.938.939-.938h5.215V0H4.708C2.13 0 0 2.054 0 4.63v5.216h3.692V4.631zM27.354 0h-5.2v3.692h5.17c.53 0 .984.4.984.939v5.215H32V4.631A4.624 4.624 0 0027.354 0zm.954 24.83c0 .532-.4.94-.939.94h-5.215v3.768h5.215c2.577 0 4.631-2.13 4.631-4.707v-5.139h-3.692v5.139zm-23.677.94c-.531 0-.939-.4-.939-.94v-5.138H0v5.139c0 2.577 2.13 4.707 4.708 4.707h5.138V25.77H4.631z" /></svg>
@@ -762,6 +731,7 @@ function Flow() {
             <MiniMap pannable zoomable position="bottom-right" maskColor="var(--fl-mask)" nodeColor={n => (n.type === 'frame' ? 'transparent' : 'var(--fl-line-strong)')} nodeBorderRadius={3} />
           </ReactFlow>
         </ActionsCtx.Provider>
+        {tour.captionLayer}
       </div>
     </div>
   )

@@ -42,6 +42,11 @@
         "icon": "$(folder-library)"
       },
       {
+        "command": "flow.tour.playFile",
+        "title": "Play Tour from File…",
+        "category": "Axle"
+      },
+      {
         "command": "flow.diff.showInFlow",
         "title": "Show Git Changes in Flow",
         "category": "Axle",
