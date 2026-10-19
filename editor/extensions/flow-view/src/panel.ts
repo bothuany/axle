@@ -256,7 +256,8 @@ export class FlowPanel implements vscode.Disposable {
 		const kept = parseGaze(batch, roots());
 		this.gazeLog.add(kept);
 		if (kept.length && this.panel && this.webviewReady) {
-			void this.panel.webview.postMessage({ type: 'gaze', events: kept.map(k => k.event) });
+			// `burst`: flow-agent saw more than 20 looks in a second; the canvas then jumps instead of gliding.
+			void this.panel.webview.postMessage({ type: 'gaze', events: kept.map(k => k.event), burst: (batch as { burst?: unknown }).burst === true });
 		}
 	}
 

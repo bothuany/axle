@@ -37,7 +37,7 @@ export function useGaze(env: GazeEnv) {
       if (m?.type === 'gaze') {
         const more = sanitizeGaze(m.events)
         if (!more.length) return
-        setBurst(more.length > BURST)
+        setBurst(m.burst === true || more.length > BURST)
         setEvents(list => keep(list, more))
         setNow(Date.now())
       } else if (m?.type === 'gazeClear') {
