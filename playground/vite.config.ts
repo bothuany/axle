@@ -28,6 +28,29 @@ function repoMedia(): Plugin {
   }
 }
 
+/** Where the site is served from: pages that must name their own address (the canonical link, the social cards, the sitemap) use it. */
+const SITE = (process.env.SITE_URL ?? 'https://bothuany.github.io/axle').replace(/\/$/, '')
+
+/** Writes the site's address into the page (`{{site}}`) and emits sitemap.xml, dated with the build: the site is one page. */
+function site(): Plugin {
+  return {
+    name: 'axle-site',
+    transformIndexHtml: html => html.replaceAll('{{site}}', SITE),
+    generateBundle() {
+      const lastmod = new Date().toISOString().slice(0, 10)
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>${SITE}/</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>\n`
+      this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: xml })
+    },
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if ((req.url ?? '').split('?')[0] !== '/sitemap.xml') return next()
+        res.setHeader('Content-Type', 'application/xml')
+        res.end(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${SITE}/</loc></url></urlset>\n`)
+      })
+    },
+  }
+}
+
 // Served from https://<owner>.github.io/axle/: every URL is relative. The canvas page imports ui/ (a webview that expects
 // the editor's globals, which src/host.ts supplies), so the dev server may read the repository root.
 export default defineConfig({
@@ -35,7 +58,7 @@ export default defineConfig({
   // One tsconfig for every file: the extension modules the playground imports (flow-agent's attention.ts and friends) sit in a
   // project that extends editor/vscode's, which a build without the VS Code checkout does not have.
   tsconfig: 'tsconfig.json',
-  plugins: [react(), repoMedia()],
+  plugins: [react(), repoMedia(), site()],
   server: { fs: { allow: ['..'] } },
   build: {
     target: 'esnext',
