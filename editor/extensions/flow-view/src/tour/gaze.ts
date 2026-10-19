@@ -16,6 +16,8 @@ export const GAZE_KEEP = 300;
 const MAX_BATCH = 200;
 /** What a newly opened canvas is sent: the trail it would still be showing. */
 export const GAZE_RECENT_MS = 60_000;
+/** Sessions kept: the ones that looked at something last. */
+export const GAZE_SESSIONS = 20;
 
 const obj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const whole = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0 && v < 10_000_000;
@@ -32,7 +34,7 @@ interface Kept {
  * workspace folder itself), whole lines in order. Labels are cut, control characters dropped, and a colour that is not a
  * `#hex` literal is replaced: it ends up in the canvas's CSS.
  */
-export function parseGaze(raw: unknown, roots: readonly string[]): { event: GazeEvent; turn: number }[] {
+export function parseGaze(raw: unknown, roots: readonly string[], now = Date.now()): { event: GazeEvent; turn: number }[] {
 	const looks = obj(raw) && Array.isArray(raw.looks) ? raw.looks.slice(0, MAX_BATCH) : [];
 	return looks.flatMap(l => {
 		if (!obj(l) || typeof l.session !== 'string' || !l.session || l.session.length > 200 || typeof l.file !== 'string' || !path.isAbsolute(l.file)) {
@@ -45,7 +47,7 @@ export function parseGaze(raw: unknown, roots: readonly string[]): { event: Gaze
 		}
 		const label = (typeof l.agent === 'string' ? l.agent : '').replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 40) || 'Agent';
 		const color = typeof l.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(l.color) ? l.color : '#c6a8ff';
-		const event: GazeEvent = { session: l.session, agent: { label, color }, act, file, at: typeof l.at === 'number' && Number.isFinite(l.at) && l.at >= 0 ? Math.round(l.at) : Date.now() };
+		const event: GazeEvent = { session: l.session, agent: { label, color }, act, file, at: typeof l.at === 'number' && Number.isFinite(l.at) && l.at >= 0 ? Math.min(Math.round(l.at), now) : now };
 		if (act !== 'search' && whole(l.startLine)) {
 			event.startLine = l.startLine;
 			if (whole(l.endLine) && l.endLine >= l.startLine) {
@@ -67,7 +69,12 @@ export class GazeLog {
 			if (list.length > GAZE_KEEP) {
 				list.splice(0, list.length - GAZE_KEEP);
 			}
+			// Re-inserted, so the map runs from the session that looked least recently to the latest one.
+			this.sessions.delete(k.event.session);
 			this.sessions.set(k.event.session, list);
+		}
+		for (const old of [...this.sessions.keys()].slice(0, Math.max(0, this.sessions.size - GAZE_SESSIONS))) {
+			this.sessions.delete(old);
 		}
 	}
 
@@ -147,13 +154,14 @@ export function gazeTour(events: readonly GazeEvent[], roots: readonly string[],
 			return { title: `Searched in ${rel(r.file)}`, caption: `Searched in ${rel(r.file)}${r.count > 1 ? ` ×${r.count}` : ''}.`, state: 'ok' };
 		}
 		const verb = r.act === 'edit' ? 'Edited' : 'Read';
-		const startLine = r.start ?? 1;
-		const endLine = r.end ?? startLine;
-		const where = r.start === undefined ? `all of ${name}` : `${lines(startLine, endLine)} of ${name}`;
 		if (!texts.has(r.file)) {
 			texts.set(r.file, readText(r.file));
 		}
 		const text = texts.get(r.file);
+		// The whole file: its whole range, so the step lands on the file's first drawn card rather than on line 1.
+		const startLine = r.start ?? 1;
+		const endLine = r.end ?? (r.start === undefined && text !== undefined ? text.split('\n').length : startLine);
+		const where = r.start === undefined ? `all of ${name}` : `${lines(startLine, endLine)} of ${name}`;
 		const step: TourStep = {
 			title: `${verb} ${name}${r.count > 1 ? ` ×${r.count}` : ''}`,
 			caption: `${verb}${r.count > 1 ? ` ×${r.count}` : ''}: ${where}.`,

@@ -14,6 +14,19 @@ const turns = new Map<string, number>();
 
 const on = () => vscode.workspace.getConfiguration('flow.agents').get<boolean>('gaze', true);
 
+/**
+ * Turning the setting off drops what is queued and tells flow-view to forget what it kept, so nothing more is shown or
+ * replayed. Registered once by the extension.
+ */
+export function watchGazeSetting(): vscode.Disposable {
+	return vscode.workspace.onDidChangeConfiguration(e => {
+		if (e.affectsConfiguration('flow.agents.gaze') && !on()) {
+			queue.dispose();
+			void Promise.resolve(vscode.commands.executeCommand('flow.agent.gaze', { looks: [], clear: true })).catch(() => undefined);
+		}
+	});
+}
+
 function roots(extra?: string) {
 	const folders = (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath);
 	return extra && !folders.includes(extra) ? [extra, ...folders] : folders;
@@ -28,14 +41,19 @@ export function gazeTurn(session: string) {
 	turns.set(session, (turns.get(session) ?? 0) + 1);
 }
 
-/** A terminal agent's PostToolUse. `root`: the checkout it works in (its worktree), which counts as the workspace. */
+/** A terminal agent's PostToolUse. `root`: the checkout it works in (its worktree, under the workspace's .axle/worktrees). */
 export function gazeHook(session: string, agent: string, cli: string, tool: string, input: Record<string, unknown> | undefined, response: Record<string, unknown> | undefined, cwd: string | undefined, root: string | undefined) {
 	if (!on()) {
 		return;
 	}
-	const looks = looksFromHook(tool, input, response, cwd, roots(root));
-	if (looks.length) {
-		queue.push(who(session, agent, cli), looks);
+	// Observe only: a payload of an unexpected shape costs this look, never the hook handling around it.
+	try {
+		const looks = looksFromHook(tool, input ?? {}, response ?? {}, cwd, roots(root));
+		if (looks.length) {
+			queue.push(who(session, agent, cli), looks);
+		}
+	} catch {
+		// dropped
 	}
 }
 
@@ -44,9 +62,13 @@ export function gazeAcp(session: string, agent: string, cli: string, kind: strin
 	if (!on()) {
 		return;
 	}
-	const looks = looksFromAcp(kind, locations, roots());
-	if (looks.length) {
-		queue.push(who(session, agent, cli), looks);
+	try {
+		const looks = looksFromAcp(kind, locations, roots());
+		if (looks.length) {
+			queue.push(who(session, agent, cli), looks);
+		}
+	} catch {
+		// dropped
 	}
 }
 

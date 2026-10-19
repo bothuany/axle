@@ -97,6 +97,8 @@ test('replay: consecutive looks at one place merge, an edit and a search get the
 	assert.equal(tour.steps[1].at, undefined, 'a search points at nothing')
 	assert.ok(tour.steps[0].peek?.code.includes('code 10'), 'a step off the drawn flow can show its code')
 	assert.equal(tour.steps[3].peek, undefined, 'no text, no peek: the caption alone')
+	const whole = g.gazeTour([parse(look({ startLine: undefined, endLine: undefined }))[0].event], roots, () => text)
+	assert.deepEqual([whole.steps[0].at.startLine, whole.steps[0].at.endLine, whole.steps[0].highlights], [1, 80, undefined], 'a whole file spans all its lines, so it lands on its first drawn card')
 	assert.equal(g.gazeTour([], roots, () => undefined), undefined)
 })
 
@@ -106,4 +108,13 @@ test('replay: a trail longer than a tour keeps its last steps behind a note', ()
 	assert.equal(tour.steps.length, 30)
 	assert.match(tour.steps[0].caption, /21 earlier places left out/)
 	assert.equal(tour.steps.at(-1).title, 'Read f49.js')
+})
+
+test('a time from the future is now; the log keeps the 20 sessions that looked last', () => {
+	assert.equal(g.parseGaze({ looks: [look({ at: 9e15 })] }, roots, 5000)[0].event.at, 5000)
+	const log = new g.GazeLog()
+	for (let i = 0; i < 25; i++) log.add(parse(look({ session: `s${i}` })))
+	log.add(parse(look({ session: 's0' })))
+	assert.ok(log.has('s0'), 'a session that looked again is kept')
+	assert.ok(!log.has('s1') && !log.has('s5') && log.has('s6') && log.has('s24'))
 })

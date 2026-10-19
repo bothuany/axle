@@ -261,3 +261,11 @@ test('sanitize: a note keeps its text, who wrote it and when', () => {
   const withNotes = sanitizeStep({ caption: 'c', notes: [...Array.from({ length: 12 }, (_, i) => ({ text: `n${i}`, by: 'agent', at: i })), 'junk'] })
   assert.equal(withNotes.notes.length, 10)
 })
+
+test('a step whose first line no card holds lands on the first card inside its range', () => {
+  const tree = { key: 'a', file: 'C:\\w\\x.js', startLine: 5, endLine: 9, label: 'a', children: [{ node: { key: 'b', file: 'C:\\w\\x.js', startLine: 12, endLine: 20, label: 'b', children: [] } }] }
+  const step = (startLine, endLine) => ({ title: 't', caption: 'c', state: 'ok', at: { file: 'c:/w/x.js', startLine, endLine, label: 'x' } })
+  assert.equal(resolveStep([tree], step(1, 30)).node.key, 'a')
+  assert.equal(resolveStep([tree], step(10, 30)).node.key, 'b')
+  assert.equal(resolveStep([tree], step(1, 1)).kind, 'none')
+})

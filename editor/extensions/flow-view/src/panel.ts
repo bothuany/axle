@@ -247,6 +247,12 @@ export class FlowPanel implements vscode.Disposable {
 	 * reveals or focuses anything: without a canvas the looks are only kept.
 	 */
 	gaze(batch: unknown) {
+		// The setting was turned off: forget the trails, here and on the canvas.
+		if ((batch as { clear?: unknown } | null)?.clear === true) {
+			this.gazeLog.clear();
+			void this.panel?.webview.postMessage({ type: 'gazeClear' });
+			return;
+		}
 		const kept = parseGaze(batch, roots());
 		this.gazeLog.add(kept);
 		if (kept.length && this.panel && this.webviewReady) {
