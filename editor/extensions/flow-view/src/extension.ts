@@ -390,6 +390,8 @@ function wireAgentBridge(flow: Flow) {
 			await panel.show(target, label);
 		},
 		currentFlow: () => flow.currentFlow,
+		shownTarget: () => panel.shown?.target,
+		tours: { play: tour => panel.playTour(tour), state: () => panel.tourState(), go: index => panel.tourGo(index), end: () => panel.endTour() },
 		trackChanges: async (entries, base) => {
 			await flow.changes.trackAgainst(base ? `Changes since ${base}` : 'Git changes', GIT_AGENT, entries, base);
 			panel.refreshSoon();

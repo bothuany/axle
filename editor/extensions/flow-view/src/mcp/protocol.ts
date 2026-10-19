@@ -7,6 +7,7 @@
 
 import { createInterface } from 'readline';
 import type { Readable, Writable } from 'stream';
+import { getPrompt, promptList } from './prompts';
 import { TOOLS, TOOL_NAMES } from './tools';
 
 export interface ToolResult {
@@ -24,6 +25,7 @@ export const INSTRUCTIONS = [
 	"Axle is the user's code editor. These tools act on the Axle window that has the current folder open.",
 	'To open a file or place in the editor use `open`. To show how a feature runs, use `find_entry_points` then `show_flow` (it opens the flow canvas for the user) or `flow_text` (the same call chain as text, to understand code without reading many files).',
 	'Use `impact` before changing shared code (or, with `table` or `entity`, a table or its entity), `get_context` to see what the user is looking at, and `draw_board` (kinds: flow, plan, class, er, sequence, architecture) to show the user a flow or plan you designed; tick plan steps with `update_board`.',
+	'To explain or walk the user through code, SHOW it with `tour`: get file:line from `flow_text` first, 3-12 steps in the order the code runs, one idea per step, captions that say why and not what (run the `tour_guide` prompt for the advice). The user\'s questions during a tour come back to you; answer them through `tour_control`.',
 ].join('\n');
 
 export const errorResult = (text: string): ToolResult => ({ content: [{ type: 'text', text }], isError: true });
@@ -70,7 +72,7 @@ export class McpServer {
 				return reply({
 					// Echo the client's version: Claude Code is newer than any version written down here.
 					protocolVersion: typeof params.protocolVersion === 'string' ? params.protocolVersion : DEFAULT_PROTOCOL,
-					capabilities: { tools: {} },
+					capabilities: { tools: {}, prompts: {} },
 					serverInfo: { name: 'axle', version: SERVER_VERSION },
 					instructions: INSTRUCTIONS,
 				});
@@ -83,7 +85,11 @@ export class McpServer {
 			case 'resources/list':
 				return reply({ resources: [] });
 			case 'prompts/list':
-				return reply({ prompts: [] });
+				return reply({ prompts: promptList() });
+			case 'prompts/get': {
+				const prompt = getPrompt(params.name, isObject(params.arguments) ? params.arguments : {});
+				return prompt ? reply(prompt) : fail(-32602, `Unknown prompt: ${String(params.name)}. Prompts: ${promptList().map(p => p.name).join(', ')}.`);
+			}
 			default:
 				// notifications/initialized, notifications/cancelled and the like need no answer.
 				return msg.method.startsWith('notifications/') ? undefined : fail(-32601, `Method not found: ${msg.method}`);

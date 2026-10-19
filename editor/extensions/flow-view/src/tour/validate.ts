@@ -8,17 +8,12 @@
 
 import * as path from 'path';
 import type { Tour, TourStep } from '../../../../../protocol/flow';
+import { parseHighlights, placeStep, positive, type Method, type StepInput } from './resolve';
 
 export const MAX_STEPS = 30;
 export const MAX_CAPTION = 600;
 export const MAX_TITLE = 120;
 export const MAX_STEP_TITLE = 80;
-const MAX_HIGHLIGHTS = 3;
-const MAX_HIGHLIGHT_LINES = 80;
-const PEEK_LINES = 40;
-/** A peek card shows code, not a minified bundle: each line is cut here, and the whole peek stays a few KB. */
-const PEEK_LINE_CHARS = 300;
-const PEEK_CHARS = 8_000;
 
 /** The canvas this tour wants to play on. Omitted: the canvas the user has open, else the flow of the first step's code. */
 export interface TourFlow {
@@ -29,12 +24,11 @@ export interface TourFlow {
 	/** An absolute workspace file, and a line inside the method. */
 	file?: string;
 	line?: number;
+	/** With `file`: the method to open the flow of. */
+	method?: string;
 	changes?: boolean;
-}
-
-export interface ParsedTour {
-	tour: Tour;
-	flow: TourFlow | undefined;
+	/** With `changes`: what the changes are measured against. */
+	base?: 'uncommitted' | 'branch' | 'last_commit';
 }
 
 export class TourFileError extends Error { }
@@ -44,6 +38,8 @@ export interface TourFileHost {
 	roots: string[];
 	/** The file's text, or nothing when it cannot be read. Used for the peek card of a step that is on no drawn flow. */
 	readText(file: string): string | undefined;
+	/** The methods of a file, when the host could list them (the code index, the C# analyzer or a language server): steps are then placed by name. */
+	methodsIn?(file: string): readonly Method[] | undefined;
 }
 
 /** `file` as an absolute path inside one of the roots, else nothing (`../../etc/passwd`, another drive, an absolute path elsewhere). */
@@ -64,7 +60,6 @@ const CONTROL = /[\u0000-\u001f\u007f\u0080-\u009f\u2028\u2029]/g;
 const plain = (v: unknown) => typeof v === 'string' ? v.replace(CONTROL, ' ').replace(/ {2,}/g, ' ').trim() : '';
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-const positive = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 10_000_000;
 
 function tooLong(what: string, text: string, max: number) {
 	if (text.length > max) {
@@ -72,10 +67,24 @@ function tooLong(what: string, text: string, max: number) {
 	}
 }
 
-function parseFlow(raw: unknown, host: TourFileHost): TourFlow | undefined {
+const FLOW_KEYS = ['http', 'id', 'file', 'method', 'line', 'changes', 'base'];
+const STEP_KEYS = ['title', 'caption', 'file', 'method', 'line', 'lines', 'table', 'anchor', 'hash', 'notes'];
+const TOUR_KEYS = ['id', 'title', 'flow', 'steps', 'start'];
+const BASES: readonly string[] = ['uncommitted', 'branch', 'last_commit'];
+
+/** In a tool call a field Axle does not know is a mistake the agent should hear about; in a file it is dropped. */
+function noStrangers(what: string, raw: Record<string, unknown>, known: readonly string[], strict: boolean) {
+	const strange = Object.keys(raw).filter(k => !known.includes(k));
+	if (strict && strange.length) {
+		throw new TourFileError(`${what}.${strange[0]} is not a field of ${what.startsWith('steps') ? 'a tour step' : what === 'flow' ? 'flow' : 'a tour'} (allowed: ${known.join(', ')}).`);
+	}
+}
+
+function parseFlow(raw: unknown, host: TourFileHost, strict: boolean): TourFlow | undefined {
 	if (!isObject(raw)) {
 		return undefined;
 	}
+	noStrangers('flow', raw, strict ? FLOW_KEYS.filter(k => k !== 'http') : FLOW_KEYS, strict);
 	const flow: TourFlow = {};
 	const http = plain(raw.http);
 	if (http) {
@@ -94,87 +103,113 @@ function parseFlow(raw: unknown, host: TourFileHost): TourFlow | undefined {
 		if (positive(raw.line)) {
 			flow.line = raw.line;
 		}
+		const method = plain(raw.method).slice(0, 200);
+		if (method) {
+			flow.method = method;
+		}
 	}
 	if (raw.changes === true) {
 		flow.changes = true;
+		if (typeof raw.base === 'string' && BASES.includes(raw.base)) {
+			flow.base = raw.base as TourFlow['base'];
+		} else if (strict && raw.base !== undefined) {
+			throw new TourFileError(`flow.base must be one of: ${BASES.join(', ')}.`);
+		}
 	}
 	return Object.keys(flow).length ? flow : undefined;
 }
 
-/** Up to three `[from, to]` ranges of at most 80 lines each; a range that is not two positive integers is dropped. */
-function parseHighlights(raw: unknown): [number, number][] {
-	if (!Array.isArray(raw)) {
-		return [];
-	}
-	const out: [number, number][] = [];
-	for (const r of raw) {
-		if (out.length >= MAX_HIGHLIGHTS) {
-			break;
-		}
-		const [a, b = a] = Array.isArray(r) ? r : [r];
-		if (positive(a) && positive(b)) {
-			const from = Math.min(a, b);
-			out.push([from, Math.min(Math.max(a, b), from + MAX_HIGHLIGHT_LINES - 1)]);
-		}
-	}
-	return out;
-}
+/** What one raw step says, checked: the fields every step may have. `file` is the absolute path, or undefined when it names a place outside the workspace. */
+interface Cleaned { input: StepInput; given: string; abs: string | undefined }
 
-/** The method's code for a step that lands on no drawn card: its lines, or a window around the highlighted lines. */
-function peekOf(text: string, startLine: number, endLine: number): TourStep['peek'] {
-	const lines = text.replace(/\r\n/g, '\n').split('\n');
-	const from = Math.max(1, startLine - 2);
-	const to = Math.min(lines.length, Math.max(endLine, startLine + 12), from + PEEK_LINES - 1);
-	return from > lines.length ? undefined : { code: lines.slice(from - 1, to).map(l => l.slice(0, PEEK_LINE_CHARS)).join('\n').slice(0, PEEK_CHARS), startLine: from };
-}
-
-function parseStep(raw: unknown, i: number, host: TourFileHost): TourStep {
+function cleanStep(raw: unknown, i: number, host: TourFileHost, strict: boolean): Cleaned {
 	const where = `steps[${i}]`;
 	if (!isObject(raw)) {
 		throw new TourFileError(`${where} is not an object.`);
 	}
+	noStrangers(where, raw, STEP_KEYS, strict);
 	const caption = plain(raw.caption);
 	if (!caption) {
 		throw new TourFileError(`${where}.caption is missing: every step says something.`);
 	}
 	tooLong(`${where}.caption`, caption, MAX_CAPTION);
-	const method = plain(raw.method).slice(0, 200);
-	const title = plain(raw.title) || method;
+	const title = plain(raw.title);
 	tooLong(`${where}.title`, title, MAX_STEP_TITLE);
-	const step: TourStep = { title: title || `Step ${i + 1}`, caption, state: 'ok' };
-
-	const table = plain(raw.table);
-	const file = typeof raw.file === 'string' ? raw.file : '';
+	const given = typeof raw.file === 'string' ? raw.file : '';
+	const abs = given ? insideWorkspace(host.roots, given) : undefined;
+	if (strict && given && !abs) {
+		throw new TourFileError(`${where}.file "${given}" is not inside the workspace; only files inside it can be shown.`);
+	}
+	const table = plain(raw.table).slice(0, 200);
+	const method = plain(raw.method).slice(0, 200);
+	const input: StepInput = { caption };
+	if (title) {
+		input.title = title;
+	}
 	if (table) {
-		// A database card instead of code: it is found by its table name on the drawn flow.
-		step.at = { file: '', startLine: 0, endLine: 0, label: table.slice(0, 200), table: table.slice(0, 200) };
-		return step;
+		input.table = table;
 	}
-	if (!file) {
-		// Only a caption: an intro or an outro.
-		return step;
+	if (method) {
+		input.method = method;
 	}
-	const highlights = parseHighlights(raw.lines);
-	const line = positive(raw.line) ? raw.line : highlights[0]?.[0];
-	const abs = insideWorkspace(host.roots, file);
-	const text = abs && line !== undefined ? host.readText(abs) : undefined;
-	// A step Axle cannot place is shown greyed with its caption, and never points at a wrong card. In this version a step is
-	// placed by `line` (or `lines`); `method` is the label only. Finding a method by name is the MCP tool's resolver.
-	if (!abs || line === undefined || text === undefined) {
-		step.state = 'missing';
-		step.at = { file: abs ?? '', startLine: line ?? 0, endLine: line ?? 0, label: method || path.basename(file) };
-		return step;
+	if (positive(raw.line)) {
+		input.line = raw.line;
+	} else if (strict && raw.line !== undefined) {
+		throw new TourFileError(`${where}.line must be a whole number of 1 or more.`);
 	}
-	const endLine = Math.max(line, ...highlights.map(h => h[1]));
-	step.at = { file: abs, startLine: line, endLine, label: method || `${path.basename(abs)}:${line}` };
-	if (highlights.length) {
-		step.highlights = highlights;
+	const lines = parseHighlights(raw.lines);
+	if (lines.length) {
+		input.lines = lines;
 	}
-	step.peek = peekOf(text, Math.min(line, ...highlights.map(h => h[0])), endLine);
-	return step;
+	return { input, given, abs };
 }
 
-/** Throws a TourFileError naming the bad field. */
+/** The workspace files the steps of a raw tour name, once each: what the host lists the methods of before the tour is placed. */
+export function stepFiles(raw: unknown, roots: readonly string[]): string[] {
+	const steps = isObject(raw) && Array.isArray(raw.steps) ? raw.steps.slice(0, MAX_STEPS) : [];
+	const files = new Set<string>();
+	for (const s of steps) {
+		const abs = isObject(s) && typeof s.file === 'string' && s.file && !plain(s.table) ? insideWorkspace(roots, s.file) : undefined;
+		if (abs) {
+			files.add(abs);
+		}
+	}
+	return [...files];
+}
+
+export interface ParsedTour {
+	tour: Tour;
+	flow: TourFlow | undefined;
+	/** One entry per step: what to tell the agent (where a method went, what is closest to a name that is gone). */
+	notes: (string | undefined)[];
+}
+
+function parseSteps(rawSteps: unknown, host: TourFileHost, strict: boolean): { steps: TourStep[]; notes: (string | undefined)[] } {
+	if (!Array.isArray(rawSteps) || !rawSteps.length) {
+		throw new TourFileError('"steps" must list at least one step.');
+	}
+	if (rawSteps.length > MAX_STEPS) {
+		throw new TourFileError(`"steps" has ${rawSteps.length} steps; a tour has at most ${MAX_STEPS}. A longer one is a document: split it into two tours.`);
+	}
+	// A file named by several steps is read once.
+	const cache = new Map<string, string | undefined>();
+	const readText = (f: string) => (cache.has(f) ? cache.get(f) : cache.set(f, host.readText(f)).get(f));
+	const steps: TourStep[] = [];
+	const notes: (string | undefined)[] = [];
+	rawSteps.forEach((raw, i) => {
+		const { input, given, abs } = cleanStep(raw, i, host, strict);
+		// A step Axle cannot place is shown greyed with its caption, and never points at a wrong card.
+		const placed = given && !abs
+			? { step: { title: input.title ?? '', caption: input.caption, state: 'missing' as const, at: { file: '', startLine: input.line ?? 0, endLine: input.line ?? 0, label: input.method || path.basename(given) } }, note: 'the file is outside the workspace' }
+			: placeStep(input, { file: abs, methods: abs ? host.methodsIn?.(abs) : undefined, text: abs ? readText(abs) : undefined, base: abs ? path.basename(abs) : undefined });
+		placed.step.title ||= `Step ${i + 1}`;
+		steps.push(placed.step);
+		notes.push(placed.note);
+	});
+	return { steps, notes };
+}
+
+/** A tour file. Throws a TourFileError naming the bad field. */
 export function parseTourFile(raw: unknown, host: TourFileHost): ParsedTour {
 	if (!isObject(raw)) {
 		throw new TourFileError('A tour file is a JSON object.');
@@ -191,16 +226,7 @@ export function parseTourFile(raw: unknown, host: TourFileHost): ParsedTour {
 		throw new TourFileError('"title" is missing.');
 	}
 	tooLong('"title"', title, MAX_TITLE);
-	if (!Array.isArray(raw.steps) || !raw.steps.length) {
-		throw new TourFileError('"steps" must list at least one step.');
-	}
-	if (raw.steps.length > MAX_STEPS) {
-		throw new TourFileError(`"steps" has ${raw.steps.length} steps; a tour has at most ${MAX_STEPS}. A longer one is a document: split it into two tours.`);
-	}
-	// A file named by several steps is read once.
-	const cache = new Map<string, string | undefined>();
-	const cached: TourFileHost = { roots: host.roots, readText: f => (cache.has(f) ? cache.get(f) : cache.set(f, host.readText(f)).get(f)) };
-	const steps = raw.steps.map((s, i) => parseStep(s, i, cached));
+	const { steps, notes } = parseSteps(raw.steps, host, false);
 	const tour: Tour = {
 		id,
 		title,
@@ -215,7 +241,30 @@ export function parseTourFile(raw: unknown, host: TourFileHost): ParsedTour {
 	if (agent && label && typeof agent.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(agent.color)) {
 		tour.agent = { label, color: agent.color };
 	}
-	return { tour, flow: parseFlow(raw.flow, host) };
+	return { tour, flow: parseFlow(raw.flow, host, false), notes };
+}
+
+/** The arguments of the MCP `tour` tool. A field Axle does not know, or a path outside the workspace, is an error naming it. */
+export function parseTourArgs(raw: unknown, host: TourFileHost, origin: string): ParsedTour {
+	if (!isObject(raw)) {
+		throw new TourFileError('The arguments of `tour` are an object.');
+	}
+	noStrangers('tour', raw, TOUR_KEYS, true);
+	const id = raw.id === undefined ? 'tour' : plain(raw.id);
+	if (!/^[\w.-]{1,64}$/.test(id)) {
+		throw new TourFileError('`id` is not a name of letters, digits, - _ . (at most 64).');
+	}
+	const title = plain(raw.title);
+	if (!title) {
+		throw new TourFileError('`title` is required.');
+	}
+	tooLong('`title`', title, MAX_TITLE);
+	const { steps, notes } = parseSteps(raw.steps, host, true);
+	if (raw.start !== undefined && !positive(raw.start)) {
+		throw new TourFileError('`start` must be a whole number of 1 or more.');
+	}
+	const tour: Tour = { id, title, origin, source: 'agent', steps, start: positive(raw.start) ? Math.min(raw.start, steps.length) - 1 : 0 };
+	return { tour, flow: parseFlow(raw.flow, host, true), notes };
 }
 
 /**

@@ -12,7 +12,9 @@ import { Command } from './commands';
 import type { FlowPanel } from './panel';
 import { PolyIndex, POLY_LANGUAGES } from './poly/client';
 import { realInside, readTextIn } from './tour/files';
-import { parseTourFile, TourFileError, type TourFlow } from './tour/validate';
+import type { Method } from './tour/resolve';
+import { methodsOf } from './tourMethods';
+import { parseTourFile, stepFiles, TourFileError, type TourFlow } from './tour/validate';
 
 /** What the command needs of the extension. */
 export interface TourHost {
@@ -117,7 +119,10 @@ export async function playTourFile(host: TourHost, source?: unknown): Promise<vo
 	} catch (e) {
 		throw new TourFileError(`${uri.fsPath} is not valid JSON: ${(e as Error).message}`);
 	}
-	const { tour, flow } = parseTourFile(json, { roots, readText: readTextIn(roots) });
+	// The methods of the files the steps name, so a step is placed by its method name even when the line moved.
+	const methods = new Map<string, readonly Method[] | undefined>();
+	await Promise.all(stepFiles(json, roots).map(async f => methods.set(f, realInside(roots, f) ? await methodsOf(host, f).catch(() => undefined) : undefined)));
+	const { tour, flow } = parseTourFile(json, { roots, readText: readTextIn(roots), methodsIn: f => methods.get(f) });
 	const first = tour.steps.find(s => s.at?.file && s.at.startLine > 0);
 	await openFlow(host, roots, flow, first?.at && { file: first.at.file, line: first.at.startLine });
 	await host.panel.playTour(tour);

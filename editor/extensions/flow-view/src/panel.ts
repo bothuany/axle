@@ -234,6 +234,28 @@ export class FlowPanel implements vscode.Disposable {
 		await panel.webview.postMessage({ type: 'tour', tour });
 	}
 
+	/** The tour playing on the canvas and where the reader is in it (the canvas reports it), for an agent that asks. */
+	tourState(): { id: string; steps: number; index: number | undefined; paused: boolean } | undefined {
+		return this.playing && { id: this.playing.id, steps: this.playing.steps, index: this.tourAt?.index, paused: this.tourAt?.paused ?? false };
+	}
+
+	/** Moves the reader of the playing tour to a step (the agent answers a question and points at the code that does). */
+	async tourGo(index: number) {
+		if (this.playing && this.panel && index >= 0 && index < this.playing.steps) {
+			await this.panel.webview.postMessage({ type: 'tourStep', id: this.playing.id, index });
+		}
+	}
+
+	/** Closes the playing tour, from the agent's side. */
+	async endTour() {
+		const playing = this.playing;
+		this.playing = undefined;
+		this.tourAt = undefined;
+		if (playing && this.panel) {
+			await this.panel.webview.postMessage({ type: 'tourEnd', id: playing.id, reason: 'agent' });
+		}
+	}
+
 	/** Editor → canvas: the canvas highlights the card holding this line. */
 	cursorMoved(file: string, line: number) {
 		void this.panel?.webview.postMessage({ type: 'cursor', file, line });

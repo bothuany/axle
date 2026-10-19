@@ -199,6 +199,66 @@ export const TOOLS: ToolDef[] = [
 		},
 		annotations: ro('Update a board node'),
 	},
+	{
+		name: 'tour',
+		description: "Play a narrated walkthrough on Axle's flow canvas: a cursor moves from card to card, dims the rest, highlights lines and shows your caption. Use it when the user asks you to explain, walk through or show code, after finishing work (\"explain what you changed\"), or to answer a question about code by SHOWING it. Get file:line from flow_text or find_symbol first. 3-12 steps, one idea each, in the order the code runs; captions say WHY and what to watch, not what the code says, in the user's language. Name each step's code by `file` + `method` (preferred: it survives edits) with a `line` hint, and `lines` for the few lines the caption talks about; a step with only a caption is an intro or an outro; `table` points at a database card. The tool returns at once with each step marked ok / moved / missing / offflow: fix a missing step by calling tour again with the same id. The user steps through it; questions they ask come back to you as a new message. Run the `tour_guide` prompt for the full advice.",
+		inputSchema: {
+			type: 'object',
+			properties: {
+				id: str('Stable name (letters, digits, - _ .). Reuse it to replace the tour.'),
+				title: { type: 'string', maxLength: 120, description: 'What the tour is about.' },
+				flow: {
+					type: 'object',
+					description: 'The canvas to play on. Omit to stay on the canvas the user has open, or to let Axle open the flow of the first step. Use {"changes": true} for the current git changes.',
+					properties: {
+						id: str('Entry point id from find_entry_points.'),
+						file: str('Source file of the method whose flow to show. Use with `method` or `line`.'),
+						method: str('Method or function name in `file`.'),
+						line: int('1-based line inside the method.'),
+						changes: { type: 'boolean', description: 'Play on the change set (the flows the changed files reach, cut down to the changed cards).' },
+						base: { type: 'string', enum: ['uncommitted', 'branch', 'last_commit'], description: 'With changes: what they are measured against (default uncommitted).' },
+					},
+					additionalProperties: false,
+				},
+				steps: {
+					type: 'array', minItems: 1, maxItems: 30,
+					items: {
+						type: 'object',
+						properties: {
+							file: str('Workspace file of the code this step points at.'),
+							method: str('Method or function, e.g. "OrderService.Place". Preferred: survives edits.'),
+							line: int('1-based line inside the method (a hint when method is given).'),
+							lines: { type: 'array', maxItems: 3, description: 'Line ranges to highlight, current-file 1-based, e.g. [[42,47]].', items: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1, maxItems: 2 } },
+							table: str('A database card instead of code: the table name.'),
+							title: { type: 'string', maxLength: 80, description: 'Short label for the step list; defaults to the method.' },
+							caption: { type: 'string', maxLength: 600, description: 'What to say here: one or two sentences on WHY, not a restatement of the code. Plain text; `code` in backticks is shown as code.' },
+						},
+						required: ['caption'],
+						additionalProperties: false,
+					},
+				},
+				start: int('Step to open on (default 1).'),
+			},
+			required: ['title', 'steps'],
+			additionalProperties: false,
+		},
+		annotations: ro('Play a tour in Axle'),
+	},
+	{
+		name: 'tour_control',
+		description: "Drive the tour you started with `tour`. go: jump the user to a step (only while they are paused, or after they asked a question: the user paces the tour, so do not fight them) · end: close the tour. Returns where the user is and whether they paused.",
+		inputSchema: {
+			type: 'object',
+			properties: {
+				id: str('Tour id.'),
+				action: { type: 'string', enum: ['go', 'end'] },
+				step: int('go: the step to jump to (1-based).'),
+			},
+			required: ['id', 'action'],
+			additionalProperties: false,
+		},
+		annotations: ro('Control the tour', false),
+	},
 ];
 
 export const TOOL_NAMES = new Set(TOOLS.map(t => t.name));
