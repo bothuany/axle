@@ -139,6 +139,8 @@ const PATCH_TOOL = 'apply_patch';
 const PRE_TOOLS = `${EDIT_TOOLS}|ExitPlanMode|AskUserQuestion`;
 /** The most files of one turn that are checked for the flows they affect. */
 const MAX_TOUCHED = 40;
+/** How long after a typed line the Enter that submits it is sent (see typeInto). */
+const SUBMIT_DELAY_MS = 300;
 /** The turn-end impact may take this long: Roslyn answers one request at a time. */
 const IMPACT_WAIT_MS = 9000;
 const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure', 'Notification', 'Stop', 'StopFailure', 'SubagentStop', 'SessionEnd'];
@@ -726,7 +728,18 @@ export class Agents implements vscode.Disposable {
 			return false;
 		}
 		t.show();
-		t.sendText(typed, submit);
+		t.sendText(typed, false);
+		if (submit) {
+			// Claude Code takes a long line for a paste, and an Enter that arrives in the same write only adds a line to the draft
+			// (found with a real session): the Enter goes on its own, a moment later.
+			setTimeout(() => {
+				try {
+					t.sendText('', true);
+				} catch {
+					// the terminal was closed in between
+				}
+			}, SUBMIT_DELAY_MS);
+		}
 		return true;
 	}
 
