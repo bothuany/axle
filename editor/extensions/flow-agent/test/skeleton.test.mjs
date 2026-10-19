@@ -42,7 +42,7 @@ test('the row from flow-view is taken only in its own shape', () => {
 })
 
 test('buttons: Write and Just do it side by side once the design is drawn; Check and Hand over only at the prompt', () => {
-	assert.deepEqual(k.rowActions({ ...VIEW, stage: 'design', drawn: false }, true), ['just'])
+	assert.deepEqual(k.rowActions({ ...VIEW, stage: 'design', drawn: false }, true), [], 'no design, no offer: a plan that adds no types is implemented as usual')
 	assert.deepEqual(k.rowActions({ ...VIEW, stage: 'design' }, true), ['write', 'just', 'board'])
 	assert.deepEqual(k.rowActions({ ...VIEW, stage: 'skeleton' }, true), ['check', 'handover', 'just', 'board'])
 	assert.deepEqual(k.rowActions({ ...VIEW, stage: 'skeleton' }, false), ['just', 'board'])

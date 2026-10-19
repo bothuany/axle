@@ -48,7 +48,7 @@ export function readView(raw: unknown): SkeletonView | undefined {
 export function rowActions(v: SkeletonView, atPrompt: boolean): SkeletonAction[] {
 	switch (v.stage) {
 		case 'design':
-			return v.drawn ? ['write', 'just', 'board'] : ['just'];
+			return v.drawn ? ['write', 'just', 'board'] : [];
 		case 'skeleton':
 			return [...(atPrompt ? ['check', 'handover'] as const : []), 'just', 'board'];
 		case 'handover':

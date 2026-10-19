@@ -46,7 +46,7 @@ Home's prompt and **Ask about this flow** send the question to the agent you cho
 
 ## How agent status works
 
-Axle starts `claude` with `--settings <file>` that adds observe-only hooks on top of your own settings (your hooks still run). Each hook runs a small Node script that posts the event to the Axle window. The hooks never answer a permission question: Claude Code keeps asking you itself.
+Axle starts `claude` with `--settings <file>` that adds observe-only hooks on top of your own settings (your hooks still run). Each hook runs a small Node script that posts the event to the Axle window. The hooks never answer a permission question: Claude Code keeps asking you itself. The one thing a hook hands back is context for the agent to read: while **Skeleton first** is on, the hook after a plan is approved (`PostToolUse` on `ExitPlanMode`) reminds Claude to call `check_skeleton` before its first edit.
 
 Codex reads hooks only from its config layers, so Axle writes its own profile, `$CODEX_HOME/axle.config.toml`, the first time it starts Codex, and starts it with `codex -p axle`; your `config.toml` is not changed, and a `codex` you start yourself does not see these hooks. Codex runs a hook only after you trust it: run `/hooks` in Codex once and trust Axle's. Until then the dock shows a hint instead of a status. An older Codex that cannot take `-p axle` is started as before, without status. Turn it off with `flow.agents.codexHooks`.
 

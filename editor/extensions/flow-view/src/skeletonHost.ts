@@ -82,9 +82,9 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			if (this.sessions.size >= MAX_SESSIONS) {
 				return 'Skeleton first: too many agent sessions are in the middle of it in this window. Implement the plan as usual.';
 			}
+			// No row yet: a plan that adds no types never gets a design, and the dock must not offer a choice for it.
 			s = newSession(id);
 			this.sessions.set(id, s);
-			this.push(s);
 		}
 		if (s.stage !== 'design') {
 			await this.recompute(s);
@@ -314,7 +314,7 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 
 	/** Tells the dock what to show on the session's row (nothing for an agent Axle did not start: it has no row). */
 	private push(s: SkeletonSession | { session: string }, gone = false) {
-		if (!s.session) {
+		if (!s.session || (!gone && 'stage' in s && s.stage === 'design' && !s.plan)) {
 			return;
 		}
 		// Without flow-agent there is no dock to tell (and the switch reads as off): only a failure of a dock that is there is worth a line.

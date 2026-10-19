@@ -3,7 +3,8 @@
  *  terminal; Axle only watches. Claude reports through hooks that Axle hands to that one
  *  session with --settings (the user's own settings and hooks are untouched and still run), so
  *  every agent shows whether it is working, waiting for you or done, what it is doing, its to-do
- *  list and how full its context is. The hooks never answer a permission question: the CLI asks.
+ *  list and how full its context is. The hooks never answer a permission question: the CLI asks. The only thing
+ *  they hand back is context for the agent (skeleton first's reminder when a plan is approved).
  *--------------------------------------------------------------------------------------------*/
 
 import { execFile } from 'child_process';
@@ -260,13 +261,16 @@ process.stdin.on('data', d => body += d).on('end', () => {
 	const req = http.request({ host: '127.0.0.1', port, path: '/hook', method: 'POST', timeout: 3000, headers: { 'Content-Type': 'application/json', 'X-Flow-Token': token, 'X-Flow-Agent': process.env.FLOW_AGENT_SESSION || '' } }, res => {
 		let out = '';
 		res.setEncoding('utf8');
-		res.on('data', d => { if (out.length < 8000) out += d; });
+		res.on('data', d => { out += d; if (out.length > 8000) res.destroy(); });
 		res.on('end', () => {
-			try {
-				const o = JSON.parse(out).hookSpecificOutput;
-				if (o && typeof o.hookEventName === 'string' && typeof o.additionalContext === 'string') process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: o.hookEventName, additionalContext: o.additionalContext.slice(0, 4000) } }));
-			} catch {}
-			process.exit(0);
+			// Only the one text Axle sends, exactly: whatever else answers on this port cannot put words into the agent's context.
+			let o;
+			try { o = JSON.parse(out).hookSpecificOutput; } catch {}
+			if (o && o.hookEventName === 'PostToolUse' && o.additionalContext === ${JSON.stringify(SKELETON_GATE)}) {
+				process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: o.additionalContext } }), () => process.exit(0));
+			} else {
+				process.exit(0);
+			}
 		});
 	});
 	req.on('error', () => process.exit(0)).on('timeout', () => { req.destroy(); process.exit(0); });

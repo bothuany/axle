@@ -91,7 +91,11 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 
 	/** A session's skeleton-first row with the buttons it may show now; the page sends back only an action name or a warning's index. */
 	private skeletonRow(s: Parameters<Agents['atPrompt']>[0]) {
+		// No design drawn yet means no offer: the agent may be on a plan that adds no types, and implements it as usual.
 		const v = s.state === 'ended' ? undefined : this.agents.skeletons.get(s.id);
+		if (v?.stage === 'design' && !v.drawn) {
+			return undefined;
+		}
 		return v && { ...v, actions: rowActions(v, this.agents.atPrompt(s)) };
 	}
 
