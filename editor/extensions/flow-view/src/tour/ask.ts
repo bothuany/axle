@@ -60,7 +60,7 @@ export const place = (file: string, startLine: number, endLine: number) => `${fi
 /** What the agent that made the tour is told when the reader asks about a step (3.6 of the design). `step` is 1-based. */
 export function tourAskPrompt(tour: { id: string; title: string }, step: number, steps: number, what: { label: string; where?: string }, question: string): string {
 	return [
-		`The user is on step ${step} of ${steps} of your tour "${oneLine(tour.id, 80)}" (${oneLine(what.label, MAX_LABEL)}${what.where ? `, ${what.where}` : ''}) and asks, in their own words: ${JSON.stringify(question)}.`,
+		`The user is on step ${step} of ${steps} of your tour "${oneLine(tour.id, 80)}" (${oneLine(what.label, MAX_LABEL)}${what.where ? `, ${oneLine(what.where, MAX_LABEL)}` : ''}) and asks, in their own words: ${JSON.stringify(question)}.`,
 		`Answer with the axle tool \`tour_control\`: action "note" for id "${oneLine(tour.id, 80)}" step ${step} (and action "go" with the step that answers it better, if there is one), then action "resume".`,
 		'Keep the note short; if the answer needs more than a note, start a new tour with `tour`.',
 	].join(' ');
@@ -69,7 +69,7 @@ export function tourAskPrompt(tour: { id: string; title: string }, step: number,
 /** What the agent is told when the reader points at code and asks (6 of the design). `where`: a workspace-relative path with lines. */
 export function pointAskPrompt(p: { label: string; where: string; flow?: string; question: string }): string {
 	return [
-		`The user points at ${oneLine(p.label, MAX_LABEL)} (${p.where})${p.flow ? ` on the flow "${oneLine(p.flow, MAX_LABEL)}"` : ''} and asks, in their own words: ${JSON.stringify(p.question)}.`,
+		`The user points at ${oneLine(p.label, MAX_LABEL)} (${oneLine(p.where, MAX_LABEL)})${p.flow ? ` on the flow "${oneLine(p.flow, MAX_LABEL)}"` : ''} and asks, in their own words: ${JSON.stringify(p.question)}.`,
 		'Answer by showing: call the axle tool `tour` with 1 to 5 steps starting at that code (leave `flow` out: the canvas already shows it), captions that answer the question; then a one-paragraph answer here.',
 		'If you cannot call mcp__axle__tour, answer in text.',
 	].join(' ');

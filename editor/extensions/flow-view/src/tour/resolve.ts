@@ -95,7 +95,9 @@ function distance(a: string, b: string): number {
 export function closestNames(methods: readonly Method[], wanted: string): string[] {
 	const w = segments(wanted);
 	const last = w.pop() ?? '';
-	return [...new Set(methods.map(m => m.name))]
+	const limit = Math.max(3, Math.floor(last.length / 3));
+	return [...new Set(methods.slice(0, 2000).map(m => m.name))]
+		.filter(name => Math.abs((segments(name).pop() ?? '').length - last.length) <= limit + 10)
 		.map(name => {
 			const n = segments(name);
 			const l = n.pop() ?? '';

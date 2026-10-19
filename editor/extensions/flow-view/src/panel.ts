@@ -58,7 +58,8 @@ function workspaceFile(file: unknown): string | undefined {
 	if (typeof file !== 'string' || !file) {
 		return undefined;
 	}
-	const uri = vscode.Uri.file(file);
+	// `..` and `.` are collapsed first: the folder check below is on the spelling, and `C:\ws\..\secret` is not inside C:\ws.
+	const uri = vscode.Uri.file(path.resolve(file));
 	return vscode.workspace.getWorkspaceFolder(uri) ? uri.fsPath : undefined;
 }
 
@@ -255,8 +256,8 @@ export class FlowPanel implements vscode.Disposable {
 	}
 
 	/** The tour playing on the canvas and where the reader is in it (the canvas reports it), for an agent that asks. */
-	tourState(): { id: string; steps: number; index: number | undefined; paused: boolean; asking: boolean } | undefined {
-		return this.playing && { id: this.playing.id, steps: this.playing.steps, index: this.tourAt?.index, paused: this.tourAt?.paused ?? false, asking: this.asking };
+	tourState(): { id: string; steps: number; index: number | undefined; paused: boolean; asking: boolean; session?: string } | undefined {
+		return this.playing && { id: this.playing.id, steps: this.playing.steps, index: this.tourAt?.index, paused: this.tourAt?.paused ?? false, asking: this.asking, session: this.playing.session };
 	}
 
 	/** Pins an agent's answer to a step (a note on its card, shown until the tour ends). A message names what is wrong, nothing when it was pinned. */

@@ -44,6 +44,11 @@ export interface TourFileHost {
 
 /** `file` as an absolute path inside one of the roots, else nothing (`../../etc/passwd`, another drive, an absolute path elsewhere). */
 export function insideWorkspace(roots: readonly string[], file: string): string | undefined {
+	// A name with a line break or a control character is not a file a tour points at: it would end up in a terminal prompt.
+	// eslint-disable-next-line no-control-regex
+	if (/[\x00-\x1f\x7f-\x9f]/.test(file)) {
+		return undefined;
+	}
 	for (const root of roots) {
 		const abs = path.resolve(root, file);
 		const rel = path.relative(root, abs);

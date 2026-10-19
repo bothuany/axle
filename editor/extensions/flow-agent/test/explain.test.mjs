@@ -64,6 +64,13 @@ test('text an agent or a file name cannot carry a second line into the prompt', 
 	assert.doesNotMatch(text, /[\r\n]/)
 })
 
+test('no key or escape sequence of a terminal gets through in a name or a path', () => {
+	const esc = String.fromCharCode(27)
+	const text = e.explainPrompt([at(`a${esc}[2Jb.cs`)], { methods: [{ file: at(`x${esc}]0;evil${String.fromCharCode(7)}.cs`), name: `M${String.fromCharCode(3)}${String.fromCharCode(0x85)}` }] }, root)
+	assert.doesNotMatch(text, /[\x00-\x1f\x7f-\x9f]/)
+	assert.match(text, /Changed: M/)
+})
+
 test('canExplain: only a turn that edited something', () => {
 	assert.equal(e.canExplain(0), false)
 	assert.equal(e.canExplain(2), true)

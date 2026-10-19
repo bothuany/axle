@@ -71,6 +71,14 @@ test('a question cannot break out of its quotes or add a second line to the prom
 	assert.doesNotMatch(pointed, /[\r\n]/)
 })
 
+test('a path or a label with a control character cannot put one into the prompt', () => {
+	const esc = String.fromCharCode(27)
+	const bell = String.fromCharCode(7)
+	const text = a.tourAskPrompt({ id: `t${esc}`, title: 'T' }, 1, 1, { label: `M${bell}`, where: `a${esc}[2J.cs:1` }, 'q')
+	const pointed = a.pointAskPrompt({ label: `M${esc}`, where: `a${esc}.cs:1`, flow: `f${bell}`, question: 'q' })
+	assert.doesNotMatch(text + pointed, /[\x00-\x1f\x7f-\x9f]/)
+})
+
 test('the prompt for pointing at code asks for a tour that starts there, and a text answer when there are no tools', () => {
 	const text = a.pointAskPrompt({ label: 'OrderService.Place', where: a.place('src/Orders/OrderService.cs', 71, 76), flow: 'POST /orders', question: 'What does this do?' })
 	assert.match(text, /points at OrderService\.Place \(src\/Orders\/OrderService\.cs:71-76\) on the flow "POST \/orders" and asks, in their own words: "What does this do\?"/)

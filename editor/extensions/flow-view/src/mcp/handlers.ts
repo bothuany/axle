@@ -68,7 +68,7 @@ export interface CallContext {
 export interface TourPlayer {
 	/** `session`: the agent session that made it, when it said (AXLE_SESSION): the reader's questions go back to it. */
 	play(tour: Tour, session?: string): Promise<void>;
-	state(): { id: string; steps: number; index: number | undefined; paused: boolean; asking: boolean } | undefined;
+	state(): { id: string; steps: number; index: number | undefined; paused: boolean; asking: boolean; session?: string } | undefined;
 	go(index: number): Promise<void>;
 	/** Pins an agent's answer to a step; a message says what is wrong, nothing when it was pinned. */
 	note(index: number, text: string): Promise<string | undefined>;
@@ -148,7 +148,7 @@ export class AgentTools {
 				case 'draw_board': return await this.draw(a);
 				case 'update_board': return await this.update(a);
 				case 'tour': return await this.tour(a, ctx);
-				case 'tour_control': return await this.tourControl(a);
+				case 'tour_control': return await this.tourControl(a, ctx);
 				default: return errorResult(`Unknown tool: ${tool}`);
 			}
 		} catch (e) {
@@ -998,11 +998,15 @@ export class AgentTools {
 		].filter(Boolean).join('\n'));
 	}
 
-	private async tourControl(a: Record<string, unknown>): Promise<ToolResult> {
+	private async tourControl(a: Record<string, unknown>, ctx: CallContext): Promise<ToolResult> {
 		const id = typeof a.id === 'string' ? a.id : '';
 		const state = this.d.tours.state();
 		if (!state || state.id !== id) {
 			throw new Error(state ? `No tour "${id}" is playing; the one playing is "${state.id}".` : `No tour "${id}" is playing (it was closed, or the canvas is gone). Start one with \`tour\`.`);
+		}
+		// A tour an agent session made is driven by that session: another agent answering its user's question would pin a note "from the agent" it did not write.
+		if (state.session && ctx.session !== state.session) {
+			throw new Error(`Tour "${id}" was started by another agent session: only that session can drive it.`);
 		}
 		const where = `The user is on step ${(state.index ?? 0) + 1} of ${state.steps}${state.paused ? ' and has paused' : ''}.`;
 		if (a.action === 'end') {

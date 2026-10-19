@@ -150,6 +150,12 @@ test('flow: an endpoint, an id, a file inside the workspace; one outside is refu
 	fails(file({ flow: { file: '../secret.txt' } }), /flow\.file.*not inside the workspace/)
 })
 
+test('insideWorkspace: a name with a line break or a control character is no file (it would end up in a terminal prompt)', () => {
+	const roots = [join(work, 'proj')]
+	for (const code of [10, 13, 27, 3, 4, 0x85]) assert.equal(v.insideWorkspace(roots, `a${String.fromCharCode(code)}b.cs`), undefined, String(code))
+	assert.equal(v.insideWorkspace(roots, 'a b.cs'), join(work, 'proj', 'a b.cs'), 'a space is a name')
+})
+
 test('insideWorkspace: relative paths inside a root, nothing that leaves it', () => {
 	const roots = [join(work, 'proj')]
 	assert.equal(v.insideWorkspace(roots, 'a/b.js'), join(work, 'proj', 'a', 'b.js'))

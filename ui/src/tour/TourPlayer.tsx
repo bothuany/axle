@@ -151,7 +151,7 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
   // The reader asks about the step they are on: the tour waits (paused, the step stays lit) and the host puts the question to the agent that made it.
   const ask = (question: string) => {
     const q = question.replace(/\s+/g, ' ').trim().slice(0, 1000)
-    if (!tour || tour.source === 'review' || !q) return false
+    if (!tour || tour.source !== 'agent' || !q) return false
     dispatch({ type: 'ask' })
     env.post({ type: 'tourAsk', id: tour.id, index: state.index, question: q })
     return true
@@ -345,7 +345,7 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
     startReview,
     onClickCapture,
     /** Rendered before the canvas, so it stays the first of its kind in the page. */
-    bar: (extras?: ReactNode): ReactNode => tour && <TourBar tour={tour} state={state} api={api} extras={extras} ask={tour.source === 'review' ? undefined : { ask, inputRef: askRef }} />,
+    bar: (extras?: ReactNode): ReactNode => tour && <TourBar tour={tour} state={state} api={api} extras={extras} ask={tour.source === 'agent' ? { ask, inputRef: askRef } : undefined} />,
     /** Rendered inside <ReactFlow>: the cursor and the peek card live in flow coordinates. */
     flowLayer,
     /** Rendered after <ReactFlow>, inside the canvas: the caption lives in screen coordinates, so it stays readable at any zoom. */

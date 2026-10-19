@@ -23,7 +23,7 @@ import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
 import { canExplain, explainPrompt } from './explain';
-import { canType, notReady, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
+import { canType, notReady, oneLine, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 import { createWorktree, sameDir, validBranch, worktreeSlug, type Worktree } from './worktrees';
 
@@ -718,11 +718,14 @@ export class Agents implements vscode.Disposable {
 	typeInto(id: string, line: string, submit: boolean, customs: CustomCli[]): boolean {
 		const t = this.terminals.get(id);
 		const s = this.askSessions().find(x => x.id === id);
-		if (!t || !s || !canType(s, customs) || !line) {
+		// One line of plain characters, whoever built it: a file name or a method name may hold a line break or a terminal's escape or
+		// control keys (Ctrl+C, Ctrl+D), and none of them may reach the prompt or the shell behind it.
+		const typed = oneLine(line);
+		if (!t || !s || !canType(s, customs) || !typed) {
 			return false;
 		}
 		t.show();
-		t.sendText(line, submit);
+		t.sendText(typed, submit);
 		return true;
 	}
 
@@ -1220,8 +1223,8 @@ export class Agents implements vscode.Disposable {
 	explain(id: string, customs: CustomCli[]) {
 		const s = this.sessions.get(id);
 		const files = [...(this.touched.get(id) ?? [])];
-		if (!s || !canExplain(files.length)) {
-			void vscode.window.showInformationMessage('Axle: nothing to explain: this agent has not edited a file since its last prompt.');
+		if (!s || !this.canExplain(s)) {
+			void vscode.window.showInformationMessage(s && canExplain(files.length) ? `Axle: ${s.name} is not at its prompt: choose Explain this again when it is.` : 'Axle: nothing to explain: this agent has not edited a file since its last prompt.');
 			return;
 		}
 		const text = explainPrompt(files, this.turns.get(id)?.impact, this.rootOf(s));

@@ -57,5 +57,7 @@ export function explainPrompt(files: readonly string[], impact: ExplainImpact | 
 		const list = files.slice(0, MAX_FILES).map(f => shown(f, root));
 		lines.push(`The files you edited this turn: ${list.join(', ')}${files.length > MAX_FILES ? ` and ${files.length - MAX_FILES} more` : ''}.`);
 	}
-	return lines.join(' ').replace(/\s*[\r\n]+\s*/g, ' ').replace(/ {2,}/g, ' ').trim();
+	// A name from the index or a file name may hold any character: nothing a terminal takes for a key or an escape gets through.
+	// eslint-disable-next-line no-control-regex
+	return lines.join(' ').replace(/[\x00-\x1f\x7f-\x9f]+/g, ' ').replace(/ {2,}/g, ' ').trim();
 }
