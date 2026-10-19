@@ -9,6 +9,8 @@
   --fl-muted: var(--vscode-descriptionForeground, #8b8b8b);
   --fl-faint: color-mix(in srgb, var(--fl-muted) 62%, transparent);
   --fl-signal: #6f86ff;
+  /* A tour's colour: its agent's, set on the page while it plays (TourPlayer.tsx); the canvas's own otherwise. */
+  --tour-ink: var(--fl-signal);
   --fl-add: #5fe0a1;
   --fl-del: #ff6b7d;
   --fl-mono: var(--vscode-editor-font-family, 'JetBrains Mono', Menlo, monospace);
@@ -179,11 +181,13 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .tl-undo { margin-top: 6px; flex: none; }
 .tl-all { margin: 6px 0 0 16px; }
 
-.tour { position: absolute; z-index: 15; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; max-width: calc(100% - 24px); padding: 5px 6px 5px 6px; border: 1px solid var(--fl-line-strong); border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); }
+.tour { position: absolute; z-index: 15; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; max-width: calc(100% - 24px); padding: 4px 6px 6px; border-radius: 12px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: 0 0 0 1px var(--fl-line-strong), var(--fl-lift); }
+/* How far the tour has come, in its colour, along the bar's bottom edge. */
+.tour::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 2px; height: 2px; border-radius: 2px; background: linear-gradient(to right, var(--tour-ink) var(--progress, 0%), var(--fl-line) var(--progress, 0%)); pointer-events: none; }
 .tour-pos { font: 600 11.5px var(--fl-mono); color: var(--fl-muted); min-width: 36px; text-align: center; }
 .tour-label { font: 12px var(--fl-mono); color: var(--fl-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; margin: 0 6px; }
 .icon-btn:disabled { opacity: .35; cursor: default; }
-.tour.paused { border-style: dashed; }
+.tour.paused::after { opacity: .35; }
 .tour-pos { background: none; border: 0; padding: 3px 4px; border-radius: 5px; cursor: pointer; }
 .tour-pos:hover { background: var(--fl-line); }
 .tour-steps { position: relative; display: inline-flex; }
@@ -196,9 +200,9 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .tour-paused { color: var(--fl-muted); }
 .tour-ask { display: flex; flex: 1 1 160px; min-width: 110px; max-width: 260px; margin: 0 4px; }
 .tour-ask input { width: 100%; min-width: 0; padding: 3px 8px; border: 1px solid var(--fl-line-strong); border-radius: 6px; background: var(--fl-card); color: var(--fl-text); font: 12px var(--fl-mono); }
-.tour-ask input:focus { outline: 1.5px solid var(--fl-signal); outline-offset: 0; }
-.tour-asking { color: var(--fl-signal); font-size: 11.5px; }
-.point-ask { position: absolute; z-index: 16; padding: 8px 10px 9px; border: 1px solid color-mix(in srgb, var(--fl-signal) 55%, transparent); border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); color: var(--fl-text); pointer-events: auto; max-width: calc(100% - 16px); }
+.tour-ask input:focus { outline: 1.5px solid var(--tour-ink); outline-offset: 0; }
+.tour-asking { color: var(--tour-ink); font-size: 11.5px; }
+.point-ask { position: absolute; z-index: 16; padding: 8px 10px 9px; border: 1px solid var(--fl-line-strong); border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); color: var(--fl-text); pointer-events: auto; max-width: calc(100% - 16px); }
 .point-ask-what { margin-bottom: 6px; color: var(--fl-muted); font: 11.5px var(--fl-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .point-ask-what b { color: var(--fl-text); }
 .point-ask input { width: 100%; padding: 5px 8px; border: 1px solid var(--fl-line-strong); border-radius: 6px; background: var(--fl-card); color: var(--fl-text); font: 12.5px var(--fl-mono); }
@@ -207,32 +211,35 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 
 /* ---- guided tours: the ghost cursor, the lit lines, the caption, the peek card (src/tour) ---- */
 /* Cards sit at z-index 1000 (selected cards above that is React Flow's own), so the cursor and the peek card are above them. */
-.tour-cursor { position: absolute; left: 0; top: 0; z-index: 2000; pointer-events: none; opacity: 0; transition: opacity .15s; filter: drop-shadow(0 1px 1px #0009) drop-shadow(0 5px 10px color-mix(in srgb, var(--tc) 40%, transparent)); will-change: transform; }
+.tour-cursor { position: absolute; left: 0; top: 0; z-index: 2000; pointer-events: none; opacity: 0; transition: opacity .15s; will-change: transform; }
 .tour-cursor.on { opacity: 1; }
-.tour-cursor svg { position: relative; display: block; }
-/* A soft glow under the tip, and the ring that spreads from it when the pointer lands (Cursor.tsx). */
-.tour-cursor::before { content: ''; position: absolute; left: -15px; top: -15px; width: 34px; height: 34px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--tc) 38%, transparent), transparent 68%); }
-.tour-cursor-ping { position: absolute; left: 2px; top: 1.5px; width: 22px; height: 22px; border: 1.5px solid var(--tc); border-radius: 50%; box-shadow: 0 0 8px var(--tc); opacity: 0; }
-.tour-cursor-tag { position: absolute; left: 15px; top: 19px; display: flex; align-items: center; gap: 4px; padding: 2px 8px 2px 6px; border: 1px solid #ffffff55; border-radius: 99px; background: linear-gradient(135deg, color-mix(in srgb, var(--tc) 70%, #fff), var(--tc) 60%, color-mix(in srgb, var(--tc) 80%, #000)); color: #0b0d12; font: 600 10.5px/1.35 var(--fl-mono); letter-spacing: .01em; white-space: nowrap; box-shadow: 0 2px 6px #0005; }
-.tour-cursor-tag i { width: 5px; height: 5px; border-radius: 50%; background: #0b0d12; box-shadow: 0 0 0 2px #ffffff80; }
+.tour-cursor-tip { transform-origin: 2px 2px; }
+/* The agent's arrow (tour/Arrow.tsx): flat, in the agent's colour, with a rim dark enough to read on any card. */
+.agent-arrow { display: block; overflow: visible; }
+.agent-arrow path { fill: var(--ink, var(--tour-ink)); stroke: color-mix(in srgb, var(--ink, var(--tour-ink)) 22%, #000); stroke-width: 2.2; stroke-linejoin: round; paint-order: stroke; }
+.tour-cursor .agent-arrow { filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / .45)); }
+/* The name: a small solid tag at the arrow's foot, in the agent's colour, so it reads over code. */
+.tour-cursor-name { position: absolute; left: 20px; top: 21px; padding: 2px 5px 3px; border-radius: 4px; background: var(--ink, var(--tour-ink)); color: color-mix(in srgb, var(--ink, var(--tour-ink)) 18%, #000); font: 650 10.5px/1 var(--fl-ui); white-space: nowrap; box-shadow: 0 1px 2px rgb(0 0 0 / .35); }
 .tour-layer { position: absolute; inset: 0; z-index: 14; pointer-events: none; overflow: hidden; }
-.tour-caption { position: absolute; width: 360px; max-width: calc(100% - 16px); padding: 10px 12px 11px; border: 1px solid color-mix(in srgb, var(--fl-signal) 55%, transparent); border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); color: var(--fl-text); font-size: 12.5px; line-height: 1.5; pointer-events: auto; animation: tour-in .18s ease-out; }
+.tour-caption { position: absolute; width: 360px; max-width: calc(100% - 16px); padding: 10px 13px 11px; border: 0; border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); color: var(--fl-text); font-size: 12.5px; line-height: 1.5; pointer-events: auto; animation: tour-in .18s ease-out; }
 .tour-caption.missing { opacity: .6; border-style: dashed; }
-.tour-caption-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.tour-caption-head { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+.tour-caption-arrow { flex: none; }
+.tour-caption-head .tour-mark { margin-left: auto; }
 .tour-caption-head b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px var(--fl-mono); }
 .tour-caption p { margin: 0; }
 .tour-caption-text.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .tour-caption code { font: 11.5px var(--fl-mono); padding: 0 4px; border-radius: 4px; background: var(--fl-line); }
-.tour-more { background: none; border: 0; padding: 0; margin-top: 2px; color: var(--fl-signal); font-size: 11.5px; cursor: pointer; }
+.tour-more { background: none; border: 0; padding: 0; margin-top: 2px; color: var(--tour-ink); font-size: 11.5px; cursor: pointer; }
 .tour-warn { margin-top: 6px !important; color: var(--fl-muted); font-size: 11.5px; }
-.tour-note { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--fl-line); }
+.tour-note { margin-top: 9px; padding: 1px 0 1px 10px; box-shadow: inset 2px 0 0 color-mix(in srgb, var(--tour-ink) 60%, transparent); }
 .tour-q { font-style: italic; color: var(--fl-muted); }
 .tour-from { color: var(--fl-muted); font-size: 10.5px; }
 @keyframes tour-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.tour-peek { position: absolute; z-index: 1001; display: flex; flex-direction: column; overflow: hidden; border: 1.5px dashed color-mix(in srgb, var(--fl-signal) 60%, var(--fl-line-strong)); border-radius: 8px; background: color-mix(in srgb, var(--fl-card) 70%, transparent); box-shadow: var(--fl-lift); pointer-events: none; }
+.tour-peek { position: absolute; z-index: 1001; display: flex; flex-direction: column; overflow: hidden; border: 1.5px dashed color-mix(in srgb, var(--tour-ink) 60%, var(--fl-line-strong)); border-radius: 8px; background: color-mix(in srgb, var(--fl-card) 70%, transparent); box-shadow: var(--fl-lift); pointer-events: none; }
 .tour-peek-head { flex: none; display: flex; align-items: center; gap: 9px; padding: 0 11px; border-bottom: 1px solid var(--fl-line); }
 .tour-peek-tag { padding: 1px 6px; border-radius: 4px; background: var(--fl-line); color: var(--fl-muted); font: 600 10px var(--fl-mono); white-space: nowrap; }
-.tour-peek .ln.tour-lit { background: color-mix(in srgb, var(--fl-signal) 20%, transparent); box-shadow: inset 2px 0 0 var(--fl-signal); }
+.tour-peek .ln.tour-lit { background: color-mix(in srgb, var(--tour-ink) 18%, transparent); box-shadow: inset 2px 0 0 var(--tour-ink); }
 @media (prefers-reduced-motion: reduce) {
   .tour-caption { animation: none; }
   .tour-cursor { transition: none; }

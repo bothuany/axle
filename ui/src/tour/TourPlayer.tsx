@@ -303,6 +303,16 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
   const lit = here && (!state.paused || !!state.asking)
   const touring = lit && target.kind !== 'none'
 
+  // The whole tour wears its agent's colour (the cursor, the outline, the lit lines, the caption's mark, the bar's progress).
+  // Set as a property on the page, never pasted into a style sheet: the colour comes from the dock.
+  const ink = tour?.agent?.color
+  useEffect(() => {
+    const root = document.documentElement.style
+    if (ink) root.setProperty('--tour-ink', ink)
+    else root.removeProperty('--tour-ink')
+    return () => { root.removeProperty('--tour-ink') }
+  }, [ink])
+
   // ---- the spotlight: per-card CSS by data-id, so no card's layout is touched ---------------------------------
   const css = useMemo(() => {
     if (!touring || !step) return ''
@@ -310,11 +320,11 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
     if (spot) {
       const k = q(spot)
       rules.push(`.wv-touring .react-flow__node[data-id="${k}"] { opacity: 1 }`)
-      rules.push(`.wv-touring .react-flow__node[data-id="${k}"] .card { outline: 2px solid var(--fl-signal); outline-offset: 3px }`)
+      rules.push(`.wv-touring .react-flow__node[data-id="${k}"] .card { outline: 2px solid var(--tour-ink); outline-offset: 3px }`)
       // The wires into and out of it stay readable, so the reader still sees where the card sits in the flow.
       for (const e of env.edges) if (e.source === spot || e.target === spot) rules.push(`.wv-touring .react-flow__edge[data-testid="rf__edge-${q(e.id)}"] { opacity: .75 }`)
       const lines = highlightedLines(step.highlights)
-      if (lines.length) rules.push(`.wv-touring .react-flow__node[data-id="${k}"] .ln:is(${lines.map(n => `[data-line="${n}"]`).join(',')}) { background: color-mix(in srgb, var(--fl-signal) 20%, transparent); box-shadow: inset 2px 0 0 var(--fl-signal) }`)
+      if (lines.length) rules.push(`.wv-touring .react-flow__node[data-id="${k}"] .ln:is(${lines.map(n => `[data-line="${n}"]`).join(',')}) { background: color-mix(in srgb, var(--tour-ink) 20%, transparent); box-shadow: inset 2px 0 0 var(--tour-ink) }`)
     }
     return rules.join('\n')
   }, [touring, step, spot, env.edges])

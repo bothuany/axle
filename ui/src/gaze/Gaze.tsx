@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { ViewportPortal, useReactFlow, type Node } from '@xyflow/react'
 import { CODE_PAD, HEADER_H, LINE_H, type CardData } from '../layout'
 import type { CanvasToHostTour, FlowNode, GazeEvent } from '../types'
+import { Arrow } from '../tour/Arrow'
 import { lineY } from '../tour/geometry'
 import { baseName, BURST, keep, paint, sanitizeGaze, TRAIL_MS, type Marker } from './trail'
 import './gaze.css'
@@ -174,7 +175,7 @@ function Dot({ marker, index, instant }: { marker: Marker; index: number; instan
       title={`${marker.label} is here`}
       aria-hidden="true"
     >
-      <span key={pulsing} className={`gaze-dot${pulsing ? ' pulse' : ''}`}>{marker.label.slice(0, 1).toUpperCase()}</span>
+      <span key={pulsing} className={`gaze-dot${pulsing ? ' pulse' : ''}`}><Arrow size={14} /></span>
     </div>
   )
 }
