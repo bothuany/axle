@@ -10,6 +10,12 @@ import { countsText, diffText, type SkeletonDiff } from './match';
 
 export type Stage = 'design' | 'skeleton' | 'handover';
 
+/** What the MCP tools need of skeleton first: the answer of `check_skeleton`, and a board an agent drew. */
+export interface SkeletonTools {
+	check(session: string | undefined): Promise<string>;
+	drawn(id: string, spec: BoardSpec, session: string | undefined): void;
+}
+
 export interface SkeletonSession {
 	/** The Axle agent session (AXLE_SESSION); '' for an agent Axle did not start. */
 	session: string;
@@ -33,7 +39,8 @@ export interface SkeletonView {
 	drawn: boolean;
 	summary: string;
 	counts?: { matches: number; missing: number; differs: number };
-	warnings: { text: string; revert: boolean }[];
+	/** Each warning by a number that stays its own while the list changes: the dock sends it back, never a position. */
+	warnings: { id: number; text: string; revert: boolean }[];
 }
 
 /** The board id a session's design goes on: letters and digits of the session only, so it is a valid board id. */
@@ -49,7 +56,7 @@ export function viewOf(s: SkeletonSession): SkeletonView {
 	return {
 		stage: s.stage, title: s.plan?.title, drawn, summary,
 		counts: s.stage !== 'design' && s.diff?.ready ? { ...s.diff.counts } : undefined,
-		warnings: s.warnings.map(w => ({ text: warningText(w), revert: w.reason !== 'removed' && !!w.after })),
+		warnings: s.warnings.map(w => ({ id: w.id ?? 0, text: warningText(w), revert: w.reason !== 'removed' && !!w.after })),
 	};
 }
 

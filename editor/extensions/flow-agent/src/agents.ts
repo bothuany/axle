@@ -181,6 +181,12 @@ function filesOf(tool: string, input: Record<string, unknown> = {}, cwd?: string
 
 const isEdit = (tool: string) => tool === PATCH_TOOL || EDIT_TOOLS.split('|').includes(tool);
 
+/** A skeleton-first click flow-view could not carry out: said, not swallowed, so the row never looks as if it did. */
+function skeletonFailed(e: unknown) {
+	const missing = /command .* not found/i.test(String((e as Error)?.message ?? e));
+	void vscode.window.showWarningMessage(missing ? 'Axle: skeleton first needs the Flow View extension, which is not running.' : `Axle: skeleton first: ${(e as Error)?.message ?? e}`);
+}
+
 /** Resolves with undefined once `ms` have passed, whatever `p` is doing. */
 function bounded<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
 	let timer: NodeJS.Timeout | undefined;
@@ -1285,34 +1291,39 @@ export class Agents implements vscode.Disposable {
 			void vscode.window.showInformationMessage(`Axle: ${now ? notReady(now) : `${s.name} has closed`}: try again when it is back at its prompt.`);
 			return;
 		}
-		switch (action) {
-			case 'write':
-				await vscode.commands.executeCommand('flow.skeleton.choose', id, 'skeleton');
-				return;
-			case 'just':
-				await vscode.commands.executeCommand('flow.skeleton.choose', id, 'just');
-				break;
-			case 'handover':
-				if (!await vscode.commands.executeCommand<boolean>('flow.skeleton.handover', id)) {
+		try {
+			switch (action) {
+				case 'write':
+					await vscode.commands.executeCommand('flow.skeleton.choose', id, 'skeleton');
 					return;
-				}
-				break;
-			case 'finish':
-				await vscode.commands.executeCommand('flow.skeleton.finish', id);
-				return;
-			case 'board':
-				await vscode.commands.executeCommand('flow.skeleton.open', id);
-				return;
+				case 'just':
+					await vscode.commands.executeCommand('flow.skeleton.choose', id, 'just');
+					break;
+				case 'handover':
+					if (!await vscode.commands.executeCommand<boolean>('flow.skeleton.handover', id)) {
+						return;
+					}
+					break;
+				case 'finish':
+					await vscode.commands.executeCommand('flow.skeleton.finish', id);
+					return;
+				case 'board':
+					await vscode.commands.executeCommand('flow.skeleton.open', id);
+					return;
+			}
+		} catch (e) {
+			skeletonFailed(e);
+			return;
 		}
 		if (prompt) {
 			this.typeInto(id, prompt, true, customs);
 		}
 	}
 
-	/** Accept, Revert or Open on a warning, by its index in the list flow-view sent. */
-	skeletonWarning(id: string, index: number, action: WarningAction) {
-		if (this.skeletons.get(id)?.warnings[index]) {
-			void Promise.resolve(vscode.commands.executeCommand('flow.skeleton.warning', id, index, action)).catch(() => undefined);
+	/** Accept, Revert or Open on a warning, by the number flow-view gave it. */
+	skeletonWarning(id: string, warning: number, action: WarningAction) {
+		if (this.skeletons.get(id)?.warnings.some(w => w.id === warning)) {
+			void Promise.resolve(vscode.commands.executeCommand('flow.skeleton.warning', id, warning, action)).catch(skeletonFailed);
 		}
 	}
 

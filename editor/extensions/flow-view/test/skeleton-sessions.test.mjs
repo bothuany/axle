@@ -36,7 +36,7 @@ test('design drawn: wait for the developer; skeleton: the diff, explain without 
 	assert.match(text, /MISSING Order/)
 	assert.match(text, /Do NOT create or edit any file/)
 	assert.match(text, /theirs is better/)
-	const handover = { ...writing, stage: 'handover', warnings: [{ owner: 'Order', name: 'id', kind: 'field', file: '/x.ts', reason: 'changed', before: 'id: number', after: 'id: string', line: 3, lines: 1 }] }
+	const handover = { ...writing, stage: 'handover', warnings: [{ id: 3, owner: 'Order', name: 'id', kind: 'field', file: '/x.ts', reason: 'changed', before: 'id: number', after: 'id: string', line: 3, lines: 1 }] }
 	const h = sessions.toolAnswer(true, handover)
 	assert.match(h, /The agent changed Order\.id: id: number → id: string/)
 	assert.match(h, /fill in the method bodies/)

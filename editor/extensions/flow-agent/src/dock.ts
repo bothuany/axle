@@ -60,7 +60,7 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				// The switch is a user setting: it holds for every window and every agent, and turning it off ends every stage at once.
 				case 'skeletonFirst': return void vscode.workspace.getConfiguration('axle.skeletonFirst').update('enabled', m.on, vscode.ConfigurationTarget.Global);
 				case 'sk': return void this.agents.skeleton(m.id, m.action, savedAgents());
-				case 'skw': return this.agents.skeletonWarning(m.id, m.index, m.action);
+				case 'skw': return this.agents.skeletonWarning(m.id, m.warning, m.action);
 			}
 		});
 		view.onDidChangeVisibility(() => view.visible && this.post());

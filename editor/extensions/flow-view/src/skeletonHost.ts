@@ -11,10 +11,13 @@ import type { BoardSpec } from './board/spec';
 import type { BoardStore } from './board/store';
 import { goneIn, headersOf, locate, revertRange, stillThere, type Header } from './skeleton/guard';
 import { decorate, matchPlan } from './skeleton/match';
-import { newSession, toolAnswer, viewOf, type SkeletonSession } from './skeleton/sessions';
+import { newSession, toolAnswer, viewOf, type SkeletonSession, type SkeletonTools } from './skeleton/sessions';
 import type { TypeService } from './types/typeService';
 
+/** Declared by flow-agent (its dock holds the switch); without flow-agent it reads as its default, off. */
 const SETTING = 'axle.skeletonFirst';
+/** Agent sessions with a stage at once: more is a caller making up ids. */
+const MAX_SESSIONS = 20;
 const RECOMPUTE_MS = 250;
 /** The files the code index reads: a save of anything else changes no type. */
 const CODE_FILE = /\.(cs|ts|tsx|js|jsx|mjs|cjs|java|kt|py|go|rs|php|rb)$/i;
@@ -25,15 +28,10 @@ const fileKey = (f: string) => f.replace(/\\/g, '/').toLowerCase();
 
 export const skeletonEnabled = () => vscode.workspace.getConfiguration(SETTING).get<boolean>('enabled', false) === true;
 
-/** What the MCP tools need: the answer of `check_skeleton`, and a board an agent drew. */
-export interface SkeletonTools {
-	check(session: string | undefined): Promise<string>;
-	drawn(id: string, spec: BoardSpec, session: string | undefined): void;
-}
-
 export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 	private readonly sessions = new Map<string, SkeletonSession>();
 	private readonly timers = new Map<string, NodeJS.Timeout>();
+	private warningSeq = 0;
 	private readonly disposables: vscode.Disposable[] = [];
 
 	constructor(private readonly boards: BoardStore, private readonly types: TypeService, private readonly log: vscode.LogOutputChannel) {
@@ -74,12 +72,16 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 	// ── MCP ─────────────────────────────────────────────────────────────────
 
 	async check(session: string | undefined): Promise<string> {
-		const id = session ?? '';
 		if (!skeletonEnabled()) {
 			return toolAnswer(false, undefined);
 		}
+		// Only a session the dock knows gets a row: an id the bridge was handed but the dock never started counts as no session.
+		const id = session && await this.known(session) ? session : '';
 		let s = this.sessions.get(id);
 		if (!s) {
+			if (this.sessions.size >= MAX_SESSIONS) {
+				return 'Skeleton first: too many agent sessions are in the middle of it in this window. Implement the plan as usual.';
+			}
 			s = newSession(id);
 			this.sessions.set(id, s);
 			this.push(s);
@@ -88,6 +90,11 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			await this.recompute(s);
 		}
 		return toolAnswer(true, s, f => vscode.workspace.asRelativePath(f, false));
+	}
+
+	private async known(session: string): Promise<boolean> {
+		const look = await Promise.resolve(vscode.commands.executeCommand<unknown>('flow.agent.describe', session)).catch(() => undefined);
+		return !!look;
 	}
 
 	/** draw_board ran: a class or ER board drawn by a session waiting for its design becomes that design, whatever id it used. */
@@ -162,9 +169,10 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		}
 	}
 
-	private async warning(session: unknown, index: unknown, action: unknown) {
+	private async warning(session: unknown, warningId: unknown, action: unknown) {
 		const s = this.get(session);
-		const w = s && typeof index === 'number' && Number.isInteger(index) ? s.warnings[index] : undefined;
+		const index = s && typeof warningId === 'number' ? s.warnings.findIndex(x => x.id === warningId) : -1;
+		const w = s && index >= 0 ? s.warnings[index] : undefined;
 		if (!s || !w) {
 			return;
 		}
@@ -186,6 +194,11 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			}
 		} else if (action === 'revert') {
 			const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(w.file));
+			if (doc.isDirty) {
+				// Saving after the revert would also save the developer's unsaved work in that file.
+				void vscode.window.showWarningMessage(`Axle: ${vscode.workspace.asRelativePath(doc.uri)} has unsaved changes: save or undo them, then Revert.`);
+				return;
+			}
 			const range = revertRange(doc.getText(), w);
 			if (!range) {
 				void vscode.window.showWarningMessage('Axle: that declaration changed again since the warning; revert it by hand.');
@@ -200,7 +213,7 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		} else {
 			return;
 		}
-		s.warnings.splice(index as number, 1);
+		s.warnings.splice(index, 1);
 		this.push(s);
 		await this.recompute(s);
 	}
@@ -242,7 +255,8 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		if (!s || phase !== 'after' || s.stage === 'design') {
 			return;
 		}
-		const code = files.filter(f => CODE_FILE.test(f));
+		// The paths come from the agent's hook: only code files inside an open workspace folder are read or indexed.
+		const code = files.filter(f => CODE_FILE.test(f) && !!vscode.workspace.getWorkspaceFolder(vscode.Uri.file(f)));
 		if (!code.length) {
 			return;
 		}
@@ -256,7 +270,7 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 				}
 				for (const h of goneIn(s.headers, file, text, same)) {
 					if (!s.warnings.some(w => w.owner === h.owner && w.name === h.name && w.kind === h.kind && same(w.file, h.file))) {
-						s.warnings.push(locate(h, graph.types, text, s.headers));
+						s.warnings.push({ ...locate(h, graph.types, text, s.headers), id: ++this.warningSeq });
 					}
 				}
 			}
@@ -303,7 +317,8 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		if (!s.session) {
 			return;
 		}
-		void Promise.resolve(vscode.commands.executeCommand('flow.agents.skeleton', s.session, gone ? undefined : viewOf(s as SkeletonSession))).catch(() => undefined);
+		// Without flow-agent there is no dock to tell (and the switch reads as off): only a failure of a dock that is there is worth a line.
+		void Promise.resolve(vscode.commands.executeCommand('flow.agents.skeleton', s.session, gone ? undefined : viewOf(s as SkeletonSession))).catch(e => this.log.debug(`skeleton: the dock was not told (${(e as Error).message})`));
 	}
 
 	private drop(s: SkeletonSession) {

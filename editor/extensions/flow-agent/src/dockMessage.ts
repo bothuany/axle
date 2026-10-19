@@ -25,8 +25,8 @@ export type DockAction =
 	| { type: 'skeletonFirst'; on: boolean }
 	/** A skeleton-first button on a row: the prompt it types is the host's own (skeleton.ts). */
 	| { type: 'sk'; id: string; action: SkeletonAction }
-	/** A warning on a row, by its index in the list the host sent. */
-	| { type: 'skw'; id: string; index: number; action: WarningAction };
+	/** A warning on a row, by the number the host gave it (not its position: the list may have changed since it was drawn). */
+	| { type: 'skw'; id: string; warning: number; action: WarningAction };
 
 const MAX_ID = 200;
 const ID_TYPES = new Set(['show', 'pr', 'xray', 'forget', 'compact', 'rename', 'explain']);
@@ -51,7 +51,7 @@ export function dockAction(raw: unknown): DockAction | undefined {
 		case 'sk':
 			return id !== undefined && SKELETON_ACTIONS.includes(m.action as SkeletonAction) ? { type: 'sk', id, action: m.action as SkeletonAction } : undefined;
 		case 'skw':
-			return id !== undefined && typeof m.index === 'number' && Number.isInteger(m.index) && m.index >= 0 && m.index < 100 && WARNING_ACTIONS.includes(m.action as WarningAction) ? { type: 'skw', id, index: m.index, action: m.action as WarningAction } : undefined;
+			return id !== undefined && typeof m.warning === 'number' && Number.isInteger(m.warning) && m.warning >= 0 && m.warning <= 1e9 && WARNING_ACTIONS.includes(m.action as WarningAction) ? { type: 'skw', id, warning: m.warning, action: m.action as WarningAction } : undefined;
 		case 'wt':
 			return id !== undefined && WORKTREE_ACTIONS.includes(m.action as WorktreeAction) ? { type: 'wt', id, action: m.action as WorktreeAction } : undefined;
 		default:

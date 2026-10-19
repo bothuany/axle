@@ -166,10 +166,10 @@ function skeletonRow(k) {
 	if (!k) { return ''; }
 	const c = k.counts;
 	const counts = c ? '<div class="sk-counts"><span class="ok">● ' + c.matches + ' match</span><span class="miss">○ ' + c.missing + ' missing</span><span class="diff">◐ ' + c.differs + ' differ</span></div>' : '';
-	const warns = k.warnings.map((w, i) => '<div class="skw"><span class="t">⚠ ' + esc(w.text) + '</span>'
-		+ '<span class="act" role="button" tabindex="0" data-skw="' + i + '" data-wa="accept" title="Keep the agent&#39;s version">Accept</span>'
-		+ (w.revert ? '<span class="act" role="button" tabindex="0" data-skw="' + i + '" data-wa="revert" title="Put back the declaration you wrote (the body stays)">Revert</span>' : '')
-		+ '<span class="act" role="button" tabindex="0" data-skw="' + i + '" data-wa="open" title="Open it in the editor">Open</span></div>').join('');
+	const warns = k.warnings.map(w => '<div class="skw"><span class="t">⚠ ' + esc(w.text) + '</span>'
+		+ '<span class="act" role="button" tabindex="0" data-skw="' + w.id + '" data-wa="accept" title="Keep the agent&#39;s version">Accept</span>'
+		+ (w.revert ? '<span class="act" role="button" tabindex="0" data-skw="' + w.id + '" data-wa="revert" title="Put back the declaration you wrote (the body stays)">Revert</span>' : '')
+		+ '<span class="act" role="button" tabindex="0" data-skw="' + w.id + '" data-wa="open" title="Open it in the editor">Open</span></div>').join('');
 	const acts = (k.actions || []).filter(a => SKL[a]).map(a => '<span class="act' + (a === 'write' || a === 'just' ? ' big ' + a : '') + '" role="button" tabindex="0" data-sk="' + a + '" title="' + esc(SKT[a]) + '">' + SKL[a] + '</span>').join('');
 	return '<div class="sk ' + esc(k.stage) + '"><div class="sk-head"><span class="chip">Skeleton first</span><span class="t">' + esc(k.summary) + '</span></div>' + counts + warns + (acts ? '<div class="sk-acts">' + acts + '</div>' : '') + '</div>';
 }
@@ -265,7 +265,7 @@ function render() {
 		if (e.target.closest('.sk')) {
 			// The skeleton panel is not a click on the row: only its buttons do something.
 			if (sk) { vscode.postMessage({ type: 'sk', id: b.dataset.id, action: sk.dataset.sk }); }
-			if (skw) { vscode.postMessage({ type: 'skw', id: b.dataset.id, index: Number(skw.dataset.skw), action: skw.dataset.wa }); }
+			if (skw) { vscode.postMessage({ type: 'skw', id: b.dataset.id, warning: Number(skw.dataset.skw), action: skw.dataset.wa }); }
 			return;
 		}
 		vscode.postMessage(ex ? { type: 'explain', id: b.dataset.id } : wa ? { type: 'wt', id: b.dataset.id, action: wa.dataset.wt } : pr ? { type: 'pr', id: b.dataset.id } : cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : xr ? { type: 'xray', id: b.dataset.id } : { type: 'show', id: b.dataset.id });

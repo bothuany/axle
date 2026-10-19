@@ -28,15 +28,15 @@ before(async () => {
 })
 after(() => rmSync(tmp, { recursive: true, force: true }))
 
-const VIEW = { stage: 'handover', title: 'Checkout', drawn: true, summary: 'Plan vs code: 3 match · 0 missing · 1 differs', counts: { matches: 3, missing: 0, differs: 1 }, warnings: [{ text: 'The agent changed Order.total: total(): Money → total(tax: boolean): Money', revert: true }] }
+const VIEW = { stage: 'handover', title: 'Checkout', drawn: true, summary: 'Plan vs code: 3 match · 0 missing · 1 differs', counts: { matches: 3, missing: 0, differs: 1 }, warnings: [{ id: 4, text: 'The agent changed Order.total: total(): Money → total(tax: boolean): Money', revert: true }] }
 
 test('the row from flow-view is taken only in its own shape', () => {
 	assert.deepEqual(k.readView(VIEW), VIEW)
 	assert.equal(k.readView(undefined), undefined, 'no view clears the row')
 	assert.equal(k.readView({ stage: 'nope' }), undefined)
-	const odd = k.readView({ stage: 'design', summary: 'x'.repeat(999), warnings: [{ text: 1 }, { text: 'ok', revert: 'yes' }], counts: { matches: -3, missing: 1.5, differs: 2 }, file: '/etc/passwd' })
+	const odd = k.readView({ stage: 'design', summary: 'x'.repeat(999), warnings: [{ text: 1, id: 1 }, { text: 'no id' }, { id: 2, text: 'ok', revert: 'yes' }], counts: { matches: -3, missing: 1.5, differs: 2 }, file: '/etc/passwd' })
 	assert.equal(odd.summary.length, 300)
-	assert.deepEqual(odd.warnings, [{ text: 'ok', revert: false }])
+	assert.deepEqual(odd.warnings, [{ id: 2, text: 'ok', revert: false }])
 	assert.deepEqual(odd.counts, { matches: 0, missing: 0, differs: 2 })
 	assert.equal('file' in odd, false)
 })
@@ -65,16 +65,17 @@ test('prompts: one line each; Check never asks for a fix, the hand-over asks to 
 	assert.match(k.skeletonPrompt('just'), /implement the approved plan now/)
 })
 
-test('the page asks for the switch, a row action or a warning by index, and nothing else', () => {
+test('the page asks for the switch, a row action or a warning by its number, and nothing else', () => {
 	assert.deepEqual(d.dockAction({ type: 'skeletonFirst', on: true }), { type: 'skeletonFirst', on: true })
 	assert.equal(d.dockAction({ type: 'skeletonFirst', on: 'yes' }), undefined)
 	assert.deepEqual(d.dockAction({ type: 'sk', id: 'a1', action: 'handover' }), { type: 'sk', id: 'a1', action: 'handover' })
 	assert.equal(d.dockAction({ type: 'sk', id: 'a1', action: 'rm' }), undefined)
 	assert.equal(d.dockAction({ type: 'sk', action: 'check' }), undefined)
-	assert.deepEqual(d.dockAction({ type: 'skw', id: 'a1', index: 0, action: 'revert' }), { type: 'skw', id: 'a1', index: 0, action: 'revert' })
-	assert.equal(d.dockAction({ type: 'skw', id: 'a1', index: -1, action: 'accept' }), undefined)
-	assert.equal(d.dockAction({ type: 'skw', id: 'a1', index: 1.5, action: 'accept' }), undefined)
-	assert.equal(d.dockAction({ type: 'skw', id: 'a1', index: 0, action: 'delete', file: '/x' }), undefined)
+	assert.deepEqual(d.dockAction({ type: 'skw', id: 'a1', warning: 7, action: 'revert' }), { type: 'skw', id: 'a1', warning: 7, action: 'revert' })
+	assert.equal(d.dockAction({ type: 'skw', id: 'a1', warning: -1, action: 'accept' }), undefined)
+	assert.equal(d.dockAction({ type: 'skw', id: 'a1', warning: 1.5, action: 'accept' }), undefined)
+	assert.equal(d.dockAction({ type: 'skw', id: 'a1', index: 0, action: 'accept' }), undefined, 'a position is not accepted')
+	assert.equal(d.dockAction({ type: 'skw', id: 'a1', warning: 0, action: 'delete', file: '/x' }), undefined)
 })
 
 test('the dock draws the switch and the row: counts, the warning with Accept / Revert / Open, and escaped text', () => {
@@ -86,13 +87,13 @@ test('the dock draws the switch and the row: counts, the warning with Accept / R
 	const window = { addEventListener: (_type, f) => { onMessage = f } }
 	vm.runInNewContext(script, { window, document, acquireVsCodeApi: () => ({ postMessage() { } }), setInterval() { }, Math, Object, isFinite, Date, String, Number, Map })
 	const row = { id: 'a1', cli: 'claude', name: 'Claude', state: 'done', since: Date.now(), todos: [], unread: false, done: 0 }
-	const skeleton = { ...VIEW, warnings: [{ text: 'The agent changed <b>x</b>', revert: true }], actions: k.rowActions(VIEW, true) }
+	const skeleton = { ...VIEW, warnings: [{ id: 9, text: 'The agent changed <b>x</b>', revert: true }], actions: k.rowActions(VIEW, true) }
 	onMessage({ data: { type: 'data', list: [{ ...row, skeleton }], now: Date.now(), avatar: 'pixel', skeletonFirst: true } })
 	assert.equal(list.checked, true, 'the switch shows the setting')
 	assert.match(list.innerHTML, /<div class="sk handover">/)
 	assert.match(list.innerHTML, /● 3 match/)
 	assert.match(list.innerHTML, /The agent changed &lt;b&gt;x&lt;\/b&gt;/)
-	assert.match(list.innerHTML, /data-skw="0" data-wa="revert"/)
+	assert.match(list.innerHTML, /data-skw="9" data-wa="revert"/)
 	assert.match(list.innerHTML, /data-sk="tour"[^>]*>Closing tour/)
 	onMessage({ data: { type: 'data', list: [{ ...row, skeleton: { ...VIEW, stage: 'design', warnings: [], counts: undefined, actions: ['write', 'just', 'board'] } }], now: Date.now(), avatar: 'pixel', skeletonFirst: true } })
 	assert.match(list.innerHTML, /class="act big write"[^>]*>Write the skeleton/)

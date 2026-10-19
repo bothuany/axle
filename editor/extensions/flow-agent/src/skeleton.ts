@@ -12,7 +12,8 @@ export interface SkeletonView {
 	drawn: boolean;
 	summary: string;
 	counts?: { matches: number; missing: number; differs: number };
-	warnings: { text: string; revert: boolean }[];
+	/** `id` stays the warning's own while the list changes: the dock sends it back, never a position. */
+	warnings: { id: number; text: string; revert: boolean }[];
 }
 
 /** What a row's skeleton buttons may ask for. */
@@ -39,7 +40,7 @@ export function readView(raw: unknown): SkeletonView | undefined {
 		drawn: v.drawn === true,
 		summary: str(v.summary, 300) ?? '',
 		counts: c && typeof c === 'object' ? { matches: count(c.matches), missing: count(c.missing), differs: count(c.differs) } : undefined,
-		warnings: (Array.isArray(v.warnings) ? v.warnings : []).slice(0, MAX_WARNINGS).filter(w => typeof w?.text === 'string').map(w => ({ text: String(w.text).slice(0, 400), revert: w.revert === true })),
+		warnings: (Array.isArray(v.warnings) ? v.warnings : []).slice(0, MAX_WARNINGS).filter(w => typeof w?.text === 'string' && Number.isInteger(w.id) && w.id >= 0).map(w => ({ id: w.id as number, text: String(w.text).slice(0, 400), revert: w.revert === true })),
 	};
 }
 

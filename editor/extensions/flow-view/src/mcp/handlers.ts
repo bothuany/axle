@@ -31,7 +31,7 @@ import { readTextIn, realInside } from '../tour/files';
 import { methodsOf } from '../tourMethods';
 import { drawnOf, markOffFlow, type Method } from '../tour/resolve';
 import { parseTourArgs, stepFiles, type TourFlow } from '../tour/validate';
-import type { SkeletonTools } from '../skeletonHost';
+import type { SkeletonTools } from '../skeleton/sessions';
 
 /** What the tools need from the rest of the extension. */
 export interface ToolDeps {

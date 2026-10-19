@@ -22,6 +22,8 @@ export interface Header {
 }
 
 export interface Warning {
+	/** Given by the host when the warning is raised; stays the same while other warnings come and go. */
+	id?: number;
 	owner: string;
 	name?: string;
 	kind: Header['kind'];
