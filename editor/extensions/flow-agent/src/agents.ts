@@ -19,6 +19,7 @@ import { findConflicts, key, type Conflict, type SessionEdits } from './conflict
 import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexProfile, codexProfileFile } from './codexHooks';
 import { agentCwd, agentProcessEnv, inheritedAgentEnv } from './env';
 import { CostTracker, statusUsd, type SessionCost } from './cost';
+import { disposeGaze, gazeHook, gazeTurn } from './gazeHost';
 import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
@@ -1064,6 +1065,7 @@ export class Agents implements vscode.Disposable {
 				this.touched.delete(s.id);
 				this.turns.delete(s.id);
 				this.planDrawn.delete(s.id);
+				gazeTurn(s.id);
 				set('working', 'Thinking');
 				void this.markPrompt(s);
 				await Promise.resolve(vscode.commands.executeCommand('flow.agentTurn', s.prompt ?? 'Prompt', agentLabel(s))).catch(() => undefined);
@@ -1098,6 +1100,7 @@ export class Agents implements vscode.Disposable {
 				this.settleAsked(s, 'allowed');
 				set('working', describe(tool, p.tool_input));
 				if (p.hook_event_name === 'PostToolUse') {
+					gazeHook(s.id, s.name, s.cli, tool, p.tool_input, p.tool_response, p.cwd, s.worktree?.path);
 					if (isEdit(tool)) {
 						const files = filesOf(tool, p.tool_input, p.cwd);
 						void Promise.resolve(vscode.commands.executeCommand('flow.agentDidEdit', files)).catch(() => undefined);
@@ -1615,6 +1618,7 @@ export class Agents implements vscode.Disposable {
 	}
 
 	dispose() {
+		disposeGaze();
 		this.server?.close();
 		// Hooks read the port at call time: leave it blank rather than pointing at a dead port, but not when a newer
 		// window of this folder has already put its own there.

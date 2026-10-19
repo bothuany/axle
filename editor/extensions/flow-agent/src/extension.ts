@@ -10,6 +10,7 @@ import { Agents } from './agents';
 import { AskRouter } from './ask';
 import { DesktopStatus } from './desktop';
 import { AgentsDock } from './dock';
+import { watchGazeSetting } from './gazeHost';
 import { registerPlaceholderModels } from './models';
 import { AttentionNotifier } from './notify';
 import { pickAgent } from './pick';
@@ -36,6 +37,9 @@ export function activate(context: vscode.ExtensionContext) {
 				.then(pick => pick && vscode.commands.executeCommand('workbench.action.reloadWindow'));
 		}
 	}));
+
+	// The gaze: turning flow.agents.gaze off stops it at once and clears what the canvas kept.
+	context.subscriptions.push(watchGazeSetting());
 
 	const agents = new Agents(context, log);
 	agents.start().catch(e => log.error(`Agents: start failed: ${(e as Error).message}`));

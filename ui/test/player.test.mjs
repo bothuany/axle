@@ -286,3 +286,11 @@ test('moving on, pausing and playing all end a question; there is nothing to ask
   assert.equal(reduce(idle, { type: 'ask' }), idle)
   assert.equal(reduce(asked, { type: 'exit' }), idle)
 })
+
+test('a step whose first line no card holds lands on the first card inside its range', () => {
+  const tree = { key: 'a', file: 'C:\\w\\x.js', startLine: 5, endLine: 9, label: 'a', children: [{ node: { key: 'b', file: 'C:\\w\\x.js', startLine: 12, endLine: 20, label: 'b', children: [] } }] }
+  const step = (startLine, endLine) => ({ title: 't', caption: 'c', state: 'ok', at: { file: 'c:/w/x.js', startLine, endLine, label: 'x' } })
+  assert.equal(resolveStep([tree], step(1, 30)).node.key, 'a')
+  assert.equal(resolveStep([tree], step(10, 30)).node.key, 'b')
+  assert.equal(resolveStep([tree], step(1, 1)).kind, 'none')
+})

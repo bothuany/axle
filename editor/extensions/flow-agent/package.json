@@ -264,6 +264,11 @@
           "default": true,
           "markdownDescription": "Also give a `claude` you type by hand in an Axle terminal the `axle` tools (open the diff, show flows, find symbols, diagnostics). Axle puts a small `claude` script first on the PATH of its own terminals; it runs the real `claude` with `--mcp-config` added, and passes subcommands such as `claude mcp` through untouched. Requires `#flow.agents.mcp#`. Takes effect after reloading the window."
         },
+        "flow.agents.gaze": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show where agents started in Axle are reading and editing on a flow canvas that is open: a dot on the card they read and a fading trail of the cards they visited. Only files and lines are passed on, never file content or search text, and only in memory. Turn off to send nothing."
+        },
         "flow.agents.planBoard": {
           "type": "boolean",
           "default": true,

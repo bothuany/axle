@@ -277,6 +277,8 @@ function registerAgentCommands({ context, panel, changes }: Flow) {
 		vscode.commands.registerCommand('flow.agentProposes', (p: Parameters<FlowPanel['propose']>[0]) => panel.propose(p)),
 		vscode.commands.registerCommand('flow.agentProposalDone', () => panel.proposalDone()),
 		vscode.commands.registerCommand('flow.agentTurn', (prompt: string, agent: string) => changes.startTurn(prompt, agent)),
+		// flow-agent's gaze: where its agents read and edit, painted on an open canvas only (panel.ts).
+		vscode.commands.registerCommand('flow.agent.gaze', (batch: unknown) => panel.gaze(batch)),
 
 		// "Ask the agent about this flow": the flow as a markdown file handed to the chosen agent, so it reads
 		// exact file:line spans instead of searching for them.

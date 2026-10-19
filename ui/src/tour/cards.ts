@@ -69,6 +69,12 @@ export function resolveStep(trees: Trees, step: TourStep, prefer?: string): Targ
       if (!node && n.key === prefer && n.file && samePath(n.file, at.file) && n.startLine <= at.startLine && at.startLine <= n.endLine) node = n
     })
     node ??= cardAt(trees, at.file, at.startLine)
+    // No card holds the first line (a whole file, a range starting above its methods): the first card inside the range.
+    if (!node && at.endLine > at.startLine) {
+      visit(trees, n => {
+        if (n.file && samePath(n.file, at.file) && at.startLine <= n.startLine && n.startLine <= at.endLine && (!node || n.startLine < node.startLine)) node = n
+      })
+    }
   }
   return node ? { kind: 'card', node } : step.peek ? { kind: 'peek' } : { kind: 'none' }
 }
