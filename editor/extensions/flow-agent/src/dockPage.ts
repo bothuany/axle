@@ -112,12 +112,31 @@ ${AVATAR_CSS}
 .pr:hover { background: var(--hover); }
 .pr .ck.pass { color: var(--done); } .pr .ck.fail { color: #ff6b7d; } .pr .ck.pending { color: var(--blocked); }
 .pr.merged { color: var(--custom); } .pr.closed { color: var(--muted); }
+/* Skeleton first: the switch, and on a row the stage, the plan-vs-code counts, warnings and the choices (Write and Just do it the same size). */
+.skf { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 5px 9px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.skf:hover { background: var(--hover); }
+.skf input { margin: 0; accent-color: var(--working); cursor: pointer; }
+.skf b { color: var(--text); font-weight: 600; }
+.skf small { margin-left: auto; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sk { margin: 6px 0 0 34px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--working) 32%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--working) 7%, transparent); font-size: 11.5px; line-height: 1.45; cursor: default; }
+.sk-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.sk .chip { background: color-mix(in srgb, var(--working) 22%, transparent); color: var(--working); }
+.sk-counts { margin-top: 3px; font: 11px/1.5 var(--mono); font-variant-numeric: tabular-nums; }
+.sk-counts span { margin-right: 10px; } .sk-counts .ok { color: var(--done); } .sk-counts .miss { color: var(--muted); } .sk-counts .diff { color: var(--blocked); }
+.skw { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin-top: 5px; padding: 3px 6px; border-radius: 5px; background: color-mix(in srgb, var(--blocked) 10%, transparent); color: var(--blocked); }
+.skw .t { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; }
+.sk .act { display: inline-block; margin: 5px 6px 0 0; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; color: var(--text); font: 11px/1.6 var(--vscode-font-family, system-ui); cursor: pointer; }
+.skw .act { margin: 0; color: var(--blocked); }
+.sk .act:hover { background: var(--hover); }
+.sk .act.big { min-width: 118px; padding: 1px 10px; text-align: center; font-weight: 600; }
+.sk .act.big.write { border-color: color-mix(in srgb, var(--working) 60%, transparent); color: var(--working); }
 </style></head><body>
 <div class="new">
 	<button data-cli="claude" title="Start Claude Code in a new terminal, or resume an earlier session">${ICON.claude}Claude</button>
 	<button data-cli="codex" title="Start Codex in a new terminal, or resume an earlier session">${ICON.codex}Codex</button>
 	<button class="more" data-cli="pick"title="Start another agent: Gemini, Aider, your own command…" aria-label="Start another agent">Other…</button>
 </div>
+<label class="skf" title="Skeleton first: after you approve a plan that adds or changes types, the agent draws its design, you write the types and signatures, the board shows your code against the design, and the agent fills the bodies. Offered, never imposed: Just do it is always one click."><input type="checkbox" id="skf"><b>Skeleton first</b><small>you write the types, the agent fills the bodies</small></label>
 <div id="list"></div>
 <script>
 const vscode = acquireVsCodeApi();
@@ -141,7 +160,22 @@ function avatar(s, pct) {
 	const key = [s.id, data.avatar, s.cli, st, pct ?? ''].join('|');
 	return '<span class="av" data-k="' + esc(key) + '">' + window.axleAvatar(data.avatar, s.cli, st, pct, 24) + '</span>';
 }
+const SKL = { write: 'Write the skeleton', just: 'Just do it', check: 'Check', handover: 'Hand over', tour: 'Closing tour', finish: 'Finish', board: 'Board' };
+const SKT = { write: 'You write the types and signatures in the editor; the board shows your code against the design on every save', just: 'Skip skeleton first: the agent implements the plan now', check: 'Ask the agent to explain each difference, without changing your code', handover: 'Keep your declarations as they are and let the agent fill the bodies', tour: 'Ask the agent for a tour of the bodies it filled', finish: 'End skeleton first for this change', board: 'Show the design board' };
+function skeletonRow(k) {
+	if (!k) { return ''; }
+	const c = k.counts;
+	const counts = c ? '<div class="sk-counts"><span class="ok">● ' + c.matches + ' match</span><span class="miss">○ ' + c.missing + ' missing</span><span class="diff">◐ ' + c.differs + ' differ</span></div>' : '';
+	const warns = k.warnings.map((w, i) => '<div class="skw"><span class="t">⚠ ' + esc(w.text) + '</span>'
+		+ '<span class="act" role="button" tabindex="0" data-skw="' + i + '" data-wa="accept" title="Keep the agent&#39;s version">Accept</span>'
+		+ (w.revert ? '<span class="act" role="button" tabindex="0" data-skw="' + i + '" data-wa="revert" title="Put back the declaration you wrote (the body stays)">Revert</span>' : '')
+		+ '<span class="act" role="button" tabindex="0" data-skw="' + i + '" data-wa="open" title="Open it in the editor">Open</span></div>').join('');
+	const acts = (k.actions || []).filter(a => SKL[a]).map(a => '<span class="act' + (a === 'write' || a === 'just' ? ' big ' + a : '') + '" role="button" tabindex="0" data-sk="' + a + '" title="' + esc(SKT[a]) + '">' + SKL[a] + '</span>').join('');
+	return '<div class="sk ' + esc(k.stage) + '"><div class="sk-head"><span class="chip">Skeleton first</span><span class="t">' + esc(k.summary) + '</span></div>' + counts + warns + (acts ? '<div class="sk-acts">' + acts + '</div>' : '') + '</div>';
+}
 function render() {
+	const skf = document.getElementById('skf');
+	if (skf) { skf.checked = !!data.skeletonFirst; }
 	const el = document.getElementById('list');
 	if (!data.list.length) {
 		el.innerHTML = '<p class="empty"><b>No agents running.</b><br>Start one above. It runs in a terminal like always; here you see at a glance which one is working, which one waits for you and which one is done.</p>'
@@ -207,6 +241,7 @@ function render() {
 			+ clash
 			+ impact
 			+ explain
+			+ skeletonRow(s.skeleton)
 			+ wt
 			+ ctx
 			+ meta
@@ -225,9 +260,18 @@ function render() {
 		const pr = e.target.closest('[data-pr]');
 		const xr = e.target.closest('[data-xray]');
 		const ex = e.target.closest('[data-explain]');
+		const sk = e.target.closest('[data-sk]');
+		const skw = e.target.closest('[data-skw]');
+		if (e.target.closest('.sk')) {
+			// The skeleton panel is not a click on the row: only its buttons do something.
+			if (sk) { vscode.postMessage({ type: 'sk', id: b.dataset.id, action: sk.dataset.sk }); }
+			if (skw) { vscode.postMessage({ type: 'skw', id: b.dataset.id, index: Number(skw.dataset.skw), action: skw.dataset.wa }); }
+			return;
+		}
 		vscode.postMessage(ex ? { type: 'explain', id: b.dataset.id } : wa ? { type: 'wt', id: b.dataset.id, action: wa.dataset.wt } : pr ? { type: 'pr', id: b.dataset.id } : cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : xr ? { type: 'xray', id: b.dataset.id } : { type: 'show', id: b.dataset.id });
 	});
 }
+document.getElementById('skf').onchange = e => vscode.postMessage({ type: 'skeletonFirst', on: e.target.checked });
 document.querySelectorAll('.new button').forEach(b => b.onclick = () => vscode.postMessage(b.dataset.cli === 'pick' ? { type: 'pick' } : { type: 'new', cli: b.dataset.cli }));
 window.addEventListener('message', e => { if (e.data.type === 'data') { data = e.data; render(); } });
 setInterval(() => data.list.some(s => s.state === 'working' || s.state === 'blocked' || s.state === 'done') && render(), 5000);

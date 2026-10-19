@@ -5,6 +5,8 @@
  *  (test/dockMessage.test.mjs); dock.ts carries the actions out.
  *--------------------------------------------------------------------------------------------*/
 
+import { SKELETON_ACTIONS, WARNING_ACTIONS, type SkeletonAction, type WarningAction } from './skeleton';
+
 /** What the page may ask for on a worktree row; anything else is ignored. */
 export const WORKTREE_ACTIONS = ['open', 'diff', 'merge', 'remove'] as const;
 export type WorktreeAction = typeof WORKTREE_ACTIONS[number];
@@ -18,7 +20,13 @@ export type DockAction =
 	| { type: 'flow'; id: string; index: number }
 	/** The page names the row and one of four actions; the folder and branches come from the host's own record. */
 	| { type: 'wt'; id: string; action: WorktreeAction }
-	| { type: 'pick' | 'chat' };
+	| { type: 'pick' | 'chat' }
+	/** The skeleton-first switch at the top of the dock. */
+	| { type: 'skeletonFirst'; on: boolean }
+	/** A skeleton-first button on a row: the prompt it types is the host's own (skeleton.ts). */
+	| { type: 'sk'; id: string; action: SkeletonAction }
+	/** A warning on a row, by its index in the list the host sent. */
+	| { type: 'skw'; id: string; index: number; action: WarningAction };
 
 const MAX_ID = 200;
 const ID_TYPES = new Set(['show', 'pr', 'xray', 'forget', 'compact', 'rename', 'explain']);
@@ -38,6 +46,12 @@ export function dockAction(raw: unknown): DockAction | undefined {
 			return m.cli === 'claude' || m.cli === 'codex' ? { type: 'new', cli: m.cli } : undefined;
 		case 'flow':
 			return id !== undefined && typeof m.index === 'number' && Number.isInteger(m.index) && m.index >= 0 ? { type: 'flow', id, index: m.index } : undefined;
+		case 'skeletonFirst':
+			return typeof m.on === 'boolean' ? { type: 'skeletonFirst', on: m.on } : undefined;
+		case 'sk':
+			return id !== undefined && SKELETON_ACTIONS.includes(m.action as SkeletonAction) ? { type: 'sk', id, action: m.action as SkeletonAction } : undefined;
+		case 'skw':
+			return id !== undefined && typeof m.index === 'number' && Number.isInteger(m.index) && m.index >= 0 && m.index < 100 && WARNING_ACTIONS.includes(m.action as WarningAction) ? { type: 'skw', id, index: m.index, action: m.action as WarningAction } : undefined;
 		case 'wt':
 			return id !== undefined && WORKTREE_ACTIONS.includes(m.action as WorktreeAction) ? { type: 'wt', id, action: m.action as WorktreeAction } : undefined;
 		default:

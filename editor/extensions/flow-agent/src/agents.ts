@@ -24,6 +24,7 @@ import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
 import { canExplain, explainPrompt } from './explain';
+import { rowActions, skeletonPrompt, type SkeletonAction, type SkeletonView, type WarningAction } from './skeleton';
 import { canType, notReady, oneLine, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 import { createWorktree, sameDir, validBranch, worktreeSlug, type Worktree } from './worktrees';
@@ -874,6 +875,7 @@ export class Agents implements vscode.Disposable {
 		this.terminals.get(id)?.dispose();
 		this.terminals.delete(id);
 		this.sessions.delete(id);
+		this.skeletons.delete(id);
 		this.touched.delete(id);
 		this.turns.delete(id);
 		this.planDrawn.delete(id);
@@ -1247,6 +1249,70 @@ export class Agents implements vscode.Disposable {
 		if (!this.typeInto(id, text, true, customs)) {
 			const now = this.askSessions().find(x => x.id === id);
 			void vscode.window.showInformationMessage(`Axle: ${now ? notReady(now) : `${s.name} has closed`}: choose Explain this again when it is back at its prompt.`);
+		}
+	}
+
+	/** Skeleton first: what flow-view says each session's row shows (its src/skeletonHost.ts decides the stage). */
+	readonly skeletons = new Map<string, SkeletonView>();
+
+	setSkeleton(id: string, view: SkeletonView | undefined) {
+		if (view && this.sessions.has(id)) {
+			this.skeletons.set(id, view);
+		} else {
+			this.skeletons.delete(id);
+		}
+		this.changed.fire();
+	}
+
+	/** Whether the session sits at its prompt, so a click may type into it. */
+	atPrompt(s: AgentSession): boolean {
+		return (s.state === 'done' || s.state === 'idle') && s.cli !== 'custom' && this.terminals.has(s.id);
+	}
+
+	/**
+	 * A skeleton-first button. The stage moves (in flow-view) only when the prompt that goes with it can be typed now, so Axle and
+	 * the agent never disagree about where they are; a button that only changes what Axle shows types nothing.
+	 */
+	async skeleton(id: string, action: SkeletonAction, customs: CustomCli[]) {
+		const s = this.sessions.get(id);
+		const view = this.skeletons.get(id);
+		if (!s || !view || !rowActions(view, this.atPrompt(s)).includes(action)) {
+			return;
+		}
+		const prompt = skeletonPrompt(action);
+		const now = this.askSessions().find(x => x.id === id);
+		if (prompt && !(now && canType(now, customs))) {
+			void vscode.window.showInformationMessage(`Axle: ${now ? notReady(now) : `${s.name} has closed`}: try again when it is back at its prompt.`);
+			return;
+		}
+		switch (action) {
+			case 'write':
+				await vscode.commands.executeCommand('flow.skeleton.choose', id, 'skeleton');
+				return;
+			case 'just':
+				await vscode.commands.executeCommand('flow.skeleton.choose', id, 'just');
+				break;
+			case 'handover':
+				if (!await vscode.commands.executeCommand<boolean>('flow.skeleton.handover', id)) {
+					return;
+				}
+				break;
+			case 'finish':
+				await vscode.commands.executeCommand('flow.skeleton.finish', id);
+				return;
+			case 'board':
+				await vscode.commands.executeCommand('flow.skeleton.open', id);
+				return;
+		}
+		if (prompt) {
+			this.typeInto(id, prompt, true, customs);
+		}
+	}
+
+	/** Accept, Revert or Open on a warning, by its index in the list flow-view sent. */
+	skeletonWarning(id: string, index: number, action: WarningAction) {
+		if (this.skeletons.get(id)?.warnings[index]) {
+			void Promise.resolve(vscode.commands.executeCommand('flow.skeleton.warning', id, index, action)).catch(() => undefined);
 		}
 	}
 
