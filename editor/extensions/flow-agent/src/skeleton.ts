@@ -56,6 +56,12 @@ export function rowActions(v: SkeletonView, atPrompt: boolean): SkeletonAction[]
 	}
 }
 
+/**
+ * What Claude Code reads right after the user approves a plan while the switch is on (a PostToolUse hook on ExitPlanMode). The
+ * server instructions say the same, but a small model goes straight to its first edit without this.
+ */
+export const SKELETON_GATE = 'Axle: skeleton first is ON (the developer chose it). Before you create or edit any file for this plan, call the axle MCP tool check_skeleton once (mcp__axle__check_skeleton; load it with ToolSearch if it is not loaded yet) and follow its answer. If the plan adds or changes no types, entities or interfaces, it tells you to go ahead as usual.';
+
 /** One line: a terminal prompt submits at a line break, and nothing a terminal takes for a key gets through. */
 // eslint-disable-next-line no-control-regex
 const oneLine = (lines: string[]) => lines.join(' ').replace(/[\x00-\x1f\x7f-\x9f]+/g, ' ').replace(/ {2,}/g, ' ').trim();

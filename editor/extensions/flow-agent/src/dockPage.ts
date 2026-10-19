@@ -119,17 +119,18 @@ ${AVATAR_CSS}
 .skf b { color: var(--text); font-weight: 600; }
 .skf small { margin-left: auto; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sk { margin: 6px 0 0 34px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--working) 32%, transparent); border-radius: 7px; background: color-mix(in srgb, var(--working) 7%, transparent); font-size: 11.5px; line-height: 1.45; cursor: default; }
-.sk-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.sk-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 6px; min-width: 0; }
+.sk-head .t { flex: 1 1 140px; min-width: 0; }
 .sk .chip { background: color-mix(in srgb, var(--working) 22%, transparent); color: var(--working); }
 .sk-counts { margin-top: 3px; font: 11px/1.5 var(--mono); font-variant-numeric: tabular-nums; }
 .sk-counts span { margin-right: 10px; } .sk-counts .ok { color: var(--done); } .sk-counts .miss { color: var(--muted); } .sk-counts .diff { color: var(--blocked); }
 .skw { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin-top: 5px; padding: 3px 6px; border-radius: 5px; background: color-mix(in srgb, var(--blocked) 10%, transparent); color: var(--blocked); }
 .skw .t { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; }
-.sk .act { display: inline-block; margin: 5px 6px 0 0; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; color: var(--text); font: 11px/1.6 var(--vscode-font-family, system-ui); cursor: pointer; }
+.sk .act { display: inline-block; margin: 5px 6px 0 0; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--text) 30%, transparent); border-radius: 5px; color: var(--text); font: 11px/1.6 var(--vscode-font-family, system-ui); cursor: pointer; }
 .skw .act { margin: 0; color: var(--blocked); }
 .sk .act:hover { background: var(--hover); }
 .sk .act.big { min-width: 118px; padding: 1px 10px; text-align: center; font-weight: 600; }
-.sk .act.big.write { border-color: color-mix(in srgb, var(--working) 60%, transparent); color: var(--working); }
+.sk .act.big.write, .sk .act.big.just { border-color: color-mix(in srgb, var(--working) 60%, transparent); color: var(--working); }
 </style></head><body>
 <div class="new">
 	<button data-cli="claude" title="Start Claude Code in a new terminal, or resume an earlier session">${ICON.claude}Claude</button>

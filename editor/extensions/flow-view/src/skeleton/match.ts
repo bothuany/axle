@@ -253,13 +253,15 @@ export function parseMember(text: string, kind?: BoardMember['kind']): ParsedMem
 	return nt && /^[A-Za-z_$][\w$]*$/.test(nt.name) ? { name: nt.name, kind: 'field', type: nt.type } : undefined;
 }
 
-interface Actual { name: string; kind: 'method' | 'field'; parsed: ParsedMember; text: string; line?: number; isPublic: boolean; isPlumbing: boolean }
+const CTOR_NAMES = new Set(['constructor', '__init__', 'init', 'new', '__construct', 'initialize']);
+
+interface Actual { name: string; kind: 'method' | 'field'; parsed: ParsedMember; text: string; line?: number; isPublic: boolean; isPlumbing: boolean; isCtor?: boolean }
 
 function actualMembers(t: TypeInfo): Actual[] {
 	const fields: Actual[] = t.fields.map(f => ({ name: f.name, kind: 'field', parsed: { name: f.name, kind: 'field', type: f.type }, text: `${f.name}: ${f.type}`, line: f.line, isPublic: f.visibility === '+', isPlumbing: false }));
 	const methods: Actual[] = t.methods.map(m => {
 		const parsed = parseMember(`${m.name}${m.signature}`, 'method') ?? { name: m.name, kind: 'method' as const };
-		return { name: m.name, kind: 'method', parsed, text: `${m.name}${m.signature}`, line: m.line, isPublic: m.visibility === '+', isPlumbing: !!m.isConstructor || !!m.isAccessor };
+		return { name: m.name, kind: 'method', parsed, text: `${m.name}${m.signature}`, line: m.line, isPublic: m.visibility === '+', isPlumbing: !!m.isConstructor || !!m.isAccessor, isCtor: !!m.isConstructor };
 	});
 	const constants: Actual[] = (t.constants ?? []).map(c => ({ name: c, kind: 'field', parsed: { name: c, kind: 'field' }, text: c, isPublic: true, isPlumbing: false }));
 	return [...fields, ...methods, ...constants];
@@ -320,7 +322,10 @@ function matchMembers(planned: BoardMember[], t: TypeInfo): { members: MemberRes
 			results[i] = { text: m.text, check: 'matches', note: 'not a member the check can read' };
 			return;
 		}
-		const hit = actual.find(a => !used.has(a) && sameName(a.name, p.name))
+		// A planned constructor is the type's constructor whatever the language calls it (constructor, __init__, the type's name).
+		const ctor = p.kind === 'method' && (CTOR_NAMES.has(p.name) || sameName(p.name, t.name));
+		const hit = (ctor ? actual.find(a => !used.has(a) && a.isCtor) : undefined)
+			?? actual.find(a => !used.has(a) && sameName(a.name, p.name))
 			?? (p.kind === 'field' ? actual.find(a => !used.has(a) && a.kind === 'method' && getterOf(p.name, a.name)) : undefined);
 		if (!hit) {
 			pending.push({ i, p, text: m.text });

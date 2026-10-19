@@ -302,7 +302,7 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			return;
 		}
 		const graph = await this.types.getGraph();
-		s.diff = matchPlan(s.plan, graph, { recent: f => s.recent.has(fileKey(f)), ready: this.types.complete && graph.types.length > 0 });
+		s.diff = matchPlan(s.plan, graph, { recent: f => s.recent.has(fileKey(f)), ready: this.types.complete });
 		this.push(s);
 		await this.boards.redraw(s.boardId);
 	}

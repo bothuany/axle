@@ -34,7 +34,13 @@ So the gate is something the agent does **before its first edit**: it calls `che
   - **Later:** the diff (see Check).
 - The dock owns the stage after that: each later step is a click in the dock, which types the next prompt into the same session (as "Explain this" does).
 
-This works for any agent that reads MCP server instructions, Codex included. The limit: an agent that skips the call just implements the plan as usual. The design is not forced on anyone, and the tool answer is the only thing that stops the agent. The probe with Haiku checks whether it makes the call.
+The instructions alone are not enough. In the first probe, Haiku went straight from plan approval to writing `Order.ts` and never called the tool. So for Claude Code the dock adds one reminder at the moment of approval:
+- When the switch is on, the `PostToolUse` hook on `ExitPlanMode` answers with `hookSpecificOutput.additionalContext`: "Skeleton first is ON: before you create or edit any file, call `check_skeleton`".
+- The hook still decides nothing. It is not a lock and it never denies; it only hands the agent text to read before its first edit.
+- The hook script passes back only that exact shape, with a size cap. Every other event answers `{}` as before.
+- With that reminder, Haiku called the tool before editing in the probe.
+
+Codex has no plan-approval event, so it relies on the server instructions alone. The limit for any agent: one that skips the call just implements the plan as usual. Nothing is forced, and the tool's answer is the only thing that stops the agent.
 
 ## Stages
 
@@ -120,3 +126,29 @@ Commands across the boundary (all registered, checked by `test/arch/commands.tes
 - Team policy.
 - Any record that outlives the window.
 - The council's sketch-first ordering.
+
+## Probe (2026-10-20)
+
+The probe ran in web mode with a real Claude Code session (Haiku 5.5, set in the demo project's `.claude/settings.json`) on a TypeScript change to the demo shop. All eight steps worked:
+
+1. **Switch on.**
+2. **Plan, then the design.** The plan was approved, then Haiku called `check_skeleton`, drew a 6-type class board and stopped. This needed the approval-time reminder: without it, Haiku went straight to writing.
+3. **Change by talking.** "Rename Receipt to CheckoutResult" redrew the same board.
+4. **Live colours.** After a save, the board showed matches, missing and differs per type and member.
+5. **Check.** The agent explained each difference as a trade-off and edited nothing. When told "mine is better", it agreed and redrew the plan, and the type turned green.
+6. **Hand over.** The agent filled the bodies without touching a signature. When asked to add a parameter, the dock and the board showed the warning. Revert put the header back and kept the body. The agent then noticed the body still used the removed parameter.
+7. **Closing tour.** It ran on the change set: 5 steps.
+8. **Switch off.** The row and the colours went at once, and `check_skeleton` answered "off".
+
+Fixed after the probe:
+- A planned `constructor(...)` now matches the language's constructor.
+- An empty workspace counts as checked.
+- "Just do it" is now styled like "Write the skeleton".
+
+## Known gaps
+
+- TypeScript interface method signatures are not in the type graph, so a planned interface method shows as missing. This needs work in the poly index.
+- Codex gets no approval-time reminder; it has only the server instructions.
+- The stages live in window memory, so a reload ends them.
+- A file written outside the editor (not saved in it) recolours only on the next save or index refresh.
+- Revert leaves a body that may use the reverted parameter. The agent is not told automatically; the warning text says what changed.

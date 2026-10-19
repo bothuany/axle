@@ -24,7 +24,7 @@ import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
 import { canExplain, explainPrompt } from './explain';
-import { rowActions, skeletonPrompt, type SkeletonAction, type SkeletonView, type WarningAction } from './skeleton';
+import { rowActions, SKELETON_GATE, skeletonPrompt, type SkeletonAction, type SkeletonView, type WarningAction } from './skeleton';
 import { canType, notReady, oneLine, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 import { createWorktree, sameDir, validBranch, worktreeSlug, type Worktree } from './worktrees';
@@ -181,6 +181,8 @@ function filesOf(tool: string, input: Record<string, unknown> = {}, cwd?: string
 
 const isEdit = (tool: string) => tool === PATCH_TOOL || EDIT_TOOLS.split('|').includes(tool);
 
+const skeletonFirstOn = () => vscode.workspace.getConfiguration('axle.skeletonFirst').get<boolean>('enabled', false) === true;
+
 /** A skeleton-first click flow-view could not carry out: said, not swallowed, so the row never looks as if it did. */
 function skeletonFailed(e: unknown) {
 	const missing = /command .* not found/i.test(String((e as Error)?.message ?? e));
@@ -242,16 +244,31 @@ function lastTitle(lines: string[]): string | undefined {
 	return undefined;
 }
 
-/** Reads the event from stdin and posts it to the Axle window that owns this folder now. Never blocks the agent. */
+/**
+ * Reads the event from stdin and posts it to the Axle window that owns this folder now. Never blocks the agent and never decides
+ * anything. The one thing it passes back is context for the agent (`hookSpecificOutput.additionalContext`, skeleton first's
+ * reminder when a plan is approved), and only in that exact shape.
+ */
 function HOOK_SCRIPT(portFile: string, tokenFile: string) {
-	return `// Written by Axle: forwards Claude Code hook events to the Axle window (observe only).
+	return `// Written by Axle: forwards Claude Code hook events to the Axle window (observe only; it may hand the agent context, never a decision).
 const fs = require('fs'), http = require('http');
 let body = '';
 process.stdin.on('data', d => body += d).on('end', () => {
 	let port, token;
 	try { port = fs.readFileSync(${JSON.stringify(portFile)}, 'utf8').trim(); token = fs.readFileSync(${JSON.stringify(tokenFile)}, 'utf8').trim(); } catch { process.exit(0); }
 	if (!port) process.exit(0);
-	const req = http.request({ host: '127.0.0.1', port, path: '/hook', method: 'POST', timeout: 3000, headers: { 'Content-Type': 'application/json', 'X-Flow-Token': token, 'X-Flow-Agent': process.env.FLOW_AGENT_SESSION || '' } }, res => { res.resume(); res.on('end', () => process.exit(0)); });
+	const req = http.request({ host: '127.0.0.1', port, path: '/hook', method: 'POST', timeout: 3000, headers: { 'Content-Type': 'application/json', 'X-Flow-Token': token, 'X-Flow-Agent': process.env.FLOW_AGENT_SESSION || '' } }, res => {
+		let out = '';
+		res.setEncoding('utf8');
+		res.on('data', d => { if (out.length < 8000) out += d; });
+		res.on('end', () => {
+			try {
+				const o = JSON.parse(out).hookSpecificOutput;
+				if (o && typeof o.hookEventName === 'string' && typeof o.additionalContext === 'string') process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: o.hookEventName, additionalContext: o.additionalContext.slice(0, 4000) } }));
+			} catch {}
+			process.exit(0);
+		});
+	});
 	req.on('error', () => process.exit(0)).on('timeout', () => { req.destroy(); process.exit(0); });
 	req.end(body);
 });
@@ -983,10 +1000,11 @@ export class Agents implements vscode.Disposable {
 	}
 
 	private request(req: http.IncomingMessage, res: http.ServerResponse) {
-		const reply = (status: number) => {
+		const reply = (status: number, context?: { event: string; text: string }) => {
 			res.statusCode = status;
 			res.setHeader('content-type', 'application/json');
-			res.end('{}'); // never a decision: the CLI keeps asking the user itself
+			// Never a decision: the CLI keeps asking the user itself. At most context for the agent to read.
+			res.end(context ? JSON.stringify({ hookSpecificOutput: { hookEventName: context.event, additionalContext: context.text } }) : '{}');
 		};
 		if (req.method !== 'POST' || (req.url !== '/hook' && req.url !== '/status') || req.headers['x-flow-token'] !== this.token) {
 			req.resume();
@@ -1002,16 +1020,17 @@ export class Agents implements vscode.Disposable {
 		});
 		const agent = String(req.headers['x-flow-agent'] ?? '');
 		req.on('end', async () => {
+			let context: { event: string; text: string } | undefined;
 			try {
 				if (req.url === '/status') {
 					this.status(JSON.parse(body), agent);
 				} else {
-					await this.hook(JSON.parse(body) as HookPayload, agent);
+					context = await this.hook(JSON.parse(body) as HookPayload, agent);
 				}
 			} catch (e) {
 				this.log.warn(`Agents: hook failed: ${(e as Error).message}`);
 			}
-			reply(200);
+			reply(200, context);
 		});
 	}
 
@@ -1039,8 +1058,10 @@ export class Agents implements vscode.Disposable {
 		return undefined;
 	}
 
-	private async hook(p: HookPayload, agent = '') {
+	/** Handles one hook event; what it returns is context the agent reads next (only skeleton first's reminder, today). */
+	private async hook(p: HookPayload, agent = ''): Promise<{ event: string; text: string } | undefined> {
 		const s = this.sessionFor(p.session_id, agent);
+		let context: { event: string; text: string } | undefined;
 		if (!s) {
 			return; // a session Axle did not start (or forgot): stay out of it
 		}
@@ -1130,6 +1151,10 @@ export class Agents implements vscode.Disposable {
 						this.recordEdits(s, files);
 					} else if (tool === 'ExitPlanMode') {
 						this.planProposed(s, p, 'after');
+						// The plan was just approved and nothing is written yet: the one moment the reminder can come before the first edit.
+						if (skeletonFirstOn()) {
+							context = { event: 'PostToolUse', text: SKELETON_GATE };
+						}
 					}
 					this.todos(s, tool, p.tool_input ?? {}, p.tool_response ?? {});
 				}
@@ -1175,6 +1200,7 @@ export class Agents implements vscode.Disposable {
 		}
 		this.save();
 		this.changed.fire();
+		return context;
 	}
 
 	/**

@@ -99,3 +99,10 @@ test('the dock draws the switch and the row: counts, the warning with Accept / R
 	assert.match(list.innerHTML, /class="act big write"[^>]*>Write the skeleton/)
 	assert.match(list.innerHTML, /class="act big just"[^>]*>Just do it/)
 })
+
+test('the reminder Claude reads when a plan is approved names the tool and never asks for a lock', () => {
+	assert.match(k.SKELETON_GATE, /check_skeleton/)
+	assert.match(k.SKELETON_GATE, /Before you create or edit any file/)
+	assert.match(k.SKELETON_GATE, /go ahead as usual/)
+	assert.equal(/[\r\n]/.test(k.SKELETON_GATE), false)
+})

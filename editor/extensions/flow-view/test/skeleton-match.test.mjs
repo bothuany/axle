@@ -118,6 +118,20 @@ test('plan vs code: csharp (analyzer types)', async () => {
 	snapshot('checkout-csharp', match.diffText(diff, PLAN.title))
 })
 
+test('a planned constructor is the constructor, whatever the language calls it (found in the probe: TS reported it as missing)', async () => {
+	for (const fixture of ['skeleton-ts', 'skeleton-java', 'skeleton-py']) {
+		const plan = spec.parseBoard({ kind: 'class', title: 'c', nodes: [{ id: 's', label: 'CheckoutService', members: [{ text: 'constructor(discounts: DiscountPolicy)' }] }] })
+		const diff = match.matchPlan(plan, await graphOf(fixture))
+		assert.equal(diff.nodes[0].members[0].check, 'matches', fixture)
+	}
+})
+
+test('an empty workspace is checked, not "still loading": everything planned is missing', () => {
+	const diff = match.matchPlan(PLAN, { types: [], edges: [] })
+	assert.equal(diff.ready, true)
+	assert.equal(diff.counts.missing, 8)
+})
+
 test('member notations: name(T a): R, R name(T a), name: T, T name, Python and TypeScript forms', () => {
 	const p = match.parseMember
 	assert.deepEqual(p('apply(order: Order): Money'), { name: 'apply', kind: 'method', params: ['Order'], type: 'Money' })
