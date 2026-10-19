@@ -207,10 +207,14 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 
 /* ---- guided tours: the ghost cursor, the lit lines, the caption, the peek card (src/tour) ---- */
 /* Cards sit at z-index 1000 (selected cards above that is React Flow's own), so the cursor and the peek card are above them. */
-.tour-cursor { position: absolute; left: 0; top: 0; z-index: 2000; pointer-events: none; opacity: 0; transition: opacity .15s; filter: drop-shadow(0 2px 4px #0006); will-change: transform; }
+.tour-cursor { position: absolute; left: 0; top: 0; z-index: 2000; pointer-events: none; opacity: 0; transition: opacity .15s; filter: drop-shadow(0 1px 1px #0009) drop-shadow(0 5px 10px color-mix(in srgb, var(--tc) 40%, transparent)); will-change: transform; }
 .tour-cursor.on { opacity: 1; }
-.tour-cursor svg { display: block; }
-.tour-cursor-tag { position: absolute; left: 14px; top: 16px; padding: 1px 7px; border-radius: 99px; background: var(--tc); color: #0b0d12; font: 600 10.5px var(--fl-mono); white-space: nowrap; }
+.tour-cursor svg { position: relative; display: block; }
+/* A soft glow under the tip, and the ring that spreads from it when the pointer lands (Cursor.tsx). */
+.tour-cursor::before { content: ''; position: absolute; left: -15px; top: -15px; width: 34px; height: 34px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--tc) 38%, transparent), transparent 68%); }
+.tour-cursor-ping { position: absolute; left: 2px; top: 1.5px; width: 22px; height: 22px; border: 1.5px solid var(--tc); border-radius: 50%; box-shadow: 0 0 8px var(--tc); opacity: 0; }
+.tour-cursor-tag { position: absolute; left: 15px; top: 19px; display: flex; align-items: center; gap: 4px; padding: 2px 8px 2px 6px; border: 1px solid #ffffff55; border-radius: 99px; background: linear-gradient(135deg, color-mix(in srgb, var(--tc) 70%, #fff), var(--tc) 60%, color-mix(in srgb, var(--tc) 80%, #000)); color: #0b0d12; font: 600 10.5px/1.35 var(--fl-mono); letter-spacing: .01em; white-space: nowrap; box-shadow: 0 2px 6px #0005; }
+.tour-cursor-tag i { width: 5px; height: 5px; border-radius: 50%; background: #0b0d12; box-shadow: 0 0 0 2px #ffffff80; }
 .tour-layer { position: absolute; inset: 0; z-index: 14; pointer-events: none; overflow: hidden; }
 .tour-caption { position: absolute; width: 360px; max-width: calc(100% - 16px); padding: 10px 12px 11px; border: 1px solid color-mix(in srgb, var(--fl-signal) 55%, transparent); border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); color: var(--fl-text); font-size: 12.5px; line-height: 1.5; pointer-events: auto; animation: tour-in .18s ease-out; }
 .tour-caption.missing { opacity: .6; border-style: dashed; }
