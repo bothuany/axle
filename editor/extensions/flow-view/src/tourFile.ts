@@ -89,10 +89,22 @@ async function openFlow(host: TourHost, flow: TourFlow | undefined, firstStep: {
 	}
 }
 
+/** The tour files of the workspace (`*.tour.json`) to pick from, and "Browse…" for one anywhere else. */
+async function pickTourFile(): Promise<vscode.Uri | undefined> {
+	const found = await vscode.workspace.findFiles('**/*.tour.json', '**/{node_modules,.git}/**', 50);
+	const browse = { label: '$(folder-opened) Browse…', uri: undefined as vscode.Uri | undefined };
+	const items = [...found.map(uri => ({ label: vscode.workspace.asRelativePath(uri, false), uri: uri as vscode.Uri | undefined })).sort((a, b) => a.label.localeCompare(b.label)), browse];
+	const pick = found.length ? await vscode.window.showQuickPick(items, { title: 'Axle: play a tour', placeHolder: 'A tour file in this workspace' }) : browse;
+	if (pick?.uri) {
+		return pick.uri;
+	}
+	return pick ? (await vscode.window.showOpenDialog({ canSelectMany: false, openLabel: 'Play Tour', title: 'Axle: play a tour file', filters: { 'Axle tour': ['json'] } }))?.[0] : undefined;
+}
+
 /** `source`: a file the caller already chose (a Uri or a path); without one the user picks it. */
 export async function playTourFile(host: TourHost, source?: unknown): Promise<void> {
 	let uri = source instanceof vscode.Uri ? source : typeof source === 'string' && source ? vscode.Uri.file(source) : undefined;
-	uri ??= (await vscode.window.showOpenDialog({ canSelectMany: false, openLabel: 'Play Tour', title: 'Axle: play a tour file', filters: { 'Axle tour': ['json'] } }))?.[0];
+	uri ??= await pickTourFile();
 	if (!uri) {
 		return;
 	}

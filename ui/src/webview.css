@@ -196,7 +196,8 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .tour-paused { color: var(--fl-muted); }
 
 /* ---- guided tours: the ghost cursor, the lit lines, the caption, the peek card (src/tour) ---- */
-.tour-cursor { position: absolute; left: 0; top: 0; z-index: 40; pointer-events: none; opacity: 0; transition: opacity .15s; filter: drop-shadow(0 2px 4px #0006); will-change: transform; }
+/* Cards sit at z-index 1000 (selected cards above that is React Flow's own), so the cursor and the peek card are above them. */
+.tour-cursor { position: absolute; left: 0; top: 0; z-index: 2000; pointer-events: none; opacity: 0; transition: opacity .15s; filter: drop-shadow(0 2px 4px #0006); will-change: transform; }
 .tour-cursor.on { opacity: 1; }
 .tour-cursor svg { display: block; }
 .tour-cursor-tag { position: absolute; left: 14px; top: 16px; padding: 1px 7px; border-radius: 99px; background: var(--tc); color: #0b0d12; font: 600 10.5px var(--fl-mono); white-space: nowrap; }
@@ -214,7 +215,7 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .tour-q { font-style: italic; color: var(--fl-muted); }
 .tour-from { color: var(--fl-muted); font-size: 10.5px; }
 @keyframes tour-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-.tour-peek { position: absolute; display: flex; flex-direction: column; overflow: hidden; border: 1.5px dashed color-mix(in srgb, var(--fl-signal) 60%, var(--fl-line-strong)); border-radius: 8px; background: color-mix(in srgb, var(--fl-card) 70%, transparent); box-shadow: var(--fl-lift); pointer-events: none; }
+.tour-peek { position: absolute; z-index: 1001; display: flex; flex-direction: column; overflow: hidden; border: 1.5px dashed color-mix(in srgb, var(--fl-signal) 60%, var(--fl-line-strong)); border-radius: 8px; background: color-mix(in srgb, var(--fl-card) 70%, transparent); box-shadow: var(--fl-lift); pointer-events: none; }
 .tour-peek-head { flex: none; display: flex; align-items: center; gap: 9px; padding: 0 11px; border-bottom: 1px solid var(--fl-line); }
 .tour-peek-tag { padding: 1px 6px; border-radius: 4px; background: var(--fl-line); color: var(--fl-muted); font: 600 10px var(--fl-mono); white-space: nowrap; }
 .tour-peek .ln.tour-lit { background: color-mix(in srgb, var(--fl-signal) 20%, transparent); box-shadow: inset 2px 0 0 var(--fl-signal); }

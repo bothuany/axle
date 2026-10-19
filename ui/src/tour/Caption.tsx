@@ -2,7 +2,6 @@
 // the string. There is no HTML, no Markdown link and no image, so a caption an agent wrote cannot reach the page as markup.
 import { useState, type CSSProperties } from 'react'
 import type { TourStep } from '../types'
-import { CAPTION_W } from './geometry'
 import { captionParts, stepMark } from './player'
 
 /** A caption longer than this is cut to three lines, with "more". */
@@ -12,7 +11,7 @@ export function Caption({ step, place }: { step: TourStep; place: { left: number
   const [open, setOpen] = useState(false)
   const mark = stepMark(step)
   const long = step.caption.length > LONG
-  const style: CSSProperties = place === 'centre' ? { left: '50%', top: '18%', marginLeft: -CAPTION_W / 2 } : { left: place.left, top: place.top }
+  const style: CSSProperties = place === 'centre' ? { left: 0, right: 0, top: '18%', margin: '0 auto' } : { left: place.left, top: place.top }
   return (
     <div className={`tour-caption${step.state === 'missing' ? ' missing' : ''}`} data-side={place === 'centre' ? 'centre' : place.side} style={style} role="status" aria-live="polite">
       <div className="tour-caption-head">
