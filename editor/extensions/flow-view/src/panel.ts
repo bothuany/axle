@@ -15,6 +15,8 @@ import { CardLanguage, cardQuery } from './language';
 import { CardOverlays } from './overlay';
 import type { FlowNode, FlowProvider, FlowTarget } from './providers';
 import { flowRoot } from './root';
+import { readTextIn } from './tour/files';
+import { GazeLog, gazeTour, parseGaze } from './tour/gaze';
 import { tourReport } from './tour/validate';
 import { TypeService } from './types/typeService';
 
@@ -59,6 +61,8 @@ function workspaceFile(file: unknown): string | undefined {
 	const uri = vscode.Uri.file(file);
 	return vscode.workspace.getWorkspaceFolder(uri) ? uri.fsPath : undefined;
 }
+
+const roots = () => vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) ?? [];
 
 /**
  * A flow shows how the application runs; tests calling into it are noise there. Callers and callees in
@@ -140,6 +144,7 @@ export class FlowPanel implements vscode.Disposable {
 			if (!this.webviewReady) {
 				this.webviewReady = true;
 				this.postWaiting();
+				this.postRecentGaze();
 				this.listening.splice(0).forEach(done => done());
 			}
 			this.onMessage(m).catch(e => vscode.window.showErrorMessage(`Axle: ${(e as Error).message ?? e}`));
@@ -234,12 +239,34 @@ export class FlowPanel implements vscode.Disposable {
 		await panel.webview.postMessage({ type: 'tour', tour });
 	}
 
+	/** Where agents looked, in memory only: what a canvas opened later still shows, and what "Replay trail" plays. */
+	private readonly gazeLog = new GazeLog();
+
+	/**
+	 * flow-agent's looks (`flow.agent.gaze`): checked, kept, and painted on the canvas when one is open. Gaze never opens,
+	 * reveals or focuses anything: without a canvas the looks are only kept.
+	 */
+	gaze(batch: unknown) {
+		const kept = parseGaze(batch, roots());
+		this.gazeLog.add(kept);
+		if (kept.length && this.panel && this.webviewReady) {
+			void this.panel.webview.postMessage({ type: 'gaze', events: kept.map(k => k.event) });
+		}
+	}
+
+	private postRecentGaze() {
+		const events = this.gazeLog.recent(Date.now());
+		if (events.length) {
+			void this.panel?.webview.postMessage({ type: 'gaze', events });
+		}
+	}
+
 	/** Editor → canvas: the canvas highlights the card holding this line. */
 	cursorMoved(file: string, line: number) {
 		void this.panel?.webview.postMessage({ type: 'cursor', file, line });
 	}
 
-	private async onMessage(m: Request | { type: 'open' | 'reveal'; file: string; line: number } | { type: 'ask'; label: string; context: string } | { type: 'answer'; id: string; accept: boolean } | { type: 'mention'; file: string; start: number; end: number } | { type: 'typeDiagram'; id: string } | Extract<CanvasToHostTour, { type: 'tourState' | 'tourExit' }>) {
+	private async onMessage(m: Request | { type: 'open' | 'reveal'; file: string; line: number } | { type: 'ask'; label: string; context: string } | { type: 'answer'; id: string; accept: boolean } | { type: 'mention'; file: string; start: number; end: number } | { type: 'typeDiagram'; id: string } | Extract<CanvasToHostTour, { type: 'tourState' | 'tourExit' | 'gazeReplay' }>) {
 		if (m.type === 'open' || m.type === 'reveal') {
 			// open: jump there and type; reveal: show the line but keep the canvas focused.
 			const file = workspaceFile(m.file);
@@ -259,6 +286,16 @@ export class FlowPanel implements vscode.Disposable {
 				this.tourAt = undefined;
 			} else if (report) {
 				this.tourAt = { index: report.index, paused: report.paused };
+			}
+			return;
+		}
+		if (m.type === 'gazeReplay') {
+			// Only a session the log holds: the canvas names it, the host builds the tour from its own record.
+			if (this.gazeLog.has(m.session)) {
+				const tour = gazeTour(this.gazeLog.lastTurn(m.session), roots(), readTextIn(roots()));
+				if (tour) {
+					await this.playTour(tour);
+				}
 			}
 			return;
 		}

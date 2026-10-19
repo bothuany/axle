@@ -121,7 +121,7 @@ function parseHighlights(raw: unknown): [number, number][] {
 }
 
 /** The method's code for a step that lands on no drawn card: its lines, or a window around the highlighted lines. */
-function peekOf(text: string, startLine: number, endLine: number): TourStep['peek'] {
+export function peekOf(text: string, startLine: number, endLine: number): TourStep['peek'] {
 	const lines = text.replace(/\r\n/g, '\n').split('\n');
 	const from = Math.max(1, startLine - 2);
 	const to = Math.min(lines.length, Math.max(endLine, startLine + 12), from + PEEK_LINES - 1);

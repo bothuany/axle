@@ -15,6 +15,7 @@ import { definitionInFile, notify, registerIde } from './ide'
 import { ActionsCtx, LANG_BY_EXT, nodeTypes, type CanvasActions, type Caret } from './nodes'
 import { cardAt, samePath } from './tour/cards'
 import { useTourPlayer } from './tour/TourPlayer'
+import { useGaze } from './gaze/Gaze'
 import type { FlowNode } from './types'
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void }
@@ -539,6 +540,8 @@ function Flow() {
     post: msg => vscode.postMessage(msg),
     changed,
   })
+  // Where agents are reading and editing (src/gaze): painted on this canvas only, never moving it.
+  const gaze = useGaze({ down, up, showUp, nodes, quiet: !!tour.state.tour, post: msg => vscode.postMessage(msg) })
   const isReview = tour.state.tour?.source === 'review'
   const reviewNode = isReview && turn === undefined && tour.cardKey ? (find(down, tour.cardKey) ?? find(up, tour.cardKey)) : null
 
@@ -658,6 +661,7 @@ function Flow() {
         )}
         <span className="wv-spacer" />
         {status && <span className="wv-status">{status}</span>}
+        {gaze.toggle}
         <button className="icon-btn" onClick={() => load(target.target, true)} title="Trace the flow again">
           ↻
         </button>
@@ -722,6 +726,7 @@ function Flow() {
             proOptions={{ hideAttribution: true }}
           >
             <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+            {gaze.flowLayer}
             {tour.flowLayer}
             <Controls showInteractive={false} showFitView={false} position="bottom-left">
               <ControlButton onClick={frame} title="Fit view" aria-label="Fit view">
@@ -731,6 +736,7 @@ function Flow() {
             <MiniMap pannable zoomable position="bottom-right" maskColor="var(--fl-mask)" nodeColor={n => (n.type === 'frame' ? 'transparent' : 'var(--fl-line-strong)')} nodeBorderRadius={3} />
           </ReactFlow>
         </ActionsCtx.Provider>
+        {gaze.overlay}
         {tour.captionLayer}
       </div>
     </div>
