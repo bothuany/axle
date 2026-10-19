@@ -17,6 +17,7 @@ import { BoardStore } from './board/store';
 import { MarkdownBoardViewer } from './board/viewer';
 import { registerTypeViews } from './typeviews';
 import { TypeService } from './types/typeService';
+import { SkeletonHost } from './skeletonHost';
 import { Command } from './commands';
 import { EndpointsView } from './endpoints';
 import { FlowHome } from './home';
@@ -383,8 +384,10 @@ function wireAgentBridge(flow: Flow) {
 			}
 		},
 	});
+	// Skeleton first: the plan board against the type index, the stages the dock drives (docs/design/skeleton-first.md).
+	const skeleton = new SkeletonHost(boards, TypeService.get(log), log);
 	const bridge = new AgentBridge({
-		log, endpoints: endpointList, analyzer, poly, boards, tables: flow.tables,
+		log, endpoints: endpointList, analyzer, poly, boards, tables: flow.tables, skeleton,
 		providerFor: flow.providerFor,
 		showEntry: (id, label, source) => flow.showEntry(id, label, source),
 		showTarget: async (target, label) => {
@@ -412,7 +415,7 @@ function wireAgentBridge(flow: Flow) {
 		},
 	}, log);
 	context.subscriptions.push(
-		viewer, bridge, boardPanel, TypeService.get(log),
+		viewer, bridge, boardPanel, TypeService.get(log), skeleton,
 		{ dispose: () => boards.setHost(undefined) },
 		// flow-agent calls these around an agent's work (see extensions/flow-agent/src/agents.ts); they never throw into the hook.
 		vscode.commands.registerCommand('flow.agent.plan', async (session: string, plan: string, planFile?: string) => {
@@ -437,6 +440,9 @@ function wireAgentBridge(flow: Flow) {
 			}
 		}),
 		vscode.commands.registerCommand('flow.agent.edited', async (session: string, files: string[], phase: 'before' | 'after') => {
+			if (typeof session === 'string' && Array.isArray(files)) {
+				void skeleton.agentEdited(session, files.filter(f => typeof f === 'string'), phase).catch(e => log.warn(`skeleton: ${(e as Error).message}`));
+			}
 			for (const board of boards.forSession(session)) {
 				for (const file of files ?? []) {
 					for (const node of nodesLinkedTo(board.spec, file)) {

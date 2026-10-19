@@ -45,7 +45,7 @@ export function registerMcpCommands(context: vscode.ExtensionContext, log: vscod
 			``,
 			commandLine(cmd.args),
 			``,
-			`What changes: your Claude Code user configuration gets an MCP server named "axle". From then on every \`claude\` session on this PC (in any terminal, not only Axle's) can call mcp__axle__open, open_diff, get_diagnostics, find_symbol, go_to_definition, find_references, find_entry_points, show_flow, flow_text, impact, get_context, draw_board, update_board, tour and tour_control.`,
+			`What changes: your Claude Code user configuration gets an MCP server named "axle". From then on every \`claude\` session on this PC (in any terminal, not only Axle's) can call mcp__axle__open, open_diff, get_diagnostics, find_symbol, go_to_definition, find_references, find_entry_points, show_flow, flow_text, impact, get_context, draw_board, update_board, tour, tour_control and check_skeleton.`,
 			``,
 			`What the tools can do: open files, the git diff and flows and draw diagrams in an Axle window that has the same folder open, and read diagnostics, symbols and the call flows Axle has indexed. They cannot write files or run commands, and refuse paths outside the open folder.`,
 			cmd.electron ? `\nNode was not found on PATH, so Axle's own runtime runs the server.` : '',

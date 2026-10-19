@@ -245,6 +245,12 @@ export const TOOLS: ToolDef[] = [
 		annotations: ro('Play a tour in Axle'),
 	},
 	{
+		name: 'check_skeleton',
+		description: "Skeleton first, the developer's choice in Axle to write the structure of a change themselves. Call it ONCE right after the user approves a plan that adds or changes types, entities or interfaces, BEFORE you create or edit any file; it answers at once. If Axle says skeleton first is off, implement as usual. If it is on, it tells you to draw the design with draw_board and stop; later calls return the developer's skeleton against your design as a structured diff (each type and member matches, MISSING or DIFFERS, with what the code has), which you explain without fixing their code. Read-only.",
+		inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+		annotations: ro('Check the skeleton', false),
+	},
+	{
 		name: 'tour_control',
 		description: "Drive the tour you started with `tour`, or answer the user's question during it. go: jump the user to a step (only while they are paused or waiting for your answer: the user paces the tour, so do not fight them) · note: pin your answer to a step's card, shown until the tour ends (plain text) · resume: continue after a question · end: close it. When the user asks a question during the tour it comes to you as a message: answer with note (for the step they asked about, and go to a step that answers it better), then resume; if the answer needs more than a note, start a new tour. Returns where the user is and whether they paused.",
 		inputSchema: {

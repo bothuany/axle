@@ -43,7 +43,27 @@ const EXPLAIN_CHANGE = [
 	'',
 ].join('\n');
 
+const SKELETON_FIRST = `# Skeleton first in Axle
+
+Skeleton first is an opt-in switch in Axle's agent dock. When it is on, the developer writes the structure of a change (types, entities, interfaces, signatures, empty bodies) themselves, so they keep the know-how of their own system. You design, check, explain and fill the bodies. It is never imposed: \`check_skeleton\` says whether it is on, and the developer can pick "Just do it" at any point.
+
+1. Right after the user approves a plan that adds or changes types, entities or interfaces, and before you create or edit any file, call \`check_skeleton\` once. A bug fix, a rename or a small edit does not need it.
+2. Off: implement the plan as usual.
+3. On: draw your target design with \`draw_board\` (the id it names; kind "class", or "er" for tables). Draw one node per type, with kind interface / class / service / repository / entity / dto / enum. List the members as signatures (\`name(param: Type): Return\`, \`field: Type\`), and add edges for extends / implements / has / has-many / uses. Then STOP, and tell the user in one line that the design is on the board.
+4. If the user asks for a change ("make DiscountPolicy an interface", "remove the repository"), redraw with the same id and stop again. Nothing is edited by dragging: the conversation is how the design changes.
+5. The developer then writes the skeleton. The board colours each planned type and member matches, MISSING or DIFFERS from the real code after every save. Do not write that code for them.
+6. When they ask you to check, call \`check_skeleton\`. Explain each MISSING or DIFFERS line: what the plan intended and why, phrased as a trade-off, not a verdict. Do not edit their files. If they say theirs is better, argue your case with reasons, or, if they are right, redraw the plan so it follows their design. "Differs" is not "wrong".
+7. When they hand over, fill in the method bodies. Keep every type, signature, name and relation they wrote. Axle warns them about any you change, so if one must change, say so and why.
+8. Finish with a closing tour: \`tour\` with \`flow: {"changes": true}\`, one step per method you filled, in the order a request runs through them, and a last caption-only step on what you did not test.
+
+Nothing is scored and nothing leaves the machine.
+`;
+
 const PROMPTS: { def: PromptDef; text: (args: Record<string, string>) => string }[] = [
+	{
+		def: { name: 'skeleton_first', title: 'Skeleton first: how it works', description: 'The skeleton-first flow: when to call check_skeleton, how to draw the design, check the developer\'s skeleton without fixing it, fill the bodies and close with a tour.' },
+		text: () => SKELETON_FIRST,
+	},
 	{
 		def: { name: 'tour_guide', title: 'How to make a good Axle tour', description: "Advice for the `tour` tool: what to point at, how to write captions, how to fix a step that was not found." },
 		text: () => TOUR_GUIDE,

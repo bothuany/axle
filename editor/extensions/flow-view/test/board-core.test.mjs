@@ -35,10 +35,12 @@ test('board-schema: the draw_board enums are the ones spec.ts accepts', () => {
 	assert.deepEqual(props.nodes.items.properties.status.enum, union('NodeStatus'))
 	assert.deepEqual(props.edges.items.properties.kind.enum, union('EdgeKind'))
 	assert.deepEqual(props.direction.enum, ['LR', 'TB'])
-	// every field of BoardNode / BoardEdge in spec.ts is in the schema
+	// every field of BoardNode / BoardEdge in spec.ts is in the schema, except skeleton first's host-only marks (parseBoard drops them)
 	const src = readFileSync(join(ROOT, 'src', 'board', 'spec.ts'), 'utf8')
 	const fields = name => [...new RegExp(`export interface ${name} \\{([\\s\\S]*?)\\n\\}`).exec(src)[1].matchAll(/^\t(\w+)\??:/gm)].map(m => m[1])
-	assert.deepEqual(fields('BoardNode').sort(), Object.keys(props.nodes.items.properties).sort())
+	const HOST_ONLY = ['check', 'checkNote', 'warn']
+	assert.deepEqual(fields('BoardNode').filter(f => !HOST_ONLY.includes(f)).sort(), Object.keys(props.nodes.items.properties).sort())
+	assert.deepEqual(fields('BoardMember').filter(f => !HOST_ONLY.includes(f)).sort(), Object.keys(props.nodes.items.properties.members.items.properties).sort())
 	assert.deepEqual(fields('BoardEdge').sort(), Object.keys(props.edges.items.properties).sort())
 	assert.deepEqual(fields('BoardGroup').sort(), Object.keys(props.groups.items.properties).sort())
 })

@@ -31,6 +31,7 @@ import { readTextIn, realInside } from '../tour/files';
 import { methodsOf } from '../tourMethods';
 import { drawnOf, markOffFlow, type Method } from '../tour/resolve';
 import { parseTourArgs, stepFiles, type TourFlow } from '../tour/validate';
+import type { SkeletonTools } from '../skeletonHost';
 
 /** What the tools need from the rest of the extension. */
 export interface ToolDeps {
@@ -56,6 +57,8 @@ export interface ToolDeps {
 	tours: TourPlayer;
 	/** Who an agent session is (its name and colour in the dock), for the tour's cursor; nothing when the session is not known. */
 	describeAgent(session: string): Promise<{ label: string; color: string } | undefined>;
+	/** Skeleton first: the answer of check_skeleton, and the boards agents draw. */
+	skeleton?: SkeletonTools;
 }
 
 /** What a bridge call says about who made it. */
@@ -145,10 +148,11 @@ export class AgentTools {
 				case 'flow_text': return await this.flow(a, false);
 				case 'impact': return await this.impact(a);
 				case 'get_context': return await this.context();
-				case 'draw_board': return await this.draw(a);
+				case 'draw_board': return await this.draw(a, ctx);
 				case 'update_board': return await this.update(a);
 				case 'tour': return await this.tour(a, ctx);
 				case 'tour_control': return await this.tourControl(a, ctx);
+				case 'check_skeleton': return text(await (this.d.skeleton?.check(ctx.session) ?? Promise.resolve('Skeleton first is not available in this Axle window: implement the plan as usual.')));
 				default: return errorResult(`Unknown tool: ${tool}`);
 			}
 		} catch (e) {
@@ -1042,7 +1046,7 @@ export class AgentTools {
 
 	// ── boards ──────────────────────────────────────────────────────────────
 
-	private async draw(a: Record<string, unknown>): Promise<ToolResult> {
+	private async draw(a: Record<string, unknown>, ctx: CallContext = {}): Promise<ToolResult> {
 		let raw = a.board;
 		if (typeof raw === 'string') {
 			try {
@@ -1081,6 +1085,7 @@ export class AgentTools {
 		const wanted = cleanBoardId(a.id);
 		const replaced = wanted ? !!this.d.boards.get(wanted) : false;
 		const id = await this.d.boards.set(spec, { id: wanted, origin: 'agent' });
+		this.d.skeleton?.drawn(id, spec, ctx.session);
 		return text([
 			`Board "${id}" ${replaced ? 'replaced' : 'drawn'} and shown to the user in Axle: ${spec.kind}, ${spec.nodes.length} nodes, ${spec.edges.length} edges.`,
 			spec.kind === 'plan' ? `Tick steps off with update_board (id "${id}", nodeId one of: ${spec.nodes.slice(0, 20).map(n => n.id).join(', ')}).` : `Use id "${id}" again to replace it.`,

@@ -13,6 +13,9 @@ export type NodeKind =
 
 export type NodeStatus = 'todo' | 'doing' | 'done' | 'skipped' | 'blocked';
 
+/** Skeleton first: how the code compares with a planned type or member. Set by the host only, never by an agent (parseBoard drops it). */
+export type CheckState = 'matches' | 'missing' | 'differs';
+
 export type EdgeKind =
 	| 'calls' | 'extends' | 'implements' | 'uses' | 'has' | 'has-many' | 'depends'
 	| 'next' | 'yes' | 'no' | 'reads' | 'writes' | 'message';
@@ -24,6 +27,10 @@ export interface BoardMember {
 	visibility?: '+' | '-' | '#' | '~';
 	/** The type another node is drawn for, so the member can link to it (an ER or class edge starts here). */
 	ref?: string;
+	/** Host-only (skeleton first): the member in the code against the plan, why, and a warning that the agent changed it. */
+	check?: CheckState;
+	checkNote?: string;
+	warn?: string;
 }
 
 export interface BoardNode {
@@ -42,6 +49,10 @@ export interface BoardNode {
 	members?: BoardMember[];
 	/** For plans: what the step changes, as free text. */
 	note?: string;
+	/** Host-only (skeleton first): the type in the code against the plan, why, and a warning that the agent changed it. */
+	check?: CheckState;
+	checkNote?: string;
+	warn?: string;
 }
 
 export interface BoardEdge {
