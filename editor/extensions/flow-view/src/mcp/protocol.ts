@@ -23,9 +23,9 @@ const DEFAULT_PROTOCOL = '2025-06-18';
 
 export const INSTRUCTIONS = [
 	"Axle is the user's code editor. These tools act on the Axle window that has the current folder open.",
-	'To open a file or place in the editor use `open`. To show how a feature runs, use `find_entry_points` then `show_flow` (it opens the flow canvas for the user) or `flow_text` (the same call chain as text, to understand code without reading many files).',
+	'WHEN THE USER ASKS HOW SOMETHING WORKS, to be walked through it, or for an explanation of code ("walk me through how an order is placed", "how does X work", "explain this flow", "anlat", "nasıl çalışıyor", in any language), do not read files and write a text answer: find the entry with `find_entry_points`, get the call chain with `flow_text`, then SHOW it with `tour` and keep your own message to a line. If these tools are listed but not loaded, load `find_entry_points`, `flow_text` and `tour` first (ToolSearch). 3-12 steps in the order the code runs, one idea per step, captions that say why and not what, in the language the user writes in (the `tour_guide` prompt has the advice). Questions the user asks during a tour come back to you; answer them through `tour_control`.',
+	'To open a file or place in the editor use `open`. To open the flow of a feature for the user use `find_entry_points` then `show_flow`; `flow_text` is the same call chain as text, to understand code without reading many files.',
 	'Use `impact` before changing shared code (or, with `table` or `entity`, a table or its entity), `get_context` to see what the user is looking at, and `draw_board` (kinds: flow, plan, class, er, sequence, architecture) to show the user a flow or plan you designed; tick plan steps with `update_board`.',
-	'To explain or walk the user through code, SHOW it with `tour`: get file:line from `flow_text` first, 3-12 steps in the order the code runs, one idea per step, captions that say why and not what (run the `tour_guide` prompt for the advice). The user\'s questions during a tour come back to you; answer them through `tour_control`.',
 ].join('\n');
 
 export const errorResult = (text: string): ToolResult => ({ content: [{ type: 'text', text }], isError: true });

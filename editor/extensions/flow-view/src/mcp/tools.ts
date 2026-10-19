@@ -155,13 +155,13 @@ export const TOOLS: ToolDef[] = [
 	},
 	{
 		name: 'show_flow',
-		description: 'Open the Axle flow canvas for an entry point or method, so the user SEES the runtime call chain (callers on the left, the method, everything it calls on the right, with the database tables it touches), and return the same call chain as text. Use this when the user asks to open or show a flow in the IDE ("open the delete-users flow"). Pass an `id` from find_entry_points, or `file` plus `method` or `line`.',
+		description: 'Open the Axle flow canvas for an entry point or method, so the user SEES the runtime call chain (callers on the left, the method, everything it calls on the right, with the database tables it touches), and return the same call chain as text. Use this when the user asks to open a flow in the IDE ("open the delete-users flow"). To explain how it works, walk the user through it with `tour`. Pass an `id` from find_entry_points, or `file` plus `method` or `line`.',
 		inputSchema: { type: 'object', properties: { ...TARGET, depth: int('How many call levels to include in the returned text (default 6).') }, additionalProperties: false },
 		annotations: ro('Show flow in Axle'),
 	},
 	{
 		name: 'flow_text',
-		description: 'Return the runtime call chain of an entry point or method as indented text: each step with file:line, calls through interfaces and mediators resolved, and the database tables touched. Does not open anything. Call this BEFORE reading many files to understand how a feature works; one call replaces dozens of reads. Pass an `id` from find_entry_points, or `file` plus `method` or `line`.',
+		description: 'Return the runtime call chain of an entry point or method as indented text: each step with file:line, calls through interfaces and mediators resolved, and the database tables touched. Does not open anything. Call this BEFORE reading many files to understand how a feature works; one call replaces dozens of reads. To explain a feature to the user, do not paste this text: SHOW it with `tour`. Pass an `id` from find_entry_points, or `file` plus `method` or `line`.',
 		inputSchema: { type: 'object', properties: { ...TARGET, depth: int('Call levels to include (default 6).') }, additionalProperties: false },
 		annotations: ro('Flow as text'),
 	},
@@ -201,7 +201,7 @@ export const TOOLS: ToolDef[] = [
 	},
 	{
 		name: 'tour',
-		description: "Play a narrated walkthrough on Axle's flow canvas: a cursor moves from card to card, dims the rest, highlights lines and shows your caption. Use it when the user asks you to explain, walk through or show code, after finishing work (\"explain what you changed\"), or to answer a question about code by SHOWING it. Get file:line from flow_text or find_symbol first. 3-12 steps, one idea each, in the order the code runs; captions say WHY and what to watch, not what the code says, in the user's language. Name each step's code by `file` + `method` (preferred: it survives edits) with a `line` hint, and `lines` for the few lines the caption talks about; a step with only a caption is an intro or an outro; `table` points at a database card. The tool returns at once with each step marked ok / moved / missing / offflow: fix a missing step by calling tour again with the same id. The user steps through it; questions they ask come back to you as a new message. Run the `tour_guide` prompt for the full advice.",
+		description: "The way to EXPLAIN code to the user in Axle: a narrated walkthrough on the flow canvas, where a cursor moves from card to card, dims the rest, highlights lines and shows your caption. Use it INSTEAD of a long text answer whenever the user asks how something works or to be walked through it (\"walk me through how an order is placed\", \"how does X work\", \"explain this flow\", \"show me\", \"anlat\", \"bana göster\", \"nasıl çalışıyor\"), after finishing work (\"explain what you changed\"), or to answer a question about code by SHOWING it; then keep your own message to one line. Get file:line from flow_text or find_symbol first. 3-12 steps, one idea each, in the order the code runs; captions say WHY and what to watch, not what the code says, in the user's language. Name each step's code by `file` + `method` (preferred: it survives edits) with a `line` hint, and `lines` for the few lines the caption talks about; a step with only a caption is an intro or an outro; `table` points at a database card. The tool returns at once with each step marked ok / moved / missing / offflow: fix a missing step by calling tour again with the same id. The user steps through it; questions they ask come back to you as a new message. Run the `tour_guide` prompt for the full advice.",
 		inputSchema: {
 			type: 'object',
 			properties: {

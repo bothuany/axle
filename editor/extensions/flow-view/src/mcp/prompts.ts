@@ -14,6 +14,8 @@ const TOUR_GUIDE = `# How to make a good tour with Axle's \`tour\` tool
 
 A tour is you pointing at the code on the user's flow canvas while you talk: a cursor moves from card to card, the rest dims, the lines you name light up and your caption is shown. The user steps through it with the arrow keys.
 
+Use a tour whenever the user asks how something works, to be walked through it or for an explanation ("walk me through how an order is placed", "explain this flow", "anlat", "nasıl çalışıyor"): showing the code beats a long text answer, and the message you write next stays one or two lines.
+
 1. Get the places first. Use \`find_entry_points\`, then \`flow_text\` (or \`find_symbol\`) to learn the call order and the file:line of each method. Do not guess lines.
 2. Start at the entry point, or at the user's question, and follow the order the code runs. Do not jump around the file system.
 3. One step per idea. If a caption needs "and also", split the step. Aim for 3-12 steps; if it needs more, offer a second tour instead of a longer one.
