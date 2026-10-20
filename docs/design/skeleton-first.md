@@ -13,7 +13,7 @@ AI writes so much code that developers lose the know-how of their own system. Sk
 1. **Variant A order.** After a plan is approved, the agent draws the target design (class or ER) with `draw_board`. The developer then writes the skeleton in the editor: types, entities, interfaces, signatures, empty bodies.
 2. **The diagram is corrected by talking.** "Make DiscountPolicy an interface", "remove the repository": the agent redraws the same board. This repeats until the developer accepts it. Nothing is edited by dragging.
 3. **An on/off switch, never imposed, per agent.** Each agent row in the dock has one "Skeleton" button (pressed when on), explained in its tooltip, and nothing else. The setting `axle.skeletonFirst.enabled` (default off) is only the starting value for an agent nobody has switched. When it is on for an agent, the mode is offered only when the plan adds or changes types, entities or interfaces. "Just do it" is always one sentence to the agent. Turning it off takes effect at once.
-4. **Live plan vs actual.** While the developer writes, the board is recomputed from the real type index on every save. Each type and member is marked **matches**, **missing** or **differs**. The diagram is the plan and the code is the truth; nothing round-trips.
+4. **Live plan vs actual.** While the developer writes, the board is recomputed from the real type index on every save. Each type and member is marked **matches**, **missing** or **differs**; a type or member that was already in the code when the design was drawn is **existing** (neutral). The diagram is the plan and the code is the truth; nothing round-trips.
 5. **Check.** The developer says "check"; the MCP tool `check_skeleton` returns the structured diff. The agent explains each difference with a reason and does not fix the code. When the developer answers "mine is better", the agent argues its case or updates the plan.
 6. **Hand over.** The agent fills the bodies. There is **no lock, only a warning**: if the agent changes a signature, a name or a relation the developer wrote, a passive warning shows on the board and in the agent's own reply, with the before and after text; keep or revert is the developer's call.
 7. **A closing tour** of what was filled, with the `tour` tool.
@@ -30,7 +30,8 @@ So the gate is something the agent does **before its first edit**, plan mode or 
 - The server instructions (`src/mcp/protocol.ts`) and the `skeleton_first` MCP prompt say: before your first edit for a request or an approved plan that adds or changes types, entities or interfaces, call `check_skeleton` once. A bug fix, a small edit or a question does not need it.
 - The tool reads the live setting in the window, not anything fixed when the MCP server started, so turning the mode off works at once:
   - **Off:** "Skeleton first is off: implement the plan as usual." One fast call, nothing else.
-  - **On, no design yet:** "Draw the design with `draw_board` (id `skeleton-…`, kind class or er, members as signatures), then STOP and tell the user in one line." The agent tells the developer, in two or three lines, what to do next and what to say.
+  - **On, no design yet:** "Draw the design with `draw_board` (id `skeleton-…`, kind class or er, and on every type you add or change the members the developer is to write, as `{"text": "name(param: Type): Return"}` objects), then STOP." The agent tells the developer, in a few lines, which types are new and which existing types get which members, and what to say next.
+  - **The design itself** is answered by `draw_board`, not by a later check: its result says which types are new, which existing types get which members, and which are context only, so the agent can tell the developer at once. A design with a new type that has no members is turned down there ("redraw with members"), and the stage stays `design`.
   - **Later:** the diff (see Check).
 - After that the developer drives the stages by talking to the agent: "check", "hand over", "just do it", "done", "keep it", "revert". The agent passes the reply to `check_skeleton` as its `step` (`handover`, `just`, `finish`, `accept` with a warning number); the window moves the stage. Every answer repeats what the next replies map to, and the prompt-time reminder says the same, so a small model stays in step.
 
@@ -57,7 +58,7 @@ Per agent session, held in the window's memory (`src/skeleton/sessions.ts`). A w
 | --- | --- | --- |
 | (none) | | Off, or "draw the design and stop, and tell the developer what to say" (the stage becomes `design`) |
 | `design` | The agent's first `check_skeleton` while its switch is on | The same, until a class or ER board is drawn |
-| `skeleton` | The agent drew the design (the board colours it at once: everything missing until written) | The diff, "explain, do not fix", and the replies mapped to steps |
+| `skeleton` | The agent drew the design and every new type has members (the board colours it at once: new things missing until written, existing types neutral) | The diff, "explain, do not fix", and the replies mapped to steps |
 | `handover` | Step `handover` (the developer said "hand over") | The diff, numbered warnings, "fill the bodies, keep the signatures, report each warning, close with a tour" |
 
 - Step `just` drops the stage ("implement as usual"); step `finish` drops it at the end.
@@ -69,23 +70,27 @@ Per agent session, held in the window's memory (`src/skeleton/sessions.ts`). A w
 
 - **Types** are matched by name: case-insensitive, with the qualified prefix ignored.
   - When two types share the name, the one in a file changed since the design was drawn wins. Otherwise the result says it is ambiguous; it never picks silently.
-  - A type with no exact name match is matched to an unplanned type of a similar name, in which the planned members mostly appear. It is then marked **differs (renamed?)**.
+  - A type with no exact name match may be a rename: an unplanned type of a similar name, in which the planned members mostly appear, **and** that the developer wrote since the design was drawn (in a file saved since, and not in the baseline). It is then marked **differs (renamed?)**. Anything else is **missing**: in a real project a planned `BillReportDTO` was taken for the old `BillResponseDTO`, which shares a word and eight of its fields.
 - **Kinds.** A planned `interface` or `enum` must be one. All the class-like roles are the same here: class, service, controller, repository, entity and dto may be a class, record or struct. Any other combination **differs**.
 - **Members.** The planned text is parsed in either style: `name(T a, U b): R`, `R name(T a)`, `name: T` or `T name`.
   - A field and a property are the same thing. A planned property also matches a Java getter (`getName`/`isName`).
   - Parameter names and package qualifiers are ignored, as is whitespace.
   - Types are compared by the identifiers they are made of. Collection wrappers are equal to each other (`List<T>`, `T[]`, `IEnumerable<T>`, `Set<T>`, `Sequence[T]`), and so are optional ones (`T?`, `Optional<T>`, `T | null`, `Optional[T]`).
   - A different parameter count or type, or a different return or field type, is **differs**, and the actual text is shown.
-  - An unmatched planned member and an unmatched actual member with the same shape are a rename: **differs (renamed?)**.
+  - An unmatched planned member and an unmatched actual member with the same shape are a rename: **differs (renamed?)**. A member the type already had before the design is never a rename of a new one, and in a type that existed only a close name counts.
   - Extra members are fine: private ones, constructors and accessors are ignored, and extra public members are listed but never coloured.
 - **Relations.** `extends`/`implements` edges are checked against the type's supers. `has`/`has-many`/`uses`/`depends` edges are checked against the graph's edges between the two types (field, method, constructor or generic). A missing relation makes its node **differs**.
+- **The baseline.** When the design is first drawn and the index is complete, the window keeps each type's id with the names of its members (`baselineOf`); if the index is still loading, it is taken at the first complete recompute, leaving out files saved since. A redraw keeps it, so the developer's new types never turn into old ones.
 - **Node colour.**
   - **differs** when anything differs.
+  - A type in the baseline is **existing** (neutral: a grey stripe and an outlined badge) until everything the plan adds to it is written, then **matches**. Its members that were already there are **existing** too; only the new ones are coloured. Before this, a type that only existed read as "matches", and the developer took it for something the agent had written.
   - Otherwise **missing** when the type or any planned member is missing.
   - Otherwise **matches**.
 - When the index is still building, the answer is "not checked yet", never "missing". False reds would teach people to ignore the colours.
 
 The board is recomputed from the index after every save of a file the index reads (`TypeService.refreshFiles`). The plan stays as the agent drew it in `BoardStore`. A decorator adds `check` and `checkNote` to the copy that is shown. These fields are host-only: `parseBoard` drops them, so an agent cannot paint its own board green.
+
+`parseBoard` is lenient about how agents write a board: a member may be plain text (`"members": ["id: UUID"]`) as well as `{ "text": … }`, and `name` stands for a missing `label`; `draw_board` also takes the board id from inside `board`. Each of these was lost in a real session (Sonnet 5.5), which left every type without members. Members that are still dropped are counted in `draw_board`'s answer.
 
 Languages: whatever the type graph covers, which is Java, TypeScript/JavaScript, Python, Go, PHP, Ruby and Rust through the code index, and C# through the analyzer. Golden tests cover Java, TypeScript, Python and C#.
 
@@ -179,8 +184,23 @@ At the user's request the dock row has a single "Skeleton" button and nothing el
   - "Keep it, we are done": step `accept` (warning 1), then step `finish`; the board went plain.
   - Turned off, "add a Referral type": `check_skeleton` answered off, and the agent wrote the file.
 
+## Real-project fixes (2026-10-20, Sonnet 5.5)
+
+A developer used it on a CRM's billing service ("a bill report with the customer in it"). The agent drew the right types, stopped, and said what to do, but:
+- **No members on the board.** The agent sent `members` as plain strings (and `name` for the label, the board as JSON text, the id inside it). `parseBoard` kept only `{ text }` members and dropped the rest without a word. Now plain strings are members, `name` is a label, the id is read from either place, dropped members are counted, and a new type without members is turned down with an example of the form.
+- **Existing types read as done.** With no members, every type that already existed matched, and the developer asked why the agent had created files (it had not). Now they are **existing** and only their new members are coloured, and `draw_board` tells the agent which types are new and which existing types get what.
+- **BillReportDTO read as differs.** The empty plan let the rename rule take the old BillResponseDTO. Renames now need a type written since the design; golden test `skeleton-expected/billing-report-java.txt` (fixture `types-fixtures/skeleton-billing`, the agent's own payload).
+
+Review follow-ups in the same change:
+- A design turned down for empty types is taken on the second try, still naming the empty types, so a marker interface never traps the agent in a redraw loop. A new type the developer has written no longer counts as empty.
+- The baseline keeps every type id (what a rename may not be) but member names only for the types the plan names; a redraw that names more types adds theirs from the code as it is then.
+- `draw_board` will not replace another agent session's skeleton design: an id that belongs to one draws a new board, and the answer says so.
+- If reading the index fails while the design is drawn, the board is still drawn and the answer just has no summary.
+- At the hand-over, members that were already there are kept as the developer's declarations too, as before (they used to read as "matches"): an agent that changes an existing signature gets a warning.
+
 ## Known gaps
 
+- A redraw while the developer writes the skeleton becomes the plan even when it has new types without members; the answer asks for members, but the board follows the agent. If the index is still loading when the design is drawn, the turn-down cannot happen then; `check_skeleton` names the empty types later.
 - TypeScript interface method signatures are not in the type graph, so a planned interface method shows as missing. This needs work in the poly index.
 - Codex gets no approval-time reminder; it has only the server instructions.
 - The stages live in window memory, so a reload ends them.

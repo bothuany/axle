@@ -43,6 +43,8 @@ export interface NodeResult {
 	relations: RelationResult[];
 	/** Public members the plan does not name: fine, listed for the record. */
 	extra: string[];
+	/** The type was in the code before the design was drawn (the baseline has it). */
+	existed?: boolean;
 }
 
 export interface SkeletonDiff {
@@ -52,10 +54,26 @@ export interface SkeletonDiff {
 	counts: Record<CheckState, number>;
 }
 
+/**
+ * The code as it was when the design was drawn: each type's id with the names of the members it had. A planned type found here is
+ * `existing` (neutral) and only what the plan adds to it is coloured; a member it already had is `existing` too. Without it every
+ * type found counts as written for the plan.
+ */
+export interface Baseline {
+	/** Every type id then: what a rename may not be. */
+	ids: Set<string>;
+	/** The member names of the types a plan names (all of a workspace's members would be held per agent session). */
+	types: Map<string, Set<string>>;
+}
+
 export interface MatchOptions {
-	/** Files the developer changed since the design was drawn: a name that two types share goes to the one in such a file. */
+	/**
+	 * Files the developer changed since the design was drawn: a name that two types share goes to the one in such a file, and only
+	 * a type in such a file can be a rename of a planned one.
+	 */
 	recent?: (file: string) => boolean;
 	ready?: boolean;
+	baseline?: Baseline;
 }
 
 /** Nodes that stand for a type of the code; notes, actors, steps and outside systems are not checked. */
@@ -311,8 +329,36 @@ function sameShape(plan: ParsedMember, actual: ParsedMember) {
 	return memberDifference(plan, actual) === undefined && (plan.kind === 'field' ? !!plan.type && !!actual.type : true);
 }
 
-function matchMembers(planned: BoardMember[], t: TypeInfo): { members: MemberResult[]; extra: string[] } {
+/** The keys a plan's checked nodes may name a type by. */
+const planKeys = (plan: BoardSpec) => new Set(plan.nodes.filter(isCheckedNode).flatMap(n => nameKeys(nodeName(n))));
+
+/**
+ * The code now, as the baseline of a design drawn now: types in `skip` (files the developer already changed) are left out, and
+ * members are kept for the types the plan names only.
+ */
+export function baselineOf(types: TypeInfo[], plan: BoardSpec, skip: (file: string) => boolean = () => false): Baseline {
+	const b: Baseline = { ids: new Set(types.filter(t => !skip(t.file)).map(t => t.id)), types: new Map() };
+	return extendBaseline(b, types, plan);
+}
+
+/**
+ * A redraw that names more types: their members are added from the code as it is now, for the types that were there at the start
+ * (a member written since then counts as an old one; the colours of the rest are unchanged).
+ */
+export function extendBaseline(b: Baseline, types: TypeInfo[], plan: BoardSpec): Baseline {
+	const keys = planKeys(plan);
+	for (const t of types) {
+		if (b.ids.has(t.id) && !b.types.has(t.id) && keys.has(key(t.name))) {
+			b.types.set(t.id, new Set(actualMembers(t).map(a => key(a.name))));
+		}
+	}
+	return b;
+}
+
+/** `before`: the member names the type had when the design was drawn, when it existed then. */
+function matchMembers(planned: BoardMember[], t: TypeInfo, before?: Set<string>): { members: MemberResult[]; extra: string[] } {
 	const actual = actualMembers(t);
+	const old = (a: Actual) => !!before?.has(key(a.name));
 	const used = new Set<Actual>();
 	const results: (MemberResult | undefined)[] = [];
 	const pending: { i: number; p: ParsedMember; text: string }[] = [];
@@ -333,13 +379,14 @@ function matchMembers(planned: BoardMember[], t: TypeInfo): { members: MemberRes
 		}
 		used.add(hit);
 		const why = memberDifference(p, hit.parsed);
-		results[i] = why ? { text: m.text, check: 'differs', note: why, actual: hit.text, line: hit.line } : { text: m.text, check: 'matches', actual: hit.text, line: hit.line };
+		results[i] = why ? { text: m.text, check: 'differs', note: why, actual: hit.text, line: hit.line } : { text: m.text, check: old(hit) ? 'existing' : 'matches', note: old(hit) ? 'in the code before the design was drawn' : undefined, actual: hit.text, line: hit.line };
 	});
-	// What is left: a member with the same shape under another name is a rename, the rest is missing.
+	// What is left: a member with the same shape under another name is a rename, the rest is missing. A member the type already had
+	// before the design is not a rename of a new one, and in a type that existed only a close name counts (it has other members).
 	for (const { i, p, text } of pending) {
-		const candidates = actual.filter(a => !used.has(a) && !a.isPlumbing && sameShape(p, a.parsed));
+		const candidates = actual.filter(a => !used.has(a) && !a.isPlumbing && !old(a) && sameShape(p, a.parsed));
 		const best = candidates.sort((a, b) => similarity(b.name, p.name) - similarity(a.name, p.name))[0];
-		if (best && (candidates.length === 1 || similarity(best.name, p.name) >= 0.4)) {
+		if (best && ((candidates.length === 1 && !before) || similarity(best.name, p.name) >= 0.4)) {
 			used.add(best);
 			results[i] = { text, check: 'differs', note: `named ${best.name} in the code (renamed?)`, actual: best.text, line: best.line };
 		} else {
@@ -409,14 +456,17 @@ export function matchPlan(plan: BoardSpec, graph: Pick<TypeGraph, 'types' | 'edg
 		const why = opts.recent?.(t.file) && !others.every(o => opts.recent?.(o.file)) ? ', the one changed since the design was drawn' : '';
 		found.set(n.id, { t, note: others.length ? `${others.length + 1} types are called ${t.name}; checked the one in ${t.file}${why}` : undefined });
 	}
-	// Then renames: an unplanned type of a similar name that has most of the planned members.
+	// Then renames: an unplanned type of a similar name that the developer wrote since the design was drawn (a file they changed, a
+	// type that was not there before) and that has most of the planned members. Anything looser took an unrelated type that happens
+	// to share a word (BillReportDTO → an old ReportDTO) for a rename, and a type nobody wrote read as written.
 	for (const n of nodes) {
 		if (found.has(n.id)) {
 			continue;
 		}
 		const name = nodeName(n);
 		const planned = n.members ?? [];
-		const candidates = graph.types.filter(t => !taken.has(t.id) && similarity(t.name, name) >= 0.6 && (planned.length === 0 || overlap(planned, t) * 2 >= planned.length));
+		const candidates = planned.length === 0 ? [] : graph.types.filter(t => !taken.has(t.id) && !!opts.recent?.(t.file) && !opts.baseline?.ids.has(t.id)
+			&& similarity(t.name, name) >= 0.6 && overlap(planned, t) * 2 >= planned.length);
 		const t = candidates.sort((a, b) => similarity(b.name, name) - similarity(a.name, name) || (opts.recent?.(b.file) ? 1 : 0) - (opts.recent?.(a.file) ? 1 : 0))[0];
 		if (t) {
 			taken.add(t.id);
@@ -444,26 +494,81 @@ export function matchPlan(plan: BoardSpec, graph: Pick<TypeGraph, 'types' | 'edg
 			return { id: n.id, label: n.label, check: 'missing', note: ready ? `no type called ${nodeName(n)} in the code yet` : 'the code index is still loading', members: (n.members ?? []).map(m => ({ text: m.text, check: 'missing' as const })), relations, extra: [] };
 		}
 		const { t } = hit;
-		const { members, extra } = matchMembers(n.members ?? [], t);
+		const before = opts.baseline?.types.get(t.id);
+		const { members, extra } = matchMembers(n.members ?? [], t, before);
 		const kindWhy = kindDifference(n, t);
 		const notes = [hit.renamed ? `named ${t.name} in the code (renamed?)` : undefined, kindWhy, hit.note].filter(Boolean);
 		const differs = hit.renamed || !!kindWhy || members.some(m => m.check === 'differs');
-		const missing = members.some(m => m.check === 'missing') || relations.some(r => r.check === 'missing');
-		if (!differs && missing) {
+		const added = members.filter(m => m.check !== 'existing');
+		const missing = added.some(m => m.check === 'missing') || relations.some(r => r.check === 'missing');
+		let check: CheckState = differs ? 'differs' : missing ? 'missing' : 'matches';
+		if (before && !differs) {
+			// A type that was there before the design: neutral until everything the plan adds to it is written, so it never reads as done
+			// (or as made by the agent) just because it exists.
+			check = added.length && !missing ? 'matches' : 'existing';
+			notes.unshift(added.length ? `in the code before the design; ${added.filter(m => m.check !== 'missing').length} of ${added.length} new members written` : 'in the code before the design; the plan adds no members to it');
+		} else if (!differs && missing) {
 			const have = members.filter(m => m.check !== 'missing').length;
 			notes.push(members.length ? `${have} of ${members.length} members written` : 'a relation is not written yet');
 		}
 		return {
-			id: n.id, label: n.label, check: differs ? 'differs' : missing ? 'missing' : 'matches', note: notes.join('; ') || undefined,
-			typeId: t.id, name: t.name, kind: t.kind, file: t.file, line: t.line, members, relations, extra,
+			id: n.id, label: n.label, check, note: notes.join('; ') || undefined,
+			typeId: t.id, name: t.name, kind: t.kind, file: t.file, line: t.line, members, relations, extra, existed: !!before || undefined,
 		};
 	});
-	const counts: Record<CheckState, number> = { matches: 0, missing: 0, differs: 0 };
+	const counts: Record<CheckState, number> = { matches: 0, missing: 0, differs: 0, existing: 0 };
 	results.forEach(r => counts[r.check]++);
 	return { ready, nodes: results, counts };
 }
 
 // ── output ─────────────────────────────────────────────────────────────────────────────────────
+
+export interface DesignSummary {
+	/** Types the developer is to write. */
+	added: string[];
+	/** Types already in the code with the members the plan adds to them. */
+	extended: { name: string; members: string[] }[];
+	/** Types already in the code the plan adds nothing to (shown for its relations). */
+	context: string[];
+	/** Types to write that the plan gives no member: there is nothing for the developer to write from. */
+	empty: string[];
+}
+
+/** What a just-drawn design asks of the developer, from its diff against the baseline. */
+export function designSummary(diff: SkeletonDiff): DesignSummary {
+	const out: DesignSummary = { added: [], extended: [], context: [], empty: [] };
+	for (const r of diff.nodes) {
+		const name = nodeName(r);
+		const adds = r.members.filter(m => m.check !== 'existing').map(m => m.text);
+		if (!r.existed) {
+			out.added.push(name);
+			// Once the developer has written it, an empty type is theirs to keep (a marker interface): no more asking for members.
+			if (!r.members.length && !r.typeId) {
+				out.empty.push(name);
+			}
+		} else if (adds.length) {
+			out.extended.push({ name, members: adds });
+		} else {
+			out.context.push(name);
+		}
+	}
+	return out;
+}
+
+/** The summary as the lines draw_board hands the agent. */
+export function designText(s: DesignSummary): string {
+	const lines: string[] = [];
+	if (s.added.length) {
+		lines.push(`New types the developer writes: ${s.added.join(', ')}.`);
+	}
+	for (const e of s.extended) {
+		lines.push(`Existing type ${e.name} gets: ${e.members.join('; ')}.`);
+	}
+	if (s.context.length) {
+		lines.push(`Existing types the plan adds nothing to (shown for context): ${s.context.join(', ')}.`);
+	}
+	return lines.join('\n');
+}
 
 /** A one-line summary: "3 match · 2 missing · 1 differs". */
 export function countsText(diff: SkeletonDiff): string {
@@ -471,7 +576,7 @@ export function countsText(diff: SkeletonDiff): string {
 		return 'not checked yet: the code index is still loading';
 	}
 	const c = diff.counts;
-	return `${c.matches} match${c.matches === 1 ? 'es' : ''} · ${c.missing} missing · ${c.differs} differ${c.differs === 1 ? 's' : ''}`;
+	return `${c.matches} match${c.matches === 1 ? 'es' : ''} · ${c.missing} missing · ${c.differs} differ${c.differs === 1 ? 's' : ''}${c.existing ? ` · ${c.existing} existing` : ''}`;
 }
 
 /** The plan board with the check painted on: the plan itself is not changed. */
@@ -499,7 +604,7 @@ export function decorate(plan: BoardSpec, diff: SkeletonDiff, warnings: { owner:
 	return { ...plan, nodes, description: [summary, plan.description].filter(Boolean).join(' ') };
 }
 
-const MARK: Record<CheckState, string> = { matches: 'matches', missing: 'MISSING', differs: 'DIFFERS' };
+const MARK: Record<CheckState, string> = { matches: 'matches', missing: 'MISSING', differs: 'DIFFERS', existing: 'existing' };
 
 /** The diff as text for the agent: one line per type, indented lines for members and relations that need a word. */
 export function diffText(diff: SkeletonDiff, title: string, rel: (file: string) => string = f => f): string {
@@ -511,7 +616,7 @@ export function diffText(diff: SkeletonDiff, title: string, rel: (file: string) 
 		const where = r.file ? ` (${r.kind} at ${rel(r.file)}:${r.line})` : '';
 		lines.push(`${MARK[r.check]} ${nodeName(r)}${where}${r.note ? `: ${r.note}` : ''}`);
 		for (const m of r.members) {
-			if (m.check !== 'matches' || r.check === 'differs') {
+			if ((m.check !== 'matches' && m.check !== 'existing') || r.check === 'differs') {
 				lines.push(`  ${MARK[m.check]} ${m.text}${m.note ? `: ${m.note}` : ''}${m.actual && m.check !== 'matches' ? ` [code: ${m.actual}]` : ''}`);
 			}
 		}

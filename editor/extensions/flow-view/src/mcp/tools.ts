@@ -55,7 +55,7 @@ export const BOARD_SCHEMA = {
 					note: str('Longer free text, e.g. what a plan step changes.'),
 					members: {
 						type: 'array',
-						description: 'Fields/methods listed inside a class or entity node.',
+						description: 'Fields/methods listed inside a class or entity node, each an object: [{"text":"id: UUID"},{"text":"findByStatus(status: BillStatus): List<Bill>"}].',
 						items: {
 							type: 'object',
 							properties: {

@@ -11,8 +11,8 @@ import * as vscode from 'vscode';
 import type { BoardSpec } from './board/spec';
 import type { BoardStore } from './board/store';
 import { goneIn, headersOf, locate, revertRange, stillThere, warningText, type Header, type Warning } from './skeleton/guard';
-import { decorate, matchPlan } from './skeleton/match';
-import { newSession, toolAnswer, type SkeletonSession, type SkeletonStep, type SkeletonTools } from './skeleton/sessions';
+import { baselineOf, decorate, designSummary, extendBaseline, matchPlan, type DesignSummary } from './skeleton/match';
+import { drawnAnswer, newSession, toolAnswer, type SkeletonSession, type SkeletonStep, type SkeletonTools } from './skeleton/sessions';
 import type { TypeService } from './types/typeService';
 
 /** Declared by flow-agent (the starting value of each agent's switch); without flow-agent it reads as its default, off. */
@@ -49,7 +49,11 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			{ dispose: () => boards.setDecorator(undefined) },
 			// A redraw of the design ("make X an interface") is the new plan: the colours follow it at once.
 			boards.onDidChange(e => {
+				// Only once the design is taken: a first draw that is turned down (types without members) must not become the plan.
 				const s = e.type === 'set' ? this.byBoard(e.id) : undefined;
+				if (s?.stage === 'design') {
+					return;
+				}
 				const board = s && this.boards.get(e.id);
 				if (s && board && (board.spec.kind === 'class' || board.spec.kind === 'er')) {
 					s.plan = board.spec;
@@ -139,15 +143,47 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 	 * draw_board ran: a class or ER board drawn by a session waiting for its design becomes that design, whatever id it used, and the
 	 * board starts comparing it with the code at once (everything missing until the developer writes it).
 	 */
-	drawn(id: string, spec: BoardSpec, session: string | undefined) {
+	async drawn(id: string, spec: BoardSpec, session: string | undefined): Promise<string | undefined> {
 		const s = this.sessions.get(session ?? '');
-		if (!s || s.stage !== 'design' || (spec.kind !== 'class' && spec.kind !== 'er')) {
-			return;
+		// The first design, or a redraw of it while the developer writes the skeleton (onDidChange has made it the plan already).
+		const redraw = s?.stage === 'skeleton' && s.boardId === id;
+		if (!s || (s.stage !== 'design' && !redraw) || (spec.kind !== 'class' && spec.kind !== 'er')) {
+			return undefined;
 		}
-		s.boardId = id;
-		s.plan = this.boards.get(id)?.spec ?? spec;
-		s.stage = 'skeleton';
-		this.changed(s);
+		const plan = this.boards.get(id)?.spec ?? spec;
+		let summary: DesignSummary | undefined;
+		try {
+			const graph = await this.types.getGraph();
+			const ready = this.types.complete;
+			// What exists now is the baseline: taken once, on the first design, so a redraw never turns the developer's new types into old ones.
+			if (ready) {
+				s.baseline = s.baseline ? extendBaseline(s.baseline, graph.types, plan) : baselineOf(graph.types, plan);
+				summary = designSummary(matchPlan(plan, graph, { ready, baseline: s.baseline }));
+			}
+		} catch (e) {
+			// The board is drawn either way: an index that failed only means no summary, never a failed draw the agent would repeat.
+			this.log.warn(`skeleton: ${(e as Error).message}`);
+		}
+		// A first design with a new type without members is no design to write from: the agent redraws it, and the board waits. Turned
+		// down once already, it is taken (a marker interface may be empty on purpose), and the answer still names the empty types.
+		const empty = !!summary?.empty.length;
+		if (empty) {
+			this.log.info(`skeleton: design "${plan.title}" has new types without members (${summary!.empty.join(', ')})${s.turnedDown ? '' : '; asked for a redraw'}`);
+		}
+		const take = !redraw && (!empty || !!s.turnedDown);
+		s.turnedDown = s.turnedDown || (!redraw && empty);
+		if (take) {
+			s.boardId = id;
+			s.plan = plan;
+			s.stage = 'skeleton';
+			this.changed(s);
+		}
+		return drawnAnswer(summary, id, redraw || take);
+	}
+
+	/** Whether a board id is another agent session's skeleton design: draw_board then draws a new board instead of replacing it. */
+	claimed(id: string, session: string | undefined): boolean {
+		return [...this.sessions.values()].some(s => s.session !== (session ?? '') && s.stage !== 'design' && s.boardId === id);
 	}
 
 	/** Keeps the developer's declarations as they are now, then the agent may fill the bodies. */
@@ -298,7 +334,13 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			return;
 		}
 		const graph = await this.types.getGraph();
-		s.diff = matchPlan(s.plan, graph, { recent: f => s.recent.has(fileKey(f)), ready: this.types.complete });
+		const recent = (f: string) => s.recent.has(fileKey(f));
+		if (this.types.complete) {
+			// The index was still loading when the design was drawn: what is there now, but for the files saved since, is the baseline.
+			// A redraw that names more types adds their members.
+			s.baseline = s.baseline ? extendBaseline(s.baseline, graph.types, s.plan) : baselineOf(graph.types, s.plan, recent);
+		}
+		s.diff = matchPlan(s.plan, graph, { recent, ready: this.types.complete, baseline: s.baseline });
 		await this.boards.redraw(s.boardId);
 	}
 
