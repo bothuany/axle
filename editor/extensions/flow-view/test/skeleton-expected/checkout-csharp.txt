@@ -1,0 +1,17 @@
+Skeleton check of "Checkout with discounts": 3 match · 1 missing · 4 differ.
+matches Order (class at /src/Order.cs:3)
+DIFFERS OrderLine (class at /src/OrderLine.cs:3)
+  matches sku: String
+  DIFFERS quantity: int: named Qty in the code (renamed?) [code: Qty: int]
+matches Money (record at /src/Money.cs:3)
+DIFFERS DiscountPolicy (class at /src/DiscountPolicy.cs:3): the plan has an interface, the code has an abstract class
+  matches apply(order: Order): Money
+matches PercentDiscount (class at /src/PercentDiscount.cs:3)
+DIFFERS CheckoutService (class at /src/CheckoutService.cs:3)
+  DIFFERS checkout(order: Order, code: String): Receipt: takes 1 parameter, the plan says 2 [code: Checkout(Order order): Task<ReceiptDto>]
+  MISSING relation uses → OrderRepository
+DIFFERS Receipt (record at /src/ReceiptDto.cs:3): named ReceiptDto in the code (renamed?)
+  matches orderId: Long
+  matches total: Money
+MISSING OrderRepository: no type called OrderRepository in the code yet
+  MISSING save(order: Order): Order

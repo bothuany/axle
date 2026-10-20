@@ -69,9 +69,32 @@ export class BoardStore {
 	readonly onDidChange = this.changed.event;
 	private host: BoardHost | undefined;
 	private seq = 0;
+	/** Paints a board before it is shown (skeleton first's plan vs code); the stored board stays as it was drawn. */
+	private decorator: ((id: string, spec: BoardSpec) => BoardSpec) | undefined;
 
 	setHost(host: BoardHost | undefined) {
 		this.host = host;
+	}
+
+	setDecorator(decorator: ((id: string, spec: BoardSpec) => BoardSpec) | undefined) {
+		this.decorator = decorator;
+	}
+
+	/** The board as the user sees it. */
+	private shown(id: string, spec: BoardSpec): BoardSpec {
+		try {
+			return this.decorator?.(id, spec) ?? spec;
+		} catch {
+			return spec;
+		}
+	}
+
+	/** Shows a board again through the decorator, in the tab that has it (the decoration changed, the board did not). */
+	async redraw(id: string): Promise<void> {
+		const board = this.boards.get(id);
+		if (board) {
+			await this.host?.update(id, this.shown(id, board.spec));
+		}
 	}
 
 	/** Adds a board, or replaces the one with the same id; returns its id. Shown when `present` is not false. */
@@ -87,7 +110,7 @@ export class BoardStore {
 		}
 		this.changed.fire({ type: 'set', id });
 		if (opts.present !== false) {
-			await this.host?.show(id, spec); // a replaced board is shown again if its tab was closed
+			await this.host?.show(id, this.shown(id, spec)); // a replaced board is shown again if its tab was closed
 		}
 		return id;
 	}
@@ -124,7 +147,7 @@ export class BoardStore {
 		const spec = { ...board.spec, nodes: board.spec.nodes.map(n => n === node ? next : n) };
 		this.boards.set(id, { ...board, spec, updatedAt: Date.now() });
 		this.changed.fire({ type: 'node', id });
-		await this.host?.update(id, spec);
+		await this.host?.update(id, this.shown(id, spec));
 		return next;
 	}
 

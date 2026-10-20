@@ -76,10 +76,10 @@ test('mcp-protocol: initialize echoes the client protocol version and offers too
 	assert.equal(s.lines.length, 2, 'a notification gets no answer')
 })
 
-test('mcp-protocol: tools/list has the fifteen tools, each annotated read-only with a schema', async () => {
+test('mcp-protocol: tools/list has the sixteen tools, each annotated read-only with a schema', async () => {
 	const s = session({ AXLE_BRIDGE_DIR: temp('axle-empty-') })
 	const { result } = await s.send('tools/list')
-	assert.deepEqual(result.tools.map(t => t.name), ['open', 'open_diff', 'get_diagnostics', 'find_symbol', 'go_to_definition', 'find_references', 'find_entry_points', 'show_flow', 'flow_text', 'impact', 'get_context', 'draw_board', 'update_board', 'tour', 'tour_control'])
+	assert.deepEqual(result.tools.map(t => t.name), ['open', 'open_diff', 'get_diagnostics', 'find_symbol', 'go_to_definition', 'find_references', 'find_entry_points', 'show_flow', 'flow_text', 'impact', 'get_context', 'draw_board', 'update_board', 'tour', 'check_skeleton', 'tour_control'])
 	for (const t of result.tools) {
 		assert.equal(t.inputSchema.type, 'object', t.name)
 		assert.equal(t.annotations.readOnlyHint, true, t.name)
@@ -223,7 +223,7 @@ test('mcp-protocol: the server tells the agent to show code with `tour`, and lis
 	const init = await s.send('initialize', {})
 	assert.match(init.result.instructions, /SHOW it with `tour`/)
 	const list = await s.send('prompts/list')
-	assert.deepEqual(list.result.prompts.map(p => p.name), ['tour_guide', 'explain_change'])
+	assert.deepEqual(list.result.prompts.map(p => p.name), ['skeleton_first', 'tour_guide', 'explain_change'])
 	const explain = (await s.send('prompts/get', { name: 'explain_change' })).result.messages[0].content.text
 	for (const part of [/`tour`/, /"changes": true/, /get_context/, /impact/, /`table` step/, /risks/, /tour_guide/]) assert.match(explain, part)
 	const got = await s.send('prompts/get', { name: 'tour_guide' })

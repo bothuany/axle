@@ -1,0 +1,18 @@
+Skeleton check of "Checkout with discounts": 3 match · 1 missing · 4 differ.
+matches Order (class at checkout/model.py:17)
+DIFFERS OrderLine (class at checkout/model.py:11)
+  matches sku: String
+  DIFFERS quantity: int: named qty in the code (renamed?) [code: qty: int]
+matches Money (class at checkout/model.py:6)
+DIFFERS DiscountPolicy (class at checkout/discount.py:4): the plan has an interface, the code has a class
+  matches apply(order: Order): Money
+matches PercentDiscount (class at checkout/discount.py:9)
+DIFFERS CheckoutService (class at checkout/service.py:13)
+  DIFFERS checkout(order: Order, code: String): Receipt: takes 1 parameter, the plan says 2 [code: checkout(order: Order): ReceiptDto]
+  MISSING relation uses → OrderRepository
+  extra (fine): discounts: DiscountPolicy
+DIFFERS Receipt (class at checkout/service.py:8): named ReceiptDto in the code (renamed?)
+  matches orderId: Long
+  matches total: Money
+MISSING OrderRepository: no type called OrderRepository in the code yet
+  MISSING save(order: Order): Order
