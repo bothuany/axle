@@ -1,6 +1,6 @@
 {
   "name": "axle",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "description": "Axle: a harness-first code editor. Call-flow canvas, terminal agents with live status, and tools for Claude Code harness engineering.",
   "license": "MIT",
