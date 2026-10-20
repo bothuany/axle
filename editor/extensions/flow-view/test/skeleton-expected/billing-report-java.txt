@@ -1,0 +1,25 @@
+Skeleton check of "Bill + Customer Report": 0 match · 1 missing · 0 differ · 5 existing.
+existing BillingController (class at src/main/java/com/acme/billing/controllers/BillingController.java:7): in the code before the design; 0 of 1 new members written
+  MISSING getBillReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): ResponseEntity<List<BillReportDTO>>: no method getBillReport(BillStatus, LocalDateTime, LocalDateTime): ResponseEntity<List<BillReportDTO>> yet
+  extra (fine): getBillById(UUID billId): BillResponseDTO
+existing BilingService (interface at src/main/java/com/acme/billing/services/BilingService.java:7): in the code before the design; 0 of 1 new members written
+  MISSING getBillReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): List<BillReportDTO>: no method getBillReport(BillStatus, LocalDateTime, LocalDateTime): List<BillReportDTO> yet
+existing BillingServiceImpl (class at src/main/java/com/acme/billing/services/impl/BillingServiceImpl.java:10): in the code before the design; 0 of 1 new members written
+  MISSING getBillReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): List<BillReportDTO>: no method getBillReport(BillStatus, LocalDateTime, LocalDateTime): List<BillReportDTO> yet
+  MISSING relation uses → BillReportDTO
+existing BillRepository (interface at src/main/java/com/acme/billing/repositories/BillRepository.java:6): in the code before the design; 0 of 1 new members written
+  MISSING findForReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): List<Bill>: no method findForReport(BillStatus, LocalDateTime, LocalDateTime): List<Bill> yet
+  extra (fine): findByPaidFalse(): List<Bill>, findByCustomerId(String customerId): List<Bill>
+existing CustomerClient (interface at src/main/java/com/acme/billing/clients/CustomerClient.java:6): in the code before the design; the plan adds no members to it
+MISSING BillReportDTO: no type called BillReportDTO in the code yet
+  MISSING billId: UUID
+  MISSING contractId: UUID
+  MISSING amount: BigDecimal
+  MISSING dueDate: LocalDateTime
+  MISSING billStatus: String
+  MISSING paid: boolean
+  MISSING createdAt: LocalDateTime
+  MISSING paymentDate: LocalDateTime
+  MISSING customerId: String
+  MISSING customerName: String
+  MISSING customerEmail: String

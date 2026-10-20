@@ -13,8 +13,12 @@ export type NodeKind =
 
 export type NodeStatus = 'todo' | 'doing' | 'done' | 'skipped' | 'blocked';
 
-/** Skeleton first: how the code compares with a planned type or member. Set by the host only, never by an agent (parseBoard drops it). */
-export type CheckState = 'matches' | 'missing' | 'differs';
+/**
+ * Skeleton first: how the code compares with a planned type or member. `existing` is a type or member that was in the code before
+ * the design was drawn: neutral, so a type the change only adds to does not read as done. Set by the host only, never by an agent
+ * (parseBoard drops it).
+ */
+export type CheckState = 'matches' | 'missing' | 'differs' | 'existing';
 
 export type EdgeKind =
 	| 'calls' | 'extends' | 'implements' | 'uses' | 'has' | 'has-many' | 'depends'
@@ -114,7 +118,8 @@ export function parseBoard(input: unknown): BoardSpec {
 		if (typeof n !== 'object' || n === null) {
 			continue;
 		}
-		const label = typeof n.label === 'string' ? n.label : typeof n.id === 'string' ? n.id : '';
+		// Agents often write `name` for the label (a class's name), so it is read as one.
+		const label = typeof n.label === 'string' ? n.label : typeof n.name === 'string' ? n.name : typeof n.id === 'string' ? n.id : '';
 		let id = typeof n.id === 'string' && n.id ? n.id : label;
 		if (!id) {
 			continue;
@@ -124,7 +129,8 @@ export function parseBoard(input: unknown): BoardSpec {
 		}
 		seen.add(id);
 		const members = Array.isArray(n.members)
-			? (n.members as Record<string, unknown>[]).filter(m => typeof m?.text === 'string').slice(0, 60).map((m): BoardMember => ({
+			// A member may come as plain text ("getBill(id: UUID): Bill"), as agents tend to write it: dropping it would draw an empty type.
+			? (n.members as unknown[]).map(m => typeof m === 'string' ? { text: m } : m as Record<string, unknown>).filter(m => typeof m?.text === 'string' && m.text.trim()).slice(0, 60).map((m): BoardMember => ({
 				text: String(m.text).slice(0, 200),
 				kind: m.kind === 'field' || m.kind === 'method' || m.kind === 'property' ? m.kind : undefined,
 				visibility: m.visibility === '+' || m.visibility === '-' || m.visibility === '#' || m.visibility === '~' ? m.visibility : undefined,

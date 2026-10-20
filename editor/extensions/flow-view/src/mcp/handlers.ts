@@ -1077,7 +1077,7 @@ export class AgentTools {
 		}
 		const spec = parseBoard(raw);
 		const warnings: string[] = [];
-		const sent = raw as { nodes?: unknown[]; edges?: unknown[] };
+		const sent = raw as { id?: unknown; nodes?: unknown[]; edges?: unknown[] };
 		const droppedEdges = (Array.isArray(sent.edges) ? sent.edges.length : 0) - spec.edges.length;
 		if (droppedEdges > 0) {
 			warnings.push(`${droppedEdges} edge(s) were dropped because they name a node id that does not exist (or exceed the limit).`);
@@ -1085,6 +1085,11 @@ export class AgentTools {
 		const droppedNodes = (Array.isArray(sent.nodes) ? sent.nodes.length : 0) - spec.nodes.length;
 		if (droppedNodes > 0) {
 			warnings.push(`${droppedNodes} node(s) were dropped (not objects, or without an id or label).`);
+		}
+		const sentMembers = (Array.isArray(sent.nodes) ? sent.nodes : []).reduce<number>((n, x) => n + (Array.isArray((x as { members?: unknown })?.members) ? ((x as { members: unknown[] }).members.length) : 0), 0);
+		const droppedMembers = sentMembers - spec.nodes.reduce((n, x) => n + (x.members?.length ?? 0), 0);
+		if (droppedMembers > 0) {
+			warnings.push(`${droppedMembers} member(s) were dropped: write each as {"text": "name(param: Type): Return"} or {"text": "field: Type"} (at most 60 per node).`);
 		}
 		// Links to code: only files inside the workspace; a path outside is dropped, not followed.
 		for (const n of spec.nodes) {
@@ -1099,14 +1104,21 @@ export class AgentTools {
 				}
 			}
 		}
-		const wanted = cleanBoardId(a.id);
+		// The id belongs next to `board`, but agents also put it inside the board: either way it names the board.
+		let wanted = cleanBoardId(a.id) ?? cleanBoardId(sent.id);
+		if (wanted && this.d.skeleton?.claimed(wanted, ctx.session)) {
+			// Another agent's skeleton design: replacing it would rewrite that agent's plan and colours under the developer's eyes.
+			warnings.push(`id "${wanted}" is another agent's skeleton design, so this was drawn as a new board.`);
+			wanted = undefined;
+		}
 		const replaced = wanted ? !!this.d.boards.get(wanted) : false;
 		const id = await this.d.boards.set(spec, { id: wanted, origin: 'agent' });
-		this.d.skeleton?.drawn(id, spec, ctx.session);
+		const skeleton = await this.d.skeleton?.drawn(id, spec, ctx.session);
 		return text([
 			`Board "${id}" ${replaced ? 'replaced' : 'drawn'} and shown to the user in Axle: ${spec.kind}, ${spec.nodes.length} nodes, ${spec.edges.length} edges.`,
 			spec.kind === 'plan' ? `Tick steps off with update_board (id "${id}", nodeId one of: ${spec.nodes.slice(0, 20).map(n => n.id).join(', ')}).` : `Use id "${id}" again to replace it.`,
 			...warnings,
+			...(skeleton ? ['', skeleton] : []),
 		].join('\n'));
 	}
 

@@ -57,3 +57,25 @@ test('the steps the agent may pass are the ones the tool schema lists', async ()
 	assert.deepEqual(t.inputSchema.properties.step.enum, [...sessions.SKELETON_STEPS])
 	assert.equal(t.inputSchema.additionalProperties, false)
 })
+
+test('the design asks for members on every new or changed type, with the exact form as an example', () => {
+	const text = sessions.toolAnswer(true, sessions.newSession('m'))
+	assert.match(text, /on EVERY type you add or change the members the developer is to write/)
+	assert.match(text, /"members": \[\{"text": "findByStatus\(status: BillStatus\): List<Bill>"\}/)
+	assert.match(text, /which types are new and which existing types get which new members/)
+})
+
+test('draw_board\'s answer: new and existing types for the developer, and a new type without members is turned down', () => {
+	const summary = { added: ['BillReportDTO'], extended: [{ name: 'BillRepository', members: ['findForReport(from: LocalDate): List<Bill>'] }], context: ['CustomerClient'], empty: [] }
+	const taken = sessions.drawnAnswer(summary, 'skeleton-x')
+	assert.match(taken, /this is the design \(board "skeleton-x"\)/)
+	assert.match(taken, /New types the developer writes: BillReportDTO\./)
+	assert.match(taken, /Existing type BillRepository gets: findForReport\(from: LocalDate\): List<Bill>\./)
+	assert.match(taken, /shown for context\): CustomerClient\./)
+	assert.match(taken, /STOP: do not create or edit any file/)
+	const turnedDown = sessions.drawnAnswer({ ...summary, empty: ['BillReportDTO'] }, 'skeleton-x')
+	assert.match(turnedDown, /NOT taken as the design yet.*BillReportDTO/)
+	assert.match(turnedDown, /Redraw now with draw_board and the same id "skeleton-x"/)
+	assert.match(sessions.drawnAnswer({ ...summary, empty: ['BillReportDTO'] }, 'skeleton-x', true), /the board shows this design, but these new types have no members/)
+	assert.match(sessions.drawnAnswer(undefined, 'skeleton-x'), /still loading/)
+})

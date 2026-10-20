@@ -51,6 +51,9 @@ function snapshot(name, text) {
 	assert.equal(text + '\n', readFileSync(file, 'utf8').replace(/\r\n/g, '\n'))
 }
 
+/** The fixtures are the skeleton the developer wrote after the design was drawn: every file is theirs, so a rename can be one. */
+const WRITTEN = { recent: () => true }
+
 const rel = fixture => file => relative(join(FIXTURES, fixture), file).split('\\').join('/')
 const byLabel = (diff, label) => diff.nodes.find(n => n.label === label)
 
@@ -81,7 +84,7 @@ function commonChecks(diff) {
 for (const [lang, fixture] of [['java', 'skeleton-java'], ['ts', 'skeleton-ts'], ['python', 'skeleton-py']]) {
 	test(`plan vs code: ${lang}`, async () => {
 		const g = await graphOf(fixture)
-		const diff = match.matchPlan(PLAN, g)
+		const diff = match.matchPlan(PLAN, g, WRITTEN)
 		commonChecks(diff)
 		snapshot(`checkout-${lang}`, match.diffText(diff, PLAN.title, rel(fixture)))
 	})
@@ -113,7 +116,7 @@ function csharpSkeleton() {
 
 test('plan vs code: csharp (analyzer types)', async () => {
 	const g = await graphOf([], { csharp: csharpSkeleton() })
-	const diff = match.matchPlan(PLAN, g)
+	const diff = match.matchPlan(PLAN, g, WRITTEN)
 	commonChecks(diff)
 	snapshot('checkout-csharp', match.diffText(diff, PLAN.title))
 })
@@ -177,7 +180,7 @@ test('two types of one name: the one in a file the developer just changed is che
 
 test('decorate paints the shown copy only, and an agent cannot paint its own board', async () => {
 	const g = await graphOf('skeleton-ts')
-	const diff = match.matchPlan(PLAN, g)
+	const diff = match.matchPlan(PLAN, g, WRITTEN)
 	const shown = match.decorate(PLAN, diff, [{ owner: 'CheckoutService', name: 'checkout', text: 'The agent changed checkout(order: Order)' }])
 	assert.equal(PLAN.nodes[0].check, undefined, 'the plan itself is untouched')
 	assert.equal(shown.nodes.find(n => n.id === 'policy').check, 'differs')
@@ -188,4 +191,63 @@ test('decorate paints the shown copy only, and an agent cannot paint its own boa
 	assert.equal(forged.nodes[0].check, undefined)
 	assert.equal(forged.nodes[0].warn, undefined)
 	assert.equal(forged.nodes[0].members[0].check, undefined)
+})
+
+// Found in a real project (a CRM's billing service, Sonnet): "a bill report with the customer in it". The agent sent members as
+// plain strings, `name` for the label and the board as JSON text; every member was dropped, so each existing type read as
+// "matches" (as if the agent had written it) and the new BillReportDTO read as a rename of the old BillResponseDTO.
+const BILLING_SENT = '{"id":"skeleton-d1013b8f5a03","kind":"class","title":"Bill + Customer Report","nodes":[{"id":"BillingController","name":"BillingController","kind":"class","members":["getBillReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): ResponseEntity<List<BillReportDTO>>"]},{"id":"BilingService","name":"BilingService","kind":"interface","members":["getBillReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): List<BillReportDTO>"]},{"id":"BillingServiceImpl","name":"BillingServiceImpl","kind":"service","members":["getBillReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): List<BillReportDTO>"]},{"id":"BillRepository","name":"BillRepository","kind":"repository","members":["findForReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): List<Bill>"]},{"id":"CustomerClient","name":"CustomerClient","kind":"interface","members":["getCustomer(id: UUID): CustomerResponseDTO"]},{"id":"BillReportDTO","name":"BillReportDTO","kind":"dto","members":["billId: UUID","contractId: UUID","amount: BigDecimal","dueDate: LocalDateTime","billStatus: String","paid: boolean","createdAt: LocalDateTime","paymentDate: LocalDateTime","customerId: String","customerName: String","customerEmail: String"]}],"edges":[{"from":"BillingController","to":"BilingService","kind":"uses"},{"from":"BillingServiceImpl","to":"BilingService","kind":"implements"},{"from":"BillingServiceImpl","to":"BillRepository","kind":"uses"},{"from":"BillingServiceImpl","to":"CustomerClient","kind":"uses"},{"from":"BillingServiceImpl","to":"BillReportDTO","kind":"uses"}]}'
+
+test('a board as agents send it: members as plain strings and `name` for the label are kept', () => {
+	const plan = spec.parseBoard(JSON.parse(BILLING_SENT))
+	assert.deepEqual(plan.nodes.map(n => `${n.label}:${n.members.length}`), ['BillingController:1', 'BilingService:1', 'BillingServiceImpl:1', 'BillRepository:1', 'CustomerClient:1', 'BillReportDTO:11'])
+	assert.deepEqual(plan.nodes[5].members[0], { text: 'billId: UUID', kind: undefined, visibility: undefined, ref: undefined })
+})
+
+test('existing types are neutral with only their new members marked, a new DTO is missing, not a rename of an old one', async () => {
+	const g = await graphOf('skeleton-billing')
+	const plan = spec.parseBoard(JSON.parse(BILLING_SENT))
+	const baseline = match.baselineOf(g.types, plan)
+	const diff = match.matchPlan(plan, g, { baseline, recent: () => false })
+	assert.equal(baseline.ids.size, g.types.length, 'every type of then is known, so none is taken for a rename')
+	assert.deepEqual([...baseline.types.keys()].map(id => id.split('.').pop()).sort(), ['BilingService', 'BillRepository', 'BillingController', 'BillingServiceImpl', 'CustomerClient'], 'members are kept for the types the plan names only')
+	assert.deepEqual(diff.nodes.map(n => `${n.label}:${n.check}`), ['BillingController:existing', 'BilingService:existing', 'BillingServiceImpl:existing', 'BillRepository:existing', 'CustomerClient:existing', 'BillReportDTO:missing'])
+	assert.equal(byLabel(diff, 'BillRepository').members[0].check, 'missing', 'the method the plan adds is missing until written')
+	assert.equal(byLabel(diff, 'CustomerClient').members[0].check, 'existing', 'a member it already had is neutral too')
+	assert.deepEqual(match.designSummary(diff), {
+		added: ['BillReportDTO'],
+		extended: [
+			{ name: 'BillingController', members: ['getBillReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): ResponseEntity<List<BillReportDTO>>'] },
+			{ name: 'BilingService', members: ['getBillReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): List<BillReportDTO>'] },
+			{ name: 'BillingServiceImpl', members: ['getBillReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): List<BillReportDTO>'] },
+			{ name: 'BillRepository', members: ['findForReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): List<Bill>'] },
+		],
+		context: ['CustomerClient'],
+		empty: [],
+	})
+	snapshot('billing-report-java', match.diffText(diff, plan.title, rel('skeleton-billing')))
+
+	// Even if the old BillResponseDTO had been saved since (a file the developer touched), a type that was there before is no rename.
+	assert.equal(byLabel(match.matchPlan(plan, g, { baseline, recent: () => true }), 'BillReportDTO').check, 'missing')
+	// Without members nothing can be a rename: the empty plan the bug produced says missing, and the design is turned down.
+	const empty = spec.parseBoard({ ...JSON.parse(BILLING_SENT), nodes: JSON.parse(BILLING_SENT).nodes.map(n => ({ ...n, members: [] })) })
+	const emptyDiff = match.matchPlan(empty, g, { baseline, recent: () => true })
+	assert.equal(byLabel(emptyDiff, 'BillReportDTO').check, 'missing')
+	assert.deepEqual(match.designSummary(emptyDiff).empty, ['BillReportDTO'])
+})
+
+test('the developer writes the DTO and the repository method: they turn green, the rest stays as it was', async () => {
+	const g = await graphOf('skeleton-billing')
+	const plan = spec.parseBoard(JSON.parse(BILLING_SENT))
+	const baseline = match.baselineOf(g.types, plan)
+	const file = '/billing/src/main/java/com/acme/billing/dtos/BillReportDTO.java'
+	const fields = [['billId', 'UUID'], ['contractId', 'UUID'], ['amount', 'BigDecimal'], ['dueDate', 'LocalDateTime'], ['billStatus', 'String'], ['paid', 'boolean'], ['createdAt', 'LocalDateTime'], ['paymentDate', 'LocalDateTime'], ['customerId', 'String'], ['customerName', 'String'], ['customerEmail', 'String']]
+	const dto = { ...g.types.find(t => t.name === 'BillResponseDTO'), id: 'java:com.acme.billing.dtos.BillReportDTO', name: 'BillReportDTO', qualifiedName: 'com.acme.billing.dtos.BillReportDTO', file, fields: fields.map(([name, type], i) => ({ name, type, visibility: '+', line: 5 + i })) }
+	const repo = g.types.find(t => t.name === 'BillRepository')
+	const written = { ...repo, methods: [...repo.methods, { name: 'findForReport', signature: '(BillStatus status, LocalDateTime from, LocalDateTime to): List<Bill>', visibility: '+', line: 12 }] }
+	const now = { types: [...g.types.filter(t => t !== repo), written, dto], edges: g.edges }
+	const diff = match.matchPlan(plan, now, { baseline, recent: f => f === file || f === repo.file })
+	assert.equal(byLabel(diff, 'BillReportDTO').check, 'matches')
+	assert.equal(byLabel(diff, 'BillRepository').check, 'matches', 'everything the plan adds to it is written')
+	assert.equal(byLabel(diff, 'BillingController').check, 'existing', 'its new method is still to write')
 })

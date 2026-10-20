@@ -95,21 +95,26 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .bc.s-doing { border-left: 3px solid var(--fl-signal); }
 .bc.s-blocked { border-left: 3px solid var(--fl-del); }
 .bc.s-skipped { opacity: .6; }
-/* Skeleton first: the plan against the code. Green as planned, grey dashed not written yet, amber differs; a warning rings the card. */
+/* Skeleton first: the plan against the code. Green as planned, grey dashed not written yet, amber differs; a warning rings the card.
+   A type that was in the code before the design is neutral (an outlined badge, no stripe colour of its own): only what the plan adds
+   to it is marked, so it never reads as written for this change. */
 .bc.c-matches { border-left: 3px solid var(--fl-add); }
 .bc.c-missing { border-left: 3px dashed var(--fl-muted); }
 .bc.c-missing .bc-name { opacity: .7; }
 .bc.c-differs { border-left: 3px solid #e6a23c; }
+.bc.c-existing { border-left: 3px solid var(--fl-line-strong); }
 .bc.warned { box-shadow: 0 0 0 1.5px #e6a23c, var(--fl-lift); }
 .bc-check { position: absolute; top: 5px; right: 6px; padding: 0 5px; border-radius: 4px; font: 600 9.5px/14px var(--fl-ui); text-transform: uppercase; letter-spacing: .03em; }
 .bc-check.c-matches { background: color-mix(in srgb, var(--fl-add) 20%, transparent); color: var(--fl-add); }
 .bc-check.c-missing { background: color-mix(in srgb, var(--fl-muted) 18%, transparent); color: var(--fl-muted); }
 .bc-check.c-differs { background: color-mix(in srgb, #e6a23c 22%, transparent); color: #e6a23c; }
+.bc-check.c-existing { box-shadow: inset 0 0 0 1px var(--fl-line-strong); color: var(--fl-muted); }
 .bc-row .mk { flex: none; width: 12px; text-align: center; font-family: var(--fl-ui); }
 .bc-row.c-matches .mk { color: var(--fl-add); }
 .bc-row.c-missing .txt { opacity: .55; font-style: italic; }
 .bc-row.c-missing .mk { color: var(--fl-muted); }
 .bc-row.c-differs .txt, .bc-row.c-differs .mk { color: #e6a23c; }
+.bc-row.c-existing .mk { color: var(--fl-faint); }
 .bc-row.warned { background: color-mix(in srgb, #e6a23c 16%, transparent); }
 .bc-row.warned .mk { color: #e6a23c; }
 .bc-head { flex: none; padding: 5px 10px 0; cursor: pointer; overflow: hidden; }

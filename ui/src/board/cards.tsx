@@ -42,8 +42,8 @@ export type GroupNodeT = Node<GroupData, 'frame'>
 const cls = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(' ')
 
 /** Skeleton first: the plan against the code, a mark per type and member (never "wrong": differs). */
-const CHECK_MARK = { matches: '✓', missing: '○', differs: '◐' } as const
-const CHECK_WORD = { matches: 'in the code as planned', missing: 'not in the code yet', differs: 'differs from the plan' } as const
+const CHECK_MARK = { matches: '✓', missing: '○', differs: '◐', existing: '·' } as const
+const CHECK_WORD = { matches: 'in the code as planned', missing: 'not in the code yet', differs: 'differs from the plan', existing: 'already in the code before the design' } as const
 const checkTitle = (x: { check?: keyof typeof CHECK_MARK; checkNote?: string; warn?: string }) =>
   [x.check && `Plan vs code: ${CHECK_WORD[x.check]}`, x.checkNote, x.warn && `⚠ ${x.warn}`].filter(Boolean).join('\n')
 
