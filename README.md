@@ -48,6 +48,10 @@ One map of what shapes your agents: `CLAUDE.md` and `AGENTS.md`, rules, skills, 
 
 C# / .NET · Java · Python · JavaScript / TypeScript · Go · PHP · Ruby · Rust, from ASP.NET and Spring to FastAPI, NestJS, Rails and axum. [Full support table →](docs/languages.md) · Agent tools and the `axle` MCP server: [docs/agent-tools.md](docs/agent-tools.md)
 
+## Updates
+
+A running Axle checks the latest GitHub release and shows **Update available** (on the gear and under Help, Check for Updates). On Windows it downloads and installs the update and offers **Restart to Update**; on macOS and Linux the notification's button opens the release page. Set `update.mode` to `manual` or `none` to turn the automatic check down or off. [How it works →](packaging/README.md#updates)
+
 ## Contributing
 
 Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately ([SECURITY.md](SECURITY.md)).

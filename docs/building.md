@@ -37,6 +37,10 @@ It installs into `/usr/share/axle`, adds `axle` to `/usr/bin` and a desktop entr
 
 - Later: an APT repository so that `sudo apt install axle` and `apt upgrade` work ([how it would be hosted](../packaging/apt/README.md); not set up yet).
 
+### Updates
+
+Axle checks the latest release by itself: **Update available** on the gear and under Help, Check for Updates. Windows downloads, installs and offers **Restart to Update**; macOS and Linux open the release page. `update.mode` (`none`, `manual`, `start`, `default`) works as in VS Code. How the update files are made, what each platform does, and how to test an update against a local server (`AXLE_UPDATE_URL`): [packaging/README.md](../packaging/README.md#updates).
+
 ### Build the packages yourself
 
 **The Windows installer** (Windows, after `npm run setup`, plus the .NET 10 SDK and the Windows SDK, whose `signtool.exe` VS Code's build calls):
@@ -48,7 +52,7 @@ npm run installer -- --fast         # reuse editor/VSCode-win32-x64 when VS Code
 npm run installer -- --full         # the full build whatever the stamp says (the default)
 ```
 
-It builds the extensions, the canvas and the analyzer, runs VS Code's production build (15 to 40 minutes, several GB of RAM, about 20 GB of disk) and its Inno Setup step, and prints where the installer is. Pushing a `v*` tag builds and attaches it to a GitHub release (`.github/workflows/release.yml`).
+It builds the extensions, the canvas and the analyzer, runs VS Code's production build (15 to 40 minutes, several GB of RAM, about 20 GB of disk) and its Inno Setup step, and prints where the installer is. Pushing a `v*` tag builds and attaches it to a GitHub release (`.github/workflows/release.yml`), together with the `update-*-axle.json` files that tell installed copies about it.
 
 **The macOS and Linux packages** (on that OS, after `npm run setup`, plus the .NET 10 SDK; on Linux also `fakeroot`, and `rpm` for the .rpm):
 
@@ -112,6 +116,7 @@ scripts/            setup, start, build-extensions, install-shortcut and install
 - Canvas: `npm run build:canvas`, then reload the window.
 - Core patches: change files in `editor/vscode`, then regenerate the patch from there. New files must be known to git first, and the icons that `setup` copies into `resources/` must stay out of the patch:
   `git add -N src product.json && git diff HEAD -- build src product.json > ../patches/flow-core.patch`. Run it in Git Bash (or any POSIX shell): Windows PowerShell 5.1 writes `>` output as UTF-16, which breaks the patch.
+- The update service is `editor/patches/flow-update.patch`, kept apart from the core patch. Regenerate it the same way, from a checkout that has the other patches applied: commit that state inside `editor/vscode` first, edit, then `git diff HEAD > ../patches/flow-update.patch` (a file you added needs `git add -N` first).
 - After a pull that changes `editor/patches/flow-core.patch`, `editor/vscode` still carries the old patch: `npm run setup` stops with "does not apply", and `npm run installer` / `npm run package` say the patches are missing. When only `product.json` changed in the patch (as when Axle's macOS bundle id and Linux desktop and icon names replaced Code - OSS's), re-apply just that file, then run setup:
   `git -C editor/vscode checkout -- product.json && git -C editor/vscode apply --include=product.json ../patches/flow-core.patch`. After any other patch change, delete `editor/vscode` and run `npm run setup` for a clean checkout.
 - Tests: `cd editor/extensions/flow-view && npm test` builds the index worker and checks what it finds in every project under `test/fixtures` against `test/expected` (after an intended change: `UPDATE=1 npm test`, then read the diff). `npm run typecheck` there checks the types.

@@ -2,7 +2,9 @@
 #   Windows  the installer (npm run installer)                      Axle-Setup-<version>-x64.exe
 #   macOS    the app for Apple silicon and Intel (npm run package)  Axle-<version>-darwin-{arm64,x64}.{zip,dmg}
 #   Linux    the Debian package, an RPM and a tarball               axle_<version>_amd64.deb, axle-<version>-1.x86_64.rpm, Axle-<version>-linux-x64.tar.gz
-# plus SHA256SUMS.txt over all of them (what packaging/homebrew/axle.rb and packaging/winget need).
+# plus SHA256SUMS.txt over all of them (what packaging/homebrew/axle.rb and packaging/winget need) and the
+# update-<platform>-axle.json files that a running Axle reads to learn of this release (scripts/update-manifests.mjs,
+# packaging/README.md "Updates").
 # Each build needs the full `npm run setup` (a VS Code checkout, `npm ci`, native modules) and VS Code's production build,
 # so it is slow: plan for 60 to 90 minutes. A manual run (no tag) keeps the files as build artifacts instead.
 # Only the Windows build has been run by hand; the macOS and Linux jobs are first tested by a tag (or a manual run).
@@ -205,6 +207,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
       - name: SHA256SUMS.txt
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -214,3 +218,15 @@ jobs:
           gh release download "${GITHUB_REF_NAME}" --pattern 'Axle-*' --pattern 'axle*'
           sha256sum -- * | tee ../SHA256SUMS.txt
           gh release upload "${GITHUB_REF_NAME}" ../SHA256SUMS.txt --clobber
+
+      # After the checksums, and only when every platform's file is on the release: the script fails on a missing one.
+      # releases/latest/download serves these files to every running Axle, which compares productVersion with its own.
+      - name: Update files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir update-assets update-files
+          gh release download "${GITHUB_REF_NAME}" --dir update-assets --pattern 'Axle-*' --pattern 'axle_*'
+          node scripts/update-manifests.mjs --dir update-assets --out update-files --version "${GITHUB_REF_NAME#v}" --commit "${GITHUB_SHA}" --repo "${GITHUB_REPOSITORY}"
+          gh release upload "${GITHUB_REF_NAME}" update-files/*.json --clobber
