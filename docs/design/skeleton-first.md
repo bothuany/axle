@@ -191,6 +191,12 @@ A developer used it on a CRM's billing service ("a bill report with the customer
 - **Existing types read as done.** With no members, every type that already existed matched, and the developer asked why the agent had created files (it had not). Now they are **existing** and only their new members are coloured, and `draw_board` tells the agent which types are new and which existing types get what.
 - **BillReportDTO read as differs.** The empty plan let the rename rule take the old BillResponseDTO. Renames now need a type written since the design; golden test `skeleton-expected/billing-report-java.txt` (fixture `types-fixtures/skeleton-billing`, the agent's own payload).
 
+Probe on a copy of that project (web mode, Claude Code 2.1.304, Sonnet 5.5, the same request):
+- Before, on main, the agent's original payload through the old matcher: five existing types "matches" with no members, BillReportDTO "differs (renamed? BillResponseDTO)". On this branch: five "existing" with their new methods missing, BillReportDTO missing.
+- Live: Sonnet sent members as objects this time. draw_board answered with the new type (BillUserReportDTO), the methods each existing type gets, and three context types; the agent's reply split them the same way, and no file was touched.
+- The board: the header read "0 match · 1 missing · 0 differ · 6 existing"; existing types had a neutral EXISTING badge with only their new methods marked missing, and the new DTO was MISSING with its five fields.
+- The developer wrote BillUserReportDTO and saved it in the editor: it turned MATCHES with every field ticked at once, and the existing types stayed neutral.
+
 Review follow-ups in the same change:
 - A design turned down for empty types is taken on the second try, still naming the empty types, so a marker interface never traps the agent in a redraw loop. A new type the developer has written no longer counts as empty.
 - The baseline keeps every type id (what a rename may not be) but member names only for the types the plan names; a redraw that names more types adds theirs from the code as it is then.
