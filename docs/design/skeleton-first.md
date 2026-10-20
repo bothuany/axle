@@ -12,7 +12,7 @@ AI writes so much code that developers lose the know-how of their own system. Sk
 
 1. **Variant A order.** After a plan is approved, the agent draws the target design (class or ER) with `draw_board`. The developer then writes the skeleton in the editor: types, entities, interfaces, signatures, empty bodies.
 2. **The diagram is corrected by talking.** "Make DiscountPolicy an interface", "remove the repository": the agent redraws the same board. This repeats until the developer accepts it. Nothing is edited by dragging.
-3. **An on/off switch, never imposed.** A "Skeleton first" switch in the agent dock, and the setting `axle.skeletonFirst.enabled` (default off). When it is on, the mode is offered only when the plan adds or changes types, entities or interfaces. "Just do it" is always one click, and the same size as the other choice. Turning it off takes effect at once.
+3. **An on/off switch, never imposed, per agent.** Each agent row in the dock has its own small "Skeleton first" switch next to Explain this. The setting `axle.skeletonFirst.enabled` (default off) is only the starting value for an agent nobody has switched. When it is on for an agent, the mode is offered only when the plan adds or changes types, entities or interfaces. "Just do it" is always one click, and the same size as the other choice. Turning it off takes effect at once.
 4. **Live plan vs actual.** While the developer writes, the board is recomputed from the real type index on every save. Each type and member is marked **matches**, **missing** or **differs**. The diagram is the plan and the code is the truth; nothing round-trips.
 5. **Check.** A dock button, or the read-only MCP tool `check_skeleton`, returns the structured diff. The agent explains each difference with a reason and does not fix the code. When the developer answers "mine is better", the agent argues its case or updates the plan.
 6. **Hand over.** The agent fills the bodies. There is **no lock, only a warning**: if the agent changes a signature, a name or a relation the developer wrote, a passive warning shows in the dock and on the board, with the before and after text and Accept / Revert.
@@ -34,7 +34,7 @@ So the gate is something the agent does **before its first edit**, plan mode or 
   - **Later:** the diff (see Check).
 - The dock owns the stage after that: each later step is a click in the dock, which types the next prompt into the same session (as "Explain this" does).
 
-The instructions alone are not enough. In the first probe, Haiku went straight from plan approval to writing `Order.ts` and never called the tool. So for Claude Code the dock adds two reminders while the switch is on (`flow-agent/src/skeleton.ts`, `HOOK_CONTEXT`):
+The instructions alone are not enough. In the first probe, Haiku went straight from plan approval to writing `Order.ts` and never called the tool. So for Claude Code the dock adds two reminders while the switch is on for that agent (`flow-agent/src/skeleton.ts`, `HOOK_CONTEXT`):
 - **With every prompt** (`UserPromptSubmit`): "skeleton first is ON. If this request makes you add or change types, entities or interfaces, call `check_skeleton` once before your first edit… For a bug fix, a small edit or a question, go ahead as usual." This is what makes it work outside plan mode. It is under 400 characters, since it rides along with each prompt.
 - **When a plan is approved** (`PostToolUse` on `ExitPlanMode`): the same rule for the plan just approved.
 
@@ -43,7 +43,7 @@ The hooks still decide nothing. They are not a lock and never deny; they only ha
 - a reply over 8000 characters is dropped whole;
 - any other text, a reminder on the wrong event, or a decision field prints nothing.
 
-So whatever else answers on the hook port cannot put words into the agent's context. With the switch off, every event answers `{}` as before.
+So whatever else answers on the hook port cannot put words into the agent's context. With the agent's switch off, every event answers `{}` as before.
 
 In the probes, Haiku called the tool before its first edit, both after plan approval and for a plain request outside plan mode.
 
@@ -56,13 +56,13 @@ Per agent session, held in the window's memory (`src/skeleton/sessions.ts`). A w
 | Stage | Entered by | The dock row shows | `check_skeleton` answers |
 | --- | --- | --- | --- |
 | (none) | | | Off, or "draw the design and stop" (and the stage becomes `design`) |
-| `design` | The agent's first `check_skeleton` while the switch is on | The design board link, **Write the skeleton** / **Just do it**, "Not right? Tell the agent what to change" | "Wait for the developer" |
+| `design` | The agent's first `check_skeleton` while its switch is on | The design board link, **Write the skeleton** / **Just do it**, "Not right? Tell the agent what to change" | "Wait for the developer" |
 | `skeleton` | **Write the skeleton** | Live counts (matches / missing / differs), **Check**, **Hand over**, **Just do it** | The diff, and "explain, do not fix" |
 | `handover` | **Hand over** (types the handover prompt) | Warnings, **Tour**, **Finish** | The diff, warnings, and "fill the bodies, keep the signatures" |
 
 - **Just do it** types "implement the approved plan now" and drops the stage.
 - **Finish** drops the stage and the colours.
-- Turning the switch off drops every stage, clears the board colours and hides the chips at once.
+- Turning an agent's switch off ends its stage at once (the board loses its colours, the row its line); other agents keep theirs. `check_skeleton` asks the dock for that agent's switch (`flow.agents.skeletonOn`); an agent Axle did not start has no switch and follows the setting.
 
 ## Plan vs actual: the matcher
 
@@ -152,16 +152,14 @@ Fixed after the probe:
 - An empty workspace counts as checked.
 - "Just do it" is now styled like "Write the skeleton".
 
-## The dock (redesigned after the user's review)
+## The dock: minimal, per agent
 
-- **The switch** sits under the start buttons as a real switch (`role="switch"`, a pill with a knob) with its state in words under the name: "Off: the agent writes everything" or "On: you write the types, the agent fills the bodies". It is global because it is the user setting. The per-change choice is already the offer on the row (Write the skeleton / Just do it), so a second, per-session switch would only add a state to keep in step. It moves at once on click, and the host puts it back and says so if the setting cannot be written.
-- **A row in skeleton first** shows three things.
-  - A progress line of the three steps: Design, Skeleton, Fill. The current step is marked `aria-current="step"`.
-  - Where the code stands: coloured dots with "3 match", "2 missing", "1 differ".
-  - One segmented group of equal-width actions, the stage's main one filled: Write the skeleton | Just do it, then Check | Hand over | Just do it, then Closing tour | Finish.
-- **Board** is a quiet link on the step line. A warning is an amber block: what happened in bold, the before → after signature in code type, then Accept, Revert and Open.
-- There is no all-caps chip and no duplicate summary line. Labels wrap rather than truncate in a narrow dock.
-- Screenshots of the dock before and after are in the probe notes.
+At the user's request the dock is touched as little as possible, and the earlier window-wide switch and stage panel were taken out again.
+- **The switch:** each agent row gets one more link in the line where Explain this sits, styled the same: "Skeleton first" when off, "Skeleton first: on" (filled) when on, with `role="switch"`. Custom agents and closed sessions have none.
+- **A change in skeleton first:** the same line adds the state as plain text (e.g. "Plan vs code: 3 match · 2 missing · 1 differs") and the choices as the same small links: Write the skeleton, Just do it, Check, Hand over, Closing tour, Finish, Board.
+- **Warnings:** each one is a line in the existing amber conflict style, with Accept, Revert and Open.
+- **CSS:** three short rules; no new panel, header or layout.
+- **The board's plan-vs-code colours stay as they were:** they are the live comparison itself.
 
 ## Probe outside plan mode (2026-10-20, Haiku 5.5, auto mode)
 

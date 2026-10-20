@@ -183,7 +183,8 @@ function filesOf(tool: string, input: Record<string, unknown> = {}, cwd?: string
 
 const isEdit = (tool: string) => tool === PATCH_TOOL || EDIT_TOOLS.split('|').includes(tool);
 
-const skeletonFirstOn = () => vscode.workspace.getConfiguration('axle.skeletonFirst').get<boolean>('enabled', false) === true;
+/** The setting is only the default for an agent nobody has switched yet: skeleton first is on or off per agent (Agents.skeletonOn). */
+const skeletonFirstDefault = () => vscode.workspace.getConfiguration('axle.skeletonFirst').get<boolean>('enabled', false) === true;
 
 /** A skeleton-first click flow-view could not carry out: said, not swallowed, so the row never looks as if it did. */
 function skeletonFailed(e: unknown) {
@@ -869,6 +870,7 @@ export class Agents implements vscode.Disposable {
 		this.terminals.delete(id);
 		this.sessions.delete(id);
 		this.skeletons.delete(id);
+		this.skeletonSwitch.delete(id);
 		this.touched.delete(id);
 		this.turns.delete(id);
 		this.planDrawn.delete(id);
@@ -1071,7 +1073,7 @@ export class Agents implements vscode.Disposable {
 				break;
 			case 'UserPromptSubmit':
 				// Skeleton first must hold outside plan mode too: the request itself may add types, so the reminder comes with every prompt.
-				if (skeletonFirstOn()) {
+				if (this.skeletonOn(s.id)) {
 					context = { event: 'UserPromptSubmit', text: SKELETON_PROMPT_GATE };
 				}
 				this.settleAsked(s, 'denied');
@@ -1126,7 +1128,7 @@ export class Agents implements vscode.Disposable {
 					} else if (tool === 'ExitPlanMode') {
 						this.planProposed(s, p, 'after');
 						// The plan was just approved and nothing is written yet: the one moment the reminder can come before the first edit.
-						if (skeletonFirstOn()) {
+						if (this.skeletonOn(s.id)) {
 							context = { event: 'PostToolUse', text: SKELETON_GATE };
 						}
 					}
@@ -1260,6 +1262,13 @@ export class Agents implements vscode.Disposable {
 
 	/** Skeleton first: what flow-view says each session's row shows (its src/skeletonHost.ts decides the stage). */
 	readonly skeletons = new Map<string, SkeletonView>();
+	/** Agents switched on or off by hand; any other follows the setting `axle.skeletonFirst.enabled`. In memory: a reload starts over. */
+	private readonly skeletonSwitch = new Map<string, boolean>();
+
+	/** Whether skeleton first is on for this agent. */
+	skeletonOn(id: string): boolean {
+		return this.skeletonSwitch.get(id) ?? skeletonFirstDefault();
+	}
 
 	setSkeleton(id: string, view: SkeletonView | undefined) {
 		if (view && this.sessions.has(id)) {
@@ -1281,6 +1290,15 @@ export class Agents implements vscode.Disposable {
 	 */
 	async skeleton(id: string, action: SkeletonAction, customs: CustomCli[]) {
 		const s = this.sessions.get(id);
+		if (s && (action === 'enable' || action === 'disable')) {
+			// Off ends this agent's change in skeleton first at once (the board loses its colours, the row its line); other agents keep theirs.
+			this.skeletonSwitch.set(id, action === 'enable');
+			if (action === 'disable') {
+				await Promise.resolve(vscode.commands.executeCommand('flow.skeleton.finish', id)).catch(skeletonFailed);
+			}
+			this.changed.fire();
+			return;
+		}
 		const view = this.skeletons.get(id);
 		if (!s || !view || !rowActions(view, this.atPrompt(s)).includes(action)) {
 			return;

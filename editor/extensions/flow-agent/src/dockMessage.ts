@@ -21,8 +21,6 @@ export type DockAction =
 	/** The page names the row and one of four actions; the folder and branches come from the host's own record. */
 	| { type: 'wt'; id: string; action: WorktreeAction }
 	| { type: 'pick' | 'chat' }
-	/** The skeleton-first switch at the top of the dock. */
-	| { type: 'skeletonFirst'; on: boolean }
 	/** A skeleton-first button on a row: the prompt it types is the host's own (skeleton.ts). */
 	| { type: 'sk'; id: string; action: SkeletonAction }
 	/** A warning on a row, by the number the host gave it (not its position: the list may have changed since it was drawn). */
@@ -46,8 +44,6 @@ export function dockAction(raw: unknown): DockAction | undefined {
 			return m.cli === 'claude' || m.cli === 'codex' ? { type: 'new', cli: m.cli } : undefined;
 		case 'flow':
 			return id !== undefined && typeof m.index === 'number' && Number.isInteger(m.index) && m.index >= 0 ? { type: 'flow', id, index: m.index } : undefined;
-		case 'skeletonFirst':
-			return typeof m.on === 'boolean' ? { type: 'skeletonFirst', on: m.on } : undefined;
 		case 'sk':
 			return id !== undefined && SKELETON_ACTIONS.includes(m.action as SkeletonAction) ? { type: 'sk', id, action: m.action as SkeletonAction } : undefined;
 		case 'skw':

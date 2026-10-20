@@ -65,7 +65,7 @@ const SIGNATURES = 'members as signatures (`name(param: Type): Return`, `field: 
 /** What `check_skeleton` answers. `enabled` is the live switch; `s` is this session's stage, when it has one. */
 export function toolAnswer(enabled: boolean, s: SkeletonSession | undefined, rel: (file: string) => string = f => f): string {
 	if (!enabled) {
-		return 'Skeleton first is off in Axle: implement the plan as usual. Do not call check_skeleton again for this plan.';
+		return 'Skeleton first is off for you in Axle: implement the plan as usual. Do not call check_skeleton again for this plan.';
 	}
 	if (!s || (s.stage === 'design' && !s.plan)) {
 		const id = s?.boardId ?? 'skeleton';

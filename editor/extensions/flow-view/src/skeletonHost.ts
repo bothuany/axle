@@ -26,7 +26,8 @@ const CODE_FILE = /\.(cs|ts|tsx|js|jsx|mjs|cjs|java|kt|py|go|rs|php|rb)$/i;
 const same = (a: string, b: string) => a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
 const fileKey = (f: string) => f.replace(/\\/g, '/').toLowerCase();
 
-export const skeletonEnabled = () => vscode.workspace.getConfiguration(SETTING).get<boolean>('enabled', false) === true;
+/** The default for an agent nobody switched, and the answer for an agent Axle did not start (it has no switch in the dock). */
+export const skeletonDefault = () => vscode.workspace.getConfiguration(SETTING).get<boolean>('enabled', false) === true;
 
 export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 	private readonly sessions = new Map<string, SkeletonSession>();
@@ -52,7 +53,6 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			}),
 			vscode.workspace.onDidSaveTextDocument(d => void this.saved(d)),
 			types.onDidChange(() => [...this.sessions.values()].forEach(s => s.stage !== 'design' && this.changed(s))),
-			vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration(SETTING) && !skeletonEnabled() && this.clearAll()),
 			vscode.commands.registerCommand('flow.skeleton.choose', (session: unknown, choice: unknown) => this.choose(session, choice)),
 			vscode.commands.registerCommand('flow.skeleton.handover', (session: unknown) => this.handover(session)),
 			vscode.commands.registerCommand('flow.skeleton.finish', (session: unknown) => this.finish(session)),
@@ -72,11 +72,14 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 	// ── MCP ─────────────────────────────────────────────────────────────────
 
 	async check(session: string | undefined): Promise<string> {
-		if (!skeletonEnabled()) {
+		// Skeleton first is on or off per agent, in the dock. Only a session the dock knows gets a row: an id the bridge was handed but
+		// the dock never started counts as no session, and follows the setting's default.
+		const on = session ? await this.switchOf(session) : undefined;
+		const id = on === undefined ? '' : session!;
+		if (!(on ?? skeletonDefault())) {
+			this.finish(id);
 			return toolAnswer(false, undefined);
 		}
-		// Only a session the dock knows gets a row: an id the bridge was handed but the dock never started counts as no session.
-		const id = session && await this.known(session) ? session : '';
 		let s = this.sessions.get(id);
 		if (!s) {
 			if (this.sessions.size >= MAX_SESSIONS) {
@@ -92,9 +95,10 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		return toolAnswer(true, s, f => vscode.workspace.asRelativePath(f, false));
 	}
 
-	private async known(session: string): Promise<boolean> {
-		const look = await Promise.resolve(vscode.commands.executeCommand<unknown>('flow.agent.describe', session)).catch(() => undefined);
-		return !!look;
+	/** The agent's switch in the dock; nothing when the dock does not know the session. */
+	private async switchOf(session: string): Promise<boolean | undefined> {
+		const on = await Promise.resolve(vscode.commands.executeCommand<unknown>('flow.agents.skeletonOn', session)).catch(() => undefined);
+		return typeof on === 'boolean' ? on : undefined;
 	}
 
 	/** draw_board ran: a class or ER board drawn by a session waiting for its design becomes that design, whatever id it used. */
@@ -328,10 +332,6 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		void this.boards.redraw(s.boardId);
 	}
 
-	/** The switch was turned off: every stage ends now, the colours go, the rows clear. */
-	private clearAll() {
-		[...this.sessions.values()].forEach(s => this.drop(s));
-	}
 
 	dispose() {
 		this.timers.forEach(t => clearTimeout(t));

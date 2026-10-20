@@ -17,7 +17,8 @@ export interface SkeletonView {
 }
 
 /** What a row's skeleton buttons may ask for. */
-export const SKELETON_ACTIONS = ['write', 'just', 'check', 'handover', 'tour', 'finish', 'board'] as const;
+/** `enable` / `disable` turn skeleton first on or off for that one agent; the rest act on its current change. */
+export const SKELETON_ACTIONS = ['enable', 'disable', 'write', 'just', 'check', 'handover', 'tour', 'finish', 'board'] as const;
 export type SkeletonAction = typeof SKELETON_ACTIONS[number];
 export const WARNING_ACTIONS = ['accept', 'revert', 'open'] as const;
 export type WarningAction = typeof WARNING_ACTIONS[number];

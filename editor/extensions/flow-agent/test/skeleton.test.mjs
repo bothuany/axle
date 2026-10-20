@@ -65,9 +65,10 @@ test('prompts: one line each; Check never asks for a fix, the hand-over asks to 
 	assert.match(k.skeletonPrompt('just'), /implement the approved plan now/)
 })
 
-test('the page asks for the switch, a row action or a warning by its number, and nothing else', () => {
-	assert.deepEqual(d.dockAction({ type: 'skeletonFirst', on: true }), { type: 'skeletonFirst', on: true })
-	assert.equal(d.dockAction({ type: 'skeletonFirst', on: 'yes' }), undefined)
+test('the page asks for an agent\'s switch, a row action or a warning by its number, and nothing else', () => {
+	assert.deepEqual(d.dockAction({ type: 'sk', id: 'a1', action: 'enable' }), { type: 'sk', id: 'a1', action: 'enable' })
+	assert.deepEqual(d.dockAction({ type: 'sk', id: 'a1', action: 'disable' }), { type: 'sk', id: 'a1', action: 'disable' })
+	assert.equal(d.dockAction({ type: 'skeletonFirst', on: true }), undefined, 'there is no window-wide switch on the page')
 	assert.deepEqual(d.dockAction({ type: 'sk', id: 'a1', action: 'handover' }), { type: 'sk', id: 'a1', action: 'handover' })
 	assert.equal(d.dockAction({ type: 'sk', id: 'a1', action: 'rm' }), undefined)
 	assert.equal(d.dockAction({ type: 'sk', action: 'check' }), undefined)
@@ -78,29 +79,26 @@ test('the page asks for the switch, a row action or a warning by its number, and
 	assert.equal(d.dockAction({ type: 'skw', id: 'a1', warning: 0, action: 'delete', file: '/x' }), undefined)
 })
 
-test('the dock draws the switch and the row: steps, counts, the warning with Accept / Revert / Open, equal actions, escaped text', () => {
-	assert.match(page, /<button class="skf" id="skf" role="switch" aria-checked="false"/)
+test('each agent row has its own small switch next to Explain this; the state, choices and warnings share that line, escaped', () => {
+	assert.equal(page.includes('id="skf"'), false, 'no window-wide switch on the page')
 	const script = /<script>([\s\S]*)<\/script>/.exec(page)[1]
-	const list = { innerHTML: '', querySelectorAll: () => [], attrs: {}, setAttribute(k, v) { this.attrs[k] = v } }
+	const list = { innerHTML: '', querySelectorAll: () => [] }
 	const document = { getElementById: () => list, querySelectorAll: () => [] }
 	let onMessage
 	const window = { addEventListener: (_type, f) => { onMessage = f } }
 	vm.runInNewContext(script, { window, document, acquireVsCodeApi: () => ({ postMessage() { } }), setInterval() { }, Math, Object, isFinite, Date, String, Number, Map })
-	const row = { id: 'a1', cli: 'claude', name: 'Claude', state: 'done', since: Date.now(), todos: [], unread: false, done: 0 }
-	const skeleton = { ...VIEW, warnings: [{ id: 9, text: 'The agent changed <b>x</b>: f(a) → f(a, b)', revert: true }], actions: k.rowActions(VIEW, true) }
-	onMessage({ data: { type: 'data', list: [{ ...row, skeleton }], now: Date.now(), avatar: 'pixel', skeletonFirst: true } })
-	assert.equal(list.attrs['aria-checked'], 'true', 'the switch shows the setting')
-	assert.match(list.textContent, /^On: /)
-	assert.match(list.innerHTML, /<div class="sk handover" role="group"/)
-	assert.match(list.innerHTML, /<li class="now" aria-current="step">Fill<\/li>/)
-	assert.match(list.innerHTML, /<span class="ok">3 match<\/span>/)
-	assert.match(list.innerHTML, /<b>The agent changed &lt;b&gt;x&lt;\/b&gt;<\/b><code>f\(a\) → f\(a, b\)<\/code>/)
+	const row = { id: 'a1', cli: 'claude', name: 'Claude', state: 'done', since: Date.now(), todos: [], unread: false, done: 0, skeletonAvailable: true }
+	onMessage({ data: { type: 'data', list: [{ ...row, skeletonOn: false }, { ...row, id: 'c', cli: 'custom', skeletonAvailable: false }], now: Date.now(), avatar: 'pixel' } })
+	assert.match(list.innerHTML, /<span class="act" role="switch" aria-checked="false"[^>]*data-sk="enable"[^>]*>Skeleton first<\/span>/)
+	assert.equal(list.innerHTML.match(/role="switch"/g).length, 1, 'a custom agent has no switch')
+	const skeleton = { ...VIEW, warnings: [{ id: 9, text: 'The agent changed <b>x</b>', revert: true }], actions: k.rowActions(VIEW, true) }
+	onMessage({ data: { type: 'data', list: [{ ...row, skeletonOn: true, skeleton }], now: Date.now(), avatar: 'pixel' } })
+	assert.match(list.innerHTML, /<span class="act on" role="switch" aria-checked="true"[^>]*data-sk="disable"[^>]*>Skeleton first: on<\/span>/)
+	assert.match(list.innerHTML, /<span class="sk-t">Plan vs code: 3 match · 0 missing · 1 differs<\/span>/)
+	assert.match(list.innerHTML, /The agent changed &lt;b&gt;x&lt;\/b&gt;/)
 	assert.match(list.innerHTML, /data-skw="9" data-wa="revert"/)
-	assert.match(list.innerHTML, /class="act main"[^>]*data-sk="tour"[^>]*>Closing tour/)
-	assert.match(list.innerHTML, /class="sk-board"[^>]*data-sk="board"/)
-	onMessage({ data: { type: 'data', list: [{ ...row, skeleton: { ...VIEW, stage: 'design', warnings: [], counts: undefined, actions: ['write', 'just', 'board'] } }], now: Date.now(), avatar: 'pixel', skeletonFirst: false } })
-	assert.equal(list.attrs['aria-checked'], 'false')
-	assert.match(list.innerHTML, /<div class="sk-acts"><span class="act main"[^>]*data-sk="write"[^>]*>Write the skeleton<\/span><span class="act"[^>]*data-sk="just"[^>]*>Just do it<\/span><\/div>/, 'Write and Just do it share one group, equal width')
+	assert.match(list.innerHTML, /data-sk="tour"[^>]*>Closing tour/)
+	assert.equal(/class="(sk-steps|sk-acts|skf)/.test(list.innerHTML), false, 'no new panel: the line uses the Explain this styles')
 })
 
 test('the reminder Claude reads when a plan is approved names the tool and never asks for a lock', () => {
