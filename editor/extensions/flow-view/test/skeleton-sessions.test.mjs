@@ -1,5 +1,5 @@
-// Skeleton first: what check_skeleton answers at each stage, and the row the dock is sent. The switch is read live, so an off
-// answer is the same whatever stage a session was in.
+// Skeleton first: what check_skeleton answers at each stage. The developer drives the flow by talking to the agent, so each answer
+// also says what to tell them and which check_skeleton step their reply maps to.
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { cleanup, load } from './bundle.mjs'
@@ -17,40 +17,43 @@ test('off: implement as usual, whatever the stage', () => {
 	assert.match(sessions.toolAnswer(false, { ...sessions.newSession('s1'), stage: 'handover' }), /off/)
 })
 
-test('on, nothing drawn yet: draw the design on the session\'s board id, then stop; a small change is exempt', () => {
+test('on, nothing drawn yet: draw on the session\'s board id, stop, and tell the developer what to say next; a small change is exempt', () => {
 	const s = sessions.newSession('abc-123')
 	assert.equal(s.boardId, 'skeleton-abc123')
 	const text = sessions.toolAnswer(true, s)
 	assert.match(text, /draw_board: id "skeleton-abc123"/)
 	assert.match(text, /STOP: do not create or edit any file/)
-	assert.match(text, /does NOT add or change types.*implement the plan as usual/)
+	assert.match(text, /they say "check" for a review, "hand over" when you should fill the bodies, or "just do it"/)
+	assert.match(text, /does NOT add or change types.*as usual/)
 	assert.equal(sessions.boardIdFor(''), 'skeleton')
 })
 
-test('design drawn: wait for the developer; skeleton: the diff, explain without fixing; handover: fill the bodies', () => {
-	const s = { ...sessions.newSession('s'), plan }
-	assert.match(sessions.toolAnswer(true, s), /has not chosen yet/)
-	const writing = { ...s, stage: 'skeleton', diff }
+test('writing: the diff, explain without fixing, and the chat replies mapped to steps', () => {
+	const writing = { ...sessions.newSession('s'), plan, stage: 'skeleton', diff }
 	const text = sessions.toolAnswer(true, writing)
 	assert.match(text, /^Skeleton check of "Checkout": 0 match · 1 missing · 0 differ\./)
 	assert.match(text, /MISSING Order/)
 	assert.match(text, /Do NOT create or edit any file/)
 	assert.match(text, /theirs is better/)
-	const handover = { ...writing, stage: 'handover', warnings: [{ id: 3, owner: 'Order', name: 'id', kind: 'field', file: '/x.ts', reason: 'changed', before: 'id: number', after: 'id: string', line: 3, lines: 1 }] }
-	const h = sessions.toolAnswer(true, handover)
-	assert.match(h, /The agent changed Order\.id: id: number → id: string/)
-	assert.match(h, /fill in the method bodies/)
+	assert.match(text, /"hand over".*step "handover"; "just do it".*step "just"; "done".*step "finish"/)
 })
 
-test('the dock row: a summary, counts once checked, warnings with Revert only where a header can be put back', () => {
-	const s = sessions.newSession('s')
-	assert.equal(sessions.viewOf(s).drawn, false)
-	assert.match(sessions.viewOf({ ...s, plan }).summary, /Tell the agent what to change/)
-	const v = sessions.viewOf({ ...s, plan, stage: 'handover', diff, warnings: [
-		{ owner: 'Order', name: 'id', kind: 'field', file: '/x.ts', reason: 'changed', before: 'id: number', after: 'id: string', line: 3, lines: 1 },
-		{ owner: 'Order', name: 'total', kind: 'method', file: '/x.ts', reason: 'removed', before: 'total(): Money {' },
-	] })
-	assert.deepEqual(v.counts, { matches: 0, missing: 1, differs: 0 })
-	assert.deepEqual(v.warnings.map(w => w.revert), [true, false])
-	assert.equal(JSON.stringify(v).includes('/x.ts'), false, 'the dock is not sent file paths')
+test('hand-over: fill the bodies, report each numbered warning in the reply, keep → accept, revert by putting their declaration back, close with a tour', () => {
+	const handover = { ...sessions.newSession('s'), plan, stage: 'handover', diff, warnings: [{ id: 3, owner: 'Order', name: 'id', kind: 'field', file: '/x.ts', reason: 'changed', before: 'id: number', after: 'id: string', line: 3, lines: 1 }] }
+	const h = sessions.toolAnswer(true, handover)
+	assert.match(h, /warning 3: The agent changed Order\.id: id: number → id: string/)
+	assert.match(h, /fill in the method bodies/)
+	assert.match(h, /tell the developer in your reply/)
+	assert.match(h, /step "accept" and that warning number/)
+	assert.match(h, /put their declaration back exactly/)
+	assert.match(h, /Axle: Revert an Agent's Change to Your Declaration/)
+	assert.match(h, /closing tour/)
+	assert.match(h, /step "finish"/)
+})
+
+test('the steps the agent may pass are the ones the tool schema lists', async () => {
+	const tools = await load('src/mcp/tools.ts')
+	const t = tools.TOOLS.find(x => x.name === 'check_skeleton')
+	assert.deepEqual(t.inputSchema.properties.step.enum, [...sessions.SKELETON_STEPS])
+	assert.equal(t.inputSchema.additionalProperties, false)
 })

@@ -1,20 +1,21 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle skeleton first, in the window: the switch (`axle.skeletonFirst.enabled`), each agent session's stage, the plan board
- *  recoloured from the type index after every save, and the warnings when an agent changes a declaration the developer wrote.
- *  The dock (flow-agent) shows a row per session and sends the developer's clicks back through the `flow.skeleton.*` commands;
- *  it is told what to show through `flow.agents.skeleton`. See docs/design/skeleton-first.md.
+ *  Axle skeleton first, in the window: each agent session's stage, the plan board recoloured from the type index after every
+ *  save, and the warnings when an agent changes a declaration the developer wrote. The developer drives it by talking to the agent
+ *  ("I'll write it", "check", "hand over", "just do it"); the agent moves the stage with `check_skeleton` steps. Whether it is on
+ *  is the agent's switch in the dock (`flow.agents.skeletonOn`). Revert is the developer's own command, never the agent's tool.
+ *  See docs/design/skeleton-first.md.
  *--------------------------------------------------------------------------------------------*/
 
 import { promises as fs } from 'fs';
 import * as vscode from 'vscode';
 import type { BoardSpec } from './board/spec';
 import type { BoardStore } from './board/store';
-import { goneIn, headersOf, locate, revertRange, stillThere, type Header } from './skeleton/guard';
+import { goneIn, headersOf, locate, revertRange, stillThere, warningText, type Header, type Warning } from './skeleton/guard';
 import { decorate, matchPlan } from './skeleton/match';
-import { newSession, toolAnswer, viewOf, type SkeletonSession, type SkeletonTools } from './skeleton/sessions';
+import { newSession, toolAnswer, type SkeletonSession, type SkeletonStep, type SkeletonTools } from './skeleton/sessions';
 import type { TypeService } from './types/typeService';
 
-/** Declared by flow-agent (its dock holds the switch); without flow-agent it reads as its default, off. */
+/** Declared by flow-agent (the starting value of each agent's switch); without flow-agent it reads as its default, off. */
 const SETTING = 'axle.skeletonFirst';
 /** Agent sessions with a stage at once: more is a caller making up ids. */
 const MAX_SESSIONS = 20;
@@ -38,7 +39,11 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 	constructor(private readonly boards: BoardStore, private readonly types: TypeService, private readonly log: vscode.LogOutputChannel) {
 		boards.setDecorator((id, spec) => {
 			const s = this.byBoard(id);
-			return s && s.stage !== 'design' && s.diff ? decorate(spec, s.diff, s.warnings.map(w => ({ owner: w.owner, name: w.name, text: `${w.reason === 'removed' ? 'Removed' : w.reason === 'renamed' ? 'Renamed' : 'Changed'} by the agent: ${w.after ? w.after.trim() : '(gone)'}\nYou wrote: ${w.before.trim()}` }))) : spec;
+			return s && s.stage !== 'design' && s.diff ? decorate(spec, s.diff, [
+				...s.warnings.map(w => ({ owner: w.owner, name: w.name, text: `${warningText(w)}\nTo put yours back: ask the agent, or run "Axle: Revert an Agent's Change to Your Declaration".` })),
+				// A keep the agent passed on stays visible: the developer can see what was kept, not only what is still open.
+				...s.accepted.map(w => ({ owner: w.owner, name: w.name, text: `Kept (the agent was told to keep it): ${warningText(w)}` })),
+			]) : spec;
 		});
 		this.disposables.push(
 			{ dispose: () => boards.setDecorator(undefined) },
@@ -53,11 +58,14 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			}),
 			vscode.workspace.onDidSaveTextDocument(d => void this.saved(d)),
 			types.onDidChange(() => [...this.sessions.values()].forEach(s => s.stage !== 'design' && this.changed(s))),
-			vscode.commands.registerCommand('flow.skeleton.choose', (session: unknown, choice: unknown) => this.choose(session, choice)),
-			vscode.commands.registerCommand('flow.skeleton.handover', (session: unknown) => this.handover(session)),
-			vscode.commands.registerCommand('flow.skeleton.finish', (session: unknown) => this.finish(session)),
-			vscode.commands.registerCommand('flow.skeleton.open', (session: unknown) => this.open(session)),
-			vscode.commands.registerCommand('flow.skeleton.warning', (session: unknown, index: unknown, action: unknown) => this.warning(session, index, action)),
+			// flow-agent: the agent's switch went off, so its change leaves skeleton first.
+			vscode.commands.registerCommand('flow.skeleton.finish', (session: unknown) => {
+				const s = typeof session === 'string' ? this.sessions.get(session) : undefined;
+				if (s) {
+					this.drop(s);
+				}
+			}),
+			vscode.commands.registerCommand('flow.skeleton.revert', () => this.revertPicked()),
 		);
 	}
 
@@ -65,34 +73,60 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		return [...this.sessions.values()].find(s => s.boardId === id);
 	}
 
-	private get(session: unknown) {
-		return typeof session === 'string' ? this.sessions.get(session) : undefined;
-	}
-
 	// ── MCP ─────────────────────────────────────────────────────────────────
 
-	async check(session: string | undefined): Promise<string> {
-		// Skeleton first is on or off per agent, in the dock. Only a session the dock knows gets a row: an id the bridge was handed but
+	async check(session: string | undefined, step?: SkeletonStep, warning?: number): Promise<string> {
+		// Skeleton first is on or off per agent, in the dock. Only a session the dock knows is that agent: an id the bridge was handed but
 		// the dock never started counts as no session, and follows the setting's default.
 		const on = session ? await this.switchOf(session) : undefined;
 		const id = on === undefined ? '' : session!;
+		const rel = (f: string) => vscode.workspace.asRelativePath(f, false);
 		if (!(on ?? skeletonDefault())) {
-			this.finish(id);
+			const old = this.sessions.get(id);
+			if (old) {
+				this.drop(old);
+			}
 			return toolAnswer(false, undefined);
 		}
+		if (step && !id) {
+			// An agent Axle did not start has no switch and no row of its own: it may check, but not move a stage that others share.
+			return 'Skeleton first steps are only for agents started from the Axle Agents dock: do what the developer asks as usual.';
+		}
+		if (step) {
+			this.log.info(`skeleton: agent ${id} asked for step ${step}${warning ? ` (warning ${warning})` : ''}`);
+		}
 		let s = this.sessions.get(id);
+		if (step === 'just' || step === 'finish') {
+			if (s) {
+				this.drop(s);
+			}
+			return step === 'just'
+				? 'Skeleton first is skipped for this change: implement the approved plan now, as usual.'
+				: 'Skeleton first is finished for this change: the board keeps the design without colours.';
+		}
 		if (!s) {
 			if (this.sessions.size >= MAX_SESSIONS) {
 				return 'Skeleton first: too many agent sessions are in the middle of it in this window. Implement the plan as usual.';
 			}
-			// No row yet: a plan that adds no types never gets a design, and the dock must not offer a choice for it.
 			s = newSession(id);
 			this.sessions.set(id, s);
+		}
+		if (step === 'handover') {
+			if (s.stage !== 'skeleton') {
+				return s.stage === 'handover' ? toolAnswer(true, s, rel) : 'There is no skeleton to hand over yet: draw the design first (call check_skeleton without a step).';
+			}
+			await this.handover(s);
+		} else if (step === 'accept') {
+			const w = s.warnings.find(x => x.id === warning);
+			if (!w) {
+				return `No warning ${warning ?? ''} in this change. ${toolAnswer(true, s, rel)}`;
+			}
+			this.accept(s, w);
 		}
 		if (s.stage !== 'design') {
 			await this.recompute(s);
 		}
-		return toolAnswer(true, s, f => vscode.workspace.asRelativePath(f, false));
+		return toolAnswer(true, s, rel);
 	}
 
 	/** The agent's switch in the dock; nothing when the dock does not know the session. */
@@ -101,43 +135,23 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		return typeof on === 'boolean' ? on : undefined;
 	}
 
-	/** draw_board ran: a class or ER board drawn by a session waiting for its design becomes that design, whatever id it used. */
+	/**
+	 * draw_board ran: a class or ER board drawn by a session waiting for its design becomes that design, whatever id it used, and the
+	 * board starts comparing it with the code at once (everything missing until the developer writes it).
+	 */
 	drawn(id: string, spec: BoardSpec, session: string | undefined) {
 		const s = this.sessions.get(session ?? '');
-		if (!s || s.stage !== 'design' || (spec.kind !== 'class' && spec.kind !== 'er') || (s.plan && id !== s.boardId)) {
+		if (!s || s.stage !== 'design' || (spec.kind !== 'class' && spec.kind !== 'er')) {
 			return;
 		}
 		s.boardId = id;
 		s.plan = this.boards.get(id)?.spec ?? spec;
-		this.push(s);
-	}
-
-	// ── the developer's clicks (from the dock) ──────────────────────────────
-
-	private async choose(session: unknown, choice: unknown) {
-		const s = this.get(session);
-		if (!s) {
-			return false;
-		}
-		if (choice === 'just') {
-			this.drop(s);
-			return true;
-		}
-		if (choice !== 'skeleton' || !s.plan) {
-			return false;
-		}
 		s.stage = 'skeleton';
-		this.push(s);
-		await this.recompute(s);
-		return true;
+		this.changed(s);
 	}
 
 	/** Keeps the developer's declarations as they are now, then the agent may fill the bodies. */
-	private async handover(session: unknown): Promise<boolean> {
-		const s = this.get(session);
-		if (!s || s.stage !== 'skeleton') {
-			return false;
-		}
+	private async handover(s: SkeletonSession) {
 		await this.recompute(s);
 		const graph = await this.types.getGraph();
 		const texts = new Map<string, string>();
@@ -153,73 +167,52 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		s.warnings = [];
 		s.stage = 'handover';
 		this.log.info(`skeleton: handed over ${s.headers.length} declarations of "${s.plan?.title}"`);
-		this.push(s);
-		await this.boards.redraw(s.boardId);
-		return true;
 	}
 
-	private finish(session: unknown) {
-		const s = this.get(session);
-		if (s) {
-			this.drop(s);
+	/** The developer keeps the agent's version: later edits are measured against it. */
+	private accept(s: SkeletonSession, w: Warning) {
+		const kept = s.headers.findIndex(h => h.owner === w.owner && h.name === w.name && h.kind === w.kind && same(h.file, w.file));
+		if (kept >= 0) {
+			if (w.after !== undefined && w.line) {
+				s.headers[kept] = { ...s.headers[kept], text: w.after, line: w.line };
+			} else {
+				s.headers.splice(kept, 1);
+			}
 		}
+		s.warnings = s.warnings.filter(x => x !== w);
+		s.accepted.push(w);
 	}
 
-	private async open(session: unknown) {
-		const s = this.get(session);
-		const board = s && this.boards.get(s.boardId);
-		if (board) {
-			await this.boards.set(board.spec, { id: board.id, origin: board.origin, session: board.session });
-		}
-	}
-
-	private async warning(session: unknown, warningId: unknown, action: unknown) {
-		const s = this.get(session);
-		const index = s && typeof warningId === 'number' ? s.warnings.findIndex(x => x.id === warningId) : -1;
-		const w = s && index >= 0 ? s.warnings[index] : undefined;
-		if (!s || !w) {
+	/** "Axle: Revert an Agent's Change to Your Declaration": the developer picks a warning and their declaration goes back; the body stays. */
+	private async revertPicked() {
+		const all = [...this.sessions.values()].flatMap(s => s.warnings.filter(w => w.reason !== 'removed' && w.after !== undefined).map(w => ({ s, w })));
+		if (!all.length) {
+			void vscode.window.showInformationMessage('Axle: no declaration of yours was changed by an agent.');
 			return;
 		}
-		const keptIndex = s.headers.findIndex(h => h.owner === w.owner && h.name === w.name && h.kind === w.kind && same(h.file, w.file));
-		if (action === 'open') {
-			const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(w.file));
-			const at = new vscode.Position(Math.max(0, (w.line ?? 1) - 1), 0);
-			await vscode.window.showTextDocument(doc, { selection: new vscode.Range(at, at), preview: true });
+		const pick = await vscode.window.showQuickPick(all.map(x => ({ label: x.w.name ? `${x.w.owner}.${x.w.name}` : x.w.owner, detail: warningText(x.w), description: vscode.workspace.asRelativePath(x.w.file), x })), { title: 'Revert an agent\'s change to your declaration', placeHolder: 'The declaration goes back to what you wrote; the body the agent filled stays' });
+		if (!pick) {
 			return;
 		}
-		if (action === 'accept') {
-			// The agent's version becomes the developer's: later edits are measured against it.
-			if (keptIndex >= 0) {
-				if (w.after !== undefined && w.line) {
-					s.headers[keptIndex] = { ...s.headers[keptIndex], text: w.after, line: w.line };
-				} else {
-					s.headers.splice(keptIndex, 1);
-				}
-			}
-		} else if (action === 'revert') {
-			const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(w.file));
-			if (doc.isDirty) {
-				// Saving after the revert would also save the developer's unsaved work in that file.
-				void vscode.window.showWarningMessage(`Axle: ${vscode.workspace.asRelativePath(doc.uri)} has unsaved changes: save or undo them, then Revert.`);
-				return;
-			}
-			const range = revertRange(doc.getText(), w);
-			if (!range) {
-				void vscode.window.showWarningMessage('Axle: that declaration changed again since the warning; revert it by hand.');
-				return;
-			}
-			const edit = new vscode.WorkspaceEdit();
-			edit.replace(doc.uri, new vscode.Range(range.startLine - 1, 0, range.endLine - 1, doc.lineAt(range.endLine - 1).text.length), range.text);
-			if (!await vscode.workspace.applyEdit(edit)) {
-				return;
-			}
+		const { s, w } = pick.x;
+		const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(w.file));
+		if (doc.isDirty) {
+			// Saving after the revert would also save the developer's unsaved work in that file.
+			void vscode.window.showWarningMessage(`Axle: ${vscode.workspace.asRelativePath(doc.uri)} has unsaved changes: save or undo them, then revert.`);
+			return;
+		}
+		const range = revertRange(doc.getText(), w);
+		if (!range) {
+			void vscode.window.showWarningMessage('Axle: that declaration changed again since the warning; revert it by hand.');
+			return;
+		}
+		const edit = new vscode.WorkspaceEdit();
+		edit.replace(doc.uri, new vscode.Range(range.startLine - 1, 0, range.endLine - 1, doc.lineAt(range.endLine - 1).text.length), range.text);
+		if (await vscode.workspace.applyEdit(edit)) {
 			await doc.save();
-		} else {
-			return;
+			s.warnings = s.warnings.filter(x => x !== w);
+			await this.recompute(s);
 		}
-		s.warnings.splice(index, 1);
-		this.push(s);
-		await this.recompute(s);
 	}
 
 	// ── edits ───────────────────────────────────────────────────────────────
@@ -293,7 +286,6 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 	// ── recompute and show ──────────────────────────────────────────────────
 
 	private changed(s: SkeletonSession) {
-		this.push(s);
 		if (s.stage === 'design') {
 			return;
 		}
@@ -307,7 +299,6 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		}
 		const graph = await this.types.getGraph();
 		s.diff = matchPlan(s.plan, graph, { recent: f => s.recent.has(fileKey(f)), ready: this.types.complete });
-		this.push(s);
 		await this.boards.redraw(s.boardId);
 	}
 
@@ -316,22 +307,11 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		return open ? open.getText() : fs.readFile(file, 'utf8').catch(() => undefined);
 	}
 
-	/** Tells the dock what to show on the session's row (nothing for an agent Axle did not start: it has no row). */
-	private push(s: SkeletonSession | { session: string }, gone = false) {
-		if (!s.session || (!gone && 'stage' in s && s.stage === 'design' && !s.plan)) {
-			return;
-		}
-		// Without flow-agent there is no dock to tell (and the switch reads as off): only a failure of a dock that is there is worth a line.
-		void Promise.resolve(vscode.commands.executeCommand('flow.agents.skeleton', s.session, gone ? undefined : viewOf(s as SkeletonSession))).catch(e => this.log.debug(`skeleton: the dock was not told (${(e as Error).message})`));
-	}
-
 	private drop(s: SkeletonSession) {
 		clearTimeout(this.timers.get(s.session));
 		this.sessions.delete(s.session);
-		this.push(s, true);
 		void this.boards.redraw(s.boardId);
 	}
-
 
 	dispose() {
 		this.timers.forEach(t => clearTimeout(t));

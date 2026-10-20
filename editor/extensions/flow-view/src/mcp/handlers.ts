@@ -31,7 +31,7 @@ import { readTextIn, realInside } from '../tour/files';
 import { methodsOf } from '../tourMethods';
 import { drawnOf, markOffFlow, type Method } from '../tour/resolve';
 import { parseTourArgs, stepFiles, type TourFlow } from '../tour/validate';
-import type { SkeletonTools } from '../skeleton/sessions';
+import { SKELETON_STEPS, type SkeletonStep, type SkeletonTools } from '../skeleton/sessions';
 
 /** What the tools need from the rest of the extension. */
 export interface ToolDeps {
@@ -152,7 +152,7 @@ export class AgentTools {
 				case 'update_board': return await this.update(a);
 				case 'tour': return await this.tour(a, ctx);
 				case 'tour_control': return await this.tourControl(a, ctx);
-				case 'check_skeleton': return text(await (this.d.skeleton?.check(ctx.session) ?? Promise.resolve('Skeleton first is not available in this Axle window: implement the plan as usual.')));
+				case 'check_skeleton': return text(await this.checkSkeleton(a, ctx));
 				default: return errorResult(`Unknown tool: ${tool}`);
 			}
 		} catch (e) {
@@ -1042,6 +1042,23 @@ export class AgentTools {
 		}
 		await this.d.tours.go(step - 1);
 		return text(`Moved the user to step ${step} of ${state.steps}.`);
+	}
+
+	// ── skeleton first ──────────────────────────────────────────────────────
+
+	private async checkSkeleton(a: Record<string, unknown>, ctx: CallContext): Promise<string> {
+		if (!this.d.skeleton) {
+			return 'Skeleton first is not available in this Axle window: implement the plan as usual.';
+		}
+		const step = a.step === undefined ? undefined : (SKELETON_STEPS as readonly unknown[]).includes(a.step) ? a.step as SkeletonStep : undefined;
+		if (a.step !== undefined && !step) {
+			throw new Error(`step must be one of: ${SKELETON_STEPS.join(', ')}.`);
+		}
+		const warning = typeof a.warning === 'number' && Number.isInteger(a.warning) && a.warning > 0 ? a.warning : undefined;
+		if (step === 'accept' && warning === undefined) {
+			throw new Error('step accept needs `warning`: the number check_skeleton listed.');
+		}
+		return this.d.skeleton.check(ctx.session, step, warning);
 	}
 
 	// ── boards ──────────────────────────────────────────────────────────────

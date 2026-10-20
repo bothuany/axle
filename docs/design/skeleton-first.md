@@ -12,10 +12,10 @@ AI writes so much code that developers lose the know-how of their own system. Sk
 
 1. **Variant A order.** After a plan is approved, the agent draws the target design (class or ER) with `draw_board`. The developer then writes the skeleton in the editor: types, entities, interfaces, signatures, empty bodies.
 2. **The diagram is corrected by talking.** "Make DiscountPolicy an interface", "remove the repository": the agent redraws the same board. This repeats until the developer accepts it. Nothing is edited by dragging.
-3. **An on/off switch, never imposed, per agent.** Each agent row in the dock has its own small "Skeleton first" switch next to Explain this. The setting `axle.skeletonFirst.enabled` (default off) is only the starting value for an agent nobody has switched. When it is on for an agent, the mode is offered only when the plan adds or changes types, entities or interfaces. "Just do it" is always one click, and the same size as the other choice. Turning it off takes effect at once.
+3. **An on/off switch, never imposed, per agent.** Each agent row in the dock has one "Skeleton" button (pressed when on), explained in its tooltip, and nothing else. The setting `axle.skeletonFirst.enabled` (default off) is only the starting value for an agent nobody has switched. When it is on for an agent, the mode is offered only when the plan adds or changes types, entities or interfaces. "Just do it" is always one sentence to the agent. Turning it off takes effect at once.
 4. **Live plan vs actual.** While the developer writes, the board is recomputed from the real type index on every save. Each type and member is marked **matches**, **missing** or **differs**. The diagram is the plan and the code is the truth; nothing round-trips.
-5. **Check.** A dock button, or the read-only MCP tool `check_skeleton`, returns the structured diff. The agent explains each difference with a reason and does not fix the code. When the developer answers "mine is better", the agent argues its case or updates the plan.
-6. **Hand over.** The agent fills the bodies. There is **no lock, only a warning**: if the agent changes a signature, a name or a relation the developer wrote, a passive warning shows in the dock and on the board, with the before and after text and Accept / Revert.
+5. **Check.** The developer says "check"; the MCP tool `check_skeleton` returns the structured diff. The agent explains each difference with a reason and does not fix the code. When the developer answers "mine is better", the agent argues its case or updates the plan.
+6. **Hand over.** The agent fills the bodies. There is **no lock, only a warning**: if the agent changes a signature, a name or a relation the developer wrote, a passive warning shows on the board and in the agent's own reply, with the before and after text; keep or revert is the developer's call.
 7. **A closing tour** of what was filled, with the `tour` tool.
 8. **No scores, no metrics, nothing leaves the machine.**
 
@@ -30,9 +30,9 @@ So the gate is something the agent does **before its first edit**, plan mode or 
 - The server instructions (`src/mcp/protocol.ts`) and the `skeleton_first` MCP prompt say: before your first edit for a request or an approved plan that adds or changes types, entities or interfaces, call `check_skeleton` once. A bug fix, a small edit or a question does not need it.
 - The tool reads the live setting in the window, not anything fixed when the MCP server started, so turning the mode off works at once:
   - **Off:** "Skeleton first is off: implement the plan as usual." One fast call, nothing else.
-  - **On, no design yet:** "Draw the design with `draw_board` (id `skeleton-…`, kind class or er, members as signatures), then STOP and tell the user in one line." The dock then offers **Write the skeleton** and **Just do it**, side by side.
+  - **On, no design yet:** "Draw the design with `draw_board` (id `skeleton-…`, kind class or er, members as signatures), then STOP and tell the user in one line." The agent tells the developer, in two or three lines, what to do next and what to say.
   - **Later:** the diff (see Check).
-- The dock owns the stage after that: each later step is a click in the dock, which types the next prompt into the same session (as "Explain this" does).
+- After that the developer drives the stages by talking to the agent: "check", "hand over", "just do it", "done", "keep it", "revert". The agent passes the reply to `check_skeleton` as its `step` (`handover`, `just`, `finish`, `accept` with a warning number); the window moves the stage. Every answer repeats what the next replies map to, and the prompt-time reminder says the same, so a small model stays in step.
 
 The instructions alone are not enough. In the first probe, Haiku went straight from plan approval to writing `Order.ts` and never called the tool. So for Claude Code the dock adds two reminders while the switch is on for that agent (`flow-agent/src/skeleton.ts`, `HOOK_CONTEXT`):
 - **With every prompt** (`UserPromptSubmit`): "skeleton first is ON. If this request makes you add or change types, entities or interfaces, call `check_skeleton` once before your first edit… For a bug fix, a small edit or a question, go ahead as usual." This is what makes it work outside plan mode. It is under 400 characters, since it rides along with each prompt.
@@ -53,16 +53,15 @@ Codex gets neither reminder (its hooks are separate and not wired for this), so 
 
 Per agent session, held in the window's memory (`src/skeleton/sessions.ts`). A window reload loses them.
 
-| Stage | Entered by | The dock row shows | `check_skeleton` answers |
-| --- | --- | --- | --- |
-| (none) | | | Off, or "draw the design and stop" (and the stage becomes `design`) |
-| `design` | The agent's first `check_skeleton` while its switch is on | The design board link, **Write the skeleton** / **Just do it**, "Not right? Tell the agent what to change" | "Wait for the developer" |
-| `skeleton` | **Write the skeleton** | Live counts (matches / missing / differs), **Check**, **Hand over**, **Just do it** | The diff, and "explain, do not fix" |
-| `handover` | **Hand over** (types the handover prompt) | Warnings, **Tour**, **Finish** | The diff, warnings, and "fill the bodies, keep the signatures" |
+| Stage | Entered by | `check_skeleton` answers |
+| --- | --- | --- |
+| (none) | | Off, or "draw the design and stop, and tell the developer what to say" (the stage becomes `design`) |
+| `design` | The agent's first `check_skeleton` while its switch is on | The same, until a class or ER board is drawn |
+| `skeleton` | The agent drew the design (the board colours it at once: everything missing until written) | The diff, "explain, do not fix", and the replies mapped to steps |
+| `handover` | Step `handover` (the developer said "hand over") | The diff, numbered warnings, "fill the bodies, keep the signatures, report each warning, close with a tour" |
 
-- **Just do it** types "implement the approved plan now" and drops the stage.
-- **Finish** drops the stage and the colours.
-- Turning an agent's switch off ends its stage at once (the board loses its colours, the row its line); other agents keep theirs. `check_skeleton` asks the dock for that agent's switch (`flow.agents.skeletonOn`); an agent Axle did not start has no switch and follows the setting.
+- Step `just` drops the stage ("implement as usual"); step `finish` drops it at the end.
+- Turning an agent's switch off ends its stage at once (the board loses its colours); other agents keep theirs. `check_skeleton` asks the dock for that agent's switch (`flow.agents.skeletonOn`); an agent Axle did not start has no switch and follows the setting.
 
 ## Plan vs actual: the matcher
 
@@ -92,38 +91,38 @@ Languages: whatever the type graph covers, which is Java, TypeScript/JavaScript,
 
 ## Check and "mine is better"
 
-The **Check** button types a prompt into the session: call `check_skeleton`, explain each difference with a reason phrased as a trade-off, and do not edit any file. If the developer says theirs is better, the agent argues its case or, if it agrees, redraws the plan with the same board id. The board recolours from the new plan straight away.
+The developer says "check". The agent calls `check_skeleton`, explains each difference with a reason phrased as a trade-off, and does not edit any file. If the developer says theirs is better, the agent argues its case or, if it agrees, redraws the plan with the same board id. The board recolours from the new plan straight away.
 
 ## Hand over and the signature warning
 
-**Hand over** records the developer's own declarations: for each planned type and member that exists in the code now, its file and header text (the declaration lines up to `{`, `;`, `=>` or a trailing `:`). It then types the handover prompt: fill the bodies, keep every signature, name and relation, say why if one must change, and end with a closing tour.
+The developer says "hand over"; the agent calls `check_skeleton` with step `handover`. The window records the developer's own declarations: for each planned type and member that exists in the code now, its file and header text (the declaration lines up to `{`, `;`, `=>` or a trailing `:`). The answer tells the agent to fill the bodies and keep every signature, name and relation.
 
 - After each agent edit (flow-agent's `flow.agent.edited`, after the tool ran), the files it touched are re-read.
-- A recorded header that is no longer in its file is a **warning**: changed, renamed, or removed. Each warning carries the before text and the after text.
+- A recorded header that is no longer in its file is a **warning**: changed, renamed, or removed, numbered, with the before text and the after text.
 - When the developer saves a file in the editor, the recorded headers in that file are taken from it again. The developer's own changes are never warned about.
-- Warnings are passive: a chip on the dock row and an amber mark on the board member. They never block, steal focus or pop up.
-  - **Accept** takes the new header as the recorded one.
-  - **Revert** writes the recorded header back over the current declaration lines only, never the whole file, so the bodies stay. It is offered for changed and renamed declarations, not removed ones.
-  - **Open** shows the place.
-- The dock sends an index into the warning list it was given, never a file or an id.
+- Warnings are passive. They never block, steal focus or pop up. They show:
+  - **on the board**, as an amber mark on the member, its tooltip naming the change and how to put it back;
+  - **in the agent's reply**: after filling, the agent calls `check_skeleton` again, which lists the numbered warnings, and tells the developer each one, before → after, and why.
+- The developer answers in the chat. "Keep it" → step `accept` with the warning number (the new header becomes the recorded one). "Revert" → the agent puts the recorded header back, keeping the body.
+- **Revert without the agent:** the command **Axle: Revert an Agent's Change to Your Declaration** lists the warnings. It writes the recorded header back over the current declaration lines only, never the whole file, and refuses a file with unsaved changes or one that moved on since the warning. It is a command the developer runs, never an MCP tool, because tools write nothing.
 
 ## The closing tour
 
-The handover prompt ends with "play a closing tour with `tour` on `{"changes": true}`: one step per filled method". The dock's **Tour** button sends the same request again later.
+The hand-over answer ends with "play a closing tour with `tour` on `{"changes": true}`: one step per filled method". The developer can ask for it again in the chat.
 
 ## Pieces
 
 | Piece | Where |
 | --- | --- |
 | Matcher, header guard, stages (pure) | `flow-view/src/skeleton/{match,guard,sessions}.ts` |
-| Host: graph refresh, board decorator, commands, push to the dock | `flow-view/src/skeletonHost.ts` |
-| `check_skeleton` tool, `skeleton_first` prompt, instructions | `flow-view/src/mcp/{tools,handlers,prompts,protocol,register}.ts` |
+| Host: graph refresh, board decorator, steps, the Revert command | `flow-view/src/skeletonHost.ts` |
+| `check_skeleton` tool (with `step`), `skeleton_first` prompt, instructions | `flow-view/src/mcp/{tools,handlers,prompts,protocol,register}.ts` |
 | `check` and `checkNote` on board nodes and members | `flow-view/src/board/spec.ts` = `ui/src/board/spec.ts`, rendered in `ui/src/board/cards.tsx` |
-| Switch, row actions, prompts | `flow-agent/src/{skeleton,dockMessage,dockPage,dock}.ts`, the setting in `flow-agent/package.json` |
+| The Skeleton button, the per-agent switch, the hook reminders | `flow-agent/src/{skeleton,hookScript,dockMessage,dockPage,dock,agents}.ts`, the setting in `flow-agent/package.json` |
 
 Commands across the boundary (all registered, checked by `test/arch/commands.test.mjs`):
-- flow-agent → flow-view: `flow.skeleton.choose`, `flow.skeleton.handover`, `flow.skeleton.finish`, `flow.skeleton.warning`.
-- flow-view → flow-agent: `flow.agents.skeleton` (the row view).
+- flow-view → flow-agent: `flow.agents.skeletonOn` (this agent's switch).
+- flow-agent → flow-view: `flow.skeleton.finish` (the switch went off).
 
 ## Out of scope
 
@@ -152,14 +151,14 @@ Fixed after the probe:
 - An empty workspace counts as checked.
 - "Just do it" is now styled like "Write the skeleton".
 
-## The dock: minimal, per agent
+## The dock: one button per agent
 
-At the user's request the dock is touched as little as possible, and the earlier window-wide switch and stage panel were taken out again.
-- **The switch:** each agent row gets one more link in the line where Explain this sits, styled the same: "Skeleton first" when off, "Skeleton first: on" (filled) when on, with `role="switch"`. Custom agents and closed sessions have none.
-- **A change in skeleton first:** the same line adds the state as plain text (e.g. "Plan vs code: 3 match · 2 missing · 1 differs") and the choices as the same small links: Write the skeleton, Just do it, Check, Hand over, Closing tour, Finish, Board.
-- **Warnings:** each one is a line in the existing amber conflict style, with Accept, Revert and Open.
-- **CSS:** three short rules; no new panel, header or layout.
-- **The board's plan-vs-code colours stay as they were:** they are the live comparison itself.
+At the user's request the dock row has a single "Skeleton" button and nothing else.
+- It is pressed (`aria-pressed`, filled) when skeleton first is on for that agent.
+- Its tooltip explains what it does and what to say to the agent.
+- It is reachable with the keyboard; Enter and Space press it.
+- There are no status lines, stage labels, counts, choice buttons or warning blocks on the row: the stages are talked through with the agent.
+- The board's plan-vs-code colours stay.
 
 ## Probe outside plan mode (2026-10-20, Haiku 5.5, auto mode)
 
@@ -167,6 +166,18 @@ At the user's request the dock is touched as little as possible, and the earlier
 - **Switch on, "fix the typo in CONFIRMATION":** the reminder arrived, and the agent made a direct edit. The design offer stayed open for the other change.
 - **Switch off, "add a Coupon type":** no reminder. The agent called `check_skeleton` from the server instructions, got "off" and wrote the file.
 - **Board colours re-checked on a partial skeleton:** DiscountCode matches, applyDiscount is missing, Order differs (`discount` against the planned `discountCode`), and DiscountRepository has one member missing.
+
+## Chat-driven flow: trust and probe (2026-10-20)
+
+- **Steps rest on the agent's honesty.** A step from the agent (, , , ) is taken on the agent's word that the developer asked for it. Every step is logged with the session. A keep () never disappears silently: the board still marks it, as "Kept (the agent was told to keep it)".
+- **Agents Axle did not start** have no switch: they may check, but their steps are refused.
+- **Probe**, Haiku 5.5 in auto mode, outside plan mode:
+  - The button rendered off, on hover and on.
+  - Turned on, "add loyalty points": the agent called , drew the design and stopped. The board was already comparing the design with the code, and the agent told the developer in the chat what to say next.
+  - "Check" explained the one difference,  without , as a trade-off, with no edits.
+  - "Hand over, and add reason to redeem": step , then the bodies, then , then a 3-step tour. The reply listed "Warning 1: redeem signature changed", before → after, and asked keep or revert.
+  - "Keep it, we are done": step  (warning 1), then step ; the board went plain.
+  - Turned off, "add a Referral type":  answered off, and the agent wrote the file.
 
 ## Known gaps
 

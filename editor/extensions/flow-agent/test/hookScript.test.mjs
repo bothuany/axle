@@ -79,6 +79,6 @@ test('anything else prints nothing: other text, a reminder on the wrong event, a
 test('the reminders stay short: they ride along with every prompt', () => {
 	assert.ok(k.SKELETON_PROMPT_GATE.length < 400)
 	assert.match(k.SKELETON_PROMPT_GATE, /check_skeleton/)
-	assert.match(k.SKELETON_PROMPT_GATE, /bug fix, a small edit or a question, go ahead as usual/)
+	assert.match(k.SKELETON_PROMPT_GATE, /Bug fixes, small edits, questions: as usual/)
 	assert.deepEqual(Object.keys(k.HOOK_CONTEXT).sort(), ['PostToolUse', 'UserPromptSubmit'])
 })

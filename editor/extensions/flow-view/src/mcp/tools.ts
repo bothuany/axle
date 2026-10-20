@@ -246,8 +246,15 @@ export const TOOLS: ToolDef[] = [
 	},
 	{
 		name: 'check_skeleton',
-		description: "Skeleton first, the developer's choice in Axle to write the structure of a change themselves. Call it ONCE before your first edit for a request or an approved plan that adds or changes types, entities or interfaces (plan mode or not); it answers at once. A bug fix, a small edit or a question does not need it. If Axle says skeleton first is off, implement as usual. If it is on, it tells you to draw the design with draw_board and stop; later calls return the developer's skeleton against your design as a structured diff (each type and member matches, MISSING or DIFFERS, with what the code has), which you explain without fixing their code. Read-only.",
-		inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+		description: "Skeleton first, the developer's choice in Axle (a switch per agent) to write the structure of a change themselves. Call it ONCE before your first edit for a request or an approved plan that adds or changes types, entities or interfaces (plan mode or not); it answers at once. A bug fix, a small edit or a question does not need it. If Axle says skeleton first is off, implement as usual. If it is on, it tells you to draw the design with draw_board and stop. The developer then drives the rest by talking to you: call it with no step to check their skeleton against your design (a structured diff, each type and member matches, MISSING or DIFFERS, with what the code has) and explain it without fixing their code; pass step \"handover\" when they hand the skeleton over, \"just\" when they say just do it, \"accept\" with a warning number when they keep a signature you changed, \"finish\" when they are done. It never writes a file.",
+		inputSchema: {
+			type: 'object',
+			properties: {
+				step: { type: 'string', enum: ['handover', 'just', 'finish', 'accept'], description: 'Only when the developer asked for it in the chat: handover (fill the bodies), just (skip skeleton first, implement as usual), finish (done), accept (keep the signature change of `warning`). Omit to check.' },
+				warning: { type: 'integer', minimum: 1, description: 'With step accept: the warning number check_skeleton listed.' },
+			},
+			additionalProperties: false,
+		},
 		annotations: ro('Check the skeleton', false),
 	},
 	{

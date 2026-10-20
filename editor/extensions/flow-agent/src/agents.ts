@@ -26,7 +26,7 @@ import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
 import { canExplain, explainPrompt } from './explain';
 import { hookScript } from './hookScript';
-import { rowActions, SKELETON_GATE, SKELETON_PROMPT_GATE, skeletonPrompt, type SkeletonAction, type SkeletonView, type WarningAction } from './skeleton';
+import { SKELETON_GATE, SKELETON_PROMPT_GATE } from './skeleton';
 import { canType, notReady, oneLine, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 import { createWorktree, sameDir, validBranch, worktreeSlug, type Worktree } from './worktrees';
@@ -869,7 +869,6 @@ export class Agents implements vscode.Disposable {
 		this.terminals.get(id)?.dispose();
 		this.terminals.delete(id);
 		this.sessions.delete(id);
-		this.skeletons.delete(id);
 		this.skeletonSwitch.delete(id);
 		this.touched.delete(id);
 		this.turns.delete(id);
@@ -1260,8 +1259,6 @@ export class Agents implements vscode.Disposable {
 		}
 	}
 
-	/** Skeleton first: what flow-view says each session's row shows (its src/skeletonHost.ts decides the stage). */
-	readonly skeletons = new Map<string, SkeletonView>();
 	/** Agents switched on or off by hand; any other follows the setting `axle.skeletonFirst.enabled`. In memory: a reload starts over. */
 	private readonly skeletonSwitch = new Map<string, boolean>();
 
@@ -1270,79 +1267,19 @@ export class Agents implements vscode.Disposable {
 		return this.skeletonSwitch.get(id) ?? skeletonFirstDefault();
 	}
 
-	setSkeleton(id: string, view: SkeletonView | undefined) {
-		if (view && this.sessions.has(id)) {
-			this.skeletons.set(id, view);
-		} else {
-			this.skeletons.delete(id);
+	/**
+	 * The agent's Skeleton button. That is all the dock does: the stages are driven by the developer talking to the agent. Off ends this
+	 * agent's change in skeleton first at once (the board loses its colours); other agents keep theirs.
+	 */
+	async setSkeletonOn(id: string, on: boolean) {
+		if (!this.sessions.has(id)) {
+			return;
+		}
+		this.skeletonSwitch.set(id, on);
+		if (!on) {
+			await Promise.resolve(vscode.commands.executeCommand('flow.skeleton.finish', id)).catch(skeletonFailed);
 		}
 		this.changed.fire();
-	}
-
-	/** Whether the session sits at its prompt, so a click may type into it. */
-	atPrompt(s: AgentSession): boolean {
-		return (s.state === 'done' || s.state === 'idle') && s.cli !== 'custom' && this.terminals.has(s.id);
-	}
-
-	/**
-	 * A skeleton-first button. The stage moves (in flow-view) only when the prompt that goes with it can be typed now, so Axle and
-	 * the agent never disagree about where they are; a button that only changes what Axle shows types nothing.
-	 */
-	async skeleton(id: string, action: SkeletonAction, customs: CustomCli[]) {
-		const s = this.sessions.get(id);
-		if (s && (action === 'enable' || action === 'disable')) {
-			// Off ends this agent's change in skeleton first at once (the board loses its colours, the row its line); other agents keep theirs.
-			this.skeletonSwitch.set(id, action === 'enable');
-			if (action === 'disable') {
-				await Promise.resolve(vscode.commands.executeCommand('flow.skeleton.finish', id)).catch(skeletonFailed);
-			}
-			this.changed.fire();
-			return;
-		}
-		const view = this.skeletons.get(id);
-		if (!s || !view || !rowActions(view, this.atPrompt(s)).includes(action)) {
-			return;
-		}
-		const prompt = skeletonPrompt(action);
-		const now = this.askSessions().find(x => x.id === id);
-		if (prompt && !(now && canType(now, customs))) {
-			void vscode.window.showInformationMessage(`Axle: ${now ? notReady(now) : `${s.name} has closed`}: try again when it is back at its prompt.`);
-			return;
-		}
-		try {
-			switch (action) {
-				case 'write':
-					await vscode.commands.executeCommand('flow.skeleton.choose', id, 'skeleton');
-					return;
-				case 'just':
-					await vscode.commands.executeCommand('flow.skeleton.choose', id, 'just');
-					break;
-				case 'handover':
-					if (!await vscode.commands.executeCommand<boolean>('flow.skeleton.handover', id)) {
-						return;
-					}
-					break;
-				case 'finish':
-					await vscode.commands.executeCommand('flow.skeleton.finish', id);
-					return;
-				case 'board':
-					await vscode.commands.executeCommand('flow.skeleton.open', id);
-					return;
-			}
-		} catch (e) {
-			skeletonFailed(e);
-			return;
-		}
-		if (prompt) {
-			this.typeInto(id, prompt, true, customs);
-		}
-	}
-
-	/** Accept, Revert or Open on a warning, by the number flow-view gave it. */
-	skeletonWarning(id: string, warning: number, action: WarningAction) {
-		if (this.skeletons.get(id)?.warnings.some(w => w.id === warning)) {
-			void Promise.resolve(vscode.commands.executeCommand('flow.skeleton.warning', id, warning, action)).catch(skeletonFailed);
-		}
 	}
 
 	/** The checkout a session works in: its worktree, or the window's folder. */

@@ -16,7 +16,6 @@ import { AttentionNotifier } from './notify';
 import { pickAgent } from './pick';
 import { startOrResume } from './resume';
 import { AgentSessionType } from './sessionType';
-import { readView } from './skeleton';
 import { WorktreeRows } from './worktreeActions';
 
 export function activate(context: vscode.ExtensionContext) {
@@ -68,8 +67,6 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('flow.agents.ask', (text: unknown, submit: unknown, origin: unknown, files: unknown, options: unknown) => typeof text === 'string'
 			? router.ask(text, submit === true, typeof origin === 'string' ? origin : undefined, Array.isArray(files) ? files.filter((f): f is string => typeof f === 'string') : [], (options as { plan?: unknown } | undefined)?.plan === true, typeof (options as { session?: unknown } | undefined)?.session === 'string' ? (options as { session: string }).session : undefined)
 			: false),
-		// Called by flow-view (src/skeletonHost.ts) whenever a session's skeleton-first row changes; nothing clears it.
-		vscode.commands.registerCommand('flow.agents.skeleton', (id: unknown, view: unknown) => typeof id === 'string' ? agents.setSkeleton(id, readView(view)) : undefined),
 		// Called by flow-view when an agent asks check_skeleton: on or off for that agent; nothing for a session this window does not know.
 		vscode.commands.registerCommand('flow.agents.skeletonOn', (id: unknown) => typeof id === 'string' && agents.sessions.has(id) ? agents.skeletonOn(id) : undefined),
 		// Called by flow-view when an agent's tour arrives with the session it came from (AXLE_SESSION): the name and colour the ghost

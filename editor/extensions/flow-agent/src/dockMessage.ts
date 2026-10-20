@@ -5,7 +5,6 @@
  *  (test/dockMessage.test.mjs); dock.ts carries the actions out.
  *--------------------------------------------------------------------------------------------*/
 
-import { SKELETON_ACTIONS, WARNING_ACTIONS, type SkeletonAction, type WarningAction } from './skeleton';
 
 /** What the page may ask for on a worktree row; anything else is ignored. */
 export const WORKTREE_ACTIONS = ['open', 'diff', 'merge', 'remove'] as const;
@@ -21,10 +20,8 @@ export type DockAction =
 	/** The page names the row and one of four actions; the folder and branches come from the host's own record. */
 	| { type: 'wt'; id: string; action: WorktreeAction }
 	| { type: 'pick' | 'chat' }
-	/** A skeleton-first button on a row: the prompt it types is the host's own (skeleton.ts). */
-	| { type: 'sk'; id: string; action: SkeletonAction }
-	/** A warning on a row, by the number the host gave it (not its position: the list may have changed since it was drawn). */
-	| { type: 'skw'; id: string; warning: number; action: WarningAction };
+	/** An agent's Skeleton button: skeleton first on or off for that agent. */
+	| { type: 'sk'; id: string; on: boolean };
 
 const MAX_ID = 200;
 const ID_TYPES = new Set(['show', 'pr', 'xray', 'forget', 'compact', 'rename', 'explain']);
@@ -45,9 +42,7 @@ export function dockAction(raw: unknown): DockAction | undefined {
 		case 'flow':
 			return id !== undefined && typeof m.index === 'number' && Number.isInteger(m.index) && m.index >= 0 ? { type: 'flow', id, index: m.index } : undefined;
 		case 'sk':
-			return id !== undefined && SKELETON_ACTIONS.includes(m.action as SkeletonAction) ? { type: 'sk', id, action: m.action as SkeletonAction } : undefined;
-		case 'skw':
-			return id !== undefined && typeof m.warning === 'number' && Number.isInteger(m.warning) && m.warning >= 0 && m.warning <= 1e9 && WARNING_ACTIONS.includes(m.action as WarningAction) ? { type: 'skw', id, warning: m.warning, action: m.action as WarningAction } : undefined;
+			return id !== undefined && typeof m.on === 'boolean' ? { type: 'sk', id, on: m.on } : undefined;
 		case 'wt':
 			return id !== undefined && WORKTREE_ACTIONS.includes(m.action as WorktreeAction) ? { type: 'wt', id, action: m.action as WorktreeAction } : undefined;
 		default:

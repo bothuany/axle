@@ -65,10 +65,11 @@ ${AVATAR_CSS}
 .explain { margin: 6px 0 0 34px; }
 .explain .act { padding: 0 8px; border: 1px solid color-mix(in srgb, var(--working) 55%, transparent); border-radius: 5px; color: var(--working); font: 11px/1.5 var(--vscode-font-family, system-ui); cursor: pointer; }
 .explain .act:hover { background: color-mix(in srgb, var(--working) 14%, transparent); }
-/* Skeleton first, per agent: the same small links as Explain this; "on" is filled. */
-.explain .act.on { background: color-mix(in srgb, var(--working) 22%, transparent); }
-.explain .sk-t { color: var(--muted); font-size: 11.5px; }
-.explain .clash .act { margin-left: 4px; }
+/* Skeleton first: one button per agent, in the Explain this style; pressed is filled. */
+.explain .act[aria-pressed="true"] { background: var(--working); color: #0c0f1f; }
+/* Its explanation, on hover and on keyboard focus (a native title shows on neither in every host). */
+.explain.sk { position: relative; }
+.explain.sk .act:hover::after, .explain.sk .act:focus-visible::after { content: attr(data-tip); position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--vscode-editorHoverWidget-background, #252526); color: var(--text); font: 11.5px/1.45 var(--vscode-font-family, system-ui); white-space: normal; pointer-events: none; }
 .clash { margin: 6px 0 0 34px; padding: 4px 7px; border-radius: 6px; background: color-mix(in srgb, var(--blocked) 10%, transparent); color: var(--blocked); font-size: 11.5px; line-height: 1.45; }
 .clash.same { background: color-mix(in srgb, #ff6b7d 12%, transparent); color: #ff8c99; }
 .clash small { display: block; color: var(--muted); }
@@ -145,21 +146,12 @@ function avatar(s, pct) {
 	const key = [s.id, data.avatar, s.cli, st, pct ?? ''].join('|');
 	return '<span class="av" data-k="' + esc(key) + '">' + window.axleAvatar(data.avatar, s.cli, st, pct, 24) + '</span>';
 }
-// Skeleton first, per agent: an on/off link next to Explain this; while a change is in it, its state and choices on the same line,
-// and a warning line for each declaration the agent changed. The page sends an action name or a warning's number, nothing else.
-const SKL = { write: 'Write the skeleton', just: 'Just do it', check: 'Check', handover: 'Hand over', tour: 'Closing tour', finish: 'Finish', board: 'Board' };
-const SKT = { write: 'You write the types and signatures; the board compares them with the design on every save', just: 'The agent implements the plan now', check: 'Ask the agent to explain each difference, without changing your code', handover: 'Keep your declarations and let the agent fill the bodies', tour: 'A tour of the bodies the agent filled', finish: 'End skeleton first for this change', board: 'Show the design board' };
-function skeletonLine(s) {
+// Skeleton first: one toggle button per agent; what it does is in its tooltip. The stages are talked through with the agent, so
+// the row shows nothing else. The page sends only the row and the state it asks for.
+const SK_TIP = 'Skeleton first for this agent. When a change adds or changes types, entities or interfaces, the agent draws its design on a board and stops; you write the types and signatures, and the board marks them against the design as you save. Then tell the agent "check", "hand over" (it fills the bodies), "just do it" or "done".';
+function skeletonButton(s) {
 	if (!s.skeletonAvailable) { return ''; }
-	const k = s.skeleton;
-	const toggle = '<span class="act' + (s.skeletonOn ? ' on' : '') + '" role="switch" aria-checked="' + (s.skeletonOn ? 'true' : 'false') + '" tabindex="0" data-sk="' + (s.skeletonOn ? 'disable' : 'enable')
-		+ '" title="Skeleton first for this agent: when a change adds types, it draws the design and you write the skeleton before it fills the bodies">Skeleton first' + (s.skeletonOn ? ': on' : '') + '</span>';
-	const acts = k ? (k.actions || []).filter(a => SKL[a]).map(a => ' <span class="act" role="button" tabindex="0" data-sk="' + a + '" title="' + esc(SKT[a]) + '">' + SKL[a] + '</span>').join('') : '';
-	const warns = k ? k.warnings.map(w => '<div class="clash">⚠ ' + esc(w.text)
-		+ '<span class="act" role="button" tabindex="0" data-skw="' + w.id + '" data-wa="accept">Accept</span>'
-		+ (w.revert ? '<span class="act" role="button" tabindex="0" data-skw="' + w.id + '" data-wa="revert" title="Put back the declaration you wrote; the body stays">Revert</span>' : '')
-		+ '<span class="act" role="button" tabindex="0" data-skw="' + w.id + '" data-wa="open">Open</span></div>').join('') : '';
-	return '<div class="explain sk">' + toggle + (k ? ' <span class="sk-t">' + esc(k.summary) + '</span>' + acts : '') + warns + '</div>';
+	return '<div class="explain sk"><span class="act" role="button" tabindex="0" aria-pressed="' + (s.skeletonOn ? 'true' : 'false') + '" data-sk="' + (s.skeletonOn ? 'off' : 'on') + '" data-tip="' + esc(SK_TIP + (s.skeletonOn ? ' On: click to turn it off.' : ' Off: click to turn it on.')) + '" aria-description="' + esc(SK_TIP) + '">Skeleton</span></div>';
 }
 function render() {
 	const el = document.getElementById('list');
@@ -227,7 +219,7 @@ function render() {
 			+ clash
 			+ impact
 			+ explain
-			+ skeletonLine(s)
+			+ skeletonButton(s)
 			+ wt
 			+ ctx
 			+ meta
@@ -237,6 +229,8 @@ function render() {
 			+ '</button>';
 	}).join('');
 	el.querySelectorAll('.av[data-k]').forEach(a => { const old = kept.get(a.dataset.k); if (old) { a.replaceWith(old); } });
+	// The Skeleton button sits inside the row's own button: Enter and Space press it, not the row.
+	el.querySelectorAll('[data-sk]').forEach(x => x.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); x.click(); } });
 	el.querySelectorAll('.agent').forEach(b => b.onclick = e => {
 		const f = e.target.closest('[data-forget]');
 		const fl = e.target.closest('[data-flow]');
@@ -247,11 +241,9 @@ function render() {
 		const xr = e.target.closest('[data-xray]');
 		const ex = e.target.closest('[data-explain]');
 		if (e.target.closest('.sk')) {
-			// The skeleton-first line is not a click on the row: only its links do something.
+			// The Skeleton button is not a click on the row.
 			const sk = e.target.closest('[data-sk]');
-			const skw = e.target.closest('[data-skw]');
-			if (sk) { vscode.postMessage({ type: 'sk', id: b.dataset.id, action: sk.dataset.sk }); }
-			if (skw) { vscode.postMessage({ type: 'skw', id: b.dataset.id, warning: Number(skw.dataset.skw), action: skw.dataset.wa }); }
+			if (sk) { vscode.postMessage({ type: 'sk', id: b.dataset.id, on: sk.dataset.sk === 'on' }); }
 			return;
 		}
 		vscode.postMessage(ex ? { type: 'explain', id: b.dataset.id } : wa ? { type: 'wt', id: b.dataset.id, action: wa.dataset.wt } : pr ? { type: 'pr', id: b.dataset.id } : cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : xr ? { type: 'xray', id: b.dataset.id } : { type: 'show', id: b.dataset.id });

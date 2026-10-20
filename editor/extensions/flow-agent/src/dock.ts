@@ -12,7 +12,6 @@ import { conflictText } from './conflicts';
 import { dockAction } from './dockMessage';
 import { dockHtml } from './dockPage';
 import { savedAgents } from './pick';
-import { rowActions } from './skeleton';
 import type { WorktreeRows } from './worktreeActions';
 
 export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable {
@@ -57,8 +56,7 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				case 'wt': return void this.worktrees?.act(m.id, m.action);
 				case 'pick': return void vscode.commands.executeCommand('flow.agents.new');
 				case 'chat': return void vscode.commands.executeCommand('workbench.action.openSettings', 'flow.agents.showChat');
-				case 'sk': return void this.agents.skeleton(m.id, m.action, savedAgents());
-				case 'skw': return this.agents.skeletonWarning(m.id, m.warning, m.action);
+				case 'sk': return void this.agents.setSkeletonOn(m.id, m.on);
 			}
 		});
 		view.onDidChangeVisibility(() => view.visible && this.post());
@@ -87,16 +85,6 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 		}
 	}
 
-	/** A session's skeleton-first row with the buttons it may show now; the page sends back only an action name or a warning's index. */
-	private skeletonRow(s: Parameters<Agents['atPrompt']>[0]) {
-		// No design drawn yet means no offer: the agent may be on a plan that adds no types, and implements it as usual.
-		const v = s.state === 'ended' ? undefined : this.agents.skeletons.get(s.id);
-		if (v?.stage === 'design' && !v.drawn) {
-			return undefined;
-		}
-		return v && { ...v, actions: rowActions(v, this.agents.atPrompt(s)) };
-	}
-
 	/** Coalesces bursts of hook events into one repaint. */
 	private post() {
 		const n = this.agents.needsYou;
@@ -110,7 +98,7 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				.map(s => ({ ...s, attention: attentionKind(s), done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, explain: this.agents.canExplain(s), impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })), tables: s.impact.tables },
 					// Worktree and conflicts are explicit fields: the session's own record (paths, the base branch) stays here.
 					worktree: s.worktree ? this.worktrees?.view(s) : undefined,
-					skeleton: this.skeletonRow(s), skeletonOn: this.agents.skeletonOn(s.id), skeletonAvailable: s.state !== 'ended' && s.cli !== 'custom',
+					skeletonOn: this.agents.skeletonOn(s.id), skeletonAvailable: s.state !== 'ended' && s.cli !== 'custom',
 					clash: s.state === 'ended' ? undefined : conflicts.get(s.id)?.map(c => ({ text: conflictText(c), same: c.sameCheckout, files: c.files.slice(0, 12) })) }));
 			const avatar = readAvatar(vscode.workspace.getConfiguration('flow.agents').get('avatar'));
 			void this.view?.webview.postMessage({ type: 'data', list, now: Date.now(), avatar });
