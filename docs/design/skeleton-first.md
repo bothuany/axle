@@ -169,15 +169,15 @@ At the user's request the dock row has a single "Skeleton" button and nothing el
 
 ## Chat-driven flow: trust and probe (2026-10-20)
 
-- **Steps rest on the agent's honesty.** A step from the agent (, , , ) is taken on the agent's word that the developer asked for it. Every step is logged with the session. A keep () never disappears silently: the board still marks it, as "Kept (the agent was told to keep it)".
+- **Steps rest on the agent's honesty.** A step from the agent (`handover`, `just`, `accept`, `finish`) is taken on the agent's word that the developer asked for it. Every step is logged with the session. A keep (`accept`) never disappears silently: the board still marks it, as "Kept (the agent was told to keep it)".
 - **Agents Axle did not start** have no switch: they may check, but their steps are refused.
 - **Probe**, Haiku 5.5 in auto mode, outside plan mode:
   - The button rendered off, on hover and on.
-  - Turned on, "add loyalty points": the agent called , drew the design and stopped. The board was already comparing the design with the code, and the agent told the developer in the chat what to say next.
-  - "Check" explained the one difference,  without , as a trade-off, with no edits.
-  - "Hand over, and add reason to redeem": step , then the bodies, then , then a 3-step tour. The reply listed "Warning 1: redeem signature changed", before → after, and asked keep or revert.
-  - "Keep it, we are done": step  (warning 1), then step ; the board went plain.
-  - Turned off, "add a Referral type":  answered off, and the agent wrote the file.
+  - Turned on, "add loyalty points": the agent called `check_skeleton`, drew the design and stopped. The board was already comparing the design with the code, and the agent told the developer in the chat what to say next.
+  - "Check" explained the one difference, `earn` without `amount`, as a trade-off, with no edits.
+  - "Hand over, and add reason to redeem": step `handover`, then the bodies, then `check_skeleton`, then a 3-step tour. The reply listed "Warning 1: redeem signature changed", before → after, and asked keep or revert.
+  - "Keep it, we are done": step `accept` (warning 1), then step `finish`; the board went plain.
+  - Turned off, "add a Referral type": `check_skeleton` answered off, and the agent wrote the file.
 
 ## Known gaps
 
