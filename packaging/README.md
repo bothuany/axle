@@ -26,6 +26,54 @@ here hand those release files to package managers. **None of them is published y
    that. A release job could do this with a token for the tap repository; `brew bump-cask-pr` is the manual route.
 5. **APT:** see `apt/README.md`.
 
+## Updates
+
+A running Axle updates itself from the release files, without an update server. VS Code's update service is kept
+(Update available on the gear, Help, Check for Updates, `update.mode`), but it reads a static file instead of
+`/api/update/<platform>/<quality>/<commit>` (`editor/patches/flow-update.patch`):
+
+1. `product.json` has `"quality": "axle"` and `"updateUrl": "https://github.com/bothuany/axle/releases/latest/download"`.
+   GitHub redirects `releases/latest/download/<file>` to the newest release that is not a draft or prerelease.
+2. The app asks for `<updateUrl>/update-<platform>-axle.json`, where `<platform>` is `win32-x64-user`, `darwin`,
+   `darwin-arm64` or `linux-x64`. Each file is `{ url, name, version, productVersion, sha256hash, timestamp }`;
+   `version` is the commit of the release, `productVersion` its Axle version.
+3. The app compares `productVersion` with its own Axle version (semver; a release is newer than its prereleases). Equal or
+   older means no update, which replaces the server's 204. The built app's `version` in `product.json` is VS Code's, so
+   `npm run installer` and `npm run package` stamp `axleVersion` (from `package.json`) into it; that is what is compared.
+4. `release.yml` writes the files with `scripts/update-manifests.mjs` (sha256 of the right asset) and uploads them as release
+   assets, after everything else is attached. It fails, and uploads nothing, when a platform's asset is missing.
+
+| Platform | The file points at | What the app does |
+|---|---|---|
+| Windows (per-user setup) | `Axle-Setup-<v>-x64.exe` | downloads it, checks the sha256, runs it silently when you choose Restart to Update (VS Code's Inno Setup flow) |
+| macOS (x64, arm64) | the release page | notification with a Download button that opens the page |
+| Linux (x64) | the release page | the same |
+
+- **Windows** only works for the per-user installer (`npm run installer`'s default), which is the one on the release: its
+  target is `user`. A system-wide install (`--system`, not released) would look for `win32-x64` files that are not published.
+  The app id, `axle` mutex and install folder come from `product.json`, so they are Axle's and not Code - OSS's; the installer's
+  `/update` flow shares them with the app. The update cache is `%TEMP%\axle-axle-user-x64`, not VS Code's.
+- **macOS** cannot install in place yet: Squirrel.Mac only replaces an app that is signed with a Developer ID and notarized,
+  and Axle's ad hoc signature would make every download fail. So the app never calls Squirrel; it reads the file and offers the
+  page. When signing is added (the section below), point the file at the zip and restore Squirrel's check in
+  `updateService.darwin.ts` (see `flow-update.patch`: it replaces `electron.autoUpdater`).
+- **Linux** is notification and link only, as in VS Code: there is no apt repository, and an `apt upgrade` cannot update the
+  `.deb` until there is ([apt/README.md](apt/README.md)).
+- The first release that carries these files is the first one an old app can learn of; 0.4.1 and older have no updater.
+- Between the release being created and the last job finishing, `latest/download` has no update files yet: a check then gets
+  a 404, which an automatic check ignores and **Check for Updates** shows as an error.
+
+**Test it without a release.** `AXLE_UPDATE_URL` replaces `updateUrl` (https, or http on this machine only):
+
+```bash
+node scripts/update-manifests.mjs --dir <folder with the four release files> --out /tmp/axle-update --version 9.9.9 --commit test --repo bothuany/axle
+(cd /tmp/axle-update && python -m http.server 8123 --bind 127.0.0.1)
+AXLE_UPDATE_URL=http://127.0.0.1:8123 npm start     # an installed build, not `npm start`: updates are off when running from source
+```
+
+A build from source is never updated (`update#ctor - not built`); install a build of an older version, set the variable and
+choose Help, Check for Updates. `npm run test:update` runs the tests for the version check, the URLs and the files.
+
 ## Not signed yet
 
 - **Windows:** the installer has no Authenticode signature, so SmartScreen warns before it runs. winget accepts unsigned

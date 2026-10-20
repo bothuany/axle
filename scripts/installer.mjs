@@ -79,8 +79,8 @@ if (major !== needMajor || minor < needMinor) {
 if (!existsSync(join(VSCODE, 'node_modules', '.package-lock.json'))) {
 	fail('Axle is not set up yet: run `npm run setup` first (it fetches and builds VS Code, which the installer packages).')
 }
-const patched = launchSync('git', ['apply', '--reverse', '--check', join(ROOT, 'editor', 'patches', 'flow-core.patch')], { cwd: VSCODE, stdio: 'ignore' })
-if (patched.status !== 0) {
+const patched = ['flow-core.patch', 'flow-update.patch'].every(patch => launchSync('git', ['apply', '--reverse', '--check', join(ROOT, 'editor', 'patches', patch)], { cwd: VSCODE, stdio: 'ignore' }).status === 0)
+if (!patched) {
 	fail('editor/vscode does not carry Axle\'s patches (or has other changes to the same files): run `npm run setup`, or delete editor/vscode and run it again.')
 }
 const product = readJson(join(VSCODE, 'product.json'))
@@ -174,7 +174,7 @@ function appStamp() {
 	const hash = createHash('sha256')
 	const described = launchSync('git', ['describe', '--tags'], { cwd: VSCODE, encoding: 'utf8' })
 	hash.update(described.status === 0 ? described.stdout.trim() : 'unknown version')
-	for (const file of [join(ROOT, 'editor', 'patches', 'flow-core.patch'), join(VSCODE, 'product.json'), join(VSCODE, 'resources', 'win32', 'code.ico')]) {
+	for (const file of [join(ROOT, 'editor', 'patches', 'flow-core.patch'), join(ROOT, 'editor', 'patches', 'flow-update.patch'), join(VSCODE, 'product.json'), join(VSCODE, 'resources', 'win32', 'code.ico')]) {
 		hash.update(readFileSync(file))
 	}
 	return hash.digest('hex')
@@ -278,6 +278,11 @@ console.log('  flow-view/analyzer, flow-view/ui/dist-webview')
 // A broken app is cheaper to find here than after a 15 minute Inno Setup run.
 const problems = []
 const productJson = readJson(join(appDir, 'product.json'))
+// The app's own version is VS Code's (product.json "version"); the update check compares Axle's with the release's.
+if (productJson.axleVersion !== version) {
+	productJson.axleVersion = version
+	writeFileSync(join(appDir, 'product.json'), JSON.stringify(productJson, null, '\t') + '\n')
+}
 for (const [key, want] of [['applicationName', 'axle'], ['dataFolderName', '.axle'], ['nameShort', 'Axle']]) {
 	if (productJson[key] !== want) {
 		problems.push(`product.json: ${key} is ${JSON.stringify(productJson[key])}, not ${JSON.stringify(want)}`)
