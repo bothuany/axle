@@ -58,7 +58,11 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				case 'pick': return void vscode.commands.executeCommand('flow.agents.new');
 				case 'chat': return void vscode.commands.executeCommand('workbench.action.openSettings', 'flow.agents.showChat');
 				// The switch is a user setting: it holds for every window and every agent, and turning it off ends every stage at once.
-				case 'skeletonFirst': return void vscode.workspace.getConfiguration('axle.skeletonFirst').update('enabled', m.on, vscode.ConfigurationTarget.Global);
+				// The page has already moved the switch: if the setting cannot be written, the next post puts it back, and the user is told.
+				case 'skeletonFirst': return void Promise.resolve(vscode.workspace.getConfiguration('axle.skeletonFirst').update('enabled', m.on, vscode.ConfigurationTarget.Global)).then(undefined, e => {
+					this.post();
+					void vscode.window.showWarningMessage(`Axle: skeleton first could not be turned ${m.on ? 'on' : 'off'} (${(e as Error)?.message ?? e}).`);
+				});
 				case 'sk': return void this.agents.skeleton(m.id, m.action, savedAgents());
 				case 'skw': return this.agents.skeletonWarning(m.id, m.warning, m.action);
 			}

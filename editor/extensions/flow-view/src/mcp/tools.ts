@@ -246,7 +246,7 @@ export const TOOLS: ToolDef[] = [
 	},
 	{
 		name: 'check_skeleton',
-		description: "Skeleton first, the developer's choice in Axle to write the structure of a change themselves. Call it ONCE right after the user approves a plan that adds or changes types, entities or interfaces, BEFORE you create or edit any file; it answers at once. If Axle says skeleton first is off, implement as usual. If it is on, it tells you to draw the design with draw_board and stop; later calls return the developer's skeleton against your design as a structured diff (each type and member matches, MISSING or DIFFERS, with what the code has), which you explain without fixing their code. Read-only.",
+		description: "Skeleton first, the developer's choice in Axle to write the structure of a change themselves. Call it ONCE before your first edit for a request or an approved plan that adds or changes types, entities or interfaces (plan mode or not); it answers at once. A bug fix, a small edit or a question does not need it. If Axle says skeleton first is off, implement as usual. If it is on, it tells you to draw the design with draw_board and stop; later calls return the developer's skeleton against your design as a structured diff (each type and member matches, MISSING or DIFFERS, with what the code has), which you explain without fixing their code. Read-only.",
 		inputSchema: { type: 'object', properties: {}, additionalProperties: false },
 		annotations: ro('Check the skeleton', false),
 	},

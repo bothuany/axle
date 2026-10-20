@@ -159,7 +159,9 @@ export function locate(h: Header, typesNow: readonly TypeInfo[], fileText: strin
 export function warningText(w: Warning): string {
 	const what = w.name ? `${w.owner}.${w.name}` : w.owner;
 	const verb = w.reason === 'removed' ? 'removed' : w.reason === 'renamed' ? 'renamed' : 'changed';
-	return w.after ? `The agent ${verb} ${what}: ${norm(w.before)} → ${norm(w.after)}` : `The agent ${verb} ${what} (was ${norm(w.before)})`;
+	// The brace or arrow that opens the body is part of the kept header, not of the signature a person reads.
+	const sig = (h: string) => norm(h).replace(/\s*(\{|=>)$/, '');
+	return w.after ? `The agent ${verb} ${what}: ${sig(w.before)} → ${sig(w.after)}` : `The agent ${verb} ${what} (was ${sig(w.before)})`;
 }
 
 const eolOf = (text: string) => text.includes('\r\n') ? '\r\n' : '\n';

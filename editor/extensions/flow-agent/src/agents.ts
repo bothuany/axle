@@ -4,7 +4,7 @@
  *  session with --settings (the user's own settings and hooks are untouched and still run), so
  *  every agent shows whether it is working, waiting for you or done, what it is doing, its to-do
  *  list and how full its context is. The hooks never answer a permission question: the CLI asks. The only thing
- *  they hand back is context for the agent (skeleton first's reminder when a plan is approved).
+ *  they hand back is context for the agent (skeleton first's reminders, with each prompt and when a plan is approved).
  *--------------------------------------------------------------------------------------------*/
 
 import { execFile } from 'child_process';
@@ -25,7 +25,8 @@ import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
 import { canExplain, explainPrompt } from './explain';
-import { rowActions, SKELETON_GATE, skeletonPrompt, type SkeletonAction, type SkeletonView, type WarningAction } from './skeleton';
+import { hookScript } from './hookScript';
+import { rowActions, SKELETON_GATE, SKELETON_PROMPT_GATE, skeletonPrompt, type SkeletonAction, type SkeletonView, type WarningAction } from './skeleton';
 import { canType, notReady, oneLine, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 import { createWorktree, sameDir, validBranch, worktreeSlug, type Worktree } from './worktrees';
@@ -245,41 +246,6 @@ function lastTitle(lines: string[]): string | undefined {
 	return undefined;
 }
 
-/**
- * Reads the event from stdin and posts it to the Axle window that owns this folder now. Never blocks the agent and never decides
- * anything. The one thing it passes back is context for the agent (`hookSpecificOutput.additionalContext`, skeleton first's
- * reminder when a plan is approved), and only in that exact shape.
- */
-function HOOK_SCRIPT(portFile: string, tokenFile: string) {
-	return `// Written by Axle: forwards Claude Code hook events to the Axle window (observe only; it may hand the agent context, never a decision).
-const fs = require('fs'), http = require('http');
-let body = '';
-process.stdin.on('data', d => body += d).on('end', () => {
-	let port, token;
-	try { port = fs.readFileSync(${JSON.stringify(portFile)}, 'utf8').trim(); token = fs.readFileSync(${JSON.stringify(tokenFile)}, 'utf8').trim(); } catch { process.exit(0); }
-	if (!port) process.exit(0);
-	const req = http.request({ host: '127.0.0.1', port, path: '/hook', method: 'POST', timeout: 3000, headers: { 'Content-Type': 'application/json', 'X-Flow-Token': token, 'X-Flow-Agent': process.env.FLOW_AGENT_SESSION || '' } }, res => {
-		let out = '';
-		res.setEncoding('utf8');
-		res.on('data', d => { out += d; if (out.length > 8000) res.destroy(); });
-		res.on('end', () => {
-			// Only the one text Axle sends, exactly: whatever else answers on this port cannot put words into the agent's context.
-			let o;
-			try { o = JSON.parse(out).hookSpecificOutput; } catch {}
-			if (o && o.hookEventName === 'PostToolUse' && o.additionalContext === ${JSON.stringify(SKELETON_GATE)}) {
-				process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: o.additionalContext } }), () => process.exit(0));
-			} else {
-				process.exit(0);
-			}
-		});
-	});
-	req.on('error', () => process.exit(0)).on('timeout', () => { req.destroy(); process.exit(0); });
-	req.end(body);
-});
-setTimeout(() => process.exit(0), 4000);
-`;
-}
-
 /** Where Claude Code keeps a session's transcript: the cwd with every non-alphanumeric turned into '-'. */
 export function projectDir(cwd: string | undefined) {
 	const config = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude');
@@ -450,7 +416,7 @@ export class Agents implements vscode.Disposable {
 		await fs.writeFile(portFile, this.server ? String(this.port) : '', { mode: 0o600 });
 		// A tiny Node script, run with the editor's own Node: the same on macOS, Linux and Windows.
 		const script = path.join(this.dir, 'flow-hook.js');
-		await fs.writeFile(script, HOOK_SCRIPT(portFile, tokenFile));
+		await fs.writeFile(script, hookScript(portFile, tokenFile));
 		// On the desktop `process.execPath` is the Axle executable itself: without ELECTRON_RUN_AS_NODE it would open
 		// an editor window for the script on every hook event. Claude Code runs hooks through bash, which takes the prefix.
 		const asNode = process.versions.electron ? 'ELECTRON_RUN_AS_NODE=1 ' : '';
@@ -1104,6 +1070,10 @@ export class Agents implements vscode.Disposable {
 				}
 				break;
 			case 'UserPromptSubmit':
+				// Skeleton first must hold outside plan mode too: the request itself may add types, so the reminder comes with every prompt.
+				if (skeletonFirstOn()) {
+					context = { event: 'UserPromptSubmit', text: SKELETON_PROMPT_GATE };
+				}
 				this.settleAsked(s, 'denied');
 				s.prompt = p.prompt?.trim().slice(0, 400);
 				s.todos = [];

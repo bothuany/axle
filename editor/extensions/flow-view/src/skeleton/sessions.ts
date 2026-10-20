@@ -80,7 +80,7 @@ export function toolAnswer(enabled: boolean, s: SkeletonSession | undefined, rel
 	const title = s.plan?.title ?? 'the design';
 	switch (s.stage) {
 		case 'design':
-			return `The design "${title}" is on the board (id "${s.boardId}") and the developer has not chosen yet. If they asked for a change, redraw it with draw_board and the same id. Otherwise wait: do not create or edit files until they choose in the Axle dock.`;
+			return `The design "${title}" is on the board (id "${s.boardId}") and the developer has not chosen yet. If they asked for a change to it, redraw it with draw_board and the same id. If their message is another task (a fix, a question), do that as usual. Otherwise wait: do not write the code of this design until they choose in the Axle dock.`;
 		case 'skeleton':
 			return [
 				s.diff ? diffText(s.diff, title, rel) : 'The code index has not been read yet: try again in a few seconds.',

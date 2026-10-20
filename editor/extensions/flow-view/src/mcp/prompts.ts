@@ -47,7 +47,7 @@ const SKELETON_FIRST = `# Skeleton first in Axle
 
 Skeleton first is an opt-in switch in Axle's agent dock. When it is on, the developer writes the structure of a change (types, entities, interfaces, signatures, empty bodies) themselves, so they keep the know-how of their own system. You design, check, explain and fill the bodies. It is never imposed: \`check_skeleton\` says whether it is on, and the developer can pick "Just do it" at any point.
 
-1. Right after the user approves a plan that adds or changes types, entities or interfaces, and before you create or edit any file, call \`check_skeleton\` once. A bug fix, a rename or a small edit does not need it.
+1. Before your first edit for a request or an approved plan that adds or changes types, entities or interfaces, in plan mode or not, call \`check_skeleton\` once. A bug fix, a rename, a small edit or a question does not need it. While the switch is on, Axle reminds you of this with each prompt.
 2. Off: implement the plan as usual.
 3. On: draw your target design with \`draw_board\` (the id it names; kind "class", or "er" for tables). Draw one node per type, with kind interface / class / service / repository / entity / dto / enum. List the members as signatures (\`name(param: Type): Return\`, \`field: Type\`), and add edges for extends / implements / has / has-many / uses. Then STOP, and tell the user in one line that the design is on the board.
 4. If the user asks for a change ("make DiscountPolicy an interface", "remove the repository"), redraw with the same id and stop again. Nothing is edited by dragging: the conversation is how the design changes.

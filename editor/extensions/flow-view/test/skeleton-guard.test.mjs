@@ -74,7 +74,7 @@ test('an agent edit: a changed signature and a renamed field are warned about, a
 		const warnings = [checkout, money, order].flatMap(f => guard.goneIn(kept, f, read(f), (a, b) => a === b).map(h => guard.locate(h, now.types, read(f), kept)))
 		assert.deepEqual(warnings.map(w => `${w.owner}.${w.name}:${w.reason}`).sort(), ['CheckoutService.checkout:changed', 'Money.cents:renamed'])
 		const changed = warnings.find(w => w.name === 'checkout')
-		assert.equal(guard.warningText(changed), 'The agent changed CheckoutService.checkout: async checkout(order: Order): Promise<ReceiptDto> { → async checkout(order: Order, dryRun: boolean): Promise<ReceiptDto> {')
+		assert.equal(guard.warningText(changed), 'The agent changed CheckoutService.checkout: async checkout(order: Order): Promise<ReceiptDto> → async checkout(order: Order, dryRun: boolean): Promise<ReceiptDto>')
 
 		// Revert puts the developer's header back and keeps the body the agent wrote.
 		const reverted = guard.revertText(read(checkout), changed)

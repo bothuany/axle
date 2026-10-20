@@ -21,26 +21,33 @@ AI writes so much code that developers lose the know-how of their own system. Sk
 
 The council's main objection: in variant A the developer types out a design they have already seen, which is transcription rather than generation. The user chose A knowingly, so it is built as decided. The way to test the objection later is to swap steps 1 and 2: the developer sketches first and the agent reveals its design afterwards.
 
-## Where "plan approved" is detected: an MCP handshake
+## The gate: an MCP handshake before the first edit, in any mode
 
-Claude Code keeps working in the same turn after the user approves `ExitPlanMode`. Axle's hooks only observe, so `PostToolUse ExitPlanMode` fires after the agent is already on its way to its first edit. The dock cannot type into a working session either. A dock-only gate would therefore come too late. Hooking `ExitPlanMode` is also version-dependent, and Codex has no such tool.
+Claude Code keeps working in the same turn after the user approves `ExitPlanMode`. Axle's hooks only observe, so `PostToolUse ExitPlanMode` fires after the agent is already on its way to its first edit. The dock cannot type into a working session either. A dock-only gate would therefore come too late. Hooking `ExitPlanMode` is also version-dependent, and Codex has no such tool. And many requests never go through plan mode at all.
 
-So the gate is something the agent does **before its first edit**: it calls `check_skeleton`.
+So the gate is something the agent does **before its first edit**, plan mode or not: it calls `check_skeleton`.
 
-- The server instructions (`src/mcp/protocol.ts`) and the `skeleton_first` MCP prompt say: after a plan is approved, and before writing code for a plan that adds or changes types, entities or interfaces, call `check_skeleton` once.
+- The server instructions (`src/mcp/protocol.ts`) and the `skeleton_first` MCP prompt say: before your first edit for a request or an approved plan that adds or changes types, entities or interfaces, call `check_skeleton` once. A bug fix, a small edit or a question does not need it.
 - The tool reads the live setting in the window, not anything fixed when the MCP server started, so turning the mode off works at once:
   - **Off:** "Skeleton first is off: implement the plan as usual." One fast call, nothing else.
   - **On, no design yet:** "Draw the design with `draw_board` (id `skeleton-…`, kind class or er, members as signatures), then STOP and tell the user in one line." The dock then offers **Write the skeleton** and **Just do it**, side by side.
   - **Later:** the diff (see Check).
 - The dock owns the stage after that: each later step is a click in the dock, which types the next prompt into the same session (as "Explain this" does).
 
-The instructions alone are not enough. In the first probe, Haiku went straight from plan approval to writing `Order.ts` and never called the tool. So for Claude Code the dock adds one reminder at the moment of approval:
-- When the switch is on, the `PostToolUse` hook on `ExitPlanMode` answers with `hookSpecificOutput.additionalContext`: "Skeleton first is ON: before you create or edit any file, call `check_skeleton`".
-- The hook still decides nothing. It is not a lock and it never denies; it only hands the agent text to read before its first edit.
-- The hook script passes back only that exact shape, with a size cap. Every other event answers `{}` as before.
-- With that reminder, Haiku called the tool before editing in the probe.
+The instructions alone are not enough. In the first probe, Haiku went straight from plan approval to writing `Order.ts` and never called the tool. So for Claude Code the dock adds two reminders while the switch is on (`flow-agent/src/skeleton.ts`, `HOOK_CONTEXT`):
+- **With every prompt** (`UserPromptSubmit`): "skeleton first is ON. If this request makes you add or change types, entities or interfaces, call `check_skeleton` once before your first edit… For a bug fix, a small edit or a question, go ahead as usual." This is what makes it work outside plan mode. It is under 400 characters, since it rides along with each prompt.
+- **When a plan is approved** (`PostToolUse` on `ExitPlanMode`): the same rule for the plan just approved.
 
-Codex has no plan-approval event, so it relies on the server instructions alone. The limit for any agent: one that skips the call just implements the plan as usual. Nothing is forced, and the tool's answer is the only thing that stops the agent.
+The hooks still decide nothing. They are not a lock and never deny; they only hand the agent text to read. The hook script (`flow-agent/src/hookScript.ts`, tested end to end in `test/hookScript.test.mjs`) is strict about what it prints:
+- only those two exact texts, each for its own event;
+- a reply over 8000 characters is dropped whole;
+- any other text, a reminder on the wrong event, or a decision field prints nothing.
+
+So whatever else answers on the hook port cannot put words into the agent's context. With the switch off, every event answers `{}` as before.
+
+In the probes, Haiku called the tool before its first edit, both after plan approval and for a plain request outside plan mode.
+
+Codex gets neither reminder (its hooks are separate and not wired for this), so it relies on the server instructions alone. The limit for any agent: one that skips the call just implements the plan as usual. Nothing is forced, and the tool's answer is the only thing that stops the agent.
 
 ## Stages
 
@@ -144,6 +151,24 @@ Fixed after the probe:
 - A planned `constructor(...)` now matches the language's constructor.
 - An empty workspace counts as checked.
 - "Just do it" is now styled like "Write the skeleton".
+
+## The dock (redesigned after the user's review)
+
+- **The switch** sits under the start buttons as a real switch (`role="switch"`, a pill with a knob) with its state in words under the name: "Off: the agent writes everything" or "On: you write the types, the agent fills the bodies". It is global because it is the user setting. The per-change choice is already the offer on the row (Write the skeleton / Just do it), so a second, per-session switch would only add a state to keep in step. It moves at once on click, and the host puts it back and says so if the setting cannot be written.
+- **A row in skeleton first** shows three things.
+  - A progress line of the three steps: Design, Skeleton, Fill. The current step is marked `aria-current="step"`.
+  - Where the code stands: coloured dots with "3 match", "2 missing", "1 differ".
+  - One segmented group of equal-width actions, the stage's main one filled: Write the skeleton | Just do it, then Check | Hand over | Just do it, then Closing tour | Finish.
+- **Board** is a quiet link on the step line. A warning is an amber block: what happened in bold, the before → after signature in code type, then Accept, Revert and Open.
+- There is no all-caps chip and no duplicate summary line. Labels wrap rather than truncate in a narrow dock.
+- Screenshots of the dock before and after are in the probe notes.
+
+## Probe outside plan mode (2026-10-20, Haiku 5.5, auto mode)
+
+- **Switch on, "add discount codes to orders":** the reminder arrived with the prompt, then `check_skeleton` and `draw_board` ran with no edit. The design came first.
+- **Switch on, "fix the typo in CONFIRMATION":** the reminder arrived, and the agent made a direct edit. The design offer stayed open for the other change.
+- **Switch off, "add a Coupon type":** no reminder. The agent called `check_skeleton` from the server instructions, got "off" and wrote the file.
+- **Board colours re-checked on a partial skeleton:** DiscountCode matches, applyDiscount is missing, Order differs (`discount` against the planned `discountCode`), and DiscountRepository has one member missing.
 
 ## Known gaps
 
