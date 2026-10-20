@@ -23,7 +23,7 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 		this.changes = [
 			agents.onDidChange(() => this.post()),
 			...(worktrees ? [worktrees.onDidChange(() => this.post())] : []),
-			vscode.workspace.onDidChangeConfiguration(e => e.affectsConfiguration('flow.agents.avatar') && this.post()),
+			vscode.workspace.onDidChangeConfiguration(e => (e.affectsConfiguration('flow.agents.avatar') || e.affectsConfiguration('axle.skeletonFirst')) && this.post()),
 		];
 	}
 
@@ -56,6 +56,7 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				case 'wt': return void this.worktrees?.act(m.id, m.action);
 				case 'pick': return void vscode.commands.executeCommand('flow.agents.new');
 				case 'chat': return void vscode.commands.executeCommand('workbench.action.openSettings', 'flow.agents.showChat');
+				case 'sk': return void this.agents.setSkeletonOn(m.id, m.on);
 			}
 		});
 		view.onDidChangeVisibility(() => view.visible && this.post());
@@ -97,6 +98,7 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 				.map(s => ({ ...s, attention: attentionKind(s), done: s.todos.filter(t => t.status === 'completed').length, current: s.todos.find(t => t.status === 'in_progress')?.text, explain: this.agents.canExplain(s), impact: s.impact && { files: s.impact.files, more: s.impact.more, flows: s.impact.flows.map(f => ({ label: f.label, via: f.via })), tables: s.impact.tables },
 					// Worktree and conflicts are explicit fields: the session's own record (paths, the base branch) stays here.
 					worktree: s.worktree ? this.worktrees?.view(s) : undefined,
+					skeletonOn: this.agents.skeletonOn(s.id), skeletonAvailable: s.state !== 'ended' && s.cli !== 'custom',
 					clash: s.state === 'ended' ? undefined : conflicts.get(s.id)?.map(c => ({ text: conflictText(c), same: c.sameCheckout, files: c.files.slice(0, 12) })) }));
 			const avatar = readAvatar(vscode.workspace.getConfiguration('flow.agents').get('avatar'));
 			void this.view?.webview.postMessage({ type: 'data', list, now: Date.now(), avatar });

@@ -3,7 +3,8 @@
  *  terminal; Axle only watches. Claude reports through hooks that Axle hands to that one
  *  session with --settings (the user's own settings and hooks are untouched and still run), so
  *  every agent shows whether it is working, waiting for you or done, what it is doing, its to-do
- *  list and how full its context is. The hooks never answer a permission question: the CLI asks.
+ *  list and how full its context is. The hooks never answer a permission question: the CLI asks. The only thing
+ *  they hand back is context for the agent (skeleton first's reminders, with each prompt and when a plan is approved).
  *--------------------------------------------------------------------------------------------*/
 
 import { execFile } from 'child_process';
@@ -24,6 +25,8 @@ import { parsePatch, patchFiles, patchText } from './patch';
 import { PrWatcher, type PrState } from './prState';
 import { shimScript } from './shim';
 import { canExplain, explainPrompt } from './explain';
+import { hookScript } from './hookScript';
+import { SKELETON_GATE, SKELETON_PROMPT_GATE } from './skeleton';
 import { canType, notReady, oneLine, slashRefusal, slashText, type AgentCli, type AgentState, type CustomCli, type SessionInfo, type SlashKind, type SlashResult } from './askTarget';
 import { applyUsage, claudeTranscriptUsage, codexRolloutUsage, endUsage, findOnPath, hasOwnStatusLine, LimitsSender, parseClaudeStatus, statusScript, type ContextUsage, type UsageLimits } from './usage';
 import { createWorktree, sameDir, validBranch, worktreeSlug, type Worktree } from './worktrees';
@@ -180,6 +183,15 @@ function filesOf(tool: string, input: Record<string, unknown> = {}, cwd?: string
 
 const isEdit = (tool: string) => tool === PATCH_TOOL || EDIT_TOOLS.split('|').includes(tool);
 
+/** The setting is only the default for an agent nobody has switched yet: skeleton first is on or off per agent (Agents.skeletonOn). */
+const skeletonFirstDefault = () => vscode.workspace.getConfiguration('axle.skeletonFirst').get<boolean>('enabled', false) === true;
+
+/** A skeleton-first click flow-view could not carry out: said, not swallowed, so the row never looks as if it did. */
+function skeletonFailed(e: unknown) {
+	const missing = /command .* not found/i.test(String((e as Error)?.message ?? e));
+	void vscode.window.showWarningMessage(missing ? 'Axle: skeleton first needs the Flow View extension, which is not running.' : `Axle: skeleton first: ${(e as Error)?.message ?? e}`);
+}
+
 /** Resolves with undefined once `ms` have passed, whatever `p` is doing. */
 function bounded<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
 	let timer: NodeJS.Timeout | undefined;
@@ -233,23 +245,6 @@ function lastTitle(lines: string[]): string | undefined {
 		}
 	}
 	return undefined;
-}
-
-/** Reads the event from stdin and posts it to the Axle window that owns this folder now. Never blocks the agent. */
-function HOOK_SCRIPT(portFile: string, tokenFile: string) {
-	return `// Written by Axle: forwards Claude Code hook events to the Axle window (observe only).
-const fs = require('fs'), http = require('http');
-let body = '';
-process.stdin.on('data', d => body += d).on('end', () => {
-	let port, token;
-	try { port = fs.readFileSync(${JSON.stringify(portFile)}, 'utf8').trim(); token = fs.readFileSync(${JSON.stringify(tokenFile)}, 'utf8').trim(); } catch { process.exit(0); }
-	if (!port) process.exit(0);
-	const req = http.request({ host: '127.0.0.1', port, path: '/hook', method: 'POST', timeout: 3000, headers: { 'Content-Type': 'application/json', 'X-Flow-Token': token, 'X-Flow-Agent': process.env.FLOW_AGENT_SESSION || '' } }, res => { res.resume(); res.on('end', () => process.exit(0)); });
-	req.on('error', () => process.exit(0)).on('timeout', () => { req.destroy(); process.exit(0); });
-	req.end(body);
-});
-setTimeout(() => process.exit(0), 4000);
-`;
 }
 
 /** Where Claude Code keeps a session's transcript: the cwd with every non-alphanumeric turned into '-'. */
@@ -422,7 +417,7 @@ export class Agents implements vscode.Disposable {
 		await fs.writeFile(portFile, this.server ? String(this.port) : '', { mode: 0o600 });
 		// A tiny Node script, run with the editor's own Node: the same on macOS, Linux and Windows.
 		const script = path.join(this.dir, 'flow-hook.js');
-		await fs.writeFile(script, HOOK_SCRIPT(portFile, tokenFile));
+		await fs.writeFile(script, hookScript(portFile, tokenFile));
 		// On the desktop `process.execPath` is the Axle executable itself: without ELECTRON_RUN_AS_NODE it would open
 		// an editor window for the script on every hook event. Claude Code runs hooks through bash, which takes the prefix.
 		const asNode = process.versions.electron ? 'ELECTRON_RUN_AS_NODE=1 ' : '';
@@ -874,6 +869,7 @@ export class Agents implements vscode.Disposable {
 		this.terminals.get(id)?.dispose();
 		this.terminals.delete(id);
 		this.sessions.delete(id);
+		this.skeletonSwitch.delete(id);
 		this.touched.delete(id);
 		this.turns.delete(id);
 		this.planDrawn.delete(id);
@@ -975,10 +971,11 @@ export class Agents implements vscode.Disposable {
 	}
 
 	private request(req: http.IncomingMessage, res: http.ServerResponse) {
-		const reply = (status: number) => {
+		const reply = (status: number, context?: { event: string; text: string }) => {
 			res.statusCode = status;
 			res.setHeader('content-type', 'application/json');
-			res.end('{}'); // never a decision: the CLI keeps asking the user itself
+			// Never a decision: the CLI keeps asking the user itself. At most context for the agent to read.
+			res.end(context ? JSON.stringify({ hookSpecificOutput: { hookEventName: context.event, additionalContext: context.text } }) : '{}');
 		};
 		if (req.method !== 'POST' || (req.url !== '/hook' && req.url !== '/status') || req.headers['x-flow-token'] !== this.token) {
 			req.resume();
@@ -994,16 +991,17 @@ export class Agents implements vscode.Disposable {
 		});
 		const agent = String(req.headers['x-flow-agent'] ?? '');
 		req.on('end', async () => {
+			let context: { event: string; text: string } | undefined;
 			try {
 				if (req.url === '/status') {
 					this.status(JSON.parse(body), agent);
 				} else {
-					await this.hook(JSON.parse(body) as HookPayload, agent);
+					context = await this.hook(JSON.parse(body) as HookPayload, agent);
 				}
 			} catch (e) {
 				this.log.warn(`Agents: hook failed: ${(e as Error).message}`);
 			}
-			reply(200);
+			reply(200, context);
 		});
 	}
 
@@ -1031,8 +1029,10 @@ export class Agents implements vscode.Disposable {
 		return undefined;
 	}
 
-	private async hook(p: HookPayload, agent = '') {
+	/** Handles one hook event; what it returns is context the agent reads next (only skeleton first's reminder, today). */
+	private async hook(p: HookPayload, agent = ''): Promise<{ event: string; text: string } | undefined> {
 		const s = this.sessionFor(p.session_id, agent);
+		let context: { event: string; text: string } | undefined;
 		if (!s) {
 			return; // a session Axle did not start (or forgot): stay out of it
 		}
@@ -1071,6 +1071,10 @@ export class Agents implements vscode.Disposable {
 				}
 				break;
 			case 'UserPromptSubmit':
+				// Skeleton first must hold outside plan mode too: the request itself may add types, so the reminder comes with every prompt.
+				if (this.skeletonOn(s.id)) {
+					context = { event: 'UserPromptSubmit', text: SKELETON_PROMPT_GATE };
+				}
 				this.settleAsked(s, 'denied');
 				s.prompt = p.prompt?.trim().slice(0, 400);
 				s.todos = [];
@@ -1122,6 +1126,10 @@ export class Agents implements vscode.Disposable {
 						this.recordEdits(s, files);
 					} else if (tool === 'ExitPlanMode') {
 						this.planProposed(s, p, 'after');
+						// The plan was just approved and nothing is written yet: the one moment the reminder can come before the first edit.
+						if (this.skeletonOn(s.id)) {
+							context = { event: 'PostToolUse', text: SKELETON_GATE };
+						}
 					}
 					this.todos(s, tool, p.tool_input ?? {}, p.tool_response ?? {});
 				}
@@ -1167,6 +1175,7 @@ export class Agents implements vscode.Disposable {
 		}
 		this.save();
 		this.changed.fire();
+		return context;
 	}
 
 	/**
@@ -1248,6 +1257,29 @@ export class Agents implements vscode.Disposable {
 			const now = this.askSessions().find(x => x.id === id);
 			void vscode.window.showInformationMessage(`Axle: ${now ? notReady(now) : `${s.name} has closed`}: choose Explain this again when it is back at its prompt.`);
 		}
+	}
+
+	/** Agents switched on or off by hand; any other follows the setting `axle.skeletonFirst.enabled`. In memory: a reload starts over. */
+	private readonly skeletonSwitch = new Map<string, boolean>();
+
+	/** Whether skeleton first is on for this agent. */
+	skeletonOn(id: string): boolean {
+		return this.skeletonSwitch.get(id) ?? skeletonFirstDefault();
+	}
+
+	/**
+	 * The agent's Skeleton button. That is all the dock does: the stages are driven by the developer talking to the agent. Off ends this
+	 * agent's change in skeleton first at once (the board loses its colours); other agents keep theirs.
+	 */
+	async setSkeletonOn(id: string, on: boolean) {
+		if (!this.sessions.has(id)) {
+			return;
+		}
+		this.skeletonSwitch.set(id, on);
+		if (!on) {
+			await Promise.resolve(vscode.commands.executeCommand('flow.skeleton.finish', id)).catch(skeletonFailed);
+		}
+		this.changed.fire();
 	}
 
 	/** The checkout a session works in: its worktree, or the window's folder. */

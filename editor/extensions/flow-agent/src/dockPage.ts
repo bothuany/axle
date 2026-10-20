@@ -65,6 +65,11 @@ ${AVATAR_CSS}
 .explain { margin: 6px 0 0 34px; }
 .explain .act { padding: 0 8px; border: 1px solid color-mix(in srgb, var(--working) 55%, transparent); border-radius: 5px; color: var(--working); font: 11px/1.5 var(--vscode-font-family, system-ui); cursor: pointer; }
 .explain .act:hover { background: color-mix(in srgb, var(--working) 14%, transparent); }
+/* Skeleton first: one button per agent, in the Explain this style; pressed is filled. */
+.explain .act[aria-pressed="true"] { background: var(--working); color: #0c0f1f; }
+/* Its explanation, on hover and on keyboard focus (a native title shows on neither in every host). */
+.explain.sk { position: relative; }
+.explain.sk .act:hover::after, .explain.sk .act:focus-visible::after { content: attr(data-tip); position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--vscode-editorHoverWidget-background, #252526); color: var(--text); font: 11.5px/1.45 var(--vscode-font-family, system-ui); white-space: normal; pointer-events: none; }
 .clash { margin: 6px 0 0 34px; padding: 4px 7px; border-radius: 6px; background: color-mix(in srgb, var(--blocked) 10%, transparent); color: var(--blocked); font-size: 11.5px; line-height: 1.45; }
 .clash.same { background: color-mix(in srgb, #ff6b7d 12%, transparent); color: #ff8c99; }
 .clash small { display: block; color: var(--muted); }
@@ -141,6 +146,13 @@ function avatar(s, pct) {
 	const key = [s.id, data.avatar, s.cli, st, pct ?? ''].join('|');
 	return '<span class="av" data-k="' + esc(key) + '">' + window.axleAvatar(data.avatar, s.cli, st, pct, 24) + '</span>';
 }
+// Skeleton first: one toggle button per agent; what it does is in its tooltip. The stages are talked through with the agent, so
+// the row shows nothing else. The page sends only the row and the state it asks for.
+const SK_TIP = 'Skeleton first for this agent. When a change adds or changes types, entities or interfaces, the agent draws its design on a board and stops; you write the types and signatures, and the board marks them against the design as you save. Then tell the agent "check", "hand over" (it fills the bodies), "just do it" or "done".';
+function skeletonButton(s) {
+	if (!s.skeletonAvailable) { return ''; }
+	return '<div class="explain sk"><span class="act" role="button" tabindex="0" aria-pressed="' + (s.skeletonOn ? 'true' : 'false') + '" data-sk="' + (s.skeletonOn ? 'off' : 'on') + '" data-tip="' + esc(SK_TIP + (s.skeletonOn ? ' On: click to turn it off.' : ' Off: click to turn it on.')) + '" aria-description="' + esc(SK_TIP) + '">Skeleton</span></div>';
+}
 function render() {
 	const el = document.getElementById('list');
 	if (!data.list.length) {
@@ -207,6 +219,7 @@ function render() {
 			+ clash
 			+ impact
 			+ explain
+			+ skeletonButton(s)
 			+ wt
 			+ ctx
 			+ meta
@@ -216,6 +229,8 @@ function render() {
 			+ '</button>';
 	}).join('');
 	el.querySelectorAll('.av[data-k]').forEach(a => { const old = kept.get(a.dataset.k); if (old) { a.replaceWith(old); } });
+	// The Skeleton button sits inside the row's own button: Enter and Space press it, not the row.
+	el.querySelectorAll('[data-sk]').forEach(x => x.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); x.click(); } });
 	el.querySelectorAll('.agent').forEach(b => b.onclick = e => {
 		const f = e.target.closest('[data-forget]');
 		const fl = e.target.closest('[data-flow]');
@@ -225,6 +240,12 @@ function render() {
 		const pr = e.target.closest('[data-pr]');
 		const xr = e.target.closest('[data-xray]');
 		const ex = e.target.closest('[data-explain]');
+		if (e.target.closest('.sk')) {
+			// The Skeleton button is not a click on the row.
+			const sk = e.target.closest('[data-sk]');
+			if (sk) { vscode.postMessage({ type: 'sk', id: b.dataset.id, on: sk.dataset.sk === 'on' }); }
+			return;
+		}
 		vscode.postMessage(ex ? { type: 'explain', id: b.dataset.id } : wa ? { type: 'wt', id: b.dataset.id, action: wa.dataset.wt } : pr ? { type: 'pr', id: b.dataset.id } : cp ? { type: 'compact', id: cp.dataset.compact } : rn ? { type: 'rename', id: rn.dataset.rename } : f ? { type: 'forget', id: f.dataset.forget } : fl ? { type: 'flow', id: b.dataset.id, index: Number(fl.dataset.flow) } : xr ? { type: 'xray', id: b.dataset.id } : { type: 'show', id: b.dataset.id });
 	});
 }

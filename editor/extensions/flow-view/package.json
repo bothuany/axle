@@ -141,6 +141,11 @@
         "category": "Axle"
       },
       {
+        "command": "flow.skeleton.revert",
+        "title": "Revert an Agent's Change to Your Declaration",
+        "category": "Axle"
+      },
+      {
         "command": "flow.board.pinFlow",
         "title": "Pin Flow as Board",
         "category": "Axle"

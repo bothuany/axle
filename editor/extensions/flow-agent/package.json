@@ -269,6 +269,11 @@
           "default": true,
           "description": "Show where agents started in Axle are reading and editing on a flow canvas that is open: a dot on the card they read and a fading trail of the cards they visited. Only files and lines are passed on, never file content or search text, and only in memory. Turn off to send nothing."
         },
+        "axle.skeletonFirst.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Skeleton first for agents you have not switched yourself (each agent has its own switch in the Agents dock, next to Explain this). When it is on for an agent and a change adds or changes types, entities or interfaces, the agent draws its design and you write the skeleton before it fills the bodies. Just do it is always one click."
+        },
         "flow.agents.planBoard": {
           "type": "boolean",
           "default": true,

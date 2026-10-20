@@ -63,6 +63,20 @@ export class TypeService implements vscode.Disposable {
 		this.timer = setTimeout(() => this.changed.fire(), SETTLE_MS);
 	}
 
+	/**
+	 * Files that just changed (a save, an agent's edit): the index reads them now rather than when its watcher settles, and the
+	 * next graph is built from them. Skeleton first recolours its board from that graph.
+	 */
+	async refreshFiles(files: string[]): Promise<void> {
+		await PolyIndex.current?.refresh(files).catch(() => undefined);
+		this.invalidate();
+	}
+
+	/** Whether the last graph had every source it needs: false while the index builds or C# is loading. */
+	get complete(): boolean {
+		return !this.incomplete;
+	}
+
 	/** Follows the index and the analyzer, which may start after this service. */
 	private follow() {
 		const poly = PolyIndex.current;
