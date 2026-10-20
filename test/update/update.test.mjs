@@ -1,7 +1,7 @@
 // The update service of the Axle app (editor/patches/flow-update.patch) and the files the release job writes for it.
 // axleUpdate.ts is pure TypeScript: it is cut out of the patch (what ships, not a copy) and run by Node's type stripping.
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
@@ -9,11 +9,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { QUALITY, buildManifests, platforms } from '../../scripts/update-manifests.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-const patch = readFileSync(join(ROOT, 'editor', 'patches', 'flow-update.patch'), 'utf8').replace(/\r\n/g, '\n')
+const readPatch = name => readFileSync(join(ROOT, 'editor', 'patches', name), 'utf8').replace(/\r\n/g, '\n')
+const patch = readPatch('flow-update.patch')
+// product.json is changed by the core patch only: when two patches touch one file, the build's "are the patches applied"
+// check (`git apply --reverse --check` per patch) fails on the first of them.
+const corePatch = readPatch('flow-core.patch')
 
-/** The added lines of one file of the patch. */
-function addedLines(file) {
-	const section = patch.split(/^diff --git /m).find(part => part.startsWith(`a/${file} `))
+/** The added lines of one file of a patch (the update patch unless another is given). */
+function addedLines(file, from = patch) {
+	const section = from.split(/^diff --git /m).find(part => part.startsWith(`a/${file} `))
 	assert.ok(section, `${file} is not in the patch`)
 	return section.split('\n').slice(section.split('\n').findIndex(line => line.startsWith('@@')) + 1).filter(line => line.startsWith('+')).map(line => line.slice(1))
 }
@@ -109,7 +113,7 @@ test('a release with a missing file, or a bad version, writes nothing', () => {
 })
 
 test('the product points at the release assets with a quality the build has no other meaning for', () => {
-	const product = addedLines('product.json').join('\n')
+	const product = addedLines('product.json', corePatch).join('\n')
 	assert.match(product, new RegExp(`"quality": "${QUALITY}"`))
 	assert.match(product, /"updateUrl": "https:\/\/github\.com\/bothuany\/axle\/releases\/latest\/download"/)
 	// "stable" and "insider" switch on VS Code's own installer parts (the Windows 11 context menu) and a "switch to Insiders" prompt.
@@ -145,5 +149,15 @@ test('a local server of update files, named by AXLE_UPDATE_URL, tells an older a
 		assert.equal((await fetch(createAxleUpdateURL(base, 'win32-arm64-user', QUALITY))).status, 404)
 	} finally {
 		server.close()
+	}
+})
+
+test('no two patches change the same file, so each one can be checked on its own', () => {
+	const owner = new Map()
+	for (const name of readdirSync(join(ROOT, 'editor', 'patches')).filter(f => f.endsWith('.patch'))) {
+		for (const [, file] of readPatch(name).matchAll(/^diff --git a\/(\S+) /gm)) {
+			assert.ok(!owner.has(file), `${file} is in both ${owner.get(file)} and ${name}`)
+			owner.set(file, name)
+		}
 	}
 })
