@@ -9,6 +9,7 @@ A harness-first code editor: a VS Code fork with built-in extensions. Contributo
 - `editor/extensions/flow-harness`: harness map, hooks studio, permissions.
 - `ui/`: the canvas webview (React Flow + Monaco), built into a bundle flow-view inlines.
 - `protocol/`: the types flow-view sends the canvas, declared once and imported type-only by both.
+- `site/`: the website (GitHub Pages): the real canvas on a fake host (`src/host.ts`) over demo data from `scripts/site-data.mjs`. The product name lives in `site/src/brand.ts` only.
 - `analyzer/`: C# Roslyn analyzer (.NET 10). `editor/vscode/` is the generated VS Code checkout: never edit it.
 
 ## Architecture rules (enforced by `npm run arch`)

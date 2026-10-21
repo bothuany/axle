@@ -3,6 +3,7 @@
 // agent's change, and with it); `?mode=changed` starts with the change in, and Keep and Undo then act on this page's own state.
 // Imported before the canvas: it sets the globals the canvas reads when it loads.
 import type { FlowNode } from '../../protocol/flow'
+import { NAME } from './brand'
 import { entryLabel, type DemoData, type Impact, type Target, type ToShell, type TurnSummary } from './demo'
 
 interface Request {
@@ -53,7 +54,7 @@ interface Answers {
   keep: { ok: boolean }
 }
 
-const READ_ONLY = 'The demo does not write files: in the Axle app a save is applied to your code.'
+const READ_ONLY = `The demo does not write files: in the ${NAME} app a save is applied to your code.`
 
 /** Keep and Undo change this page's state, and the page around it hears of it; the canvas then asks for its flow again. */
 function decide(what: 'keep' | 'undo') {
@@ -90,7 +91,7 @@ const handlers: { [Op in keyof Answers]: (m: Request) => Answers[Op] } = {
   complete: () => ({ items: [] }),
   signature: () => null,
   hover: () => null,
-  definition: () => ({ ok: false, message: 'Go to definition works in the Axle app, on your own code.' }),
+  definition: () => ({ ok: false, message: `Go to definition works in the ${NAME} app, on your own code.` }),
   endEdit: () => ({ ok: true }),
   save: () => ({ ok: false, message: READ_ONLY }),
   undo: () => {
@@ -133,10 +134,10 @@ const host = {
       return
     }
     const what: Record<string, string> = {
-      ask: 'In the Axle app this hands the flow to the agent you picked (Claude Code, Codex, any CLI).',
-      mention: 'In the Axle app this @-mentions the card in your agent’s terminal.',
-      pointAsk: 'In the Axle app the agent you picked gets the selected lines: it answers with a tour, or its edit comes back as a change to keep or undo.',
-      answer: 'In the Axle app you accept or reject what an agent wants to edit here.',
+      ask: `In the ${NAME} app this hands the flow to the agent you picked (Claude Code, Codex, any CLI).`,
+      mention: `In the ${NAME} app this @-mentions the card in your agent’s terminal.`,
+      pointAsk: `In the ${NAME} app the agent you picked gets the selected lines: it answers with a tour, or its edit comes back as a change to keep or undo.`,
+      answer: `In the ${NAME} app you accept or reject what an agent wants to edit here.`,
     }
     if (what[m.type]) say({ source: 'axle-canvas', type: 'note', text: what[m.type] })
   },

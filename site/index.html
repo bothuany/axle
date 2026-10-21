@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'self' https://api.github.com; frame-src 'self'; base-uri 'none'; form-action 'none'" />
+    <title>{{name}}: see how your code runs, and what your agents changed</title>
+    <meta name="description" content="{{name}} is an open-source code editor that draws how your code runs and shows what Claude Code, Codex or any CLI agent changed on it. Windows, macOS, Linux." />
+    <link rel="canonical" href="{{site}}/" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#e4e8ef" />
+    <meta name="google-site-verification" content="XrNonl685EqpBR0y6wrhLbWKfsVRcuFygn4sOPC6Ajw" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="{{name}}" />
+    <meta property="og:title" content="{{name}}: see how your code runs" />
+    <meta property="og:description" content="An open-source code editor that draws how your code runs, and what your agents changed on it." />
+    <meta property="og:url" content="{{site}}/" />
+    <meta property="og:image" content="{{site}}/media/hero.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"SoftwareApplication","name":"{{name}}","applicationCategory":"DeveloperApplication","operatingSystem":"Windows, macOS, Linux","url":"{{site}}/","downloadUrl":"https://github.com/{{repo}}/releases/latest","license":"https://opensource.org/licenses/MIT","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+    </script>
+    <link rel="preload" as="image" href="./media/hero.webp" media="(min-width: 761px)" fetchpriority="high" />
+    <link rel="preload" as="image" href="./media/hero-narrow.webp" media="(max-width: 760px)" fetchpriority="high" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to the content</a>
+    <header class="nav">
+      <a class="brand" href="./"><img src="./icon.svg" alt="" width="30" height="30" />{{name}}</a>
+      <nav aria-label="Site">
+        <ul class="nav-links">
+          <li><a href="./try/">Try it</a></li>
+          <li class="wide"><a href="https://github.com/{{repo}}#readme">Docs</a></li>
+          <li class="wide"><a href="https://github.com/{{repo}}/releases">Changelog</a></li>
+        </ul>
+      </nav>
+      <a class="star" href="https://github.com/{{repo}}" aria-label="{{name}} on GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .8l2.2 4.6 5 .7-3.6 3.5.9 5L8 12.2 3.5 14.6l.9-5L.8 6.1l5-.7z" /></svg>
+        GitHub <span data-stars hidden></span>
+      </a>
+    </header>
+
+    <main id="main" class="page">
+      <div class="trace" aria-hidden="true"></div>
+
+      <section class="hero" aria-labelledby="hero-title">
+        <h1 id="hero-title">See how your code runs.</h1>
+        <p class="lede">Every editor shows where code is stored. {{name}} shows how it runs, and what your agents changed in it.</p>
+        <div class="ctas">
+          <a class="btn btn-primary" data-download href="https://github.com/{{repo}}/releases/latest">Download {{name}}</a>
+          <a class="btn btn-secondary" href="https://github.com/{{repo}}">View on GitHub</a>
+        </div>
+        <p class="quiet" data-platforms>Free and open source, for Windows, macOS and Linux.</p>
+
+        <div class="stage-wrap">
+          <div class="stage" data-stage>
+            <picture><source media="(max-width: 760px)" srcset="./media/hero-narrow.webp" width="840" height="1120" /><img class="stage-poster" src="./media/hero.webp" width="1600" height="940" fetchpriority="high" alt="The {{name}} canvas on POST /orders: the controller calls the order service, which saves to the orders table, asks billing for an invoice over HTTP and announces the order on Kafka." /></picture>
+            <p class="stage-note" role="status" hidden></p>
+            <div class="stage-actions">
+              <button class="btn btn-light stage-play" type="button" data-play="order"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0l9 5-9 5z" /></svg>Play the tour</button>
+              <button class="btn btn-primary stage-explore" type="button" data-explore>Explore the flow</button>
+            </div>
+            <button class="btn btn-light stage-close" type="button" data-close>Close</button>
+          </div>
+          <p class="quiet stage-hint">
+            The real canvas, on a small demo shop.
+            <span class="hint-wheel">Drag to move around; hold Ctrl and scroll to zoom.</span>
+            <span class="hint-touch">It opens full screen.</span>
+            <a href="./try/">More to try</a>.
+          </p>
+        </div>
+      </section>
+
+      <section class="problem" aria-labelledby="p-changes">
+        <div class="prose">
+          <h2 class="branch" id="p-changes">Your agent changed 2 files. Which endpoints did it reach?</h2>
+          <p>Ask the agent to show what it did, or run <b>Show Git Changes in Flow</b>. One canvas holds the whole change: every endpoint the changed code reaches, cut down to the changed methods, added lines in green and removed lines in red.</p>
+          <p>Keep or undo each change where you see it. After every prompt, the Agents dock lists the flows that turn touched.</p>
+          <p><a href="./try/#changes">Review the change in the demo</a></p>
+        </div>
+        <figure>
+          <div class="clip" data-clip="changes"></div>
+          <figcaption>Claude Code added discount codes to orders. The change reaches four endpoints.</figcaption>
+        </figure>
+      </section>
+
+      <section class="problem" aria-labelledby="p-services">
+        <div class="prose">
+          <h2 class="branch" id="p-services">A request leaves your service. Where does it go next?</h2>
+          <p>Pick an endpoint and follow the chain it runs, card by card, to the table it writes. An HTTP call continues into the route it reaches, a message into the listener of its topic or queue, across languages.</p>
+          <p>Links found by matching a name or a path are drawn dashed, as guesses, so you always know what is certain.</p>
+          <p><a href="./try/#invoice">Follow an invoice across two services</a></p>
+        </div>
+        <figure>
+          <div class="clip" data-clip="services"></div>
+          <figcaption>An invoice request goes from Java over HTTP into Python, then to the table it reads.</figcaption>
+        </figure>
+      </section>
+
+      <section class="problem" aria-labelledby="p-agents">
+        <div class="prose">
+          <h2 class="branch" id="p-agents">Three agents are running. Which one is waiting for you?</h2>
+          <p>Claude Code, Codex and any CLI run as their real tools, in terminals. The Agents dock ranks what needs you first: an approval with its text, a question, an error, a finished turn you have not read.</p>
+          <p>Each row shows the model, how full its context window is, and what it costs. Start an agent in its own git worktree and get warned when two agents edit the same file.</p>
+          <p><a href="./try/#agents">Answer a waiting agent</a></p>
+        </div>
+        <figure>
+          <div class="clip" data-clip="agents"></div>
+          <figcaption>The Agents dock and the status island, with three agents on the demo project.</figcaption>
+        </figure>
+      </section>
+
+      <section class="problem" aria-labelledby="p-harness">
+        <div class="prose">
+          <h2 class="branch" id="p-harness">Your agent reads a dozen files before you type. Is any of them wrong?</h2>
+          <p><code>CLAUDE.md</code> and <code>AGENTS.md</code>, rules, skills, subagents, hooks, MCP servers and permissions, on one map, with a health score and what each piece costs in tokens before you type.</p>
+          <p>Rules whose paths match nothing, broken frontmatter and hooks that never fire are found without an LLM. Permissions you keep granting become proposed rules, applied only when you say so.</p>
+        </div>
+        <figure>
+          <div class="harness" data-harness aria-live="polite"><p class="quiet">The scan of the demo project loads here.</p></div>
+          <figcaption>The harness scan of the demo project, as {{name}} reads it.</figcaption>
+        </figure>
+      </section>
+
+      <section class="with" aria-labelledby="with-title">
+        <h2 class="branch" id="with-title">Works with the agents you already use.</h2>
+        <div class="with-grid">
+          <div>
+            <h3>Claude Code</h3>
+            <p>Runs in its own terminal, as it does today. Its approvals, questions and context window show up in the dock.</p>
+          </div>
+          <div>
+            <h3>Codex</h3>
+            <p>The same, side by side with Claude Code on the same project, each in its own worktree if you like.</p>
+          </div>
+          <div>
+            <h3>Any CLI</h3>
+            <p>Add the command you run, and it gets a row in the dock and a place on the status island.</p>
+          </div>
+        </div>
+        <div class="mcp">
+          <div class="prose">
+            <h3>Your agent can use the canvas too</h3>
+            <p>{{name}}'s MCP server gives the agent tools to find entry points, read a flow as text and walk you through it as a tour. Ask "how does an order get placed?" and the answer plays on the canvas.</p>
+            <p><a href="https://github.com/{{repo}}/blob/main/docs/agent-tools.md">The agent tools</a></p>
+          </div>
+          <pre class="terminal" aria-label="An agent answering a question with the canvas tools"><span class="you">you    how does an order get placed?</span>
+<span class="tool">agent  find_entry_points</span>  <span class="out">9 endpoints</span>
+<span class="tool">       flow_text "POST /orders"</span>  <span class="out">12 cards, 3 services</span>
+<span class="tool">       tour</span>  <span class="out">8 steps, playing on the canvas</span></pre>
+        </div>
+      </section>
+
+      <section class="proof" aria-labelledby="proof-title">
+        <h2 class="branch" id="proof-title">Check it yourself.</h2>
+        <dl class="proof-list">
+          <div>
+            <dt>MIT licensed</dt>
+            <dd>The whole editor is open source, and it builds on VS Code. <a href="https://github.com/{{repo}}/blob/main/LICENSE">Read the licence</a>.</dd>
+          </div>
+          <div>
+            <dt>Released often, updated in place</dt>
+            <dd><span data-release>Every release has its notes.</span> A running {{name}} checks for the next one and, on Windows, installs it. <a href="https://github.com/{{repo}}/releases">Changelog</a>.</dd>
+          </div>
+          <div>
+            <dt>Tested on every change</dt>
+            <dd>The code index is checked against the expected flows of sample projects, and this page's demo is played in a browser, on every pull request. <a href="https://github.com/{{repo}}/actions/workflows/ci.yml">See the runs</a>.</dd>
+          </div>
+          <div>
+            <dt>The canvas above is the real one</dt>
+            <dd>It is the editor's own canvas code, fed by the editor's own index of a demo project. <a href="https://github.com/{{repo}}/tree/main/site">How this page is built</a>.</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="download" id="download" aria-labelledby="download-title">
+        <h2 class="branch" id="download-title">Download {{name}}.</h2>
+        <div class="ctas">
+          <a class="btn btn-primary" data-download href="https://github.com/{{repo}}/releases/latest">Download {{name}}</a>
+          <a class="btn btn-secondary" href="https://github.com/{{repo}}">Star on GitHub</a>
+        </div>
+        <div class="dl-list" data-download-list></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <p>{{name}} is MIT licensed and builds on <a href="https://github.com/microsoft/vscode">VS Code</a>. The Claude and Codex marks belong to their owners.</p>
+        <p><a href="https://github.com/{{repo}}">GitHub</a> &nbsp; <a href="https://github.com/{{repo}}/blob/main/CONTRIBUTING.md">Contributing</a> &nbsp; <a href="https://github.com/{{repo}}/blob/main/SECURITY.md">Security</a></p>
+      </div>
+    </footer>
+    <script type="module" src="/src/home.ts"></script>
+  </body>
+</html>

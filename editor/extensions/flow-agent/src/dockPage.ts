@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
  *  Axle: the page of the Agents dock (HTML, CSS and the script that draws the rows). No `vscode` here, so the
- *  page can be rendered outside the editor too: the browser playground puts it in an iframe and sends it the
+ *  page can be rendered outside the editor too: the website (site/) puts it in an iframe and sends it the
  *  same `data` messages the dock sends it. dock.ts gives it to the webview and answers what it asks for.
  *--------------------------------------------------------------------------------------------*/
 

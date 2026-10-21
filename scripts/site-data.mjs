@@ -1,10 +1,10 @@
-// Builds the playground's demo data from the real code: runs the polyglot worker (the built flow-view out/polyWorker.js, no
-// `vscode`) headlessly on the fictional demo project in playground/demo, and writes what the editor's parts would have shown:
+// Builds the site's demo data from the real code: runs the polyglot worker (the built flow-view out/polyWorker.js, no
+// `vscode`) headlessly on the fictional demo project in site/demo, and writes what the editor's parts would have shown:
 //   - the endpoints, each one's flow, callers and impact, for the project before and after an agent's change;
 //   - one "an agent changed this" change set, drawn by flow-view's own changeSet code, and the dock's "this turn touched" summary;
 //   - the two pages that sit around the canvas in the real app: the Agents dock page (flow-agent's dockPage.ts) and the desktop
 //     status overlay (the page inside editor/patches/flow-desktop.patch), each with a small shim so it runs in an iframe.
-//   node scripts/playground-data.mjs      writes playground/public/data/demo.json and playground/public/pages/
+//   node scripts/site-data.mjs      writes site/public/data/demo.json and site/public/pages/
 // Needs `npm ci && node esbuild.mjs` in editor/extensions/flow-view first (the worker and the tree-sitter grammars live in its out/).
 import { Worker } from 'node:worker_threads'
 import { createRequire } from 'node:module'
@@ -16,11 +16,11 @@ import { EXTENSIONS, ROOT, launchSync } from './lib.mjs'
 
 const FLOW_VIEW = join(EXTENSIONS, 'flow-view')
 const FLOW_AGENT = join(EXTENSIONS, 'flow-agent')
-const DEMO = join(ROOT, 'playground', 'demo')
-const PUBLIC = join(ROOT, 'playground', 'public')
+const DEMO = join(ROOT, 'site', 'demo')
+const PUBLIC = join(ROOT, 'site', 'public')
 const OUT = join(PUBLIC, 'data', 'demo.json')
-/** The same data as a TypeScript literal that must satisfy the playground's types: `npm run typecheck` in playground/ then fails when the data and protocol/flow.ts disagree. */
-const CHECK = join(ROOT, 'playground', 'src', 'generated', 'demo-check.ts')
+/** The same data as a TypeScript literal that must satisfy the site's types: `npm run typecheck` in site/ then fails when the data and protocol/flow.ts disagree. */
+const CHECK = join(ROOT, 'site', 'src', 'generated', 'demo-check.ts')
 const flowViewDeps = createRequire(join(FLOW_VIEW, 'package.json'))
 
 if (!existsSync(join(FLOW_VIEW, 'out', 'polyWorker.js'))) {
@@ -60,16 +60,16 @@ function lf(dir) {
 	}
 }
 
-/** The demo project as two commits in two folders: the services as they are (`before`), then what an agent changed (`after`: playground/demo/changed over base). */
+/** The demo project as two commits in two folders: the services as they are (`before`), then what an agent changed (`after`: site/demo/changed over base). */
 function assemble() {
 	// The real name of the folder: a Windows runner's temp folder has an 8.3 short name the index would not report back.
-	const before = realpathSync.native(mkdtempSync(join(tmpdir(), 'axle-playground-')))
+	const before = realpathSync.native(mkdtempSync(join(tmpdir(), 'axle-site-')))
 	cpSync(join(DEMO, 'base'), before, { recursive: true })
 	lf(before)
 	git(before, 'init', '-q', '-b', 'main')
 	git(before, 'add', '-A')
 	git(before, 'commit', '-q', '-m', 'Orders, billing and shipping services')
-	const after = realpathSync.native(mkdtempSync(join(tmpdir(), 'axle-playground-')))
+	const after = realpathSync.native(mkdtempSync(join(tmpdir(), 'axle-site-')))
 	cpSync(before, after, { recursive: true })
 	cpSync(join(DEMO, 'changed'), after, { recursive: true })
 	lf(after)
@@ -93,7 +93,7 @@ async function loadHostModules(tmp) {
 		turnImpact: await load('src/mcp/turnImpact.ts', 'turnImpact'),
 		tableIndex: await load('src/mcp/tableIndex.ts', 'tableIndex'),
 		changed: await load('src/mcp/changedMethods.ts', 'changedMethods'),
-		// No stub: these must stay free of `vscode`, or the playground (and this bundle) could not use them.
+		// No stub: these must stay free of `vscode`, or the site (and this bundle) could not use them.
 		dockPage: await load('src/dockPage.ts', 'dockPage', FLOW_AGENT, {}),
 		avatars: await load('src/avatars.ts', 'avatars', FLOW_AGENT, {}),
 	}
@@ -226,7 +226,7 @@ function dockPage(dockHtml, themeCss) {
 	const shim = `${guard}<script>window.acquireVsCodeApi=function(){return{postMessage:function(m){parent.postMessage({source:'axle-dock',message:m},location.origin)}}}</script>`
 	const head = `<meta name="robots" content="noindex"><style>${themeCss}</style><style>${WEBVIEW_BASE}</style>${shim}`
 	if (!dockHtml.includes('<head>')) {
-		throw new Error('The dock page has no <head>: flow-agent/src/dockPage.ts changed shape, and the playground has to follow.')
+		throw new Error('The dock page has no <head>: flow-agent/src/dockPage.ts changed shape, and the site has to follow.')
 	}
 	return dockHtml.replace('<head>', () => `<head>${head}`).replace("default-src 'none';", () => "default-src 'none'; base-uri 'none'; form-action 'none';")
 }
@@ -237,7 +237,7 @@ function islandPage(avatars) {
 	const from = patch.indexOf('+++ b/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts')
 	const to = patch.indexOf('\ndiff --git', from)
 	if (from < 0 || to < 0) {
-		throw new Error('The overlay service is not in flow-desktop.patch any more: the playground cannot draw the notch from it.')
+		throw new Error('The overlay service is not in flow-desktop.patch any more: the site cannot draw the notch from it.')
 	}
 	const source = patch.slice(from, to).split('\n').filter(l => l.startsWith('+') && !l.startsWith('+++')).map(l => l.slice(1)).join('\n')
 	const open = 'const PAGE = /* html */ `'
@@ -247,7 +247,7 @@ function islandPage(avatars) {
 	const marker = /const MARKER = ('[^'\n]*');/.exec(source)
 	const palette = /^\s*black: (\{[^}]*\}),/m.exec(source)
 	if (a < 0 || b < 0 || !marker || !palette) {
-		throw new Error('The overlay page, its marker or its palette moved in flow-desktop.patch: update scripts/playground-data.mjs to read it.')
+		throw new Error('The overlay page, its marker or its palette moved in flow-desktop.patch: update scripts/site-data.mjs to read it.')
 	}
 	const template = source.slice(a + open.length, b + close.length - 2)
 	const MARKER = new Function(`return ${marker[1]}`)()
@@ -317,7 +317,7 @@ export default { workspace }
 	const outfile = join(tmp, 'harness-scan.mjs')
 	// The ESM build of jsonc-parser: its UMD main cannot be bundled into an ES module.
 	await build({ entryPoints: [join(EXTENSIONS, 'flow-harness', 'src', 'scan.ts')], bundle: true, platform: 'node', format: 'esm', outfile, logLevel: 'silent', alias: { vscode: stub }, mainFields: ['module', 'main'] })
-	const home = mkdtempSync(join(tmpdir(), 'axle-playground-home-'))
+	const home = mkdtempSync(join(tmpdir(), 'axle-site-home-'))
 	const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR, CODEX_HOME: process.env.CODEX_HOME }
 	// scan.ts reads the home folder when it loads: it must be the empty one by then.
 	process.env.HOME = home
@@ -340,7 +340,50 @@ export default { workspace }
 }
 
 const dirs = assemble()
-const scratch = mkdtempSync(join(tmpdir(), 'axle-playground-work-'))
+/**
+ * The site's guided tours (site/demo/tours.json): each step names a card by its label and the lines to light by text they contain,
+ * and gets its file and line numbers from the index here, so the tours cannot drift from the demo code. A step that no longer
+ * finds its card or its lines stops the build.
+ */
+function guidedTours(version) {
+	const spec = JSON.parse(readFileSync(join(DEMO, 'tours.json'), 'utf8'))
+	return spec.tours.map(t => {
+		const entry = version.entries.find(e => e.http === t.entry)
+		if (!entry) {
+			throw new Error(`tours.json: tour "${t.id}" starts at ${t.entry}, which is not an endpoint of the demo any more.`)
+		}
+		const cards = []
+		const walk = n => {
+			cards.push(n)
+			n.children.forEach(c => walk(c.node))
+		}
+		walk(version.flows[entry.id].graph)
+		const steps = t.steps.map(s => {
+			const card = cards.find(n => n.label === s.card)
+			if (!card) {
+				throw new Error(`tours.json: tour "${t.id}" has no card "${s.card}" on the flow of ${t.entry}.`)
+			}
+			const step = { title: s.title, caption: s.caption, state: 'ok', at: { file: card.file, startLine: card.startLine, endLine: card.endLine, label: card.label } }
+			if (s.table) {
+				step.at.table = s.table
+			}
+			if (s.lines) {
+				const code = (card.code ?? '').split('\n')
+				step.highlights = s.lines.map(text => {
+					const i = code.findIndex(line => line.includes(text))
+					if (i < 0) {
+						throw new Error(`tours.json: tour "${t.id}" lights "${text}" in ${s.card}, which no longer has that line.`)
+					}
+					return [card.startLine + i, card.startLine + i]
+				})
+			}
+			return step
+		})
+		return { id: t.id, title: t.title, entry: entry.id, origin: 'Guided tour', source: 'file', steps, start: 0, agent: { label: 'Guide', color: '#6f86ff' } }
+	})
+}
+
+const scratch = mkdtempSync(join(tmpdir(), 'axle-site-work-'))
 const indexBefore = new Index(dirs.before, scratch)
 const indexAfter = new Index(dirs.after, scratch)
 try {
@@ -415,24 +458,25 @@ try {
 
 	const harness = await scanHarness(dirs.before, scratch)
 
-	const theme = readFileSync(join(ROOT, 'playground', 'src', 'theme', 'vscode-theme.css'), 'utf8')
+	const theme = readFileSync(join(ROOT, 'site', 'src', 'theme', 'vscode-theme.css'), 'utf8')
 	const island = islandPage(avatars)
 	mkdirSync(join(PUBLIC, 'pages'), { recursive: true })
 	writeFileSync(join(PUBLIC, 'pages', 'dock.html'), dockPage(dockModule.dockHtml(), theme))
 	writeFileSync(join(PUBLIC, 'pages', 'island.html'), island.html)
 
 	const data = relocate({ before, after: { entries, flows }, changes: { label: 'Claude Code: discount codes on orders', root, impact, timeline }, agentImpact, edits, harness, islandColors: island.colors }, dirs.before, dirs.after)
+	data.tours = guidedTours(data.before)
 	mkdirSync(join(OUT, '..'), { recursive: true })
 	writeFileSync(OUT, `${JSON.stringify(data)}\n`)
 	mkdirSync(join(CHECK, '..'), { recursive: true })
-	writeFileSync(CHECK, `// Generated by scripts/playground-data.mjs; checked by tsc, never imported. A field the data lacks or has the wrong type for fails here; an extra one (the index also reports the ORM name) does not.
+	writeFileSync(CHECK, `// Generated by scripts/site-data.mjs; checked by tsc, never imported. A field the data lacks or has the wrong type for fails here; an extra one (the index also reports the ORM name) does not.
 import type { DemoData } from '../demo'
 
 const checked = <T extends DemoData>(data: T) => data
 
 export const demo = checked(${JSON.stringify(data)})
 `)
-	console.log(`playground data: ${entries.length} endpoints, change set with ${files.length} files → ${OUT}`)
+	console.log(`site data: ${entries.length} endpoints, change set with ${files.length} files → ${OUT}`)
 } finally {
 	await indexBefore.close()
 	await indexAfter.close()
