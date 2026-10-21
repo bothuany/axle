@@ -1,17 +1,26 @@
 // Axle board webview: draws a BoardSpec (DTO relations, architecture, plans) on a pan/zoom canvas. The host
 // (flow-view/src/boardPanel.ts) sends the spec and recomputes it when the user changes focus, search or filters:
 // those controls only post a 'rebuild' with the new options, so big graphs stay a host-side computation.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MiniMap, ReactFlow, ReactFlowProvider, useReactFlow, type Node } from '@xyflow/react'
+import { MiniMap, ReactFlow, ReactFlowProvider, useReactFlow, useViewport, type Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './board.css'
+import './tour.css'
 import type { BoardNode, BoardSpec } from './spec'
 import { adjacency, buildLayout, groupsHolding, groupDepth, matchNodes, type Layout } from './model'
-import { KIND_COLOR, ROLE_CHIPS, type BoardOpts, type Bootstrap, type ExportFormat, type ToHost, type ToWebview } from './protocol'
+import { countChanges, KIND_COLOR, ROLE_CHIPS, type BoardOpts, type BoardRef, type Bootstrap, type ExportFormat, type ToHost, type ToWebview } from './protocol'
 import { ActionsCtx, nodeTypes, type Actions, type CardData, type GroupData } from './cards'
+import { CalloutLayer } from './callouts'
 import { EdgeLayer } from './edges'
-import { toSvg, type Palette } from './svg'
+import { sequenceSvg, toSvg, type Palette } from './svg'
+import { SequenceView, type SequenceApi } from './SequenceView'
+import type { Lit } from './sequence'
+import { idle, reduce } from '../tour/player'
+import { TourBar } from '../tour/TourBar'
+import { Caption } from '../tour/Caption'
+import { captionPlace, CAPTION_W } from '../tour/geometry'
+import { highlightLit, litOf, litVisible, stepOpens, stepsOf, stepsSignature, tourOf, type StepLit } from './steps'
 import { Legend } from './legend'
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void }
@@ -54,6 +63,7 @@ function readPalette(): Palette {
     signal: resolve('--fl-signal', '#6f86ff'),
     add: resolve('--fl-add', '#5fe0a1'),
     del: resolve('--fl-del', '#ff6b7d'),
+    warn: resolve('--fl-warn', '#e6a23c'),
     groupFill: resolve('--fl-line', '#262626'),
   }
 }
@@ -85,14 +95,44 @@ const clean = (o: BoardOpts): BoardOpts => {
   return out
 }
 
+/** The caption of the current step: beside what it lights (graph), or in the top right corner (sequence, which fits on one screen). */
+function StepCaption({ step, layout, lit, sequence, stage }: { step: import('../types').TourStep; layout: Layout; lit?: StepLit; sequence: boolean; stage: { current: HTMLDivElement | null } }) {
+  const vp = useViewport()
+  const w = stage.current?.clientWidth ?? 800
+  const h = stage.current?.clientHeight ?? 600
+  let place: { left: number; top: number; side: string } | 'centre' = 'centre'
+  if (sequence) {
+    place = { left: Math.max(8, w - CAPTION_W - 16), top: 12, side: 'left' }
+  } else if (lit) {
+    const boxes = layout.nodes.filter(v => lit.nodes.has(v.id)).map(v => v.box)
+    if (boxes.length) {
+      const x1 = Math.min(...boxes.map(b => b.x))
+      const y1 = Math.min(...boxes.map(b => b.y))
+      const x2 = Math.max(...boxes.map(b => b.x + b.w))
+      const y2 = Math.max(...boxes.map(b => b.y + b.h))
+      place = captionPlace({ x: x1 * vp.zoom + vp.x, y: y1 * vp.zoom + vp.y, w: (x2 - x1) * vp.zoom, h: (y2 - y1) * vp.zoom }, { w, h })
+    }
+  }
+  return <div className="tour-layer"><Caption step={step} place={place} /></div>
+}
+
 function BoardView() {
   const boot = window.__BOARD__
   const rf = useReactFlow()
   const root = useRef<HTMLDivElement>(null)
   const searchBox = useRef<HTMLInputElement>(null)
   const canRebuild = !!boot.source
+  const seqApi = useRef<SequenceApi | null>(null)
+  const stage = useRef<HTMLDivElement>(null)
+  const [pl, dispatchPl] = useReducer(reduce, idle)
+  const [routeOn, setRouteOn] = useState(true)
 
-  const [spec, setSpec] = useState<BoardSpec>(boot.spec)
+  const [sent, setSpec] = useState<BoardSpec>(boot.spec)
+  const [since, setSince] = useState<BoardSpec | undefined>(boot.since)
+  const [showSince, setShowSince] = useState(false)
+  const [refs, setRefs] = useState<BoardRef[]>(boot.boards ?? [])
+  // "Since the last draw" swaps in the board with its changes marked; the layout is the same, so the picture only gets colours (and ghosts).
+  const spec = showSince && since ? since : sent
   const [opts, setOpts] = useState<BoardOpts>(boot.opts ?? {})
   const optsRef = useRef(opts)
   const seq = useRef(0)
@@ -112,6 +152,27 @@ function BoardView() {
   /** The user picked a direction: the host's default must not take it back. */
   const directionChosen = useRef(false)
   const centerNext = useRef<string | undefined>(undefined)
+  /** The board's `focus` (a node or a group) opens first: the groups around it open and the view goes to it. */
+  const focusFirst = (s: BoardSpec) => {
+    if (!s.focus || s.kind === 'sequence') return
+    const open = stepOpens(s, { title: '', caption: '', focus: s.focus })
+    if (open.length) {
+      setOverrides(prev => {
+        const next = new Map(prev)
+        open.forEach(g => next.set(g, false))
+        return next
+      })
+    }
+    centerNext.current = s.focus
+    if (s.nodes.some(n => n.id === s.focus)) setSelected(s.focus)
+  }
+  useEffect(() => {
+    if (boot.spec.focus && boot.spec.kind !== 'sequence') {
+      fitNext.current = false
+      focusFirst(boot.spec)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ---- messages from the host ------------------------------------------------------------------
   useEffect(() => {
@@ -121,6 +182,9 @@ function BoardView() {
         // A rebuild answered late: a newer one is already on its way.
         if (m.seq !== undefined && m.seq < seq.current) return
         setSpec(m.spec)
+        setSince(m.since)
+        setRefs(m.boards ?? [])
+        if (!m.since) setShowSince(false)
         setPending(false)
         setError(undefined)
         const exists = (id: string | undefined) => id !== undefined && m.spec.nodes.some(n => n.id === id)
@@ -134,6 +198,7 @@ function BoardView() {
           if (m.seq === undefined) setQ(m.opts.query ?? '')
         }
         if (m.spec.direction && !directionChosen.current) setDirection(m.spec.direction)
+        focusFirst(m.spec)
         // Not while a click on a field or Enter in the search is about to move the view to a card.
         if (!centerNext.current) fitNext.current = true
       } else if (m?.type === 'error') {
@@ -176,7 +241,37 @@ function BoardView() {
     () => buildLayout(spec, { direction, members, expanded: expandedNodes, isCollapsed: g => !autoOpen.has(g.id) && (overrides.get(g.id) ?? g.collapsed === true) }),
     [spec, direction, members, expandedNodes, overrides, autoOpen],
   )
+  const sequence = spec.kind === 'sequence'
+  const changes = useMemo(() => countChanges(spec), [spec])
+  const walk = useMemo(() => stepsOf(spec), [spec])
+  const walkSig = useMemo(() => stepsSignature(walk.steps), [walk])
+  const curStep = pl.tour && !pl.paused ? walk.steps[pl.index] : undefined
+  const stepLit = useMemo(() => (curStep ? litOf(curStep) : undefined), [curStep])
+  const routeLit = useMemo(() => (!pl.tour && routeOn ? highlightLit(spec) : undefined), [spec, pl.tour, routeOn])
+  const lit: StepLit | undefined = stepLit ?? routeLit
+  const seqLit = useMemo<Lit | undefined>(() => (searching ? { nodes: matched, edges: new Set() } : undefined), [searching, matched])
   const adj = useMemo(() => adjacency(layout.edges), [layout])
+  // The agent's steps start by themselves when a board arrives or its steps change; a walk made from message order waits to be asked for.
+  useEffect(() => {
+    const t = tourOf(spec, walk.steps, walk.derived)
+    if (t && !walk.derived) dispatchPl({ type: 'start', tour: t })
+    else dispatchPl({ type: 'exit' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walkSig])
+  // A step opens the groups its nodes sit in and takes the camera to them.
+  useEffect(() => {
+    if (!curStep) return
+    const open = stepOpens(spec, curStep)
+    if (open.length) {
+      setOverrides(prev => {
+        if (open.every(g => prev.get(g) === false)) return prev
+        const next = new Map(prev)
+        open.forEach(g => next.set(g, false))
+        return next
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curStep])
   const hotId = hover ?? (selected ? layout.rep.get(selected) : undefined) ?? null
 
   const cache = useRef(new Map<string, { key: string; node: Node }>())
@@ -201,17 +296,18 @@ function BoardView() {
       const isSel = selected !== undefined && layout.rep.get(selected) === v.id
       const isMatch = matched.has(v.id) || (v.group !== undefined && [...matched].some(id => layout.rep.get(id) === v.id))
       const activeRow = active?.from === v.id ? active.row : undefined
-      const key = `${isSel}|${focusRep === v.id}|${isMatch}|${searching && !isMatch}|${activeRow}|${canRebuild}`
+      const zoomable = !!v.node?.zoom && refs.some(b => b.id === v.node!.zoom)
+      const key = `${isSel}|${focusRep === v.id}|${isMatch}|${searching && !isMatch}|${activeRow}|${canRebuild}|${zoomable}`
       pick(v.id, key, () => ({
         id: v.id, type: v.group ? 'summary' : 'card', position: v.rel, parentId: v.parent ? `frame:${v.parent}` : undefined,
-        data: { v, selected: isSel, focus: focusRep === v.id, match: isMatch, dim: searching && !isMatch, activeRow, canFocus: canRebuild } satisfies CardData,
+        data: { v, selected: isSel, focus: focusRep === v.id, match: isMatch, dim: searching && !isMatch, activeRow, canFocus: canRebuild, zoomable } satisfies CardData,
         width: v.box.w, height: v.box.h, style: { width: v.box.w, height: v.box.h }, draggable: false, selectable: false, focusable: false, zIndex: 2,
       }))
     }
     cache.current = next
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout, selected, matched, searching, active, canRebuild, opts.focusId])
+  }, [layout, selected, matched, searching, active, canRebuild, opts.focusId, refs])
 
   // Neighbours of the hovered or selected card stay lit, the rest fades (DOM attributes: no React work per hover).
   useEffect(() => {
@@ -225,12 +321,25 @@ function BoardView() {
     }
   }, [hotId, adj, nodes])
 
+  // A step (or a route) lights its nodes and fades the rest: DOM attributes again, no React work per node.
+  const litView = useMemo(() => (lit ? litVisible(lit, layout.rep) : undefined), [lit, layout])
+  useEffect(() => {
+    const el = root.current
+    if (!el) return
+    el.querySelectorAll('[data-sl-lit]').forEach(n => n.removeAttribute('data-sl-lit'))
+    el.toggleAttribute('data-sl', !!litView)
+    if (!litView) return
+    for (const id of litView.nodes) el.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`)?.setAttribute('data-sl-lit', '')
+  }, [litView, nodes])
+
   // ---- viewport --------------------------------------------------------------------------------
-  const fit = useCallback(() => void rf.fitView({ padding: 0.12, duration: 0, maxZoom: 1.1 }), [rf])
+  const fit = useCallback(() => (seqApi.current ? seqApi.current.fit() : void rf.fitView({ padding: 0.12, duration: 0, maxZoom: 1.1 })), [rf])
   const centerOn = useCallback((id: string) => {
     const v = layout.nodes.find(n => n.id === (layout.rep.get(id) ?? id))
-    if (!v) return
-    void rf.setCenter(v.box.x + v.box.w / 2, v.box.y + Math.min(v.box.h / 2, 120), { zoom: Math.max(rf.getZoom(), 0.75), duration: 350 })
+    const g = v ? undefined : layout.groups.find(x => x.id === id)
+    const box = v?.box ?? g?.box
+    if (!box) return
+    void rf.setCenter(box.x + box.w / 2, box.y + Math.min(box.h / 2, 120), { zoom: Math.max(rf.getZoom(), 0.75), duration: 350 })
   }, [layout, rf])
   const viewport = useRef({ fit, centerOn })
   viewport.current = { fit, centerOn }
@@ -245,6 +354,53 @@ function BoardView() {
       setTimeout(() => viewport.current.centerOn(id), 40)
     }
   }, [layout])
+
+  // Each step takes the camera to what it lights (the graph view; a sequence fits on one screen).
+  const stepLitKey = curStep && stepLit ? `${pl.index}|${[...stepLit.nodes].join(',')}` : ''
+  const goStep = (duration: number) => {
+    if (!litView) return
+    const boxes = layout.nodes.filter(v => litView.nodes.has(v.id)).map(v => v.box)
+    if (!boxes.length) return
+    const x1 = Math.min(...boxes.map(b => b.x))
+    const y1 = Math.min(...boxes.map(b => b.y))
+    const x2 = Math.max(...boxes.map(b => b.x + b.w))
+    const y2 = Math.max(...boxes.map(b => b.y + b.h))
+    const cw = stage.current?.clientWidth ?? 800
+    const ch = stage.current?.clientHeight ?? 600
+    // Room around the nodes for the caption; never closer than 1.15x.
+    const zoom = Math.max(0.1, Math.min(1.15, cw / ((x2 - x1) * 1.5 + 380), ch / ((y2 - y1) * 1.8 + 140)))
+    void rf.setCenter((x1 + x2) / 2 + 80 / zoom, (y1 + y2) / 2, { zoom, duration })
+  }
+  const stepCamera = useRef({ key: '', go: goStep })
+  stepCamera.current = { key: stepLitKey, go: goStep }
+  /** The reader panned or zoomed by hand: a resize of the panel no longer moves the camera. */
+  const userMoved = useRef(false)
+  useEffect(() => {
+    userMoved.current = false
+    if (!stepLitKey || sequence || !litView) return
+    const t = setTimeout(() => goStep(400), 60)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepLitKey, layout])
+  // The panel was resized (a side bar closed, the window made larger): the view follows until the reader takes over.
+  useEffect(() => {
+    const el = stage.current
+    if (!el || sequence || typeof ResizeObserver === 'undefined') return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const ro = new ResizeObserver(() => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        if (userMoved.current) return
+        if (stepCamera.current.key) stepCamera.current.go(0)
+        else viewport.current.fit()
+      }, 120)
+    })
+    ro.observe(el)
+    return () => {
+      clearTimeout(timer)
+      ro.disconnect()
+    }
+  }, [sequence])
 
   // ---- actions ---------------------------------------------------------------------------------
   const nodeOf = useMemo(() => new Map(spec.nodes.map(n => [n.id, n])), [spec])
@@ -290,6 +446,7 @@ function BoardView() {
       setExpandedNodes(prev => new Set(prev).add(id))
     },
     hover: setHover,
+    zoom: board => post({ type: 'zoom', board }),
   }), [focusNode, nodeOf, spec, canRebuild, rebuild, revealGroups])
 
   const setLevel = (level: number) => {
@@ -312,7 +469,7 @@ function BoardView() {
       if (format === 'json') {
         post({ type: 'export', format, data: JSON.stringify(spec, null, 2), name })
       } else if (format === 'svg' || format === 'png') {
-        const svg = toSvg(layout, direction, readPalette(), spec.title)
+        const svg = sequence ? sequenceSvg(spec, readPalette(), spec.title) : toSvg(layout, direction, readPalette(), spec.title)
         if (format === 'svg') {
           post({ type: 'export', format, data: svg, name })
         } else {
@@ -331,6 +488,27 @@ function BoardView() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea')
+      if (pl.tour && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown') {
+          e.preventDefault()
+          dispatchPl({ type: 'next' })
+          return
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
+          e.preventDefault()
+          dispatchPl({ type: 'back' })
+          return
+        }
+        if (e.key === ' ') {
+          e.preventDefault()
+          dispatchPl({ type: 'toggle' })
+          return
+        }
+        if (e.key === 'Escape' && !q && !menu) {
+          dispatchPl({ type: 'exit' })
+          return
+        }
+      }
       if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey) {
         e.preventDefault()
         searchBox.current?.focus()
@@ -350,7 +528,7 @@ function BoardView() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [q, menu, selected, focusNode])
+  }, [q, menu, selected, focusNode, pl.tour])
 
   const firstMatch = () => {
     const first = spec.nodes.find(n => matched.has(n.id))
@@ -380,6 +558,22 @@ function BoardView() {
           <div className="bd-title" title={spec.title}>{spec.title}</div>
           <span className="bd-status">{spec.nodes.length} {spec.nodes.length === 1 ? 'node' : 'nodes'} · {spec.edges.length} {spec.edges.length === 1 ? 'edge' : 'edges'}{pending ? ' · updating…' : ''}</span>
           <div className="bd-grow" />
+          {walk.steps.length > 0 && !pl.tour && (
+            <button className="chip steps" data-act="steps" title={walk.derived ? 'Walk through the messages in order' : 'Play the steps the agent wrote'} onClick={() => { const t = tourOf(spec, walk.steps, walk.derived); if (t) dispatchPl({ type: 'start', tour: t }) }}>▶ {walk.derived ? 'Walk through' : `Steps (${walk.steps.length})`}</button>
+          )}
+          {spec.level && <span className="bd-level" title="C4 level of this diagram">C4 · {spec.level}</span>}
+          {refs.filter(b => b.up).map(b => (
+            <button key={b.id} className="chip" data-act="up" title={`Zoom out: open ${b.title}`} onClick={() => post({ type: 'zoom', board: b.id })}>↑ {b.title}</button>
+          ))}
+          {since && (
+            <button className="chip" data-act="since" aria-pressed={showSince} title="Colour what changed since the previous draw of this board" onClick={() => setShowSince(v => !v)}>Changes</button>
+          )}
+          {changes.added + changes.removed + changes.changed > 0 && (
+            <span className="bd-status bd-changes" title="Against the base board or the previous draw"><b className="add">+{changes.added}</b> <b className="del">−{changes.removed}</b> <b className="warn">~{changes.changed}</b></span>
+          )}
+          {!pl.tour && spec.highlight && spec.highlight.length > 0 && (
+            <button className="chip" data-act="route" aria-pressed={routeOn} title="Show or hide the highlighted route" onClick={() => setRouteOn(v => !v)}>{spec.highlight.length === 1 && spec.highlight[0].label ? spec.highlight[0].label : 'Route'}</button>
+          )}
           <input
             ref={searchBox}
             className="bd-search"
@@ -403,7 +597,7 @@ function BoardView() {
           </div>
           <div className="bd-menu">
             <button className="chip" aria-pressed={menu === 'legend'} title="Legend" onClick={e => { e.stopPropagation(); setMenu(menu === 'legend' ? undefined : 'legend') }}>?</button>
-            {menu === 'legend' && <div className="bd-pop bd-legend" onClick={e => e.stopPropagation()}><Legend kinds={[...present]} /></div>}
+            {menu === 'legend' && <div className="bd-pop bd-legend" onClick={e => e.stopPropagation()}><Legend kinds={[...present]} changes={changes.added + changes.removed + changes.changed > 0} entries={spec.legend} /></div>}
           </div>
         </div>
         <div className="bd-row bd-row2">
@@ -441,10 +635,10 @@ function BoardView() {
           <div className="bd-group">
             {canRebuild && typeBoard && <button className="chip" data-act="entities" aria-pressed={includeEntities} onClick={() => rebuild({ includeEntities: !includeEntities })}>Entities</button>}
             {canRebuild && typeBoard && <button className="chip" data-act="enums" aria-pressed={includeEnums} onClick={() => rebuild({ includeEnums: !includeEnums })}>Enums</button>}
-            <button className="chip" data-act="members" aria-pressed={members} onClick={() => { setMembers(!members); fitNext.current = true }}>Members</button>
-            <button className="chip" data-act="direction" title="Layout direction" onClick={() => { directionChosen.current = true; setDirection(direction === 'LR' ? 'TB' : 'LR'); fitNext.current = true }}>{direction === 'LR' ? 'Left → right' : 'Top ↓ bottom'}</button>
+            {!sequence && <button className="chip" data-act="members" aria-pressed={members} onClick={() => { setMembers(!members); fitNext.current = true }}>Members</button>}
+            {!sequence && <button className="chip" data-act="direction" title="Layout direction" onClick={() => { directionChosen.current = true; setDirection(direction === 'LR' ? 'TB' : 'LR'); fitNext.current = true }}>{direction === 'LR' ? 'Left → right' : 'Top ↓ bottom'}</button>}
           </div>
-          {(spec.groups?.length ?? 0) > 0 && (
+          {!sequence && (spec.groups?.length ?? 0) > 0 && (
             <div className="bd-group" title="Packages">
               <span className="bd-status">Packages</span>
               <button className="chip" data-act="collapse-all" onClick={() => setLevel(0)}>Collapse</button>
@@ -462,10 +656,11 @@ function BoardView() {
         {error && <div className="bd-note bd-error" role="alert">{error}</div>}
         {notice && <div className="bd-note" onClick={() => setNotice(undefined)}>{notice}</div>}
       </div>
-      <div className="bd-stage">
+      <div className="bd-stage" ref={stage}>
         <ActionsCtx.Provider value={actions}>
-          <EdgeLayer layout={layout} direction={direction} hot={hotId ?? undefined} active={active} />
-          <ReactFlow
+          {sequence && <SequenceView spec={spec} lit={lit ?? seqLit} selected={selected} apiRef={seqApi} onSelect={n => { setSelected(n.id); if (n.file) post({ type: 'open', file: n.file, line: n.line ?? 1 }) }} />}
+          {!sequence && <EdgeLayer layout={layout} direction={direction} hot={hotId ?? undefined} active={active} lit={litView?.edges} />}
+          {!sequence && <ReactFlow
             nodes={nodes}
             edges={[]}
             nodeTypes={nodeTypes}
@@ -477,10 +672,22 @@ function BoardView() {
             elementsSelectable={false}
             zoomOnDoubleClick={false}
             proOptions={{ hideAttribution: true }}
+            onMoveStart={e => { if (e) userMoved.current = true }}
             onPaneClick={() => { setSelected(undefined); setActive(undefined) }}
           >
             {layout.nodes.length > 8 && <MiniMap pannable zoomable nodeStrokeWidth={0} nodeColor={n => ((n.data as CardData | undefined)?.v?.node ? KIND_COLOR[(n.data as CardData).v.node!.kind ?? 'class'] : 'var(--fl-line-strong)')} />}
-          </ReactFlow>
+          </ReactFlow>}
+          {!sequence && <CalloutLayer layout={layout} direction={direction} />}
+          {pl.tour && (
+            <TourBar
+              tour={pl.tour}
+              state={pl}
+              api={{ next: () => dispatchPl({ type: 'next' }), back: () => dispatchPl({ type: 'back' }), goto: i => dispatchPl({ type: 'goto', index: i }), toggle: () => dispatchPl({ type: 'toggle' }), exit: () => dispatchPl({ type: 'exit' }) }}
+            />
+          )}
+          {pl.tour && !pl.paused && pl.tour.steps[pl.index] && (
+            <StepCaption step={pl.tour.steps[pl.index]} layout={layout} lit={litView} sequence={sequence} stage={stage} />
+          )}
         </ActionsCtx.Provider>
         {spec.nodes.length === 0 && (
           <div className="bd-empty">

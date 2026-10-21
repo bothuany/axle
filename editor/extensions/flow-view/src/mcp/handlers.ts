@@ -13,7 +13,10 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { innermost, type Analyzer } from '../analyzer';
 import { entryName, type Endpoints, type Entry, type Source } from '../backends';
-import { parseBoard } from '../board/spec';
+import { formatLint, lintBoard } from '../board/lint';
+import { importMermaid } from '../board/mermaidImport';
+import { parseBoardWithNotes, type BoardHighlight, type BoardSpec } from '../board/spec';
+import { describeCandidate, matchSymbols, symbolQuery, type SymbolCandidate } from '../board/symbols';
 import { cleanBoardId, type BoardStore } from '../board/store';
 import type { ChangeSet, ChangeSetTrace } from '../changeSet';
 import { POLY_LANGUAGES, type PolyIndex } from '../poly/client';
@@ -25,7 +28,7 @@ import { searchEntries } from './search';
 import { isMigrationPath } from '../poly/migrations';
 import { describeChanged, NOT_CHECKED, tableImpactText, type TableIndex } from './tableIndex';
 import { tableEndpoints } from './turnImpact';
-import { NODE_STATUSES } from './tools';
+import { CHANGE_MARKS, NODE_STATUSES } from './tools';
 import type { Tour, TourStep } from '../../../../../protocol/flow';
 import { readTextIn, realInside } from '../tour/files';
 import { methodsOf } from '../tourMethods';
@@ -1075,66 +1078,228 @@ export class AgentTools {
 		if (JSON.stringify(raw ?? null).length > 1_500_000) {
 			throw new Error('The board is too large; draw fewer nodes or split it into several boards.');
 		}
-		const spec = parseBoard(raw);
-		const warnings: string[] = [];
-		const sent = raw as { id?: unknown; nodes?: unknown[]; edges?: unknown[] };
-		const droppedEdges = (Array.isArray(sent.edges) ? sent.edges.length : 0) - spec.edges.length;
-		if (droppedEdges > 0) {
-			warnings.push(`${droppedEdges} edge(s) were dropped because they name a node id that does not exist (or exceed the limit).`);
-		}
-		const droppedNodes = (Array.isArray(sent.nodes) ? sent.nodes.length : 0) - spec.nodes.length;
-		if (droppedNodes > 0) {
-			warnings.push(`${droppedNodes} node(s) were dropped (not objects, or without an id or label).`);
-		}
-		const sentMembers = (Array.isArray(sent.nodes) ? sent.nodes : []).reduce<number>((n, x) => n + (Array.isArray((x as { members?: unknown })?.members) ? ((x as { members: unknown[] }).members.length) : 0), 0);
-		const droppedMembers = sentMembers - spec.nodes.reduce((n, x) => n + (x.members?.length ?? 0), 0);
-		if (droppedMembers > 0) {
-			warnings.push(`${droppedMembers} member(s) were dropped: write each as {"text": "name(param: Type): Return"} or {"text": "field: Type"} (at most 60 per node).`);
-		}
-		// Links to code: only files inside the workspace; a path outside is dropped, not followed.
-		for (const n of spec.nodes) {
-			if (n.file) {
-				const resolved = resolveInWorkspace(n.file, this.folders);
-				if (resolved) {
-					n.file = vscode.Uri.file(resolved).fsPath;
-				} else {
-					warnings.push(`node "${n.id}": file "${n.file}" is outside the workspace and was not linked.`);
-					n.file = undefined;
-					n.line = undefined;
-				}
+		// Mermaid text the agent already has becomes the nodes and edges; `board` then only adds what Mermaid cannot say (title, steps, callouts...).
+		const imported: string[] = [];
+		if (a.source !== undefined) {
+			const text = typeof a.source === 'object' && a.source !== null ? (a.source as { mermaid?: unknown }).mermaid : undefined;
+			if (typeof text !== 'string') {
+				throw new Error('`source` must be {"mermaid": "<the diagram text>"}.');
 			}
+			const own = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+			if (own.nodes !== undefined || own.edges !== undefined) {
+				throw new Error('Give the nodes and edges either in `board` or in `source`, not both. With `source`, `board` may still carry title, description, steps, callouts, legend, focus, base, level and direction.');
+			}
+			const result = importMermaid(text);
+			imported.push(...result.notes);
+			raw = { ...result.board, ...own, callouts: [...(result.board.callouts ?? []), ...(Array.isArray(own.callouts) ? own.callouts : [])] };
+		} else if (raw === undefined || raw === null) {
+			throw new Error('Pass `board` (the diagram as JSON), or `source: {"mermaid": "..."}`.');
 		}
+		const { spec, notes } = parseBoardWithNotes(raw);
+		const sent = raw as { id?: unknown };
+		// What parseBoard changed is said first; the checks that need the workspace (files, symbols) follow.
+		const found = [...imported.map(n => `mermaid: ${n}`), ...await this.groundBoard(spec)];
 		// The id belongs next to `board`, but agents also put it inside the board: either way it names the board.
 		let wanted = cleanBoardId(a.id) ?? cleanBoardId(sent.id);
+		let claimed: string | undefined;
 		if (wanted && this.d.skeleton?.claimed(wanted, ctx.session)) {
 			// Another agent's skeleton design: replacing it would rewrite that agent's plan and colours under the developer's eyes.
-			warnings.push(`id "${wanted}" is another agent's skeleton design, so this was drawn as a new board.`);
+			claimed = wanted;
 			wanted = undefined;
 		}
 		const replaced = wanted ? !!this.d.boards.get(wanted) : false;
+		for (const n of spec.nodes.filter(x => x.zoom && x.zoom !== wanted && !this.d.boards.get(x.zoom)).slice(0, 4)) {
+			found.push(`node \`${n.id}\` zooms into board "${n.zoom}", which is not drawn yet: draw it next with that id, or the box has nothing to open.`);
+		}
+		if (spec.base) {
+			const ids = this.d.boards.list().map(b => b.id);
+			if (spec.base === wanted ? !replaced : !ids.includes(spec.base)) {
+				found.push(spec.base === wanted
+					? `base "${spec.base}" is this board's own id, but it was not drawn before: there is nothing to compare with yet.`
+					: `base board "${spec.base}" does not exist${ids.length ? `; boards: ${ids.slice(0, 8).join(', ')}` : '; nothing is drawn yet'}: nothing is compared.`);
+			}
+		}
 		const id = await this.d.boards.set(spec, { id: wanted, origin: 'agent' });
 		const skeleton = await this.d.skeleton?.drawn(id, spec, ctx.session);
+		const lint = lintBoard(spec);
+		if (claimed) {
+			found.push(`id "${claimed}" is another agent's skeleton design, so this was drawn as a new board.`);
+		}
+		const layout = spec.kind === 'sequence' ? '' : `, ${lint.visible} visible, ~${lint.crossings} crossing${lint.crossings === 1 ? '' : 's'}`;
 		return text([
-			`Board "${id}" ${replaced ? 'replaced' : 'drawn'} and shown to the user in Axle: ${spec.kind}, ${spec.nodes.length} nodes, ${spec.edges.length} edges.`,
+			`Board "${id}" ${replaced ? 'replaced' : 'drawn'} and shown to the user in Axle: ${spec.kind}, ${spec.nodes.length} nodes, ${spec.edges.length} edges${layout}.`,
 			spec.kind === 'plan' ? `Tick steps off with update_board (id "${id}", nodeId one of: ${spec.nodes.slice(0, 20).map(n => n.id).join(', ')}).` : `Use id "${id}" again to replace it.`,
-			...warnings,
+			...formatLint(notes, found, lint),
 			...(skeleton ? ['', skeleton] : []),
 		].join('\n'));
 	}
 
+	/**
+	 * Links a board to the code, in place: a `file` must be inside the workspace and exist (and `line` must be in it); a `symbol` is looked
+	 * up in the index, which fills `file` and `line` when the node has none and, when it is not found, suggests the closest symbols.
+	 * Returns what the agent should fix. Bounded: 25 symbol lookups, 10 seconds for all of them.
+	 */
+	private async groundBoard(spec: BoardSpec): Promise<string[]> {
+		const found: string[] = [];
+		const lineCounts = new Map<string, number | undefined>();
+		const linesIn = async (file: string): Promise<number | undefined> => {
+			if (!lineCounts.has(file)) {
+				const real = realInside(this.folders, file);
+				let count: number | undefined;
+				try {
+					const stat = real ? await fs.stat(real) : undefined;
+					count = stat?.isFile() && stat.size <= 4_000_000 && real ? (await fs.readFile(real, 'utf8')).split('\n').length : undefined;
+				} catch {
+					count = undefined;
+				}
+				lineCounts.set(file, count);
+			}
+			return lineCounts.get(file);
+		};
+		// Links to code: only files inside the workspace; a path outside is dropped, not followed.
+		for (const n of spec.nodes) {
+			if (!n.file) {
+				continue;
+			}
+			const resolved = resolveInWorkspace(n.file, this.folders);
+			if (!resolved) {
+				found.push(`node \`${n.id}\`: file "${n.file}" is outside the workspace and was not linked.`);
+				n.file = undefined;
+				n.line = undefined;
+				continue;
+			}
+			n.file = vscode.Uri.file(resolved).fsPath;
+			if (lineCounts.size < 60) {
+				const count = await linesIn(n.file);
+				if (count === undefined) {
+					found.push(`node \`${n.id}\`: file "${this.rel(n.file)}" does not exist; check the path (find_symbol gives real ones).`);
+				} else if (n.line !== undefined && n.line > count) {
+					found.push(`node \`${n.id}\`: line ${n.line} is past the end of ${this.rel(n.file)} (${count} lines).`);
+					n.line = undefined;
+				}
+			}
+		}
+		const all = spec.nodes.filter(n => n.symbol);
+		const withSymbol = all.slice(0, 25);
+		if (all.length > withSymbol.length) {
+			found.push('only the first 25 symbols were checked.');
+		}
+		const cache = new Map<string, Promise<SymbolCandidate[]>>();
+		// The workspace symbol search can hang while a language server loads: it gets 3 seconds, and once it has failed to answer it is not asked again.
+		let searchDown = false;
+		const byQuery = (query: string) => {
+			if (!cache.has(query)) {
+				cache.set(query, searchDown ? Promise.resolve([]) : within(this.symbolCandidates(query), 3_000, 'the symbol search').catch(() => {
+					searchDown = true;
+					return [] as SymbolCandidate[];
+				}));
+			}
+			return cache.get(query)!;
+		};
+		const candidates = (symbol: string) => byQuery(symbolQuery(symbol));
+		// The methods of the file a node names (the code index, the C# analyzer or a language server): they answer even when the
+		// workspace symbol search has nothing yet (a language server that has not opened a project).
+		const inFile = new Map<string, Promise<SymbolCandidate[]>>();
+		const fileCandidates = (file: string) => {
+			if (!inFile.has(file)) {
+				inFile.set(file, within(methodsOf(this.d, file), 3_000, 'the method list').then(ms => (ms ?? []).map((m): SymbolCandidate => {
+					const parts = m.name.split(/::|[.#/]/).filter(Boolean);
+					return { name: parts.pop() ?? m.name, container: parts.length ? parts.join('.') : undefined, kind: 'method', file, line: m.startLine };
+				}), () => []));
+			}
+			return inFile.get(file)!;
+		};
+		try {
+			await within((async () => {
+				for (const n of withSymbol) {
+					const here = n.file ? await fileCandidates(n.file) : [];
+					let all = [...here, ...await candidates(n.symbol!)];
+					let { exact, near } = matchSymbols(n.symbol!, all);
+					const word = symbolQuery(n.symbol!);
+					if (!exact && !near.length && word.length > 5) {
+						// A typo has no exact hit in the index: look again with the start of the name, to suggest the real one.
+						all = [...all, ...await byQuery(word.slice(0, Math.ceil(word.length * 0.6)))];
+						({ exact, near } = matchSymbols(n.symbol!, all));
+					}
+					if (exact) {
+						// Fills what the agent left out; a `file` or `line` it gave stays (it may mean the call site).
+						if (!n.file) {
+							n.file = exact.file;
+						}
+						if (n.line === undefined && n.file === exact.file) {
+							n.line = exact.line;
+						}
+					} else {
+						found.push(`node \`${n.id}\`: symbol "${n.symbol}" is not in the index${near.length ? `; closest: ${near.map(describeCandidate).join('; ')}` : ' (the language servers may still be loading; find_symbol shows what exists)'}. If it does not exist yet, leave \`symbol\` off.`);
+					}
+				}
+			})(), 10_000, 'the symbol check');
+		} catch (e) {
+			found.push(`symbols were not checked: ${(e as Error).message}.`);
+		}
+		if (searchDown) {
+			found.push('the workspace symbol search did not answer (a language server is still loading), so symbols were checked against the files named in `file` only; draw again in a moment to check the rest.');
+		}
+		return found;
+	}
+
+	/** Index entries for a name, inside the workspace, as plain candidates. */
+	private async symbolCandidates(query: string): Promise<SymbolCandidate[]> {
+		const symbols = await Promise.resolve(vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', query)).catch(() => undefined) ?? [];
+		const out: SymbolCandidate[] = [];
+		for (const s of symbols.slice(0, 200)) {
+			if (await this.inside(s.location.uri)) {
+				out.push({ name: s.name, container: s.containerName || undefined, kind: vscode.SymbolKind[s.kind].toLowerCase(), file: s.location.uri.fsPath, line: s.location.range.start.line + 1 });
+			}
+		}
+		return out;
+	}
+
 	private async update(a: Record<string, unknown>): Promise<ToolResult> {
 		const id = cleanBoardId(a.id);
-		if (!id || typeof a.nodeId !== 'string') {
-			throw new Error('`id` and `nodeId` are required.');
+		if (!id) {
+			throw new Error('`id` is required: the board id draw_board returned.');
 		}
-		const status = typeof a.status === 'string' ? a.status : undefined;
-		if (status !== undefined && !(NODE_STATUSES as readonly string[]).includes(status)) {
-			throw new Error(`status must be one of: ${NODE_STATUSES.join(', ')}.`);
+		const one = (o: Record<string, unknown>) => {
+			if (typeof o.nodeId !== 'string') {
+				throw new Error('Each update needs a `nodeId`.');
+			}
+			const status = typeof o.status === 'string' ? o.status : undefined;
+			if (status !== undefined && !(NODE_STATUSES as readonly string[]).includes(status)) {
+				throw new Error(`status must be one of: ${NODE_STATUSES.join(', ')}.`);
+			}
+			const change = typeof o.change === 'string' ? o.change : undefined;
+			if (change !== undefined && !(CHANGE_MARKS as readonly string[]).includes(change)) {
+				throw new Error(`change must be one of: ${CHANGE_MARKS.join(', ')}.`);
+			}
+			if (status === undefined && typeof o.note !== 'string' && change === undefined) {
+				throw new Error(`Node "${o.nodeId}": pass \`status\`, \`note\` and/or \`change\`.`);
+			}
+			return { nodeId: o.nodeId, status: status as (typeof NODE_STATUSES)[number] | undefined, note: typeof o.note === 'string' ? o.note : undefined, change: change as (typeof CHANGE_MARKS)[number] | undefined };
+		};
+		const nodes = [
+			...(typeof a.nodeId === 'string' ? [one(a)] : []),
+			...(Array.isArray(a.updates) ? (a.updates as Record<string, unknown>[]).slice(0, 100).map(one) : []),
+		];
+		let highlight: BoardHighlight[] | undefined;
+		if (Array.isArray(a.highlight)) {
+			const known = new Set(this.d.boards.get(id)?.spec.nodes.map(n => n.id));
+			highlight = (a.highlight as Record<string, unknown>[]).slice(0, 10).map(h => {
+				const path = Array.isArray(h?.path) ? h.path.filter((x): x is string => typeof x === 'string') : [];
+				const missing = path.find(x => !known.has(x));
+				if (path.length < 2 || missing !== undefined) {
+					throw new Error(`A highlight path needs at least two node ids of the board${missing !== undefined ? ` ("${missing}" is not one)` : ''}.`);
+				}
+				return { path: path.slice(0, 40), label: typeof h.label === 'string' ? h.label.slice(0, 60) : undefined };
+			});
 		}
-		if (status === undefined && typeof a.note !== 'string') {
-			throw new Error('Pass `status` and/or `note`.');
+		if (!nodes.length && highlight === undefined) {
+			throw new Error('Pass `nodeId` with `status`/`note`/`change`, an `updates` array of those, and/or `highlight`.');
 		}
-		const node = await this.d.boards.updateNode(id, a.nodeId, { status: status as (typeof NODE_STATUSES)[number] | undefined, note: typeof a.note === 'string' ? a.note : undefined });
-		return text(`Board "${id}": node "${node.id}" is now ${node.status ?? 'unmarked'}${typeof a.note === 'string' ? ' (note updated)' : ''}.`);
+		const touched = await this.d.boards.update(id, { nodes, highlight });
+		return text(`Board "${id}": ${[
+			...touched.map(n => `node "${n.id}" is now ${n.status ?? 'unmarked'}${n.change ? ` (${n.change})` : ''}`),
+			...(highlight ? [highlight.length ? `highlighting ${highlight.length} route(s)` : 'highlight cleared'] : []),
+		].join('; ')}.`);
 	}
 }

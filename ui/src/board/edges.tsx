@@ -4,8 +4,9 @@
 import { memo, useMemo } from 'react'
 import { useStore } from '@xyflow/react'
 import type { Layout } from './model'
-import { cardinalityAt, routeEdge, type Route } from './route'
-import { edgeStyle } from './protocol'
+import { cardinalityAt, orderBadge, routeEdge, veeOf, type Route } from './route'
+import { edgeText, lineStyle } from './protocol'
+import type { ChangeMark, EdgeLine } from './spec'
 
 interface Drawn {
   key: string
@@ -17,6 +18,11 @@ interface Drawn {
   label?: string
   fromCard?: string
   toCard?: string
+  order?: number
+  guard?: string
+  style?: EdgeLine
+  async?: boolean
+  change?: ChangeMark
   count: number
 }
 
@@ -34,7 +40,7 @@ export function drawEdges(layout: Layout, direction: 'LR' | 'TB'): Drawn[] {
     const k = key(e.from, e.to)
     const i = seen.get(k) ?? 0
     seen.set(k, i + 1)
-    out.push({ key: e.key, from: e.from, to: e.to, fromRow: e.fromRow, route: routeEdge({ from, to, edge: e }, direction, i, total.get(k) ?? 1), kind: e.kind, label: e.label, fromCard: e.fromCard, toCard: e.toCard, count: e.count })
+    out.push({ key: e.key, from: e.from, to: e.to, fromRow: e.fromRow, route: routeEdge({ from, to, edge: e }, direction, i, total.get(k) ?? 1), kind: e.kind, label: e.label, fromCard: e.fromCard, toCard: e.toCard, order: e.order, guard: e.guard, style: e.style, async: e.async, change: e.change, count: e.count })
   }
   return out
 }
@@ -42,14 +48,21 @@ export function drawEdges(layout: Layout, direction: 'LR' | 'TB'): Drawn[] {
 type State = 'hot' | 'dim' | 'active' | ''
 
 const EdgePath = memo(function EdgePath({ e, state }: { e: Drawn; state: State }) {
-  const st = edgeStyle(e.kind as never)
+  const st = lineStyle({ kind: e.kind as never, style: e.style, async: e.async, change: e.change })
   const r = e.route
   const card = e.fromCard || e.toCard ? cardinalityAt(r) : undefined
-  const label = [e.label, e.count > 1 ? `×${e.count}` : ''].filter(Boolean).join(' ')
+  const label = edgeText(e)
+  const badge = e.order !== undefined ? orderBadge(r) : undefined
   return (
-    <g className={`be be-${st.color} ${state ? 'be-' + state : ''}`} data-kind={e.kind ?? 'calls'} data-from={e.from} data-to={e.to}>
+    <g className={`be be-${st.color} ${state ? 'be-' + state : ''}`} data-kind={e.kind ?? 'calls'} data-from={e.from} data-to={e.to} data-change={e.change} data-order={e.order}>
       <path className="be-line" d={r.d} strokeDasharray={st.dash} />
-      {r.head && <path className={`be-head ${r.head.kind}`} d={r.head.d} />}
+      {r.head && <path className={`be-head ${e.async && r.head.kind === 'fill' ? 'vee' : r.head.kind}`} d={e.async && r.head.kind === 'fill' ? veeOf(r) : r.head.d} />}
+      {badge && (
+        <g className="be-order" transform={`translate(${badge.x} ${badge.y})`}>
+          <circle r="8" />
+          <text y="3.5" textAnchor="middle">{e.order}</text>
+        </g>
+      )}
       {label && <text className="be-label" x={r.mid.x} y={r.mid.y - 4} textAnchor="middle">{label}</text>}
       {card && e.fromCard && <text className="be-card" x={card.from.x} y={card.from.y + 3} textAnchor="middle">{e.fromCard}</text>}
       {card && e.toCard && <text className="be-card" x={card.to.x} y={card.to.y + 3} textAnchor="middle">{e.toCard}</text>}
@@ -57,7 +70,7 @@ const EdgePath = memo(function EdgePath({ e, state }: { e: Drawn; state: State }
   )
 })
 
-export function EdgeLayer({ layout, direction, hot, active }: { layout: Layout; direction: 'LR' | 'TB'; hot?: string; active?: { from: string; row: number } }) {
+export function EdgeLayer({ layout, direction, hot, active, lit }: { layout: Layout; direction: 'LR' | 'TB'; hot?: string; active?: { from: string; row: number }; lit?: ReadonlySet<string> }) {
   const t = useStore(s => s.transform)
   const edges = useMemo(() => drawEdges(layout, direction), [layout, direction])
   return (
@@ -65,7 +78,7 @@ export function EdgeLayer({ layout, direction, hot, active }: { layout: Layout; 
       <g transform={`translate(${t[0]} ${t[1]}) scale(${t[2]})`}>
         {edges.map(e => {
           const isActive = !!active && e.from === active.from && e.fromRow === active.row
-          const state: State = isActive ? 'active' : hot ? (e.from === hot || e.to === hot ? 'hot' : 'dim') : ''
+          const state: State = isActive ? 'active' : lit ? (lit.has(`${e.from}>${e.to}`) ? 'hot' : 'dim') : hot ? (e.from === hot || e.to === hot ? 'hot' : 'dim') : ''
           return <EdgePath key={e.key} e={e} state={state} />
         })}
       </g>

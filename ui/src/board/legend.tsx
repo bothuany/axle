@@ -10,7 +10,7 @@ const LINES: { kind: EdgeKind; text: string }[] = [
   { kind: 'depends', text: 'depends on / uses' },
 ]
 
-export function Legend({ kinds }: { kinds: string[] }) {
+export function Legend({ kinds, changes, entries }: { kinds: string[]; changes?: boolean; entries?: { key: string; text: string }[] }) {
   return (
     <div>
       <div className="lg-title">Nodes</div>
@@ -30,6 +30,20 @@ export function Legend({ kinds }: { kinds: string[] }) {
           </div>
         )
       })}
+      {changes && (
+        <>
+          <div className="lg-title">Changes</div>
+          <div className="lg-row"><i style={{ background: 'var(--fl-add)' }} />added</div>
+          <div className="lg-row"><i style={{ background: 'var(--fl-warn)' }} />changed</div>
+          <div className="lg-row"><i style={{ background: 'var(--fl-del)' }} />removed (struck through)</div>
+        </>
+      )}
+      {entries && entries.length > 0 && (
+        <>
+          <div className="lg-title">This board</div>
+          {entries.map(e => <div key={e.key} className="lg-row"><b>{e.key}</b> {e.text}</div>)}
+        </>
+      )}
       <div className="lg-title">Keys</div>
       <div className="lg-row"><kbd>/</kbd> search <kbd>f</kbd> focus selected <kbd>Esc</kbd> clear</div>
       <div className="lg-row">Click a header: open · double-click: focus · click a field: go to its type</div>

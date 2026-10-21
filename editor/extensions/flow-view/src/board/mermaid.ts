@@ -179,17 +179,86 @@ function classDiagram(spec: BoardSpec, ids: Map<string, string>): string[] {
 	return out;
 }
 
+/** The nesting of a message's fragment: group ids from the outermost down, for the groups that are fragments. */
+function fragmentChain(groups: Map<string, BoardGroup>, id: string | undefined): BoardGroup[] {
+	const chain: BoardGroup[] = [];
+	for (let g = id ? groups.get(id) : undefined; g && !chain.includes(g) && chain.length < 8; g = g.parent ? groups.get(g.parent) : undefined) {
+		chain.unshift(g);
+	}
+	return chain;
+}
+
 function sequence(spec: BoardSpec, ids: Map<string, string>): string[] {
 	const out = ['sequenceDiagram'];
 	for (const n of spec.nodes) {
-		out.push(`  ${n.kind === 'actor' ? 'actor' : 'participant'} ${ids.get(n.id)} as ${label(n.label)}`);
+		out.push(`  ${n.kind === 'actor' || n.shape === 'actor' ? 'actor' : 'participant'} ${ids.get(n.id)} as ${label(n.label)}`);
 	}
-	for (const e of spec.edges) {
+	const groups = new Map((spec.groups ?? []).filter(g => g.kind === 'alt' || g.kind === 'loop' || g.kind === 'opt').map(g => [g.id, g]));
+	// Messages in drawn order: by `order`, then array position.
+	const edges = spec.edges.map((e, i) => ({ e, i })).sort((a, b) => (a.e.order ?? Infinity) - (b.e.order ?? Infinity) || a.i - b.i).map(x => x.e);
+	let open: BoardGroup[] = [];
+	const close = (to: number) => {
+		while (open.length > to) {
+			open.pop();
+			out.push(`${'  '.repeat(open.length + 1)}end`);
+		}
+	};
+	for (const e of edges) {
 		const a = ids.get(e.from);
 		const b = ids.get(e.to);
-		if (a && b) {
-			out.push(`  ${a}${e.kind === 'reads' || e.kind === 'uses' ? '-->>' : '->>'}${b}: ${label(e.label ?? '') || ' '}`);
+		if (!a || !b) {
+			continue;
 		}
+		const chain = fragmentChain(groups, e.fragment);
+		let common = 0;
+		while (common < open.length && common < chain.length && open[common] === chain[common]) {
+			common++;
+		}
+		close(common);
+		for (const g of chain.slice(common)) {
+			const parent = open[open.length - 1];
+			const isElse = g.kind === 'alt' && parent?.kind === 'alt' && g.parent === parent.id;
+			if (isElse) {
+				// An else branch continues its parent's box.
+				out.push(`${'  '.repeat(open.length)}else ${label(g.label)}`);
+				open[open.length - 1] = g;
+			} else {
+				out.push(`${'  '.repeat(open.length + 1)}${g.kind} ${label(g.label)}`);
+				open.push(g);
+			}
+		}
+		const arrow = e.async ? '-)' : e.style === 'dashed' ? '-->>' : e.kind === 'reads' || e.kind === 'uses' ? '-->>' : '->>';
+		out.push(`${'  '.repeat(open.length + 1)}${a}${arrow}${b}: ${label(e.label ?? '') || ' '}`);
+	}
+	close(0);
+	return out;
+}
+
+function state(spec: BoardSpec, ids: Map<string, string>): string[] {
+	const out = ['stateDiagram-v2', `  direction ${spec.direction === 'TB' ? 'TB' : 'LR'}`];
+	const byId = new Map(spec.nodes.map(n => [n.id, n]));
+	for (const n of spec.nodes) {
+		if (n.shape === 'initial' || n.shape === 'final') {
+			continue;
+		}
+		if (n.shape === 'choice') {
+			out.push(`  state ${ids.get(n.id)} <<choice>>`);
+		} else {
+			out.push(`  state "${label(n.label)}" as ${ids.get(n.id)}`);
+		}
+	}
+	const name = (id: string) => {
+		const n = byId.get(id);
+		return n?.shape === 'initial' || n?.shape === 'final' ? '[*]' : ids.get(id);
+	};
+	for (const e of spec.edges) {
+		const a = name(e.from);
+		const b = name(e.to);
+		if (!a || !b) {
+			continue;
+		}
+		const text = [e.label, e.guard ? `[${e.guard}]` : ''].filter(Boolean).join(' ');
+		out.push(`  ${a} --> ${b}${text ? ` : ${label(text)}` : ''}`);
 	}
 	return out;
 }
@@ -200,6 +269,7 @@ export function toMermaid(spec: BoardSpec): string {
 	const lines = spec.kind === 'er' ? er(spec)
 		: spec.kind === 'class' ? classDiagram(spec, ids)
 		: spec.kind === 'sequence' ? sequence(spec, ids)
+		: spec.kind === 'state' ? state(spec, ids)
 		: flowchart(spec, ids);
 	return lines.join('\n');
 }

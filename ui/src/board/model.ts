@@ -1,7 +1,7 @@
 // The board's pure core: which nodes are visible (collapsed groups become one summary node), where each goes (a small
 // layered layout, recursive for nested groups) and which edges connect what is visible. No DOM, no React: the renderer
 // draws what this returns, the SVG export draws the same, and tests run it directly.
-import type { BoardEdge, BoardGroup, BoardMember, BoardNode, BoardSpec, EdgeKind } from './spec'
+import type { BoardEdge, BoardGroup, BoardMember, BoardNode, BoardSpec, ChangeMark, EdgeKind, EdgeLine } from './spec'
 
 export interface Box { x: number; y: number; w: number; h: number }
 
@@ -58,6 +58,11 @@ export interface VEdge {
   label?: string
   fromCard?: string
   toCard?: string
+  order?: number
+  style?: EdgeLine
+  async?: boolean
+  guard?: string
+  change?: ChangeMark
   /** Edges merged into this one (more than 1 when they went through a collapsed group). */
   count: number
   /** Row of the source card's member list that holds this reference. */
@@ -71,6 +76,8 @@ export interface Layout {
   bounds: Box
   /** Visible id each board node is drawn as. */
   rep: Map<string, string>
+  /** Notes pinned to a visible node or to an edge (its key), for the bubbles. */
+  callouts: { text: string; node?: string; edge?: string }[]
 }
 
 export interface LayoutOptions {
@@ -83,11 +90,20 @@ export interface LayoutOptions {
 
 export const groupNodeId = (id: string) => `group:${id}`
 
+/** The line under a label: the C4 technology in brackets, then the detail. */
+export const detailOf = (n: BoardNode): string => [n.tech ? `[${n.tech}]` : '', n.detail ?? ''].filter(Boolean).join(' ')
+
+/** Pseudo-states of a state diagram: a dot, a ring with a dot, a diamond. They carry no text; the label is their tooltip. */
+export const MARK_SIZE: Record<string, number> = { initial: 24, final: 28, choice: 34 }
+
 /** Text → width in px with the fonts of the card. */
 export function cardSize(n: BoardNode, rows: BoardMember[], more: number, members: boolean): { w: number; h: number } {
+  const mark = n.shape ? MARK_SIZE[n.shape] : undefined
+  if (mark) return { w: mark, h: mark }
+  const detail = detailOf(n)
   let w = n.label.length * LABEL_W + 40
-  if (n.detail) {
-    w = Math.max(w, Math.min(n.detail.length, 44) * 6.2 + 28)
+  if (detail) {
+    w = Math.max(w, Math.min(detail.length, 44) * 6.2 + 28)
   }
   if (members) {
     for (const m of rows) {
@@ -95,13 +111,13 @@ export function cardSize(n: BoardNode, rows: BoardMember[], more: number, member
     }
   }
   w = Math.min(380, Math.max(168, Math.ceil(w)))
-  const head = HEADER_H + (n.detail ? DETAIL_H : 0)
+  const head = HEADER_H + (detail ? DETAIL_H : 0)
   const rowCount = members ? rows.length + (more ? 1 : 0) : 0
   return { w, h: head + (rowCount ? rowCount * ROW_H + CARD_PAD * 2 : 0) }
 }
 
 /** Where, in a card, the centre of member row `i` is (relative to the card's top). */
-export const rowCentre = (n: BoardNode, i: number) => HEADER_H + (n.detail ? DETAIL_H : 0) + CARD_PAD + i * ROW_H + ROW_H / 2
+export const rowCentre = (n: BoardNode, i: number) => HEADER_H + (detailOf(n) ? DETAIL_H : 0) + CARD_PAD + i * ROW_H + ROW_H / 2
 
 /** True when following `parent` from this group comes back to it. */
 function isCycle(groups: Map<string, BoardGroup>, g: BoardGroup): boolean {
@@ -392,7 +408,9 @@ export function buildLayout(spec: BoardSpec, o: LayoutOptions): Layout {
     const rows = all.slice(0, cap)
     const more = all.length - rows.length
     const size = cardSize(n, rows, more, o.members)
-    vnodes.set(n.id, { id: n.id, node: n, box: { x: 0, y: 0, ...size }, rel: { x: 0, y: 0 }, rows, more, parent: chain.length ? chain[chain.length - 1] : undefined })
+    // The states of a state diagram are rounded unless the agent chose a shape.
+    const drawn = spec.kind === 'state' && !n.shape ? { ...n, shape: 'round' as const } : n
+    vnodes.set(n.id, { id: n.id, node: drawn, box: { x: 0, y: 0, ...size }, rel: { x: 0, y: 0 }, rows, more, parent: chain.length ? chain[chain.length - 1] : undefined })
     items.set(n.id, { id: n.id, w: size.w, h: size.h })
   }
 
@@ -457,13 +475,13 @@ export function buildLayout(spec: BoardSpec, o: LayoutOptions): Layout {
       }
     }
     const merged = a !== e.from || b !== e.to
-    const key = `${a}|${b}|${e.kind ?? ''}|${merged ? '' : e.label ?? ''}|${fromRow ?? ''}`
+    const key = `${a}|${b}|${e.kind ?? ''}|${merged ? '' : e.label ?? ''}|${fromRow ?? ''}|${merged ? '' : `${e.order ?? ''}|${e.guard ?? ''}|${e.style ?? ''}|${e.async ? 'a' : ''}|${e.change ?? ''}`}`
     const prev = edges.get(key)
     if (prev) {
       prev.count++
       continue
     }
-    edges.set(key, { key, from: a, to: b, kind: e.kind, label: merged ? undefined : e.label, fromCard: merged ? undefined : e.fromCard, toCard: merged ? undefined : e.toCard, count: 1, fromRow })
+    edges.set(key, { key, from: a, to: b, kind: e.kind, label: merged ? undefined : e.label, fromCard: merged ? undefined : e.fromCard, toCard: merged ? undefined : e.toCard, order: merged ? undefined : e.order, style: merged ? undefined : e.style, async: merged ? undefined : e.async, guard: merged ? undefined : e.guard, change: e.change, count: 1, fromRow })
   }
   const vedges = [...edges.values()]
 
@@ -530,7 +548,20 @@ export function buildLayout(spec: BoardSpec, o: LayoutOptions): Layout {
   walk('', 0)
   const root = placed.get('')!
   const nodes = [...vnodes.values()].filter(v => abs.has(v.id))
-  return { nodes, groups: vgroups, edges: vedges.filter(e => abs.has(e.from) && abs.has(e.to)), bounds: { x: 0, y: 0, w: root.w, h: root.h }, rep }
+  const drawn = vedges.filter(e => abs.has(e.from) && abs.has(e.to))
+  const callouts: Layout['callouts'] = []
+  for (const c of spec.callouts ?? []) {
+    if (c.node) {
+      const id = rep.get(c.node)
+      if (id && abs.has(id)) callouts.push({ text: c.text, node: id })
+    } else if (c.edge) {
+      const a = rep.get(c.edge[0])
+      const b = rep.get(c.edge[1])
+      const hit = drawn.find(e => e.from === a && e.to === b)
+      if (hit) callouts.push({ text: c.text, edge: hit.key })
+    }
+  }
+  return { nodes, groups: vgroups, edges: drawn, bounds: { x: 0, y: 0, w: root.w, h: root.h }, rep, callouts }
 }
 
 /** Ids of the nodes a search matches: every word must appear in the label, detail, kind, group, file or a member. */

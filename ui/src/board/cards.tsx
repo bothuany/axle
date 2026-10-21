@@ -3,7 +3,7 @@
 import { createContext, memo, useContext, type CSSProperties } from 'react'
 import type { Node, NodeProps } from '@xyflow/react'
 import type { BoardMember, BoardNode } from './spec'
-import { DETAIL_H, GROUP_HEAD, HEADER_H, type VGroup, type VNode } from './model'
+import { DETAIL_H, detailOf, GROUP_HEAD, HEADER_H, MARK_SIZE, type VGroup, type VNode } from './model'
 import { KIND_COLOR, STEREOTYPE, VISIBILITY_NAME } from './protocol'
 
 export interface Actions {
@@ -14,9 +14,11 @@ export interface Actions {
   member(node: BoardNode, member: BoardMember, row: number): void
   more(id: string): void
   hover(id: string | null): void
+  /** C4: open the board below this box. */
+  zoom(board: string): void
 }
 
-export const ActionsCtx = createContext<Actions>({ select() {}, focus() {}, toggleGroup() {}, member() {}, more() {}, hover() {} })
+export const ActionsCtx = createContext<Actions>({ select() {}, focus() {}, toggleGroup() {}, member() {}, more() {}, hover() {}, zoom() {} })
 
 export interface CardData extends Record<string, unknown> {
   v: VNode
@@ -28,6 +30,8 @@ export interface CardData extends Record<string, unknown> {
   activeRow?: number
   /** `canFocus`: the host can rebuild around this node. */
   canFocus: boolean
+  /** The board the node's `zoom` names exists: a double click or the badge opens it. */
+  zoomable?: boolean
 }
 
 export interface GroupData extends Record<string, unknown> {
@@ -62,24 +66,43 @@ export const CardNode = memo(function CardNode({ data }: NodeProps<CardNodeT>) {
   const kind = n.kind ?? 'class'
   const st = STEREOTYPE[kind]
   const style = { '--k': KIND_COLOR[kind], height: '100%' } as CSSProperties
+  const detail = detailOf(n)
+  if (n.shape && MARK_SIZE[n.shape]) {
+    // A pseudo-state (initial, final, choice) is a mark with no text: the label is its tooltip.
+    return (
+      <div
+        className={cls('bc-mark', `sh-${n.shape}`, data.selected && 'sel', data.match && 'match', data.dim && 'dim', n.change && `ch-${n.change}`)}
+        title={n.label}
+        onMouseEnter={() => a.hover(v.id)}
+        onMouseLeave={() => a.hover(null)}
+        onClick={() => a.select(v.id, n)}
+      />
+    )
+  }
   return (
     <div
-      className={cls('bc', data.selected && 'sel', data.focus && 'foc', data.match && 'match', data.dim && 'dim', n.status && `s-${n.status}`, n.check && `c-${n.check}`, n.warn && 'warned', kind === 'enum' && 'enum')}
+      className={cls('bc', data.selected && 'sel', data.focus && 'foc', data.match && 'match', data.dim && 'dim', n.status && `s-${n.status}`, n.check && `c-${n.check}`, n.change && `ch-${n.change}`, n.shape && `sh-${n.shape}`, n.warn && 'warned', kind === 'enum' && 'enum')}
       style={style}
       onMouseEnter={() => a.hover(v.id)}
       onMouseLeave={() => a.hover(null)}
     >
       <div
         className="bc-head"
-        style={{ height: HEADER_H + (n.detail ? DETAIL_H : 0) }}
-        title={[n.label, n.target ? `${n.target.path}\n${n.target.reason}${n.target.create ? '\nClick to create this file or copy its path' : ''}` : n.detail, n.file ? `${n.file}${n.line ? ':' + n.line : ''}` : '', n.note, checkTitle(n)].filter(Boolean).join('\n')}
+        style={{ height: HEADER_H + (detail ? DETAIL_H : 0) }}
+        title={[n.label, n.target ? `${n.target.path}
+${n.target.reason}${n.target.create ? '
+Click to create this file or copy its path' : ''}` : detailOf(n), n.symbol, n.zoom && data.zoomable ? 'Double-click to zoom in' : '', n.file ? `${n.file}${n.line ? ':' + n.line : ''}` : '', n.note, checkTitle(n)].filter(Boolean).join('
+')}
         onClick={() => a.select(v.id, n)}
-        onDoubleClick={() => data.canFocus && a.focus(v.id)}
+        onDoubleClick={() => (data.zoomable && n.zoom ? a.zoom(n.zoom) : data.canFocus && a.focus(v.id))}
       >
         {n.check && <span className={`bc-check c-${n.check}`}>{n.warn ? '⚠ ' : ''}{n.check}</span>}
+        {!n.check && n.change && <span className={`bc-check ch-${n.change}`}>{n.change}</span>}
+        {!n.check && !n.change && n.note && <span className="bc-note" title={n.note}>✎</span>}
+        {n.zoom && data.zoomable && <span className="bc-zoom" title="Zoom in: open the board below this box" onClick={e => { e.stopPropagation(); a.zoom(n.zoom!) }}>⤓</span>}
         {st && <div className="bc-st">«{st}»</div>}
         <div className="bc-name">{n.label}</div>
-        {n.detail && <div className="bc-detail">{n.detail}</div>}
+        {detail && <div className="bc-detail">{detail}</div>}
       </div>
       {v.rows.length > 0 && (
         <div className="bc-rows">
@@ -128,10 +151,11 @@ export const GroupNode = memo(function GroupNode({ data }: NodeProps<GroupNodeT>
   const a = useContext(ActionsCtx)
   const { g } = data
   return (
-    <div className="bg" style={{ '--d': Math.min(g.depth, 3) } as CSSProperties}>
+    <div className={cls('bg', g.group.kind && `k-${g.group.kind}`)} style={{ '--d': Math.min(g.depth, 3) } as CSSProperties}>
       <div className="bg-head" style={{ height: GROUP_HEAD }} onClick={() => a.toggleGroup(g.group.id)} title="Collapse">
         <span className="chev">▾</span>
         <span className="bg-name">{g.group.label}</span>
+        {g.group.tech && <span className="bg-tech">[{g.group.tech}]</span>}
         <span className="bg-count">{g.count}</span>
       </div>
     </div>

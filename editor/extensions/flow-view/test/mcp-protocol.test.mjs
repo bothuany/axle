@@ -195,10 +195,12 @@ test('mcp-protocol: the window refuses requests with an Origin header, a wrong t
 	await server.close()
 })
 
-test('mcp-protocol: the draw_board schema is valid JSON Schema-shaped and requires board', () => {
+test('mcp-protocol: the draw_board schema is valid JSON Schema-shaped; a board or a Mermaid source', () => {
 	const draw = tools.TOOLS.find(t => t.name === 'draw_board')
-	assert.deepEqual(draw.inputSchema.required, ['board'])
-	assert.deepEqual(draw.inputSchema.properties.board.required, ['title', 'nodes'])
+	assert.equal(draw.inputSchema.required, undefined, 'board or source: the handler asks for one of them')
+	assert.deepEqual(draw.inputSchema.properties.board.required, ['title'])
+	assert.deepEqual(draw.inputSchema.properties.source.required, ['mermaid'])
+	assert.equal(draw.inputSchema.additionalProperties, false)
 	JSON.parse(JSON.stringify(tools.TOOLS)) // serializable as is
 })
 
@@ -223,7 +225,7 @@ test('mcp-protocol: the server tells the agent to show code with `tour`, and lis
 	const init = await s.send('initialize', {})
 	assert.match(init.result.instructions, /SHOW it with `tour`/)
 	const list = await s.send('prompts/list')
-	assert.deepEqual(list.result.prompts.map(p => p.name), ['skeleton_first', 'tour_guide', 'explain_change'])
+	assert.deepEqual(list.result.prompts.map(p => p.name), ['skeleton_first', 'tour_guide', 'diagram_guide', 'explain_change'])
 	const explain = (await s.send('prompts/get', { name: 'explain_change' })).result.messages[0].content.text
 	for (const part of [/`tour`/, /"changes": true/, /get_context/, /impact/, /`table` step/, /risks/, /tour_guide/]) assert.match(explain, part)
 	const got = await s.send('prompts/get', { name: 'tour_guide' })

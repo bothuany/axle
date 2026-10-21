@@ -10,6 +10,7 @@
   --fl-signal: #6f86ff;
   --fl-add: #5fe0a1;
   --fl-del: #ff6b7d;
+  --fl-warn: #e6a23c;
   --fl-mono: var(--vscode-editor-font-family, 'JetBrains Mono', Menlo, Consolas, monospace);
   --fl-ui: var(--vscode-font-family, -apple-system, 'Segoe UI', system-ui, sans-serif);
   --fl-lift: 0 1px 0 rgb(0 0 0 / .25), 0 10px 26px -12px rgb(0 0 0 / .55);
@@ -73,6 +74,7 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .be-signal { --c: var(--fl-signal); }
 .be-add { --c: var(--fl-add); }
 .be-del { --c: var(--fl-del); }
+.be-warn { --c: var(--fl-warn); }
 .be-line { fill: none; stroke: var(--c); stroke-width: 1.4; }
 .be-head { stroke: var(--c); stroke-width: 1.4; fill: none; stroke-linejoin: round; }
 .be-head.fill { fill: var(--c); }
@@ -157,3 +159,50 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 
 .bg[style*='--d: 1'], .bg[style*='--d: 2'], .bg[style*='--d: 3'] { background: color-mix(in srgb, var(--fl-text) 4.5%, transparent); }
 .react-flow { --xy-minimap-background-color-default: var(--fl-card); --xy-minimap-mask-background-color-default: rgb(0 0 0 / .32); --xy-minimap-node-background-color-default: var(--fl-line-strong); --xy-minimap-mask-stroke-color-default: var(--fl-signal); }
+
+/* ---- compare, shapes, marks, callouts -------------------------------------------------------- */
+.bc.ch-added { border-left: 3px solid var(--fl-add); box-shadow: 0 0 0 1px color-mix(in srgb, var(--fl-add) 55%, transparent), var(--fl-lift); }
+.bc.ch-removed { border-left: 3px dashed var(--fl-del); box-shadow: 0 0 0 1px color-mix(in srgb, var(--fl-del) 55%, transparent), var(--fl-lift); opacity: .72; }
+.bc.ch-removed .bc-name { text-decoration: line-through; }
+.bc.ch-changed { border-left: 3px solid var(--fl-warn); box-shadow: 0 0 0 1px color-mix(in srgb, var(--fl-warn) 55%, transparent), var(--fl-lift); }
+.bc-check.ch-added { background: color-mix(in srgb, var(--fl-add) 20%, transparent); color: var(--fl-add); }
+.bc-check.ch-removed { background: color-mix(in srgb, var(--fl-del) 20%, transparent); color: var(--fl-del); }
+.bc-check.ch-changed { background: color-mix(in srgb, var(--fl-warn) 22%, transparent); color: var(--fl-warn); }
+.bc-note { position: absolute; top: 4px; right: 7px; color: var(--fl-muted); font-size: 11px; }
+.bc-zoom { position: absolute; bottom: 3px; right: 7px; color: var(--fl-signal); font-size: 11px; }
+.bc.sh-round { border-radius: 20px; }
+.bc.sh-round .bc-head { text-align: center; }
+.bc.sh-cylinder { border-radius: 14px / 9px; }
+.bc.sh-actor { border-radius: 20px; border-top-width: 1px; }
+.bc.sh-cloud { border-radius: 24px; border-style: dashed; }
+.bc.sh-diamond { border-radius: 4px; transform: none; border-top-width: 1px; border-left: 3px solid var(--k); }
+.bc-mark { width: 100%; height: 100%; cursor: pointer; background: var(--fl-text); border-radius: 50%; }
+.bc-mark.sh-final { background: var(--fl-canvas); box-shadow: inset 0 0 0 2px var(--fl-text), inset 0 0 0 6px var(--fl-canvas), inset 0 0 0 100px var(--fl-text); }
+.bc-mark.sh-choice { border-radius: 3px; transform: rotate(45deg) scale(.72); background: var(--fl-canvas); box-shadow: inset 0 0 0 2px var(--fl-text); }
+.bc-mark.sel, .bc-mark.match { outline: 2px solid var(--fl-signal); outline-offset: 2px; }
+.bc-mark.dim { opacity: .35; }
+.be-order circle { fill: var(--fl-canvas); stroke: var(--c); stroke-width: 1.2; }
+.be-order text { fill: var(--fl-text); font: 600 10px var(--fl-ui); }
+.co-layer { z-index: 6; }
+.co-box { fill: color-mix(in srgb, #e6c15a 16%, var(--fl-card)); stroke: color-mix(in srgb, #e6c15a 70%, transparent); stroke-width: 1; }
+.co-text { fill: var(--fl-text); font: 11px var(--fl-ui); }
+.co-tail { stroke: color-mix(in srgb, #e6c15a 70%, transparent); stroke-width: 1; fill: none; }
+.co-dot { fill: #e6c15a; }
+
+/* ---- sequence ------------------------------------------------------------------------------- */
+.sq { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; user-select: none; }
+.sq:active { cursor: grabbing; }
+.bd-changes b { font-weight: 600; }
+.bd-changes .add { color: var(--fl-add); }
+.bd-changes .del { color: var(--fl-del); }
+.bd-changes .warn { color: var(--fl-warn); }
+
+/* ---- C4: levels and boundaries ---- */
+.bd-level { padding: 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--fl-signal) 18%, transparent); color: var(--fl-text); font: 600 10.5px var(--fl-ui); text-transform: capitalize; white-space: nowrap; }
+.bg.k-boundary { border: 1.5px dashed color-mix(in srgb, var(--fl-signal) 55%, var(--fl-line-strong)); background: transparent; }
+.bg.k-boundary .bg-name { color: var(--fl-text); }
+.bg.k-lane { border-radius: 4px; background: color-mix(in srgb, var(--fl-text) 3%, transparent); }
+.bg.k-layer { border-style: dotted; }
+.bg-tech { margin-left: 6px; color: var(--fl-muted); font: 10.5px var(--fl-mono); white-space: nowrap; }
+.bc-zoom { cursor: pointer; padding: 0 3px; border-radius: 3px; }
+.bc-zoom:hover { background: color-mix(in srgb, var(--fl-signal) 22%, transparent); }

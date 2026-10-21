@@ -77,7 +77,7 @@ export function routeEdge(a: Anchors, dir: 'LR' | 'TB', par = 0, pars = 1): Rout
     startDir = { x: 1, y: 0 }
     endDir = { x: -1, y: 0 }
   } else if (dir === 'LR') {
-    const sy = (rowY ?? s.y + (a.from.node ? 22 : s.h / 2)) + (rowY === undefined ? off : 0)
+    const sy = (rowY ?? s.y + (a.from.node ? Math.min(22, s.h / 2) : s.h / 2)) + (rowY === undefined ? off : 0)
     const ty = tHead + off
     if (t.x >= s.x + s.w + 10) {
       start = { x: s.x + s.w, y: sy }
@@ -166,4 +166,19 @@ export function routeEdge(a: Anchors, dir: 'LR' | 'TB', par = 0, pars = 1): Rout
 export function cardinalityAt(r: Route): { from: Pt; to: Pt } {
   const spot = (p: Pt, d: Pt, along: number) => ({ x: p.x + d.x * along - d.y * 9, y: p.y + d.y * along + d.x * 9 })
   return { from: spot(r.start, r.startDir, 14), to: spot(r.end, { x: -r.endDir.x, y: -r.endDir.y }, 14) }
+}
+
+/** Where the number badge of an edge sits: a little way along the line from its start, off the box edge. */
+export const orderBadge = (r: Route) => ({ x: r.start.x + r.startDir.x * 18, y: r.start.y + r.startDir.y * 18 })
+
+/** An open (vee) head at the tip of a route, for an asynchronous message. */
+export function veeOf(r: Route): string {
+  const size = 11
+  const half = 5.5
+  const bx = r.end.x - r.endDir.x * size
+  const by = r.end.y - r.endDir.y * size
+  const nx = -r.endDir.y
+  const ny = r.endDir.x
+  const f = (n: number) => Math.round(n * 10) / 10
+  return `M${f(bx + nx * half)} ${f(by + ny * half)} L${f(r.end.x)} ${f(r.end.y)} L${f(bx - nx * half)} ${f(by - ny * half)}`
 }

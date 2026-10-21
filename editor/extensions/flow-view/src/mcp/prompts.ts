@@ -32,6 +32,26 @@ Example:
 {"id":"place-order","title":"How an order is placed","flow":{"id":"<id from find_entry_points>"},"steps":[{"caption":"Placing an order starts at the controller; it only validates and hands over."},{"file":"src/Orders/OrderService.cs","method":"OrderService.Place","line":58,"lines":[[71,76]],"caption":"Prices are copied onto the order here so a later price change cannot alter it."},{"table":"orders","caption":"The only write: a failure after this point leaves the order without its invoice."}]}
 `;
 
+const DIAGRAM_GUIDE = `# How to draw a good board with Axle's \`draw_board\` tool
+
+A board is a diagram the user sees next to the editor. You send the nodes, edges and groups; Axle lays them out (never send coordinates), colours them, links them to code, and answers with a LINT list of what to fix.
+
+1. One question per board. Say in \`title\` what it answers. Over about 15-20 visible nodes, split the board, or put nodes in \`groups\` with \`collapsed: true\`; \`focus\` names the node or group to open first.
+2. Pick the kind by the question: how does it run -> \`sequence\` (order matters, at most 8 lifelines) or \`flow\`; what is it made of -> \`architecture\` (set \`level\`: context, container, component) or \`class\`; how is data stored -> \`er\`; what states can it be in -> \`state\`; what will we do -> \`plan\`; what changed -> draw the new version with \`base\` set to the id of the old board.
+3. Ground it. Take names from \`find_symbol\` and \`flow_text\`, and give \`symbol\` (and \`file\`) to every node that is real code: Axle checks it against the index, fills \`file\` and \`line\`, and suggests the closest symbol when it is not found. A thing that does not exist yet (a proposed class) gets no \`symbol\`, so real and planned stay distinguishable.
+4. Label edges with verbs or payloads ("validates", "OrderPlaced event"), not "calls". A state transition says its event in \`label\` and its condition in \`guard\`.
+5. Group by layer, service or package, never more than 2 levels deep. A C4 boundary is a group of kind \`boundary\` with a \`tech\`.
+6. Edge \`kind\` carries meaning (reads vs writes, extends vs uses): use it instead of prose, and use \`legend\` when your colours need a word.
+7. Order with \`order\` (1, 2, 3...), never with array position or labels like "1.". In a sequence give every message an \`order\`; a reply is \`style: "dashed"\`, a fire-and-forget message \`async: true\`; an alt, loop or opt box is a group of that \`kind\` and each message inside it names it in \`fragment\`.
+8. Then explain it: add \`steps\` (3-10): each has a \`title\`, a \`caption\` that says why and what to watch (not what the picture already shows), and the \`nodes\` and \`edges\` ([from, to]) to light. The board plays them like a tour; your chat message stays one line. \`highlight\` draws one route bold; \`callouts\` pin a note to a node or edge.
+9. Read the answer. The LINT lists what was dropped (unknown ids, kinds, files, symbols), orphans, crowding and the estimated edge crossings: fix them by calling \`draw_board\` again with the same \`id\` (the previous version is kept, so the user can see what changed). \`update_board\` changes statuses, notes, change marks and highlights without a redraw.
+10. For a C4 view draw one board per level and link a box to the board below it with \`zoom\` (that board's id): a click opens it.
+11. Already have the diagram as Mermaid (a README, a design doc)? Pass it as \`source: {"mermaid": "..."}\` (sequenceDiagram, stateDiagram-v2, flowchart or graph) instead of \`board.nodes\` and \`board.edges\`; \`board\` can still add \`title\`, \`steps\`, \`callouts\`. Axle lists the lines it could not read. JSON can say more (symbol, file, status), so prefer it for new diagrams.
+
+Example (a state board):
+{"id":"bill-states","board":{"kind":"state","title":"Bill lifecycle","nodes":[{"id":"start","label":"start","shape":"initial"},{"id":"draft","label":"Draft","symbol":"BillStatus.Draft"},{"id":"paid","label":"Paid"},{"id":"end","label":"end","shape":"final"}],"edges":[{"from":"start","to":"draft"},{"from":"draft","to":"paid","label":"payment received","guard":"amount > 0","order":1},{"from":"paid","to":"end"}],"steps":[{"title":"Only paid bills close","caption":"A bill leaves Draft only when a positive payment arrives.","nodes":["draft","paid"],"edges":[["draft","paid"]]}]}}
+`;
+
 const EXPLAIN_CHANGE = [
 	"Explain the change you just made as a tour on Axle's flow canvas, so I can follow it.",
 	'',
@@ -69,6 +89,10 @@ const PROMPTS: { def: PromptDef; text: (args: Record<string, string>) => string 
 	{
 		def: { name: 'tour_guide', title: 'How to make a good Axle tour', description: "Advice for the `tour` tool: what to point at, how to write captions, how to fix a step that was not found." },
 		text: () => TOUR_GUIDE,
+	},
+	{
+		def: { name: 'diagram_guide', title: 'How to draw a good Axle board', description: 'Advice for `draw_board`: which kind for which question, grounding nodes in code with symbol, labelling, steps that explain the board, and how to fix the lint.' },
+		text: () => DIAGRAM_GUIDE,
 	},
 	{
 		def: { name: 'explain_change', title: 'Explain your change as a tour', description: 'Ask the agent to explain the change it just made, step by step, on the flow canvas.' },
