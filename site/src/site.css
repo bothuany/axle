@@ -1,0 +1,996 @@
+/* The site's look (direction A, "Light table", docs/site/direction): a cool pale page with the dark canvas as the one lit window on
+   it, and one trace down the left gutter that branches into each section the way a call branches into the next card. */
+
+@font-face {
+  font-family: Archivo;
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  src: url('@fontsource-variable/archivo/files/archivo-latin-standard-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --film: #e4e8ef;
+  --film-2: #d9dee8;
+  --ink: #151b3b;
+  --ink-2: #474f72;
+  --signal: #3f52c9;
+  --signal-ink: #ffffff;
+  --entry: #a86a0a;
+  --window: #161616;
+  --rule: #c2c8d6;
+  --warn: #8a5300;
+
+  --gutter: 72px;
+  --pad: 40px;
+  --max: 1360px;
+  --radius: 10px;
+
+  --display: 650 1rem/1.04 Archivo, system-ui, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: 24px;
+}
+
+body {
+  margin: 0;
+  background: var(--film);
+  color: var(--ink);
+  font: 400 17px/1.55 Archivo, system-ui, sans-serif;
+}
+
+body.is-locked {
+  overflow: hidden;
+}
+
+a {
+  color: var(--signal);
+  text-underline-offset: 0.18em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.skip {
+  position: absolute;
+  left: 16px;
+  top: -60px;
+  z-index: 50;
+  background: var(--ink);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+
+.skip:focus {
+  top: 12px;
+}
+
+/* ---- navigation ---------------------------------------------------------------------------------------------------------- */
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 22px var(--pad);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 650;
+  font-stretch: 125%;
+  font-size: 20px;
+}
+
+.brand img {
+  width: 30px;
+  height: 30px;
+}
+
+.nav nav {
+  margin-left: auto;
+}
+
+.nav-links {
+  display: flex;
+  gap: 26px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-links a {
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 16px;
+}
+
+.nav-links a:hover,
+.nav-links a[aria-current='page'] {
+  text-decoration: underline;
+}
+
+.star {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  padding: 6px 14px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.star svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.star [data-stars] {
+  font-weight: 650;
+}
+
+/* ---- the page and its trace ------------------------------------------------------------------------------------------------ */
+
+.page {
+  position: relative;
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 0 var(--pad) 0 calc(var(--pad) + var(--gutter));
+}
+
+/* The trace starts at an entry dot (amber, as the canvas marks an entry point) and runs the height of the page. */
+.trace {
+  position: absolute;
+  left: calc(var(--pad) + 22px);
+  top: 8px;
+  bottom: 0;
+  width: 2px;
+  background: var(--signal);
+  transform-origin: top;
+  animation: draw 900ms cubic-bezier(0.3, 0.6, 0.2, 1) both;
+}
+
+.trace::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--entry);
+}
+
+@keyframes draw {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+/* A branch off the trace into a heading, ending in a handle dot: drawn from the heading itself, so it stays on its first line. */
+.branch {
+  position: relative;
+}
+
+.branch::before {
+  content: '';
+  position: absolute;
+  top: 0.55em;
+  left: calc(-1 * var(--gutter) + 23px);
+  width: calc(var(--gutter) - 23px - 18px);
+  height: 2px;
+  background: var(--signal);
+}
+
+.branch::after {
+  content: '';
+  position: absolute;
+  top: calc(0.55em - 6px);
+  left: -24px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--signal);
+  background: var(--film);
+}
+
+/* ---- type ----------------------------------------------------------------------------------------------------------------------- */
+
+h1,
+h2,
+h3 {
+  font: var(--display);
+  font-stretch: 125%;
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(44px, 6vw, 80px);
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  max-width: 11ch;
+}
+
+h2 {
+  font-size: clamp(30px, 3.4vw, 46px);
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  max-width: 18ch;
+}
+
+h3 {
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.lede {
+  margin: 24px 0 0;
+  font-size: clamp(19px, 1.6vw, 22px);
+  line-height: 1.45;
+  max-width: 34ch;
+}
+
+.prose p {
+  margin: 20px 0 0;
+  max-width: 42ch;
+}
+
+.quiet {
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.quiet a {
+  color: var(--ink-2);
+}
+
+/* ---- buttons ---------------------------------------------------------------------------------------------------------------- */
+
+.ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 36px;
+  align-items: center;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 24px;
+  border-radius: var(--radius);
+  border: 0;
+  font: 600 17px/1 Archivo, system-ui, sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--signal);
+  color: var(--signal-ink);
+}
+
+.btn-primary:hover {
+  background: #3445b0;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.btn-secondary:hover {
+  background: rgba(21, 27, 59, 0.06);
+}
+
+.btn-light {
+  background: #fff;
+  color: var(--ink);
+}
+
+.btn svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+
+.btn-light svg {
+  fill: var(--entry);
+}
+
+/* ---- hero and the stage ---------------------------------------------------------------------------------------------------- */
+
+.hero {
+  padding: 56px 0 0;
+}
+
+.hero .quiet {
+  margin: 14px 0 0;
+}
+
+.stage-wrap {
+  position: relative;
+  margin: 56px 0 0;
+}
+
+.stage-wrap::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--gutter) + 23px);
+  top: 64px;
+  width: calc(var(--gutter) - 23px);
+  height: 2px;
+  background: var(--signal);
+}
+
+.stage {
+  position: relative;
+  aspect-ratio: 16 / 9.4;
+  background: var(--window);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 30px 60px -30px rgba(21, 27, 59, 0.55);
+}
+
+.stage-poster,
+.stage-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.stage-poster {
+  object-fit: cover;
+  object-position: left top;
+  transition: opacity 400ms;
+}
+
+.stage.is-live .stage-poster {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.stage-frame {
+  background: var(--window);
+}
+
+.stage-actions {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.stage-close {
+  display: none;
+}
+
+.stage-note {
+  position: absolute;
+  left: 50%;
+  top: 64px;
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100% - 32px));
+  margin: 0;
+  padding: 10px 14px;
+  background: #fff;
+  color: var(--ink);
+  border-radius: 8px;
+  font-size: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.stage-hint {
+  margin: 12px 0 0;
+}
+
+.hint-touch {
+  display: none;
+}
+
+/* Full screen on a phone: the canvas takes the screen and the wheel, and a close button brings the page back. */
+.stage.is-full {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+
+.stage.is-full .stage-close {
+  display: inline-flex;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  min-height: 44px;
+  z-index: 2;
+}
+
+.stage.is-full .stage-explore {
+  display: none;
+}
+
+/* ---- problem sections ------------------------------------------------------------------------------------------------------- */
+
+.problem {
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  gap: 56px;
+  padding: 136px 0 0;
+  align-items: start;
+}
+
+.problem figure {
+  margin: 0;
+}
+
+.clip {
+  background: var(--window);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.clip img,
+.clip video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+figcaption {
+  margin: 12px 0 0;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+/* The harness scan, drawn on the page: the one product surface that is not a capture, so it takes the page's own colours. */
+.harness {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 28px;
+  box-shadow: 0 0 0 1px var(--rule);
+}
+
+.hx-head {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+
+.hx-score {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  border: 3px solid var(--signal);
+  flex: none;
+}
+
+.hx-score b {
+  /* Longhands: the minifier folds a percentage font-stretch into the shorthand, which browsers then reject. */
+  font-family: Archivo, sans-serif;
+  font-size: 34px;
+  font-weight: 650;
+  line-height: 1;
+  font-stretch: 125%;
+}
+
+.hx-score span {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.hx-sum {
+  margin: 0;
+  max-width: 34ch;
+}
+
+.hx-table {
+  width: 100%;
+  margin: 22px 0 0;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.hx-table th,
+.hx-table td {
+  text-align: left;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--film-2);
+  font-weight: 400;
+}
+
+.hx-table thead th {
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.hx-table td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.hx-table thead th:not(:first-child) {
+  text-align: right;
+}
+
+.hx-issues {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+}
+
+.hx-issues li {
+  border-left: 3px solid var(--warn);
+  padding: 4px 0 4px 14px;
+}
+
+.hx-issues p {
+  margin: 0;
+  font-size: 15px;
+}
+
+.hx-issues .hx-fix {
+  color: var(--ink-2);
+  margin-top: 4px;
+}
+
+/* ---- agents ------------------------------------------------------------------------------------------------------------------ */
+
+.with {
+  padding: 136px 0 0;
+}
+
+.with-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px;
+  margin: 40px 0 0;
+  padding: 32px 0 0;
+  border-top: 2px solid var(--ink);
+}
+
+.with-grid p {
+  margin: 10px 0 0;
+  color: var(--ink-2);
+}
+
+.mcp {
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  gap: 56px;
+  margin: 72px 0 0;
+  align-items: start;
+}
+
+.terminal {
+  margin: 0;
+  background: var(--window);
+  color: #d7dce5;
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  font: 14px/1.7 var(--mono);
+  overflow-x: auto;
+}
+
+.terminal .you {
+  color: #9aa3b5;
+}
+
+.terminal .tool {
+  color: #8c9cff;
+}
+
+.terminal .out {
+  color: #5fe0a1;
+}
+
+/* ---- proof ------------------------------------------------------------------------------------------------------------------- */
+
+.proof {
+  padding: 136px 0 0;
+}
+
+.proof-list {
+  margin: 40px 0 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 56px;
+}
+
+.proof-list div {
+  padding: 22px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.proof-list dt {
+  font-weight: 650;
+}
+
+.proof-list dd {
+  margin: 6px 0 0;
+  color: var(--ink-2);
+  max-width: 46ch;
+}
+
+/* ---- download ---------------------------------------------------------------------------------------------------------------- */
+
+.download {
+  padding: 136px 0 120px;
+}
+
+.dl-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px;
+  margin: 44px 0 0;
+}
+
+.dl-group h3 {
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--ink);
+}
+
+.dl-group[data-mine] h3::after {
+  content: ' (this computer)';
+  font-weight: 400;
+  font-stretch: 100%;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.dl-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dl-group li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.dl-size {
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- footer ------------------------------------------------------------------------------------------------------------------ */
+
+.footer {
+  background: var(--ink);
+  color: #d6daea;
+}
+
+.footer-inner {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 40px var(--pad) 48px calc(var(--pad) + var(--gutter));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 40px;
+  font-size: 15px;
+}
+
+.footer a {
+  color: #fff;
+}
+
+.footer p {
+  margin: 0;
+  max-width: 60ch;
+}
+
+/* ---- the Try page --------------------------------------------------------------------------------------------------------- */
+
+.try-head {
+  padding: 40px 0 0;
+}
+
+.try-head h1 {
+  font-size: clamp(38px, 4.4vw, 60px);
+  max-width: none;
+}
+
+.try {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 28px;
+  margin: 40px 0 0;
+  align-items: start;
+}
+
+.stories {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.story {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  padding: 18px 0 18px 18px;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+  position: relative;
+}
+
+.story b {
+  display: block;
+  font-weight: 650;
+}
+
+.story span {
+  display: block;
+  color: var(--ink-2);
+  font-size: 15px;
+  margin-top: 4px;
+}
+
+.story[aria-pressed='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 18px;
+  bottom: 18px;
+  width: 3px;
+  background: var(--signal);
+  border-radius: 2px;
+}
+
+.story:hover b {
+  text-decoration: underline;
+}
+
+.try .stage {
+  aspect-ratio: auto;
+  height: min(78vh, 820px);
+  min-height: 520px;
+}
+
+.decision {
+  margin: 16px 0 0;
+}
+
+.agents {
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  gap: 56px;
+  padding: 120px 0 0;
+  align-items: start;
+}
+
+.agents-stage {
+  position: relative;
+  background: var(--window);
+  border-radius: var(--radius);
+  padding: 72px 0 0;
+  overflow: hidden;
+}
+
+.agents-stage .dock {
+  display: block;
+  width: 100%;
+  height: 560px;
+  border: 0;
+}
+
+.agents-stage .island {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 300px;
+  height: 60px;
+  border: 0;
+  background: transparent;
+}
+
+/* ---- narrow screens ------------------------------------------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .problem,
+  .mcp,
+  .agents {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .with-grid,
+  .dl-list {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .proof-list {
+    grid-template-columns: 1fr;
+  }
+
+  .try {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --gutter: 30px;
+    --pad: 16px;
+  }
+
+  .nav {
+    gap: 14px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .nav-links {
+    gap: 16px;
+  }
+
+  .nav-links .wide {
+    display: none;
+  }
+
+  .trace {
+    left: calc(var(--pad) + 6px);
+  }
+
+  .branch::before {
+    left: calc(-1 * var(--gutter) + 7px);
+    width: calc(var(--gutter) - 7px - 14px);
+  }
+
+  .branch::after {
+    left: -18px;
+  }
+
+  .hero {
+    padding-top: 28px;
+  }
+
+  .ctas .btn {
+    width: 100%;
+  }
+
+  .stage-wrap::before {
+    left: calc(-1 * var(--gutter) + 7px);
+    width: calc(var(--gutter) - 7px);
+    top: 48px;
+  }
+
+  .stage {
+    aspect-ratio: 3 / 4;
+  }
+
+  .stage-actions {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .stage-actions .btn {
+    flex: 1;
+  }
+
+  .stage-play {
+    display: none;
+  }
+
+  .hint-wheel {
+    display: none;
+  }
+
+  .hint-touch {
+    display: inline;
+  }
+
+  .problem,
+  .with,
+  .proof {
+    padding-top: 96px;
+  }
+
+  .download {
+    padding: 96px 0 80px;
+  }
+
+  .harness {
+    padding: 20px;
+  }
+
+  .try .stage {
+    height: 72vh;
+    min-height: 420px;
+  }
+
+  .agents-stage .dock {
+    height: 520px;
+  }
+
+  .footer-inner {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 760px) {
+  .stage.is-full .stage-actions {
+    display: none;
+  }
+}
+
+@media (min-width: 761px) {
+  .stage-explore {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trace {
+    animation: none;
+  }
+
+  .stage-poster {
+    transition: none;
+  }
+}

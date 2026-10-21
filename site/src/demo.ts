@@ -1,6 +1,6 @@
 // What scripts/playground-data.mjs writes (public/data/demo.json) and what the page and the fake host read.
 // The cards and entry points are the protocol types: the same ones flow-view sends the canvas.
-import type { EntryPoint, FlowNode } from '../../protocol/flow'
+import type { EntryPoint, FlowNode, Tour } from '../../protocol/flow'
 
 export interface Entry extends EntryPoint {
   source: 'poly'
@@ -99,6 +99,8 @@ export interface DemoData {
   edits: AgentEdit[]
   harness: HarnessMap
   islandColors: IslandColors
+  /** The guided tours (demo/tours.json), resolved to the cards of the `before` flows. `entry` is the endpoint each one plays on. */
+  tours: (Tour & { entry: string })[]
 }
 
 /** What the canvas is asked to show: an endpoint's flow, or the agent's change set. */

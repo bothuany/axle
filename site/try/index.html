@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'self' https://api.github.com; frame-src 'self'; base-uri 'none'; form-action 'none'" />
+    <title>Try {{name}} in your browser</title>
+    <meta name="description" content="The real {{name}} canvas on a demo shop: follow an order across three services, review what an agent changed, answer a waiting agent. Nothing to install." />
+    <link rel="canonical" href="{{site}}/try/" />
+    <link rel="icon" href="../icon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#e4e8ef" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="{{name}}" />
+    <meta property="og:title" content="Try {{name}} in your browser" />
+    <meta property="og:description" content="The real canvas on a demo shop, with guided tours. Nothing to install." />
+    <meta property="og:url" content="{{site}}/try/" />
+    <meta property="og:image" content="{{site}}/media/hero.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to the content</a>
+    <header class="nav">
+      <a class="brand" href="../"><img src="../icon.svg" alt="" width="30" height="30" />{{name}}</a>
+      <nav aria-label="Site">
+        <ul class="nav-links">
+          <li><a href="./" aria-current="page">Try it</a></li>
+          <li class="wide"><a href="https://github.com/{{repo}}#readme">Docs</a></li>
+          <li class="wide"><a href="https://github.com/{{repo}}/releases">Changelog</a></li>
+        </ul>
+      </nav>
+      <a class="star" href="https://github.com/{{repo}}" aria-label="{{name}} on GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .8l2.2 4.6 5 .7-3.6 3.5.9 5L8 12.2 3.5 14.6l.9-5L.8 6.1l5-.7z" /></svg>
+        GitHub <span data-stars hidden></span>
+      </a>
+    </header>
+
+    <main id="main" class="page">
+      <div class="trace" aria-hidden="true"></div>
+
+      <section class="try-head" aria-labelledby="try-title">
+        <h1 id="try-title">Try it in your browser.</h1>
+        <p class="lede">The real canvas, on a small shop: orders and shipping in Java, billing in Python. Pick a story and a guide walks it with you, or move around on your own.</p>
+      </section>
+
+      <div class="try">
+        <ul class="stories" aria-label="Stories">
+          <li><button class="story" type="button" data-story="order" aria-pressed="true"><b>How an order is placed</b><span>One request, three services and three tables, in eight steps.</span></button></li>
+          <li><button class="story" type="button" data-story="changes" aria-pressed="false"><b>What the agent changed</b><span>Claude Code added discount codes. Review each change, then keep or undo it.</span></button></li>
+          <li><button class="story" type="button" data-story="invoice" aria-pressed="false"><b>How an invoice is fetched</b><span>From a Java endpoint over HTTP into Python, in five steps.</span></button></li>
+        </ul>
+        <div>
+          <div class="stage" data-stage>
+            <p class="stage-note" role="status" hidden></p>
+          </div>
+          <p class="quiet decision" data-decision role="status">Use the arrows in the tour bar, or press the arrow keys. Drag to move around; scroll or pinch to zoom.</p>
+        </div>
+      </div>
+
+      <section class="agents" id="agents" aria-labelledby="agents-title">
+        <div class="prose">
+          <h2 class="branch" id="agents-title">Three agents, one of them waiting for you.</h2>
+          <p>This is the app's Agents dock, and the status island that sits at the top of your screen. Codex wants to run the billing tests, so it is ranked first; the finished turn lists the flows it touched.</p>
+          <p>The agents here are a fixed moment written for this page. The ranking and the island are the app's own code.</p>
+          <p><button class="btn btn-primary" type="button" data-allow>Allow the test run</button></p>
+          <p class="quiet" data-agents-note role="status"></p>
+        </div>
+        <div class="agents-stage">
+          <iframe class="island" title="Status island" src="../pages/island.html" tabindex="-1"></iframe>
+          <iframe class="dock" title="Agents dock" src="../pages/dock.html"></iframe>
+        </div>
+      </section>
+
+      <section class="download" id="download" aria-labelledby="download-title">
+        <h2 class="branch" id="download-title">Run it on your own code.</h2>
+        <div class="ctas">
+          <a class="btn btn-primary" data-download href="https://github.com/{{repo}}/releases/latest">Download {{name}}</a>
+          <a class="btn btn-secondary" href="https://github.com/{{repo}}">View on GitHub</a>
+        </div>
+        <p class="quiet" data-platforms>Free and open source, for Windows, macOS and Linux.</p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <p>{{name}} is MIT licensed and builds on <a href="https://github.com/microsoft/vscode">VS Code</a>. The Claude and Codex marks belong to their owners.</p>
+        <p><a href="https://github.com/{{repo}}">GitHub</a> &nbsp; <a href="https://github.com/{{repo}}/blob/main/CONTRIBUTING.md">Contributing</a> &nbsp; <a href="https://github.com/{{repo}}/blob/main/SECURITY.md">Security</a></p>
+      </div>
+    </footer>
+    <script type="module" src="/src/try.ts"></script>
+  </body>
+</html>

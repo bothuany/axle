@@ -340,6 +340,49 @@ export default { workspace }
 }
 
 const dirs = assemble()
+/**
+ * The site's guided tours (site/demo/tours.json): each step names a card by its label and the lines to light by text they contain,
+ * and gets its file and line numbers from the index here, so the tours cannot drift from the demo code. A step that no longer
+ * finds its card or its lines stops the build.
+ */
+function guidedTours(version) {
+	const spec = JSON.parse(readFileSync(join(DEMO, 'tours.json'), 'utf8'))
+	return spec.tours.map(t => {
+		const entry = version.entries.find(e => e.http === t.entry)
+		if (!entry) {
+			throw new Error(`tours.json: tour "${t.id}" starts at ${t.entry}, which is not an endpoint of the demo any more.`)
+		}
+		const cards = []
+		const walk = n => {
+			cards.push(n)
+			n.children.forEach(c => walk(c.node))
+		}
+		walk(version.flows[entry.id].graph)
+		const steps = t.steps.map(s => {
+			const card = cards.find(n => n.label === s.card)
+			if (!card) {
+				throw new Error(`tours.json: tour "${t.id}" has no card "${s.card}" on the flow of ${t.entry}.`)
+			}
+			const step = { title: s.title, caption: s.caption, state: 'ok', at: { file: card.file, startLine: card.startLine, endLine: card.endLine, label: card.label } }
+			if (s.table) {
+				step.at.table = s.table
+			}
+			if (s.lines) {
+				const code = (card.code ?? '').split('\n')
+				step.highlights = s.lines.map(text => {
+					const i = code.findIndex(line => line.includes(text))
+					if (i < 0) {
+						throw new Error(`tours.json: tour "${t.id}" lights "${text}" in ${s.card}, which no longer has that line.`)
+					}
+					return [card.startLine + i, card.startLine + i]
+				})
+			}
+			return step
+		})
+		return { id: t.id, title: t.title, entry: entry.id, origin: 'Guided tour', source: 'file', steps, start: 0, agent: { label: 'Guide', color: '#6f86ff' } }
+	})
+}
+
 const scratch = mkdtempSync(join(tmpdir(), 'axle-site-work-'))
 const indexBefore = new Index(dirs.before, scratch)
 const indexAfter = new Index(dirs.after, scratch)
@@ -422,6 +465,7 @@ try {
 	writeFileSync(join(PUBLIC, 'pages', 'island.html'), island.html)
 
 	const data = relocate({ before, after: { entries, flows }, changes: { label: 'Claude Code: discount codes on orders', root, impact, timeline }, agentImpact, edits, harness, islandColors: island.colors }, dirs.before, dirs.after)
+	data.tours = guidedTours(data.before)
 	mkdirSync(join(OUT, '..'), { recursive: true })
 	writeFileSync(OUT, `${JSON.stringify(data)}\n`)
 	mkdirSync(join(CHECK, '..'), { recursive: true })

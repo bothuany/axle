@@ -1,9 +1,10 @@
-// The playground in a real browser (headless Chrome): the whole story a visitor goes through, and the paths around it. Run after
-// `npm run build` (and `node scripts/playground-data.mjs` before that): `npm run test:e2e`. It serves dist/ the way GitHub Pages does,
-// under /axle/, and fails on any console error, 4xx/5xx response or page error.
+// The site in a real browser (headless Chrome): the home page with its live canvas, tour and downloads, the Try page's stories and
+// agents, and what search engines read. Run after `npm run build` (and `node scripts/site-data.mjs` before that): `npm run test:e2e`.
+// It serves dist/ the way GitHub Pages does, under /axle/, and fails on any console error, 4xx/5xx response or page error. GitHub's
+// API is answered from fixtures here (a rate-limited CI runner would otherwise get 403s), and one test makes it fail on purpose.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { preview } from 'vite'
 import puppeteer from 'puppeteer-core'
 
@@ -11,6 +12,19 @@ const CHROMES = [process.env.CHROME_PATH, '/usr/bin/google-chrome', '/usr/bin/go
 const chrome = CHROMES.find(p => existsSync(p))
 const skip = chrome ? false : 'no Chrome or Edge found (set CHROME_PATH)'
 if (!chrome && process.env.CI) throw new Error('The end-to-end test needs Chrome in CI: none was found.')
+
+const WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+const PHONE = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36'
+
+/** What GitHub's API answers, in the shape it has. The asset names are the real ones of a release. */
+const asset = (name, size) => ({ name, size, browser_download_url: `https://github.com/bothuany/axle/releases/download/v9.9.9/${name}` })
+const RELEASE = {
+	tag_name: 'v9.9.9',
+	published_at: '2026-10-20T10:00:00Z',
+	html_url: 'https://github.com/bothuany/axle/releases/tag/v9.9.9',
+	assets: [asset('Axle-Setup-9.9.9-x64.exe', 140_000_000), asset('Axle-9.9.9-darwin-arm64.dmg', 160_000_000), asset('Axle-9.9.9-darwin-x64.dmg', 165_000_000), asset('axle_9.9.9_amd64.deb', 120_000_000), asset('axle-9.9.9-1.x86_64.rpm', 121_000_000), asset('Axle-9.9.9-linux-x64.tar.gz', 150_000_000), asset('SHA256SUMS.txt', 1000)],
+}
 
 let server
 let browser
@@ -28,15 +42,27 @@ after(async () => {
 	await server?.close()
 })
 
-/** A page that remembers what went wrong in it: console errors, page errors, failed requests. */
-async function open(viewport = { width: 1700, height: 1000 }) {
+/**
+ * A page that remembers what went wrong in it: console errors, page errors, failed requests. GitHub's API answers from the fixtures,
+ * or fails when `github` is false (then its failures are expected, not problems).
+ */
+async function open(path = '', { viewport = { width: 1440, height: 900 }, agent = WINDOWS, github = true } = {}) {
 	const page = await browser.newPage()
 	const problems = []
-	page.on('console', m => m.type() === 'error' && problems.push(`console: ${m.text()}`))
+	await page.setUserAgent(agent)
+	await page.setRequestInterception(true)
+	page.on('request', r => {
+		const u = r.url()
+		if (!u.startsWith('https://api.github.com/')) return r.continue()
+		if (!github) return r.respond({ status: 403, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: '{"message":"API rate limit exceeded"}' })
+		const body = u.endsWith('/releases/latest') ? RELEASE : { stargazers_count: 1234 }
+		r.respond({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(body) })
+	})
+	page.on('console', m => m.type() === 'error' && !(github === false && /403|api\.github\.com/.test(m.text() + (m.location()?.url ?? ''))) && problems.push(`console: ${m.text()}`))
 	page.on('pageerror', e => problems.push(`pageerror: ${e.message}`))
-	page.on('response', r => r.status() >= 400 && problems.push(`${r.status()}: ${r.url()}`))
+	page.on('response', r => r.status() >= 400 && !(github === false && r.url().startsWith('https://api.github.com/')) && problems.push(`${r.status()}: ${r.url()}`))
 	await page.setViewport(viewport)
-	await page.goto(url, { waitUntil: 'networkidle0', timeout: 120_000 })
+	await page.goto(url + path, { waitUntil: 'networkidle0', timeout: 120_000 })
 	return { page, problems }
 }
 
@@ -51,239 +77,189 @@ const until = async (probe, what, ms = 60_000) => {
 	}
 	assert.fail(`timed out waiting for ${what}`)
 }
-/** The page inside the iframe that is in `selector` (a tile's canvas, the dock, the overlay). */
+/** The page inside the iframe that is in `selector`. */
 const inside = async (page, selector) => {
 	const handle = await until(() => page.$(selector), `${selector} to exist`)
 	return until(() => handle.contentFrame(), `${selector} to load`)
 }
-const flowCanvas = page => inside(page, '#flow-tile iframe.canvas')
-const changesCanvas = page => inside(page, '#changes-tile iframe.canvas')
-const textOf = async frame => frame.evaluate(() => document.body.innerText)
-const drawn = async frame => until(() => frame.evaluate(() => !!document.querySelector('.react-flow__node')), 'the canvas to draw a card')
-const dockText = async page => textOf(await inside(page, 'iframe.dock'))
-const islandText = async page => textOf(await inside(page, 'iframe.island'))
-const foot = (page, tile) => page.evaluate(t => document.querySelector(`#${t} .foot p`)?.textContent ?? '', tile)
-const footHas = (page, tile, needle) => until(async () => (await foot(page, tile)).includes(needle), `the ${tile} to say "${needle}"`)
-/** Clicks the button with this label inside the iframe, once it is there. */
-const clickIn = (frame, label) => until(() => frame.evaluate(l => { const b = [...document.querySelectorAll('button')].find(b => b.textContent === l); b?.click(); return !!b }, label), `the "${label}" button`)
-const steps = page => page.evaluate(() => [...document.querySelectorAll('.steps li')].map(li => li.children[1].textContent))
-const dockSays = (page, pattern, what) => until(async () => pattern.test(await dockText(page)), what)
+const drawn = frame => until(() => frame.evaluate(() => !!document.querySelector('.react-flow__node')), 'the canvas to draw a card')
+const textOf = frame => frame.evaluate(() => document.body.innerText)
+/** The step the tour shows: its caption title, and whether the caption sits by a card (not centred for want of one). */
+const caption = frame => frame.evaluate(() => {
+	const c = document.querySelector('.tour-caption')
+	return c && { title: c.querySelector('.tour-caption-head b')?.textContent, side: c.getAttribute('data-side') }
+})
+const tours = JSON.parse(readFileSync(new URL('../public/data/demo.json', import.meta.url), 'utf8')).tours
 
-/** Starts the agent from the page's first button and answers its question: the turn is then over. */
-async function playThrough(page) {
-	await page.click('#try')
-	await until(() => page.$('#allow'), 'the permission question')
-	await page.click('#allow')
-	await until(() => page.$('#review'), 'the end of the turn')
+/** Plays a tour to its end with the tour bar's next button, checking that every step stands by its card. */
+async function walk(frame, tour) {
+	for (const [i, step] of tour.steps.entries()) {
+		await until(async () => (await caption(frame))?.title === step.title, `step ${i + 1} of "${tour.title}" ("${step.title}")`)
+		assert.notEqual((await caption(frame)).side, 'centre', `step ${i + 1} of "${tour.title}" stands by its card`)
+		if (i < tour.steps.length - 1) await frame.click('.tour button[title^="Next step"]')
+	}
 }
 
-test('the page opens on the order flow, with the menu, the languages and no agent', { skip }, async () => {
+test('home: the hero canvas loads on its own, a plain wheel scrolls the page past it, and the tour plays', { skip }, async () => {
 	const { page, problems } = await open()
-	const canvas = await flowCanvas(page)
+	assert.equal(await page.evaluate(() => !!document.querySelector('.stage-poster')), true, 'a poster stands in first')
+	const canvas = await inside(page, '.stage-frame')
 	await drawn(canvas)
-	assert.match(await textOf(canvas), /OrderController\.place/)
-	assert.equal(await canvas.evaluate(() => getComputedStyle(document.querySelector('.react-flow__minimap')).display), 'none', 'the overview map is left out')
-	assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.pill .links a')].map(a => a.textContent)), ['Agents', 'Changes', 'Harness', 'What is real'])
-	assert.ok((await page.evaluate(() => document.querySelector('.langs')?.textContent ?? '')).includes('Rust'))
-	await page.evaluate(() => document.getElementById('agents-tile').scrollIntoView())
-	await dockSays(page, /No agents running/, 'the dock to say no agent runs')
-	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.island')).opacity), '0', 'no agent, no overlay')
+	await until(() => page.evaluate(() => document.querySelector('[data-stage]').classList.contains('is-live')), 'the poster to give way to the canvas')
+	assert.equal(await page.evaluate(() => document.querySelector('.stage-frame').tabIndex), -1, 'the hero canvas is not in the tab order')
+
+	// The wheel over the canvas scrolls the page, not the canvas.
+	const box = await (await page.$('.stage-frame')).boundingBox()
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+	const zoom = () => canvas.evaluate(() => getComputedStyle(document.querySelector('.react-flow__viewport')).transform)
+	const before = await zoom()
+	await page.mouse.wheel({ deltaY: 400 })
+	await until(() => page.evaluate(() => scrollY > 200), 'the page to scroll')
+	assert.equal(await zoom(), before, 'the canvas did not zoom')
+	await page.evaluate(() => scrollTo(0, 0))
+
+	await page.click('[data-play="order"]')
+	await walk(canvas, tours.find(t => t.id === 'order'))
 	assert.deepEqual(problems, [])
 	await page.close()
 })
 
-test('another endpoint opens on the canvas', { skip }, async () => {
+test('home: the download button names the visitor\'s system and points at its file; the stars are counted', { skip }, async () => {
 	const { page, problems } = await open()
-	const canvas = await flowCanvas(page)
+	const primary = () => page.$eval('.hero [data-download]', a => ({ text: a.textContent, href: a.href }))
+	await until(async () => (await primary()).href.endsWith('.exe'), 'the button to point at the installer')
+	assert.deepEqual(await primary(), { text: 'Download for Windows', href: RELEASE.assets[0].browser_download_url })
+	assert.match(await page.$eval('.hero [data-platforms]', p => p.textContent), /^Version 9\.9\.9, free and open source\. Also for macOS and Linux\.$/)
+	assert.equal(await page.$eval('.nav [data-stars]', s => (s.hidden ? '' : s.textContent)), '1,234')
+	const list = await page.$$eval('[data-download-list] li a', as => as.map(a => a.href.split('/').pop()))
+	assert.deepEqual(list, ['Axle-Setup-9.9.9-x64.exe', 'Axle-9.9.9-darwin-arm64.dmg', 'Axle-9.9.9-darwin-x64.dmg', 'axle_9.9.9_amd64.deb', 'axle-9.9.9-1.x86_64.rpm', 'Axle-9.9.9-linux-x64.tar.gz'])
+	assert.match(await page.$eval('[data-release]', p => p.textContent), /^Version 9\.9\.9, released October 20, 2026\.$/)
+	await page.close()
+
+	// A Mac gets the Apple silicon image first.
+	const mac = await open('', { agent: MAC })
+	await until(async () => (await mac.page.$eval('.hero [data-download]', a => a.href)).endsWith('darwin-arm64.dmg'), 'the Mac button to point at the .dmg')
+	assert.equal(await mac.page.$eval('.hero [data-download]', a => a.textContent), 'Download for macOS')
+	await mac.page.close()
+	assert.deepEqual([...problems, ...mac.problems], [])
+})
+
+test('home: when GitHub does not answer, the buttons lead to the releases page and no count is shown', { skip }, async () => {
+	const { page, problems } = await open('', { github: false })
+	await wait(1500)
+	assert.equal(await page.$eval('.hero [data-download]', a => a.href), 'https://github.com/bothuany/axle/releases/latest')
+	assert.equal(await page.$eval('.nav [data-stars]', s => s.hidden), true)
+	assert.ok((await page.$$eval('[data-download-list] li a', as => as.map(a => a.href))).every(h => h === 'https://github.com/bothuany/axle/releases/latest'))
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('home: the harness section is the real scan of the demo project, with its one warning', { skip }, async () => {
+	const { page, problems } = await open()
+	await page.evaluate(() => document.querySelector('[data-harness]').scrollIntoView())
+	await until(() => page.$('.hx-table'), 'the harness scan')
+	assert.equal(await page.$eval('.hx-score b', b => b.textContent), '96')
+	assert.match(await page.$eval('.hx-issues', l => l.textContent), /graphql-schema\.md.*matches no file in the project/)
+	assert.equal(await page.$$eval('[data-clip] img', imgs => imgs.length), 3, 'the three stills are in their slots')
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('home on a phone: no canvas until asked, then full screen; the page has no sideways scroll', { skip }, async () => {
+	const { page, problems } = await open('', { viewport: { width: 375, height: 812, isMobile: true, hasTouch: true }, agent: PHONE })
+	assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 375)
+	await wait(1500)
+	assert.equal(await page.$('.stage-frame'), null, 'the phone loads no canvas by itself')
+	assert.equal(await page.$eval('.hero [data-download]', a => a.getAttribute('href')), '#download', 'a phone is sent to the list of files')
+	await page.click('[data-explore]')
+	const canvas = await inside(page, '.stage-frame')
 	await drawn(canvas)
-	const id = await page.evaluate(() => [...document.querySelectorAll('#flow-tile option')].find(o => o.textContent.startsWith('GET /orders  (')).value)
-	await page.select('#flow-tile select', id)
-	await until(async () => /OrderController\.list/.test(await textOf(canvas)), 'the canvas to show GET /orders')
+	assert.equal(await page.evaluate(() => document.querySelector('[data-stage]').classList.contains('is-full') && document.activeElement?.matches('[data-close]')), true)
+	await page.keyboard.press('Escape')
+	assert.equal(await page.evaluate(() => document.querySelector('[data-stage]').classList.contains('is-full')), false)
 	assert.deepEqual(problems, [])
 	await page.close()
 })
 
-test('the agent: it asks, the dock and the overlay say it waits, you allow, and they say what it touched', { skip }, async () => {
-	const { page, problems } = await open()
-	await page.click('#try')
-	await until(() => page.$('#allow'), 'the permission question')
-	assert.deepEqual((await steps(page)).slice(0, 3), ['Asked axle which endpoints there are', 'Read OrderService.java', 'Asked axle who else reads the orders table'])
-	await until(async () => /Wants to: Editing Order\.java and OrderService\.java/.test(await dockText(page)) && /approval/i.test(await dockText(page)), 'the dock to show the approval')
-	await until(async () => /Needs approval/.test(await islandText(page)), 'the overlay to say "Needs approval"')
-	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.island')).opacity), '1')
-	await page.click('#allow')
-	await until(() => page.$('#review'), 'the end of the turn')
-	assert.ok((await steps(page)).at(-1).startsWith('Done. It touched 4 flows and the orders table, which 4 endpoints use'))
-	await until(async () => /This turn touched 4 flows and table orders \(4 endpoints\)/.test(await dockText(page)), 'the dock to list what the turn touched')
-	await until(async () => /Done/.test(await islandText(page)), 'the overlay to say Done')
+test('try: the order tour, the agent\'s change with its review and Keep, and the invoice tour', { skip }, async () => {
+	const { page, problems } = await open('try/')
+	const canvas = async () => {
+		const c = await inside(page, '.stage-frame')
+		await drawn(c)
+		return c
+	}
+	await walk(await canvas(), tours.find(t => t.id === 'order'))
+
+	await page.click('[data-story="changes"]')
+	await until(async () => /Claude Code: discount codes on orders/.test(await textOf(await inside(page, '.stage-frame'))), 'the change set')
+	const changes = await canvas()
+	await until(() => changes.$('.tour'), 'the review of the changes to start')
+	await until(() => changes.evaluate(() => {
+		const keep = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Keep')
+		keep?.click()
+		return !!keep
+	}), 'a Keep button')
+	await until(async () => /^Kept\./.test(await page.$eval('[data-decision]', p => p.textContent)), 'the page to say it was kept')
+
+	await page.click('[data-story="invoice"]')
+	await until(async () => (await caption(await inside(page, '.stage-frame')))?.title === 'A Java endpoint', 'the invoice tour')
+	await walk(await canvas(), tours.find(t => t.id === 'invoice'))
 	assert.deepEqual(problems, [])
 	await page.close()
 })
 
-test('a flow of the dock opens on the change tile (before and after the tile has loaded)', { skip }, async () => {
-	const { page, problems } = await open()
-	// The tile is far below the first screen: the canvas has not loaded when the chip is clicked.
-	assert.equal(await page.evaluate(() => !document.querySelector('#changes-tile iframe')), true, 'the change tile has not loaded yet')
-	await playThrough(page)
+test('try: the dock ranks the waiting agent first, and allowing it moves it on', { skip }, async () => {
+	const { page, problems } = await open('try/')
 	const dock = await inside(page, 'iframe.dock')
-	await until(() => dock.evaluate(() => document.querySelector('.flow')), 'the dock chips')
-	await dock.evaluate(() => [...document.querySelectorAll('.flow')].find(c => c.textContent === 'GET /orders').click())
-	const canvas = await changesCanvas(page)
-	await until(async () => /OrderController\.list/.test(await textOf(canvas)), 'the change tile to show GET /orders')
-	assert.equal(await page.evaluate(() => document.querySelector('#changes-tile select').selectedOptions[0].textContent.startsWith('GET /orders  (')), true)
-	// Now that the tile is loaded, another chip is a `show` message to the running canvas.
-	await dock.evaluate(() => [...document.querySelectorAll('.flow')].find(c => c.textContent === 'GET /orders/{id}').click())
-	await until(async () => /OrderController.show/.test(await textOf(canvas)), 'the loaded canvas to show GET /orders/{id}')
+	await until(() => dock.evaluate(() => document.querySelectorAll('.agent').length === 3), 'three agents in the dock')
+	assert.match(await dock.evaluate(() => document.querySelector('.agent').textContent), /Codex.*Run pytest billing-service\/tests/s)
+	assert.match(await textOf(dock), /This turn touched 4 flows and table orders \(4 endpoints\)/)
+	await until(async () => /Needs approval/.test(await textOf(await inside(page, 'iframe.island'))), 'the island to say an agent needs approval')
+	await page.click('[data-allow]')
+	await until(() => dock.evaluate(() => !/APPROVAL/i.test(document.querySelector('.agent.blocked')?.textContent ?? '') && !document.querySelector('.agent.approval')), 'the approval to be answered')
 	assert.deepEqual(problems, [])
 	await page.close()
 })
 
-test('the change tile: the order flow with its green and red, Keep, Undo, and the replay', { skip }, async () => {
-	const { page, problems } = await open()
-	await page.evaluate(() => document.getElementById('changes-tile').scrollIntoView())
-	const canvas = await changesCanvas(page)
-	await drawn(canvas)
-	// The tile has stepped to the first changed card by itself: the canvas's own review tour is running.
-	await until(() => canvas.evaluate(() => /1\s\/\s2/.test(document.querySelector('.tour')?.textContent ?? '')), 'the review tour to start')
-	assert.ok(await canvas.evaluate(() => [...document.querySelectorAll('.react-flow__node')].some(n => /applyDiscount/.test(n.textContent) && /Agent edit/.test(n.textContent))), 'the new method is on the canvas, marked as an agent edit')
-	assert.ok(await until(() => canvas.evaluate(() => { const r = document.querySelector('.react-flow__viewport')?.style.transform ?? ''; return Number(/scale\(([\d.]+)\)/.exec(r)?.[1]) >= 1.2 }), 'the canvas to be zoomed in on that card'))
-	await clickIn(canvas, 'Keep')
-	await footHas(page, 'changes-tile', 'Kept.')
-	await until(() => canvas.evaluate(() => !document.querySelector('.tour')), 'the canvas to stop marking the change')
-	await page.click('#changes-tile .replay')
-	const again = await changesCanvas(page)
-	await until(() => again.evaluate(() => /1\s\/\s2/.test(document.querySelector('.tour')?.textContent ?? '')), 'the change to be back, with its tour')
-	await clickIn(again, 'Undo')
-	await footHas(page, 'changes-tile', 'Undone.')
-	await until(() => again.evaluate(() => !document.querySelector('.tour')), 'the canvas to forget the change')
-	assert.deepEqual(problems, [])
-	await page.close()
-})
-
-test('saying no changes nothing, and Start over plays it again', { skip }, async () => {
-	const { page, problems } = await open()
-	await page.click('#try')
-	await until(() => page.$('#deny'), 'the permission question')
-	await page.click('#deny')
-	await until(() => page.$('#again'), 'the end of the story')
-	assert.ok((await steps(page)).at(-1).startsWith('Wants to edit'))
-	assert.equal(await page.evaluate(() => document.querySelector('.steps li:last-child').className), 'no')
-	await page.click('#again')
-	await until(() => page.$('#play'), 'the agent to be ready to start again')
-	await dockSays(page, /No agents running/, 'the dock to forget the agent')
-	assert.deepEqual(await steps(page), [], 'the list of steps is empty again')
-	// And it plays again, to the end.
-	await page.click('#play')
-	await until(() => page.$('#allow'), 'the permission question, the second time')
-	await page.click('#allow')
-	await until(() => page.$('#review'), 'the end of the second turn')
-	assert.deepEqual(problems, [])
-	await page.close()
-})
-
-test('the buttons of the agents tile keep keyboard focus as the story moves on', { skip }, async () => {
-	const { page, problems } = await open()
-	await page.evaluate(() => document.getElementById('agents-tile').scrollIntoView())
-	await until(() => page.$('#play'), 'the start button')
-	await page.focus('#play')
-	await page.keyboard.press('Enter')
-	await until(() => page.$('#allow'), 'the permission question')
-	assert.equal(await page.evaluate(() => document.activeElement?.id), 'allow', 'focus moved to the next button')
-	await page.keyboard.press('Enter')
-	await until(() => page.$('#review'), 'the end of the turn')
-	assert.equal(await page.evaluate(() => document.activeElement?.id), 'review', 'focus moved to the next button')
-	assert.deepEqual(problems, [])
-	await page.close()
-})
-
-test('a keyboard user can skip the canvas and the dock', { skip }, async () => {
-	const { page, problems } = await open()
-	const canvas = await flowCanvas(page)
-	await drawn(canvas)
-	const links = await page.evaluate(() => [...document.querySelectorAll('.tile .skip')].map(a => `${a.textContent}>${a.getAttribute('href')}`))
-	assert.deepEqual(links, ['Skip the canvas>#flow-tile-controls', 'Skip the dock>#agents-tile-controls', 'Skip the canvas>#changes-tile-controls'])
-	await page.focus('#flow-tile .skip')
-	await page.keyboard.press('Enter')
-	assert.equal(await page.evaluate(() => document.activeElement?.id), 'flow-tile-controls', 'focus is at the tile controls, past the canvas')
-	assert.deepEqual(problems, [])
-	await page.close()
-})
-
-test('the page can be found: a searchable title, a description, a canonical address and a sitemap that names it', { skip }, async () => {
-	const { page, problems } = await open()
-	const head = await page.evaluate(() => {
-		const meta = (sel, attr = 'content') => document.querySelector(sel)?.getAttribute(attr) ?? ''
-		return {
-			title: document.title,
-			description: meta('meta[name="description"]'),
-			canonical: meta('link[rel="canonical"]', 'href'),
-			robots: meta('meta[name="robots"]'),
-			ogTitle: meta('meta[property="og:title"]'),
-			ogImage: meta('meta[property="og:image"]'),
-			ogUrl: meta('meta[property="og:url"]'),
-			card: meta('meta[name="twitter:card"]'),
-			verification: meta('meta[name="google-site-verification"]'),
-			ld: JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent),
-			h1: document.querySelector('h1')?.textContent ?? '',
-			badge: document.querySelector('.badge')?.textContent ?? '',
-		}
-	})
-	assert.equal(head.title, 'Axle: harness-first code editor for Claude Code and Codex')
-	assert.ok(head.title.length <= 60, 'the title fits a search result')
-	assert.ok(head.description.length >= 70 && head.description.length <= 160, `the description fits a search result (${head.description.length} characters)`)
-	assert.match(head.description, /Claude Code/)
-	assert.equal(head.canonical, 'https://bothuany.github.io/axle/')
-	assert.equal(head.ogUrl, head.canonical)
-	assert.equal(head.ogTitle, head.title)
-	assert.equal(head.ogImage, 'https://bothuany.github.io/axle/media/axle-poster.jpg')
-	assert.equal(head.card, 'summary_large_image')
-	assert.match(head.robots, /^index/)
-	assert.ok(head.verification.length > 20, 'the search console verification tag is there')
-	assert.equal(head.ld['@type'], 'SoftwareApplication')
-	assert.equal(head.ld.url, head.canonical)
-	assert.match(head.h1, /Axle shows how it runs/)
-	assert.match(head.badge, /Claude Code and Codex/, 'the page text names the agents')
-	// The sitemap is served next to the page, and lists exactly the page.
+test('the pages can be found: titles, descriptions, canonical addresses and a sitemap that lists them', { skip }, async () => {
+	for (const path of ['', 'try/']) {
+		const { page, problems } = await open(path)
+		const head = await page.evaluate(() => {
+			const meta = s => document.querySelector(s)?.getAttribute('content') ?? ''
+			return {
+				title: document.title,
+				description: meta('meta[name="description"]'),
+				canonical: document.querySelector('link[rel="canonical"]')?.href,
+				csp: meta('meta[http-equiv="Content-Security-Policy"]'),
+				ogUrl: meta('meta[property="og:url"]'),
+				h1: document.querySelectorAll('h1').length,
+			}
+		})
+		assert.ok(head.title.length <= 60, `"${head.title}" fits a search result`)
+		assert.ok(head.description.length >= 70 && head.description.length <= 160, `the description of /${path} fits a search result (${head.description.length} characters)`)
+		assert.equal(head.canonical, `https://bothuany.github.io/axle/${path}`)
+		assert.equal(head.ogUrl, head.canonical)
+		assert.match(head.csp, /default-src 'none'/)
+		assert.equal(head.h1, 1)
+		assert.doesNotMatch(await page.content(), /\{\{(name|site|repo)\}\}/, 'every placeholder is filled')
+		assert.deepEqual(problems, [])
+		await page.close()
+	}
 	const sitemap = await (await fetch(new URL('sitemap.xml', url))).text()
-	assert.match(sitemap, /^<\?xml version="1.0" encoding="UTF-8"\?>/)
-	assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1]), [head.canonical])
-	assert.match(sitemap, /<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/)
-	// The pages that only exist to be framed are not for a search to find.
+	assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1]), ['https://bothuany.github.io/axle/', 'https://bothuany.github.io/axle/try/'])
 	for (const part of ['canvas.html', 'pages/dock.html', 'pages/island.html']) {
 		assert.match(await (await fetch(new URL(part, url))).text(), /<meta name="robots" content="noindex"/, `${part} asks not to be indexed`)
 	}
-	assert.deepEqual(problems, [])
-	await page.close()
 })
 
-test('the harness map is the real scan of the demo project, with its one warning', { skip }, async () => {
+test('a keyboard user can skip to the content, and every image says what it shows', { skip }, async () => {
 	const { page, problems } = await open()
-	const text = await page.evaluate(() => document.querySelector('#harness-root')?.innerText ?? '')
-	for (const word of ['Instructions', 'Rules', 'Skills', 'Subagents', 'Hooks', 'MCP servers', 'CLAUDE.md', 'graphql-schema.md']) assert.ok(text.includes(word), `the map has ${word}`)
-	assert.match(text, /matches no file in the project/, 'the rule that matches nothing is flagged')
-	assert.ok(!/Batuhan|\/Users\/|\/home\/|[A-Za-z]:\\/.test(text), 'nothing of the machine that built it is in the map')
-	assert.deepEqual(problems, [])
-	await page.close()
-})
-
-test('what the demo cannot do is said where a visitor reaches for it', { skip }, async () => {
-	const { page, problems } = await open()
-	const canvas = await flowCanvas(page)
-	await drawn(canvas)
-	// Handing the flow to an agent is the app's; here the tile says so.
-	await clickIn(canvas, 'Ask about this flow')
-	await footHas(page, 'flow-tile', 'hands the flow to the agent')
-	assert.deepEqual(problems, [])
-	await page.close()
-})
-
-test('below desktop width the page shows the video and the harness map, and loads no canvas', { skip }, async () => {
-	const { page, problems } = await open({ width: 390, height: 844, isMobile: true, hasTouch: true })
-	assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.fallback')).display), 'block')
-	assert.equal(await page.evaluate(() => !!document.querySelector('.tile')), false, 'no tile was mounted')
-	assert.equal(page.frames().filter(f => f.parentFrame()).length, 0, 'no iframe was loaded')
-	assert.ok((await page.evaluate(() => document.querySelector('#harness-root')?.innerText ?? '')).includes('Instructions'), 'the harness map is there')
-	assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'no horizontal scroll')
+	await page.keyboard.press('Tab')
+	assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'Skip to the content')
+	await page.evaluate(() => document.querySelector('[data-clip]').scrollIntoView())
+	await wait(300)
+	const unnamed = await page.$$eval('img', imgs => imgs.filter(i => !i.hasAttribute('alt')).map(i => i.src))
+	assert.deepEqual(unnamed, [])
 	assert.deepEqual(problems, [])
 	await page.close()
 })
