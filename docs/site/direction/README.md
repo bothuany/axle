@@ -1,11 +1,11 @@
 # Axle website: design direction (checkpoint 1)
 
 Three directions for the new site at bothuany.github.io/axle, each with a token plan, wireframes for the hero and one problem
-section at desktop and phone width, and the frontend-design skill's anti-default check. Each direction has a mock-up page
-(`mock-a.html`, `mock-b.html`, `mock-c.html`) and two headless screenshots of it (`shots/*-1440.png`, `shots/*-375.png`).
+section at desktop and phone width, and the frontend-design skill's anti-default check. Each direction had a mock-up page and two
+headless screenshots of it (1440 and 375); screenshots are kept out of the repository, so those were shown to the user separately.
 
-The canvas in every mock-up is a real capture: `playground/canvas.html` (Axle's canvas from `ui/` on the fake host) on the demo
-project's data from `scripts/playground-data.mjs`, screenshotted with headless Chrome (`img/`). Nothing in the canvas is drawn by hand.
+The canvas in every mock-up was a real capture: `canvas.html` (Axle's canvas from `ui/` on the fake host) on the demo project's
+data, screenshotted with headless Chrome. Nothing in the canvas was drawn by hand.
 Every number in the copy comes from that data: the demo's agent change ("Claude Code: discount codes on orders") touches
 2 files and reaches 4 endpoints.
 
@@ -22,7 +22,7 @@ Every number in the copy comes from that data: the demo's agent change ("Claude 
 
 - **The hero is the real canvas in an iframe** of the canvas page (as today's `canvas.html`): the fake host already talks to
   `window.parent`, the canvas keeps its own Content-Security-Policy, and the iframe is created only when the hero is near the viewport,
-  so Monaco and the 2.7 MB editor chunk never block the first paint. Until then a poster (the capture in `img/`) sits in its place,
+  so Monaco and the 2.7 MB editor chunk never block the first paint. Until then a poster (a capture of the canvas) sits in its place,
   the same size, so nothing jumps.
 - **No scroll trap.** The canvas does not take the wheel or one-finger touch while you scroll past it. On desktop a plain wheel
   scrolls the page, Ctrl/⌘ + wheel or a pinch zooms the canvas, and a drag pans it (the canvas gets `panOnScroll` off and
@@ -203,9 +203,6 @@ from the hero down through the problems), the dark canvas is the one lit thing o
 hero, and it stays clear of the two looks a dev tool drifts to (dark with an accent, centred colour field). B's full-bleed idea
 can still be borrowed for the Try page, where the canvas should fill the screen.
 
-## Files
+## Outcome
 
-- `mock-a.html`, `mock-b.html`, `mock-c.html`: the hero and one problem section of each direction (static; the real canvas is
-  the capture, the live iframe comes in the build).
-- `shots/a-1440.png`, `shots/a-375.png`, and the same for `b` and `c`: headless Chrome, full page.
-- `img/`: the canvas captures used by the mock-ups.
+The user chose A. It is built in `site/` (see [site/README.md](../../../site/README.md)).
