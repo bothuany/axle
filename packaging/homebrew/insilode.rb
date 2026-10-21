@@ -27,8 +27,8 @@ cask "insilode" do
   zap trash: [
     "~/.insilode",
     "~/Library/Application Support/Insilode",
-    "~/Library/Preferences/com.insilode.Insilode.plist",
-    "~/Library/Saved Application State/com.insilode.Insilode.savedState",
+    "~/Library/Preferences/dev.insilode.Insilode.plist",
+    "~/Library/Saved Application State/dev.insilode.Insilode.savedState",
   ]
 
   caveats <<~EOS

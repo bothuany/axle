@@ -113,9 +113,9 @@ Code - OSS or VS Code one:
 
 | | Key | Value | What uses it |
 |---|---|---|---|
-| macOS | `darwinBundleIdentifier` | `com.insilode.Insilode` | the bundle id: preferences in `~/Library/Preferences/com.insilode.Insilode.plist`, saved window state, the policy domain |
+| macOS | `darwinBundleIdentifier` | `dev.insilode.Insilode` | the bundle id: preferences in `~/Library/Preferences/dev.insilode.Insilode.plist`, saved window state, the policy domain |
 | macOS | `darwinProfileUUID`, `darwinProfilePayloadUUID` | Insilode's own | the identity of the policy `.mobileconfig` VS Code's build can generate |
-| Linux | `linuxDesktopName` | `com.insilode.Insilode` | `/usr/share/applications/com.insilode.Insilode.desktop` (and `.UrlHandler.desktop`), the appdata file, the window class |
+| Linux | `linuxDesktopName` | `dev.insilode.insilode` | `/usr/share/applications/dev.insilode.insilode.desktop` (and `.UrlHandler.desktop`), the appdata file, the window class |
 | Linux | `linuxIconName` | `insilode` | `/usr/share/pixmaps/insilode.png` |
 
 Two folder names are still Code - OSS's: `sharedDataFolderName` (`~/.vscode-oss-shared`) and `serverDataFolderName`

@@ -33,7 +33,7 @@ Download `insilode_<version>_amd64.deb` and install it on Debian 12, Ubuntu 22.0
 sudo apt install ./insilode_<version>_amd64.deb
 ```
 
-It installs into `/usr/share/insilode`, adds `insilode` to `/usr/bin` and a desktop entry (`com.insilode.Insilode.desktop`, icon `insilode`), so it installs beside a VS Code or Code - OSS package. Unlike VS Code's package, it does not add any apt repository. For Fedora and other RPM distributions there is `insilode-<version>-1.x86_64.rpm` (`sudo dnf install ./insilode-*.rpm`), and `Insilode-<version>-linux-x64.tar.gz` unpacks anywhere (run `Insilode-linux-x64/insilode`). All are x64 only.
+It installs into `/usr/share/insilode`, adds `insilode` to `/usr/bin` and a desktop entry (`dev.insilode.insilode.desktop`, icon `insilode`), so it installs beside a VS Code or Code - OSS package. Unlike VS Code's package, it does not add any apt repository. For Fedora and other RPM distributions there is `insilode-<version>-1.x86_64.rpm` (`sudo dnf install ./insilode-*.rpm`), and `Insilode-<version>-linux-x64.tar.gz` unpacks anywhere (run `Insilode-linux-x64/insilode`). All are x64 only.
 
 - Later: an APT repository so that `sudo apt install insilode` and `apt upgrade` work ([how it would be hosted](../packaging/apt/README.md); not set up yet).
 
