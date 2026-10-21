@@ -32,7 +32,12 @@ export function parseTourAsk(m: unknown, playing: { id: string; steps: number } 
 	return question && typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < playing.steps ? { index, question } : undefined;
 }
 
+/** What the reader wants done with the lines they point at: ask about them, have them explained, or have the agent change them. */
+export type PointKind = 'ask' | 'explain' | 'edit';
+const KINDS: readonly PointKind[] = ['ask', 'explain', 'edit'];
+
 export interface PointAsk {
+	kind: PointKind;
 	/** Absolute, inside the workspace. */
 	file: string;
 	startLine: number;
@@ -48,10 +53,21 @@ export function parsePointAsk(m: unknown, fileOf: (file: unknown) => string | un
 	}
 	const file = fileOf(m.file);
 	const question = oneLine(m.question, MAX_QUESTION);
-	if (!file || !question || !whole(m.startLine) || !whole(m.endLine) || m.endLine < m.startLine) {
+	// A kind the canvas made up is an ordinary question. Explaining needs no words; asking and editing do.
+	const kind = KINDS.find(k => k === m.kind) ?? 'ask';
+	if (!file || (!question && kind !== 'explain') || !whole(m.startLine) || !whole(m.endLine) || m.endLine < m.startLine) {
 		return undefined;
 	}
-	return { file, startLine: m.startLine, endLine: m.endLine, label: oneLine(m.label, MAX_LABEL) || 'this code', question };
+	return { kind, file, startLine: m.startLine, endLine: m.endLine, label: oneLine(m.label, MAX_LABEL) || 'this code', question };
+}
+
+/** The lines a selection covers, 1-based; a selection that ends at the start of a line does not include that line. */
+export function selectedRange(sel: { start: { line: number }; end: { line: number; character: number }; isEmpty: boolean }): { startLine: number; endLine: number } | undefined {
+	if (sel.isEmpty) {
+		return undefined;
+	}
+	const last = sel.end.character === 0 && sel.end.line > sel.start.line ? sel.end.line - 1 : sel.end.line;
+	return { startLine: sel.start.line + 1, endLine: last + 1 };
 }
 
 /** `file:58-90`, or `file:58` for one line. */
@@ -73,6 +89,35 @@ export function pointAskPrompt(p: { label: string; where: string; flow?: string;
 		'Answer by showing: call the axle tool `tour` with 1 to 5 steps starting at that code (leave `flow` out: the canvas already shows it), captions that answer the question; then a one-paragraph answer here.',
 		'If you cannot call mcp__axle__tour, answer in text.',
 	].join(' ');
+}
+
+/** The reader selected code and wants it explained: the answer is a tour that starts there, as for a question. */
+export function explainPrompt(p: { label: string; where: string; flow?: string }): string {
+	return [
+		`The user selected ${oneLine(p.label, MAX_LABEL)} (${oneLine(p.where, MAX_LABEL)})${p.flow ? ` on the flow "${oneLine(p.flow, MAX_LABEL)}"` : ''} and asks you to explain it: what it does and why it is written this way.`,
+		'Answer by showing: call the axle tool `tour` with 1 to 5 steps starting at that code (leave `flow` out), captions that say why and not what; then a one-paragraph answer here.',
+		'If you cannot call mcp__axle__tour, answer in text.',
+	].join(' ');
+}
+
+/** The reader selected code and asks for it to be changed. The edit lands as the usual reviewable change (diff, Keep/Undo), so the agent only has to make it, and only there. */
+export function editPrompt(p: { label: string; where: string; instruction: string }): string {
+	return [
+		`The user selected ${oneLine(p.label, MAX_LABEL)} (${oneLine(p.where, MAX_LABEL)}) and asks you to change it, in their own words: ${JSON.stringify(p.instruction)}.`,
+		'Edit only those lines of that file, with your normal edit tools, and leave everything else as it is; Axle shows the change to the user as a diff to keep or undo.',
+		'Do not run other commands. Say in one sentence what you changed.',
+	].join(' ');
+}
+
+/** The prompt for whichever of the three the reader chose; the one place the canvas and the editor share. */
+export function selectionPrompt(raw: { kind: PointKind; label: string; where: string; flow?: string; question: string }): string {
+	// Whoever calls (the canvas, the editor's input box), the words reach a terminal as one plain line.
+	const p = { ...raw, question: oneLine(raw.question, MAX_QUESTION) };
+	switch (p.kind) {
+		case 'explain': return explainPrompt(p);
+		case 'edit': return editPrompt({ label: p.label, where: p.where, instruction: p.question });
+		default: return pointAskPrompt(p);
+	}
 }
 
 /** A note an agent pins to a step: plain text, cut, or nothing. */

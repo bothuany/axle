@@ -121,6 +121,21 @@
         "category": "Axle"
       },
       {
+        "command": "flow.selection.ask",
+        "title": "Ask Agent About Selection…",
+        "category": "Axle"
+      },
+      {
+        "command": "flow.selection.explain",
+        "title": "Explain Selection with a Tour",
+        "category": "Axle"
+      },
+      {
+        "command": "flow.selection.edit",
+        "title": "Edit Selection with Agent…",
+        "category": "Axle"
+      },
+      {
         "command": "flow.ide.howTo",
         "title": "Connect Claude Code",
         "category": "Axle"
@@ -190,6 +205,18 @@
         "key": "ctrl+alt+k",
         "mac": "cmd+alt+k",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "flow.selection.ask",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "when": "editorTextFocus && editorHasSelection"
+      },
+      {
+        "command": "flow.selection.edit",
+        "key": "ctrl+alt+j",
+        "mac": "cmd+alt+j",
+        "when": "editorTextFocus && editorHasSelection"
       }
     ],
     "menus": {
@@ -232,6 +259,26 @@
           "command": "flow.types.focusType",
           "when": "editorTextFocus || editorHasSelection",
           "group": "navigation@90"
+        },
+        {
+          "command": "flow.selection.edit",
+          "when": "editorHasSelection && resourceScheme == file",
+          "group": "9_axle@1"
+        },
+        {
+          "command": "flow.selection.ask",
+          "when": "editorHasSelection && resourceScheme == file",
+          "group": "9_axle@2"
+        },
+        {
+          "command": "flow.selection.explain",
+          "when": "editorHasSelection && resourceScheme == file",
+          "group": "9_axle@3"
+        },
+        {
+          "command": "flow.ide.mention",
+          "when": "editorHasSelection && resourceScheme == file",
+          "group": "9_axle@4"
         }
       ],
       "commandPalette": [

@@ -15,6 +15,7 @@ import { definitionInFile, notify, registerIde } from './ide'
 import { ActionsCtx, LANG_BY_EXT, nodeTypes, type CanvasActions, type Caret } from './nodes'
 import { cardAt, samePath } from './tour/cards'
 import { PointAsk, selectedLines, type Pointing } from './tour/PointAsk'
+import { SelectionBar, type Picked, type SelectionAction } from './tour/SelectionBar'
 import { useTourPlayer } from './tour/TourPlayer'
 import { useGaze } from './gaze/Gaze'
 import type { FlowNode } from './types'
@@ -536,6 +537,22 @@ function Flow() {
 
   actionsRef.current = actions
 
+  // The selection bar (tour/SelectionBar.tsx): the lines were captured when the bar showed, so the click cannot move them.
+  const selectionAct = (action: SelectionAction, picked: Picked) => {
+    const n = find(down, picked.key) ?? find(up, picked.key)
+    if (!n?.file) return
+    const label = n.label.replace(/\s*▸\s*/g, '.')
+    if (action === 'mention') {
+      vscode.postMessage({ type: 'mention', file: n.file, start: picked.startLine - 1, end: picked.endLine - 1 })
+    } else if (action === 'explain') {
+      vscode.postMessage({ type: 'pointAsk', kind: 'explain', file: n.file, startLine: picked.startLine, endLine: picked.endLine, label, question: '' })
+      notify.show('Asked the agent to explain it: the answer plays here as a tour.')
+    } else {
+      setPointing({ key: picked.key, file: n.file, startLine: picked.startLine, endLine: picked.endLine, label, kind: action })
+    }
+    window.getSelection()?.removeAllRanges()
+  }
+
   // Changed cards in call order: the outermost caller first, then down the flow as it runs.
   const changed = useMemo(() => {
     const ups: { n: FlowNode; depth: number }[] = []
@@ -772,14 +789,15 @@ function Flow() {
         </ActionsCtx.Provider>
         {gaze.overlay}
         {tour.captionLayer}
+        <SelectionBar hidden={!!pointing || !!editing} onAct={selectionAct} />
         {pointing && (
           <PointAsk
             pointing={pointing}
             onClose={() => setPointing(null)}
             onSend={question => {
-              vscode.postMessage({ type: 'pointAsk', file: pointing.file, startLine: pointing.startLine, endLine: pointing.endLine, label: pointing.label, question: question.replace(/\s+/g, ' ').trim().slice(0, 1000) })
+              vscode.postMessage({ type: 'pointAsk', kind: pointing.kind ?? 'ask', file: pointing.file, startLine: pointing.startLine, endLine: pointing.endLine, label: pointing.label, question: question.replace(/\s+/g, ' ').trim().slice(0, 1000) })
               setPointing(null)
-              notify.show('Question sent to the agent: its answer plays here as a tour.')
+              notify.show(pointing.kind === 'edit' ? 'Sent to the agent: its change shows here to keep or undo.' : 'Question sent to the agent: its answer plays here as a tour.')
             }}
           />
         )}

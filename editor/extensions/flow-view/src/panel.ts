@@ -16,7 +16,7 @@ import { CardLanguage, cardQuery } from './language';
 import { CardOverlays } from './overlay';
 import type { FlowNode, FlowProvider, FlowTarget } from './providers';
 import { flowRoot } from './root';
-import { MAX_NOTES, noteText, parsePointAsk, parseTourAsk, place, pointAskPrompt, tourAskPrompt } from './tour/ask';
+import { MAX_NOTES, noteText, parsePointAsk, parseTourAsk, place, selectionPrompt, tourAskPrompt } from './tour/ask';
 import { readTextIn } from './tour/files';
 import { GazeLog, gazeTour, parseGaze } from './tour/gaze';
 import { tourReport } from './tour/validate';
@@ -407,8 +407,11 @@ export class FlowPanel implements vscode.Disposable {
 		if (m.type === 'pointAsk') {
 			const p = parsePointAsk(m, f => workspaceFile(f));
 			if (p) {
-				this.pointed = { question: p.question, at: Date.now() };
-				await this.askAgent(pointAskPrompt({ label: p.label, where: place(this.rel(p.file), p.startLine, p.endLine), flow: this.shown?.label, question: p.question }), 'canvas', [p.file]);
+				// An edit is not answered with a tour; it comes back as a change on the canvas.
+				if (p.kind !== 'edit') {
+					this.pointed = { question: p.question || 'Explain this code.', at: Date.now() };
+				}
+				await this.askAgent(selectionPrompt({ kind: p.kind, label: p.label, where: place(this.rel(p.file), p.startLine, p.endLine), flow: this.shown?.label, question: p.question }), 'canvas', [p.file]);
 			}
 			return;
 		}
@@ -431,7 +434,11 @@ export class FlowPanel implements vscode.Disposable {
 		if (m.type === 'mention') {
 			const file = workspaceFile(m.file);
 			if (file) {
-				this.onMention?.(file, Number(m.start) || 0, Number(m.end) || 0);
+				// Whole line numbers in order: the canvas is not trusted with what reaches the terminal.
+				const [start, end] = [Number(m.start), Number(m.end)];
+				if (Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end >= start && end < 10_000_000) {
+					this.onMention?.(file, start, end);
+				}
 			}
 			return;
 		}
