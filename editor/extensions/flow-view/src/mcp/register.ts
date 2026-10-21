@@ -117,7 +117,7 @@ export function registerMcpCommands(context: vscode.ExtensionContext, log: vscod
 		const pick = await vscode.window.showInformationMessage('Move Claude Code tools from Axle to Insilode?', {
 			modal: true,
 			detail: [
-				'Claude Code has an MCP server named "axle" from before Axle was renamed Insilode. It still works, but its tools are called mcp__axle__*, and Insilode now offers them as mcp__insilode__*.',
+				'Claude Code has an MCP server named "axle" from before Axle was renamed Insilode. It may still work, but it can point at a program that no longer exists, and its tools are called mcp__axle__* where Insilode now offers them as mcp__insilode__*.',
 				'',
 				'This runs the Claude Code CLI twice:',
 				'',

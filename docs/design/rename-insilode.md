@@ -223,8 +223,9 @@ Approved 2026-10-22 with D1-D6 as recommended (D1: `com.insilode.Insilode`, in i
 - **Done as planned:** data-folder copy (`src/insilodeMigrate.ts`, tested), installer upgrade in place with legacy cleanup, legacy `update-*-axle.json`
   files, settings migration (`legacySettings.ts`, tested), theme ids, `axleTour` still read, `out/axle-mcp.js` stub plus `AXLE_WORKSPACE`, the one-time
   confirmed move of the `axle` MCP registration, `.axle/worktrees` and `axle/<name>` still recognised, the old Codex profile removed.
-- **Not done, because it turned out unnecessary:** accepting both `x-axle-*` headers and mirroring `~/.axle/bridge` (the stub runs the new server,
-  which talks to the new bridge); a "move tours" prompt (tours are found by `*.tour.json` anywhere, there is no fixed folder to move); a lint
+- **Not done:** accepting both `x-axle-*` headers and mirroring `~/.axle/bridge`. The stub runs the new server, which talks to the new bridge, so a registration
+  that still reaches `out/axle-mcp.js` works. One that does not (Windows without `node` on PATH: it runs `Axle.exe`, which Setup removes; macOS and Linux: the
+  install path changes, and a still-installed `Axle.app` runs its own 0.4.x server against `~/.axle/bridge`) fails until the user moves it to `insilode`: the move dialog says so; a "move tours" prompt (tours are found by `*.tour.json` anywhere, there is no fixed folder to move); a lint
   that flags `mcp__axle__*` permission rules (the move dialog tells the user to rename them instead).
 - **Not verified here (needs the Windows Sandbox / a real install, section 5):** that Setup upgrades `...\Programs\Axle` in place (D2's premise:
   upstream `code.iss` sets no `UsePreviousAppDir`, so Inno's default applies, but it is unrun), the legacy cleanup entries, what a 0.4.3 build does with
