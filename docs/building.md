@@ -121,6 +121,30 @@ scripts/            setup, start, build-extensions, install-shortcut and install
   `git -C editor/vscode checkout -- product.json && git -C editor/vscode apply --include=product.json ../patches/flow-core.patch`. After any other patch change, delete `editor/vscode` and run `npm run setup` for a clean checkout.
 - Tests: `cd editor/extensions/flow-view && npm test` builds the index worker and checks what it finds in every project under `test/fixtures` against `test/expected` (after an intended change: `UPDATE=1 npm test`, then read the diff). `npm run typecheck` there checks the types.
 
+## Desktop end-to-end tests
+
+Some things can only be tested in the real desktop app: the installer, the in-app update, the status island, window focus and position. They are never tested on your own desktop (a test that opens windows takes over your screen and your pointer). UI checks that do not need a desktop window run headless in web mode (`npm run web`, the [probe skill](../.claude/skills/probe/SKILL.md)) and never bring a window to the front. Everything desktop-only goes to one of two disposable machines. Both run the same code, `test/e2e-desktop` (Playwright's `_electron` API, with a remote-debugging fallback for a packaged build that has Electron's inspector off):
+
+| Scenario | What it checks |
+|---|---|
+| Branding | the window title says Axle, nothing says Code - OSS, no Welcome or Get Started page opens |
+| Canvas and tour | the flow canvas opens (as an editor tab where the build does that) and a tour plays on it |
+| Status island | it shows; where the build has the controls it also minimizes, is dragged, hides while Axle is focused and closes (a fake agent list comes from `test/e2e-desktop/driver`) |
+| Installer (Windows) | silent install, the update through `AXLE_UPDATE_URL` against a local static server (detect, download, ready, Update, relaunch on the new version), silent uninstall |
+
+**GitHub Actions** (`.github/workflows/desktop-e2e.yml`, on every pull request and on demand): Windows runs the installed build, Linux runs the app from source under xvfb. The first run builds VS Code (60 to 90 minutes); the VS Code checkout and the packaged app are then cached, and a run takes 15 to 30. Screenshots and logs are artifacts; one PR comment (updated on every push) has a pass/fail table and the screenshots.
+
+**Windows Sandbox** (Windows 10/11 Pro, Enterprise or Education), for a quick local run of the Windows scenarios on an installer you built:
+
+```bash
+npm run installer                   # once: dist/Axle-Setup-<version>-x64.exe
+npm run sandbox:e2e                 # newest installer in dist/, or: npm run sandbox:e2e -- --installer <exe>
+```
+
+Turn the feature on once: "Turn Windows features on or off", tick **Windows Sandbox**, OK, restart (or, as administrator, `Enable-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -All`); virtualization must be on in the BIOS. If it is missing, the command says so and stops. The launcher stages the installer, `node.exe` and the test code into a temp folder, writes a `.wsb` that maps that folder **read-only** and an output folder read-write (networking, clipboard, audio and GPU off), starts the sandbox minimized, and waits for `done.json`. Inside, a logon command runs `test/e2e-desktop/sandbox/run-in-sandbox.ps1` (the script CI runs too): install, the scenarios, update, uninstall, screenshots to the output folder, shutdown. The launcher prints the results and the screenshot paths. Your own Axle install and profile are never touched. Only one sandbox can run at a time, and its window opens minimized.
+
+`npm run test:e2e-unit` tests the harness itself (the `.wsb`, the command lines, the result table) with no window. `run.mjs` refuses to start Axle unless `AXLE_E2E_ISOLATED=1`, which the workflow and the sandbox script set; do not set it on a machine you use.
+
 ## The browser playground
 
 `playground/` is the site at https://bothuany.github.io/axle/: a page that presents Axle with live tiles on a fictional demo project: the real flow canvas on an endpoint, a scripted Claude that the Agents dock and the status overlay follow, the agent's change on the canvas (green and red, Keep and Undo), and the harness scan of the project. The canvas, the dock page, the overlay page and the harness map are Axle's own, built from the demo project by the real code (what each part is, and what is scripted, in [playground/README.md](../playground/README.md)). From the repository root:
