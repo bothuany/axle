@@ -167,7 +167,7 @@ Turn the feature on once: "Turn Windows features on or off", tick **Windows Sand
 
 ## The website
 
-`site/` is the site at https://bothuany.github.io/axle/: a home page whose hero is the real flow canvas on a fictional demo project, with a guided tour, one section per problem Insilode solves and the downloads; and a Try page with guided stories on the canvas and the Agents dock. The canvas, the dock page, the island page and the harness scan are Insilode's own, built from the demo project by the real code (what each part is, and what is written for the page, in [site/README.md](../site/README.md)). From the repository root:
+`site/` is the site at https://insilode.dev/: a home page whose hero is the real flow canvas on a fictional demo project, with a guided tour, one section per problem Insilode solves and the downloads; and a Try page with guided stories on the canvas and the Agents dock. The canvas, the dock page, the island page and the harness scan are Insilode's own, built from the demo project by the real code (what each part is, and what is written for the page, in [site/README.md](../site/README.md)). From the repository root:
 
 ```bash
 (cd ui && npm ci)

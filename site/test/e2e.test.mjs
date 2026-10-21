@@ -1,6 +1,6 @@
 // The site in a real browser (headless Chrome): the home page with its live canvas, tour and downloads, the Try page's stories and
 // agents, and what search engines read. Run after `npm run build` (and `node scripts/site-data.mjs` before that): `npm run test:e2e`.
-// It serves dist/ the way GitHub Pages does, under /insilode/, and fails on any console error, 4xx/5xx response or page error. GitHub's
+// It serves dist/ the way GitHub Pages does, at the root of the site (https://insilode.dev), and fails on any console error, 4xx/5xx response or page error. GitHub's
 // API is answered from fixtures here (a rate-limited CI runner would otherwise get 403s), and one test makes it fail on purpose.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
@@ -9,7 +9,7 @@ import { preview } from 'vite'
 import puppeteer from 'puppeteer-core'
 
 // The address the build was made for (SITE_URL, as in vite.config.ts).
-const SITE_URL = (process.env.SITE_URL || 'https://bothuany.github.io/axle').replace(/\/$/, '')
+const SITE_URL = (process.env.SITE_URL || 'https://insilode.dev').replace(/\/$/, '')
 
 const CHROMES = [process.env.CHROME_PATH, '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser', 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].filter(Boolean)
 const chrome = CHROMES.find(p => existsSync(p))
@@ -36,7 +36,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms))
 
 before(async () => {
 	if (skip) return
-	server = await preview({ base: '/insilode/', preview: { port: 0, host: '127.0.0.1', strictPort: false } })
+	server = await preview({ base: '/', preview: { port: 0, host: '127.0.0.1', strictPort: false } })
 	url = `${server.resolvedUrls.local[0].replace(/\/$/, '')}/`
 	browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: ['--no-first-run', '--disable-gpu', '--no-sandbox'] })
 })
@@ -247,7 +247,7 @@ test('docs: the documents of the repository are pages of the site, linked to eac
 	assert.deepEqual(await page.$$eval('.doc-nav a', as => as.map(a => a.textContent)), ['Overview', 'Install and build', 'Languages', 'Agent tools', 'Boards'])
 	// A link between documents stays on the site; a link to another file of the repository goes to GitHub.
 	const links = await page.$$eval('.doc-body a', as => as.map(a => a.href))
-	assert.ok(links.some(h => h.endsWith('/insilode/docs/languages/')), 'the support table link opens the Languages page')
+	assert.ok(links.some(h => h.endsWith('/docs/languages/')), 'the support table link opens the Languages page')
 	assert.ok(links.some(h => h === 'https://github.com/bothuany/axle/blob/main/CONTRIBUTING.md'))
 	await page.click('.doc-nav a[href$="docs/languages/"]')
 	await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'Languages')

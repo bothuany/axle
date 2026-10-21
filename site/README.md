@@ -1,6 +1,6 @@
 # The website
 
-https://bothuany.github.io/axle/: the home page and the Try page, with the real canvas on a fictional demo project (`demo/`: orders and shipping in Java, billing in Python). A static site: no backend, and the only third-party request is GitHub's public API (the star count and the latest release). The design and its reasoning are in [docs/site/direction](../docs/site/direction/README.md) (direction A, "Light table").
+https://insilode.dev/: the home page and the Try page, with the real canvas on a fictional demo project (`demo/`: orders and shipping in Java, billing in Python). A static site: no backend, and the only third-party request is GitHub's public API (the star count and the latest release). The design and its reasoning are in [docs/site/direction](../docs/site/direction/README.md) (direction A, "Light table").
 
 ## The pages
 
@@ -32,16 +32,16 @@ https://bothuany.github.io/axle/: the home page and the Try page, with the real 
 
 ## Being found
 
-Each page sets its title, description, canonical address, Open Graph tags and a Content-Security-Policy; the home page adds `SoftwareApplication` JSON-LD and the `google-site-verification` tag. `{{site}}` comes from `SITE_URL` (default `https://bothuany.github.io/axle`). The build emits `sitemap.xml` with both pages. The framed pages (`canvas.html`, `pages/dock.html`, `pages/island.html`) carry `noindex`. There is no `robots.txt`: on a project site it would have to sit at the domain's root.
+Each page sets its title, description, canonical address, Open Graph tags and a Content-Security-Policy; the home page adds `SoftwareApplication` JSON-LD and the `google-site-verification` tag. `{{site}}` comes from `SITE_URL` (default `https://insilode.dev`). The build emits `sitemap.xml` with both pages. The framed pages (`canvas.html`, `pages/dock.html`, `pages/island.html`) carry `noindex`. There is no `robots.txt`: on a project site it would have to sit at the domain's root.
 
-## A custom domain (insilode.dev)
+## The domain (insilode.dev)
 
-The site is a project site today: `https://bothuany.github.io/axle/`. For `https://insilode.dev` the owner (nothing here does it for them):
-1. points the domain at GitHub Pages (four `A` records for the apex, or `ALIAS`/`ANAME`; see GitHub's "Managing a custom domain for your GitHub Pages site"; `AAAA` records are optional),
-2. sets the repository variable `SITE_URL` to `https://insilode.dev` (Settings, Secrets and variables, Actions, Variables),
-3. in Settings, Pages, enters the custom domain and ticks Enforce HTTPS once the certificate is issued.
+The site is served from the root of https://insilode.dev through GitHub Pages with a custom domain. The build writes `CNAME` (the host of `SITE_URL`) into `dist/`, so a deploy never drops the domain, and every URL in the pages is relative, so the site also works under a sub-path. Owner's steps (nothing in the repository does them):
+1. DNS at the registrar: the apex `insilode.dev` points at GitHub Pages (four `A` records, optionally the `AAAA` ones; see GitHub's "Managing a custom domain for your GitHub Pages site"). Verify the domain in GitHub (Settings, Pages) first, so nobody else can claim it.
+2. Settings, Pages: custom domain `insilode.dev`, then Enforce HTTPS once the certificate is issued.
+3. The old address `https://bothuany.github.io/axle/` is redirected to the domain by GitHub as soon as the custom domain is set. After the repository moves to the `insilode` organisation the project address changes with it (`insilode.github.io/insilode`), which redirects the same way.
 
-With `SITE_URL` set, `{{site}}` (canonical links, the social cards, the sitemap) names that address and the build writes `CNAME` into `dist/`. All URLs in the pages are relative, so the move from `/axle/` to `/` needs no other change. Verify the domain on GitHub (Settings, Pages) before pointing DNS, so nobody else can claim it.
+To serve a fork or a preview from elsewhere set `SITE_URL` (the repository variable of the same name in the workflow, or the environment variable locally): `{{site}}` and the sitemap follow it, and `CNAME` is written only for hosts that are not `*.github.io`.
 
 ## Run it
 
