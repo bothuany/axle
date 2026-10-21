@@ -1298,3 +1298,175 @@ index 74be4ca..60cbf66 100644
  //#endregion
  
  
+diff --git a/src/insilodeMigrate.ts b/src/insilodeMigrate.ts
+new file mode 100644
+index 0000000..ecd097a
+--- /dev/null
++++ b/src/insilodeMigrate.ts
+@@ -0,0 +1,134 @@
++/*---------------------------------------------------------------------------------------------
++ *  Insilode: what an Axle install left behind (the product was called Axle until 0.4.x).
++ *
++ *  The settings live in the user data folder (`Axle` under the platform's app data folder) and the
++ *  extensions in the data folder in the home directory (`.axle`). Insilode uses `Insilode` and `.insilode`,
++ *  so the first start copies what is worth keeping, once. The old folders are never touched: an Axle
++ *  that is still installed keeps working, and nothing is lost if the copy has to be redone.
++ *
++ *  Plain TypeScript with no VS Code imports, so the unit test cuts it out of the patch and runs it as it is.
++ *--------------------------------------------------------------------------------------------*/
++
++import * as fs from 'node:fs';
++import * as path from 'node:path';
++
++export const LEGACY_USER_DATA = 'Axle';
++export const LEGACY_DATA_FOLDER = '.axle';
++
++/** Written into a folder made by the migration; the folder is never migrated again, and a half-made copy never carries it. */
++export const MARKER = '.migrated-from-axle';
++
++/** What is copied from the user data folder: settings, keybindings, snippets, global and workspace state (trust included), unsaved backups. Caches and logs are not. */
++const USER_DATA_ENTRIES = ['User', 'Backups', 'storage.json', 'languagepacks.json', 'machineid'];
++
++/** What is copied from the data folder in the home directory. The agent bridge folder is runtime state. */
++const DATA_FOLDER_ENTRIES = ['extensions', 'argv.json'];
++
++export interface MigrationInput {
++	platform: NodeJS.Platform;
++	env: NodeJS.ProcessEnv;
++	home: string;
++	/** The command line after the executable: a user-chosen folder (`--user-data-dir`, `--extensions-dir`) is never replaced. */
++	argv: readonly string[];
++	/** product.json's `nameShort` and `dataFolderName`. */
++	product: { nameShort: string; dataFolderName: string };
++	isPortable: boolean;
++}
++
++export interface MigrationResult {
++	copied: string[];
++	failed: string[];
++}
++
++/** Where VS Code keeps the user data folder: VSCODE_APPDATA, else %APPDATA%, ~/Library/Application Support or $XDG_CONFIG_HOME. */
++export function appDataFolder(i: Pick<MigrationInput, 'platform' | 'env' | 'home'>): string {
++	if (i.env['VSCODE_APPDATA']) {
++		return i.env['VSCODE_APPDATA'];
++	}
++	switch (i.platform) {
++		case 'win32': return i.env['APPDATA'] ?? path.join(i.home, 'AppData', 'Roaming');
++		case 'darwin': return path.join(i.home, 'Library', 'Application Support');
++		default: return i.env['XDG_CONFIG_HOME'] ?? path.join(i.home, '.config');
++	}
++}
++
++const hasFlag = (argv: readonly string[], name: string) => argv.some(a => a === `--${name}` || a.startsWith(`--${name}=`));
++
++/** Text that names the old theme or the old folder: rewritten in the copy, never in the original. */
++export function rewriteSettings(file: 'settings' | 'extensions', text: string): string {
++	if (file === 'settings') {
++		return text.replace(/"Axle (Dark|Light)"/g, '"Insilode $1"');
++	}
++	// extensions.json records where each extension lives, as an absolute path in the old folder.
++	return text.replace(/([\\/])\.axle([\\/])/g, '$1.insilode$2');
++}
++
++function copyEntries(from: string, to: string, entries: readonly string[]): void {
++	for (const name of entries) {
++		const source = path.join(from, name);
++		if (fs.existsSync(source)) {
++			fs.cpSync(source, path.join(to, name), { recursive: true });
++		}
++	}
++}
++
++function rewriteIn(file: string, kind: 'settings' | 'extensions'): void {
++	if (!fs.existsSync(file)) {
++		return;
++	}
++	const text = fs.readFileSync(file, 'utf8');
++	const next = rewriteSettings(kind, text);
++	if (next !== text) {
++		fs.writeFileSync(file, next);
++	}
++}
++
++/** Copies `from` to `to` when `to` is missing: into a sibling first, then a rename, so `to` is either absent or whole. */
++function migrateFolder(from: string, to: string, entries: readonly string[], rewrite: (folder: string) => void, result: MigrationResult): void {
++	if (!fs.existsSync(from) || fs.existsSync(to)) {
++		return;
++	}
++	const partial = `${to}.migrating`;
++	try {
++		fs.rmSync(partial, { recursive: true, force: true });
++		fs.mkdirSync(partial, { recursive: true });
++		copyEntries(from, partial, entries);
++		rewrite(partial);
++		fs.writeFileSync(path.join(partial, MARKER), JSON.stringify({ from, at: new Date().toISOString() }) + '\n');
++		fs.renameSync(partial, to);
++		result.copied.push(`${from} -> ${to}`);
++	} catch (e) {
++		result.failed.push(`${from}: ${(e as Error).message}`);
++		fs.rmSync(partial, { recursive: true, force: true });
++	}
++}
++
++/** Never throws: a start must not fail because an old folder could not be copied. It is tried again at the next start. */
++export function migrateLegacyData(i: MigrationInput): MigrationResult {
++	const result: MigrationResult = { copied: [], failed: [] };
++	if (i.isPortable || i.env['VSCODE_PORTABLE']) {
++		return result;
++	}
++	try {
++		if (!hasFlag(i.argv, 'user-data-dir')) {
++			const base = appDataFolder(i);
++			migrateFolder(path.join(base, LEGACY_USER_DATA), path.join(base, i.product.nameShort), USER_DATA_ENTRIES, folder => {
++				rewriteIn(path.join(folder, 'User', 'settings.json'), 'settings');
++				const profiles = path.join(folder, 'User', 'profiles');
++				if (fs.existsSync(profiles)) {
++					for (const p of fs.readdirSync(profiles)) {
++						rewriteIn(path.join(profiles, p, 'settings.json'), 'settings');
++					}
++				}
++			}, result);
++		}
++		if (!hasFlag(i.argv, 'extensions-dir')) {
++			migrateFolder(path.join(i.home, LEGACY_DATA_FOLDER), path.join(i.home, i.product.dataFolderName), DATA_FOLDER_ENTRIES, folder => {
++				rewriteIn(path.join(folder, 'extensions', 'extensions.json'), 'extensions');
++			}, result);
++		}
++	} catch (e) {
++		result.failed.push((e as Error).message);
++	}
++	return result;
++}
+diff --git a/src/mainImpl.ts b/src/mainImpl.ts
+index 3d34aea..c148e2f 100644
+--- a/src/mainImpl.ts
++++ b/src/mainImpl.ts
+@@ -9,6 +9,7 @@ import * as os from 'node:os';
+ import { performance } from 'node:perf_hooks';
+ import { configurePortable } from './bootstrap-node.js';
+ import { bootstrapESM } from './bootstrap-esm.js';
++import { migrateLegacyData } from './insilodeMigrate.js';
+ import { app, protocol, crashReporter, Menu, contentTracing } from 'electron';
+ import minimist from 'minimist';
+ import { product } from './bootstrap-meta.js';
+@@ -33,6 +34,19 @@ perf.mark('code/didLoadMainBundle');
+ // Enable portable support
+ const portable = configurePortable(product);
+ 
++// Insilode: the settings and extensions an Axle install left are copied once, before argv.json and the user data folder are read.
++const migration = migrateLegacyData({
++	platform: process.platform,
++	env: process.env,
++	home: os.homedir(),
++	argv: process.argv.slice(1),
++	product: { nameShort: product.nameShort ?? 'Insilode', dataFolderName: product.dataFolderName ?? '.insilode' },
++	isPortable: portable.isPortable
++});
++for (const failure of migration.failed) {
++	console.error(`Insilode: could not copy data from Axle: ${failure}`);
++}
++
+ const args = parseCLIArgs();
+ // Configure static command line arguments
+ perf.mark('code/willConfigureCommandlineSwitches');
