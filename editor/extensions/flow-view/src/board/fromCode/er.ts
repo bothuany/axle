@@ -62,6 +62,7 @@ interface Rel {
 const tableName = (s: string) => s.replace(/["'`[\]]/g, '').split('.').pop()!.trim().toLowerCase();
 /** A C# entity's `Id` or `OrderId`: the key by convention, which is why such a table is marked as guessed. */
 const looksLikeKey = (field: string, entity: string) => field === 'Id' || field.toLowerCase() === `${entity.toLowerCase()}id`;
+const extOf = (file?: string | null) => (file ? file.slice(file.lastIndexOf('.')) : '');
 const safeId = (s: string) => `t_${s.replace(/[^A-Za-z0-9_]+/g, '_')}`;
 
 /** `one customer` / `many items` as the schema readers write them. */
@@ -94,9 +95,11 @@ export function erFromTables(input: ErInput, scope: ErScope = {}, opts: ErOption
 
 	// Tables: the entity readers first; then entities only the type graph knows (C#); then tables only a migration declares.
 	const tables: Table[] = [];
+	// Two services (or two stacks in one folder) may each own a table of the same name: a table is told apart by its name, the module of its entity and the language of its file.
 	const byTable = new Map<string, Table>();
+	const lookup = (name: string, module?: string, file?: string | null) => byTable.get(`${tableName(name)}@${module ?? ''}@${extOf(file)}`) ?? tables.find(t => tableName(t.schema.table) === tableName(name));
 	const add = (t: Omit<Table, 'id'>) => {
-		const key = tableName(t.schema.table);
+		const key = `${tableName(t.schema.table)}@${t.type?.module ?? ''}@${extOf(t.schema.file)}`;
 		if (byTable.has(key)) {
 			return;
 		}
@@ -121,7 +124,7 @@ export function erFromTables(input: ErInput, scope: ErScope = {}, opts: ErOption
 	}
 	for (const m of input.migrations ?? []) {
 		for (const op of m.ops) {
-			if (op.op === 'create' && !byTable.has(tableName(op.table))) {
+			if (op.op === 'create' && !lookup(op.table)) {
 				add({
 					schema: { entity: op.table, table: op.table, dbSchemaName: null, columns: op.columns.map(c => ({ name: c, column: c, type: '', key: false, nullable: false, maxLength: null })), relations: [], file: m.file, line: op.line, guess: !!op.guess },
 					fromMigration: m.name,
@@ -166,7 +169,7 @@ export function erFromTables(input: ErInput, scope: ErScope = {}, opts: ErOption
 	for (const t of tables) {
 		for (const c of t.schema.columns) {
 			const target = /^→\s*([^.\s]+)/.exec(c.type);
-			const to = target ? byTable.get(tableName(target[1])) : undefined;
+			const to = target ? lookup(target[1], t.type?.module, t.schema.file) : undefined;
 			if (to && !rels.some(r => r.from === t && r.to === to && r.toOne)) {
 				rels.push({ from: t, to, field: c.name, toOne: true, fromCard: '0..*', toCard: c.nullable ? '0..1' : '1' });
 			}
