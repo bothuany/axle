@@ -192,3 +192,7 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 /* ---- sequence ------------------------------------------------------------------------------- */
 .sq { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; user-select: none; }
 .sq:active { cursor: grabbing; }
+.bd-changes b { font-weight: 600; }
+.bd-changes .add { color: var(--fl-add); }
+.bd-changes .del { color: var(--fl-del); }
+.bd-changes .warn { color: var(--fl-warn); }

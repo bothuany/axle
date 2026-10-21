@@ -5,14 +5,20 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createHash } from 'crypto';
+import { compareBoards, hasChanges } from './compare';
 import type { BoardHighlight, BoardNode, BoardSpec, ChangeMark, NodeStatus } from './spec';
 
 export interface NodePatch { status?: NodeStatus; note?: string; change?: ChangeMark }
 
 /** Whatever shows boards. `show` opens (or reveals) a board; `update` redraws one that is already shown. */
 export interface BoardHost {
-	show(id: string, spec: BoardSpec): void | Promise<void>;
-	update(id: string, spec: BoardSpec): void | Promise<void>;
+	show(id: string, spec: BoardSpec, extra?: BoardExtra): void | Promise<void>;
+	update(id: string, spec: BoardSpec, extra?: BoardExtra): void | Promise<void>;
+}
+
+/** What a host shows next to the board: the board compared with its previous draw, for the "what changed" switch. */
+export interface BoardExtra {
+	since?: BoardSpec;
 }
 
 export interface StoredBoard {
@@ -84,20 +90,33 @@ export class BoardStore {
 		this.decorator = decorator;
 	}
 
-	/** The board as the user sees it. */
+	/** The board as the user sees it: compared with its `base` first (a board that is its own base is compared with its previous draw), then painted. */
 	private shown(id: string, spec: BoardSpec): BoardSpec {
 		try {
-			return this.decorator?.(id, spec) ?? spec;
+			const entry = this.boards.get(id);
+			const base = spec.base === undefined ? undefined : spec.base === id ? entry?.previous : this.boards.get(spec.base)?.spec;
+			const compared = base ? compareBoards(base, spec) : spec;
+			return this.decorator?.(id, compared) ?? compared;
 		} catch {
 			return spec;
 		}
+	}
+
+	/** The board against its previous draw, when there is one and something changed. */
+	private since(id: string): BoardExtra {
+		const board = this.boards.get(id);
+		if (!board?.previous) {
+			return {};
+		}
+		const diff = compareBoards(board.previous, board.spec);
+		return hasChanges(diff) ? { since: diff } : {};
 	}
 
 	/** Shows a board again through the decorator, in the tab that has it (the decoration changed, the board did not). */
 	async redraw(id: string): Promise<void> {
 		const board = this.boards.get(id);
 		if (board) {
-			await this.host?.update(id, this.shown(id, board.spec));
+			await this.host?.update(id, this.shown(id, board.spec), this.since(id));
 		}
 	}
 
@@ -114,7 +133,7 @@ export class BoardStore {
 		}
 		this.changed.fire({ type: 'set', id });
 		if (opts.present !== false) {
-			await this.host?.show(id, this.shown(id, spec)); // a replaced board is shown again if its tab was closed
+			await this.host?.show(id, this.shown(id, spec), this.since(id)); // a replaced board is shown again if its tab was closed
 		}
 		return id;
 	}
@@ -163,7 +182,7 @@ export class BoardStore {
 		const spec: BoardSpec = { ...board.spec, nodes, ...(patch.highlight ? { highlight: patch.highlight.length ? patch.highlight : undefined } : {}) };
 		this.boards.set(id, { ...board, spec, updatedAt: Date.now() });
 		this.changed.fire({ type: 'node', id });
-		await this.host?.update(id, this.shown(id, spec));
+		await this.host?.update(id, this.shown(id, spec), this.since(id));
 		return touched;
 	}
 

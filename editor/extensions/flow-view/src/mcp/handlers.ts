@@ -1090,6 +1090,14 @@ export class AgentTools {
 			wanted = undefined;
 		}
 		const replaced = wanted ? !!this.d.boards.get(wanted) : false;
+		if (spec.base) {
+			const ids = this.d.boards.list().map(b => b.id);
+			if (spec.base === wanted ? !replaced : !ids.includes(spec.base)) {
+				found.push(spec.base === wanted
+					? `base "${spec.base}" is this board's own id, but it was not drawn before: there is nothing to compare with yet.`
+					: `base board "${spec.base}" does not exist${ids.length ? `; boards: ${ids.slice(0, 8).join(', ')}` : '; nothing is drawn yet'}: nothing is compared.`);
+			}
+		}
 		const id = await this.d.boards.set(spec, { id: wanted, origin: 'agent' });
 		const skeleton = await this.d.skeleton?.drawn(id, spec, ctx.session);
 		const lint = lintBoard(spec);

@@ -12,7 +12,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { exportFormat, exportPayload, fileStem, sanitizeRequest, type BoardRequest, type ExportFormat } from './boardRequest';
 import { toMermaid } from './board/mermaid';
-import type { BoardHost } from './board/store';
+import type { BoardExtra, BoardHost } from './board/store';
 import type { BoardSpec } from './board/spec';
 import { flowRoot } from './root';
 
@@ -35,6 +35,7 @@ export interface BoardShowOptions {
 	request?: BoardRequest;
 	viewColumn?: vscode.ViewColumn;
 	preserveFocus?: boolean;
+	since?: BoardSpec;
 }
 
 interface Tab {
@@ -42,6 +43,8 @@ interface Tab {
 	spec: BoardSpec;
 	request: BoardRequest;
 	source?: BoardSource;
+	/** The board compared with its previous draw, for the switch that shows what changed. */
+	since?: BoardSpec;
 	/** The webview has said it is listening. */
 	ready: boolean;
 	/** The state changed after the page was written: the webview is sent it when it is ready. */
@@ -79,7 +82,7 @@ export class BoardPanel implements vscode.Disposable {
 		const request = sanitizeRequest(options.request);
 		const tab = this.tabs.get(key);
 		if (tab) {
-			Object.assign(tab, { spec, request, source: options.source ?? tab.source, stale: true });
+			Object.assign(tab, { spec, request, source: options.source ?? tab.source, since: options.since, stale: true });
 			tab.panel.title = spec.title;
 			tab.panel.reveal(undefined, options.preserveFocus ?? true);
 			this.post(tab);
@@ -89,7 +92,7 @@ export class BoardPanel implements vscode.Disposable {
 			enableScripts: true,
 			retainContextWhenHidden: true,
 		});
-		const created: Tab = { panel, spec, request, source: options.source, ready: false, stale: false };
+		const created: Tab = { panel, spec, request, source: options.source, since: options.since, ready: false, stale: false };
 		try {
 			panel.webview.html = await this.html(panel.webview, created);
 		} catch (e) {
@@ -156,8 +159,8 @@ export class BoardPanel implements vscode.Disposable {
 	/** The store's host interface: boards an agent draws or a plan becomes, one tab per board id. */
 	asHost(): BoardHost {
 		return {
-			show: (id, spec) => this.show(spec, { key: `board:${id}`, preserveFocus: true }),
-			update: (id, spec) => (this.tabs.has(`board:${id}`) ? this.show(spec, { key: `board:${id}`, preserveFocus: true }) : undefined),
+			show: (id, spec, extra?: BoardExtra) => this.show(spec, { key: `board:${id}`, preserveFocus: true, since: extra?.since }),
+			update: (id, spec, extra?: BoardExtra) => (this.tabs.has(`board:${id}`) ? this.show(spec, { key: `board:${id}`, preserveFocus: true, since: extra?.since }) : undefined),
 		};
 	}
 
@@ -166,7 +169,7 @@ export class BoardPanel implements vscode.Disposable {
 			return; // it asks for the current state when it starts
 		}
 		tab.stale = false;
-		void tab.panel.webview.postMessage({ type: 'board', spec: tab.spec, opts: tab.request, seq, refresh: refresh || undefined });
+		void tab.panel.webview.postMessage({ type: 'board', spec: tab.spec, since: tab.since, opts: tab.request, seq, refresh: refresh || undefined });
 	}
 
 	private async onMessage(tab: Tab, m: Record<string, unknown> | undefined) {
@@ -283,7 +286,7 @@ export class BoardPanel implements vscode.Disposable {
 			`worker-src blob:`,
 		].join('; ');
 		const safe = (text: string, tag: string) => text.replace(new RegExp(`</${tag}`, 'gi'), `<\\/${tag}`).replace(/<!--/g, '\\x3C!--');
-		const boot = { spec: tab.spec, source: tab.source?.kind, search: tab.source?.searchOnHost === false ? 'local' : 'host', opts: tab.request, dark };
+		const boot = { spec: tab.spec, since: tab.since, source: tab.source?.kind, search: tab.source?.searchOnHost === false ? 'local' : 'host', opts: tab.request, dark };
 		return `<!doctype html><html><head><meta charset="utf-8">` +
 			`<meta http-equiv="Content-Security-Policy" content="${csp}">` +
 			`<style>${safe(css, 'style')}</style>` +

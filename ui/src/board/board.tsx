@@ -9,7 +9,7 @@ import './board.css'
 import './tour.css'
 import type { BoardNode, BoardSpec } from './spec'
 import { adjacency, buildLayout, groupsHolding, groupDepth, matchNodes, type Layout } from './model'
-import { KIND_COLOR, ROLE_CHIPS, type BoardOpts, type Bootstrap, type ExportFormat, type ToHost, type ToWebview } from './protocol'
+import { countChanges, KIND_COLOR, ROLE_CHIPS, type BoardOpts, type Bootstrap, type ExportFormat, type ToHost, type ToWebview } from './protocol'
 import { ActionsCtx, nodeTypes, type Actions, type CardData, type GroupData } from './cards'
 import { CalloutLayer } from './callouts'
 import { EdgeLayer } from './edges'
@@ -127,7 +127,11 @@ function BoardView() {
   const [pl, dispatchPl] = useReducer(reduce, idle)
   const [routeOn, setRouteOn] = useState(true)
 
-  const [spec, setSpec] = useState<BoardSpec>(boot.spec)
+  const [sent, setSpec] = useState<BoardSpec>(boot.spec)
+  const [since, setSince] = useState<BoardSpec | undefined>(boot.since)
+  const [showSince, setShowSince] = useState(false)
+  // "Since the last draw" swaps in the board with its changes marked; the layout is the same, so the picture only gets colours (and ghosts).
+  const spec = showSince && since ? since : sent
   const [opts, setOpts] = useState<BoardOpts>(boot.opts ?? {})
   const optsRef = useRef(opts)
   const seq = useRef(0)
@@ -156,6 +160,8 @@ function BoardView() {
         // A rebuild answered late: a newer one is already on its way.
         if (m.seq !== undefined && m.seq < seq.current) return
         setSpec(m.spec)
+        setSince(m.since)
+        if (!m.since) setShowSince(false)
         setPending(false)
         setError(undefined)
         const exists = (id: string | undefined) => id !== undefined && m.spec.nodes.some(n => n.id === id)
@@ -212,6 +218,7 @@ function BoardView() {
     [spec, direction, members, expandedNodes, overrides, autoOpen],
   )
   const sequence = spec.kind === 'sequence'
+  const changes = useMemo(() => countChanges(spec), [spec])
   const walk = useMemo(() => stepsOf(spec), [spec])
   const walkSig = useMemo(() => stepsSignature(walk.steps), [walk])
   const curStep = pl.tour && !pl.paused ? walk.steps[pl.index] : undefined
@@ -497,6 +504,12 @@ function BoardView() {
           {walk.steps.length > 0 && !pl.tour && (
             <button className="chip steps" data-act="steps" title={walk.derived ? 'Walk through the messages in order' : 'Play the steps the agent wrote'} onClick={() => { const t = tourOf(spec, walk.steps, walk.derived); if (t) dispatchPl({ type: 'start', tour: t }) }}>▶ {walk.derived ? 'Walk through' : `Steps (${walk.steps.length})`}</button>
           )}
+          {since && (
+            <button className="chip" data-act="since" aria-pressed={showSince} title="Colour what changed since the previous draw of this board" onClick={() => setShowSince(v => !v)}>Changes</button>
+          )}
+          {changes.added + changes.removed + changes.changed > 0 && (
+            <span className="bd-status bd-changes" title="Against the base board or the previous draw"><b className="add">+{changes.added}</b> <b className="del">−{changes.removed}</b> <b className="warn">~{changes.changed}</b></span>
+          )}
           {!pl.tour && spec.highlight && spec.highlight.length > 0 && (
             <button className="chip" data-act="route" aria-pressed={routeOn} title="Show or hide the highlighted route" onClick={() => setRouteOn(v => !v)}>{spec.highlight.length === 1 && spec.highlight[0].label ? spec.highlight[0].label : 'Route'}</button>
           )}
@@ -523,7 +536,7 @@ function BoardView() {
           </div>
           <div className="bd-menu">
             <button className="chip" aria-pressed={menu === 'legend'} title="Legend" onClick={e => { e.stopPropagation(); setMenu(menu === 'legend' ? undefined : 'legend') }}>?</button>
-            {menu === 'legend' && <div className="bd-pop bd-legend" onClick={e => e.stopPropagation()}><Legend kinds={[...present]} /></div>}
+            {menu === 'legend' && <div className="bd-pop bd-legend" onClick={e => e.stopPropagation()}><Legend kinds={[...present]} changes={changes.added + changes.removed + changes.changed > 0} entries={spec.legend} /></div>}
           </div>
         </div>
         <div className="bd-row bd-row2">

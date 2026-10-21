@@ -17,6 +17,8 @@ export type ExportFormat = 'mermaid' | 'plantuml' | 'png' | 'svg' | 'json'
 
 export interface Bootstrap {
   spec: BoardSpec
+  /** The board compared with its previous draw (changes marked), when something changed: the "since last draw" switch shows it. */
+  since?: BoardSpec
   /** The host's name for the source that can rebuild this board ('dto', 'architecture'); absent: the board is fixed. */
   source?: string
   opts: BoardOpts
@@ -33,7 +35,7 @@ export type ToHost =
 
 export type ToWebview =
   /** `refresh`: the same board drawn again because the code changed: the search, selection and viewport stay as they are. */
-  | { type: 'board'; spec: BoardSpec; opts?: BoardOpts; seq?: number; refresh?: boolean }
+  | { type: 'board'; spec: BoardSpec; since?: BoardSpec; opts?: BoardOpts; seq?: number; refresh?: boolean }
   | { type: 'error'; message: string; seq?: number }
 
 /** Colour per node kind (the accent of a card). */
@@ -122,3 +124,10 @@ export const ROLE_CHIPS: { role: NodeKind; label: string }[] = [
 ]
 
 export const VISIBILITY_NAME = { '+': 'public', '-': 'private', '#': 'protected', '~': 'package' } as const
+
+/** How many nodes and edges carry each change mark: the summary on the toolbar. */
+export function countChanges(spec: BoardSpec): { added: number; removed: number; changed: number } {
+  const out = { added: 0, removed: 0, changed: 0 }
+  for (const x of [...spec.nodes, ...spec.edges]) if (x.change) out[x.change]++
+  return out
+}
