@@ -117,7 +117,9 @@ export function moduleOfPlan(plan: BoardSpec, types: TypeInfo[], ctx: PathContex
 		const titled = top.find(m => key(plan.title).includes(key(m)));
 		return titled ?? (ctx.hintModule && top.includes(ctx.hintModule) ? ctx.hintModule : top.sort()[0]);
 	}
-	const titled = modules.find(m => key(plan.title + ' ' + (plan.description ?? '')).includes(key(m)));
+	// Anything the agent wrote on the board names the module it is about: the title, the description, a group, a node's line or note.
+	const said = key([plan.title, plan.description, ...(plan.groups ?? []).map(g => g.label), ...plan.nodes.flatMap(n => [n.detail, n.note, n.group])].filter(Boolean).join(' '));
+	const titled = modules.find(m => said.includes(key(m)));
 	return titled ?? (ctx.hintModule && modules.includes(ctx.hintModule) ? ctx.hintModule : modules.length === 1 ? modules[0] : undefined);
 }
 

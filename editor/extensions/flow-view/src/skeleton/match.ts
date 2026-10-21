@@ -55,6 +55,8 @@ export interface SkeletonDiff {
 	ready: boolean;
 	nodes: NodeResult[];
 	counts: Record<CheckState, number>;
+	/** The modules of the workspace, when the plan does not say which one it is about (and there is more than one): no path can be told. */
+	modules?: string[];
 }
 
 /**
@@ -561,7 +563,8 @@ export function matchPlan(plan: BoardSpec, graph: Pick<TypeGraph, 'types' | 'edg
 	});
 	const counts: Record<CheckState, number> = { matches: 0, missing: 0, differs: 0, existing: 0 };
 	results.forEach(r => counts[r.check]++);
-	return { ready, nodes: results, counts };
+	const modules = [...new Set(graph.types.map(t => t.module))].sort();
+	return { ready, nodes: results, counts, modules: ready && !planModule && modules.length > 1 && nodes.some(n => !found.has(n.id)) ? modules : undefined };
 }
 
 // ── output ─────────────────────────────────────────────────────────────────────────────────────
@@ -577,11 +580,16 @@ export interface DesignSummary {
 	empty: string[];
 	/** The file each new type belongs in, as the project's layout puts it (absolute: the caller shortens them). */
 	paths: { name: string; file: string; reason: string }[];
+	/** Several modules and the plan names none: new types have no path until it does. */
+	modules?: string[];
 }
 
 /** What a just-drawn design asks of the developer, from its diff against the baseline. */
 export function designSummary(diff: SkeletonDiff): DesignSummary {
 	const out: DesignSummary = { added: [], extended: [], context: [], empty: [], paths: [] };
+	if (diff.modules) {
+		out.modules = diff.modules;
+	}
 	for (const r of diff.nodes) {
 		const name = nodeName(r);
 		const adds = r.members.filter(m => m.check !== 'existing').map(m => m.text);
@@ -608,6 +616,9 @@ export function designText(s: DesignSummary, rel: (file: string) => string = f =
 	const lines: string[] = [];
 	if (s.added.length) {
 		lines.push(`New types the developer writes: ${s.added.join(', ')}.`);
+	}
+	if (s.modules && !s.paths.length && s.added.length) {
+		lines.push(`Axle cannot tell which module the new types belong in (${s.modules.join(', ')}): redraw with the same id and the module's name in the board title or description (e.g. "... (${s.modules[0]})"), and the board shows where each file goes.`);
 	}
 	if (s.paths.length) {
 		lines.push(`Where each new type goes (the board shows these paths and offers to create the file; list them to the developer):`, ...s.paths.map(p => `  ${p.name} → ${rel(p.file)} (${p.reason})`));

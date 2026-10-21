@@ -119,6 +119,20 @@ test("the module spells its own folders: billing-service's plural packages are f
 	assert.equal(paths.targetFor({ id: 'x', label: '../../evil', kind: 'class' }, plan, g.types, ctx), undefined, 'a label that is not an identifier is never made a file name')
 })
 
+test('a plan that names no module in a workspace of several: no path is guessed, and the agent is told what to add', async () => {
+	const g = await graphOf('skeleton-crm')
+	const baseline = match.baselineOf(g.types, PLAN)
+	const plan = spec.parseBoard({ kind: 'class', title: 'A new report', nodes: [{ id: 'a', label: 'ReportController', kind: 'controller', members: [{ text: 'get(): String' }] }] })
+	const diff = match.matchPlan(plan, g, { baseline })
+	assert.equal(diff.nodes[0].target, undefined)
+	assert.deepEqual(diff.modules, ['analytics-service', 'billing-service'])
+	assert.match(match.designText(match.designSummary(diff)), /cannot tell which module the new types belong in \(analytics-service, billing-service\)/)
+	// Saying it anywhere on the board (a group, a node's line) is enough, and the open file's module breaks the tie too.
+	const said = spec.parseBoard({ kind: 'class', title: 'A new report', nodes: [{ id: 'a', label: 'ReportController', kind: 'controller', detail: 'billing-service', members: [{ text: 'get(): String' }] }] })
+	assert.equal(match.matchPlan(said, g, { baseline }).nodes[0].target.module, 'billing-service')
+	assert.equal(match.matchPlan(plan, g, { baseline, hintModule: 'analytics-service' }).nodes[0].target.module, 'analytics-service')
+})
+
 test('a type written in the wrong module or package differs, with the reason', async () => {
 	const p = await project()
 	try {
