@@ -91,4 +91,3 @@ The `diagram_guide` MCP prompt (`src/mcp/prompts.ts`) holds the full advice an a
 
 A node's `symbol` is looked up in the methods of the node's own `file` (the code index, the C# analyzer or a language server, so it works while the workspace symbol search is still loading) and in the workspace symbol search (3 seconds, and not asked again once it fails to answer; at most 25 symbols per board and 10 seconds in all). A hit fills `file` and `line` when the node has none; a miss lists the closest symbols (`find_symbol` style) in the lint. If the search did not answer at all, the lint says symbols were checked against the named files only.
 
-Screenshots of each kind in the real editor (web mode, drawn through the MCP handler): `docs/media/boards/`.
