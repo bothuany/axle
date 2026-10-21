@@ -37,6 +37,9 @@ Every number in the copy comes from that data: the demo's agent change ("Claude 
 - **Download:** the primary button names the visitor's OS ("Download for Windows", ".dmg for macOS", ".deb for Linux"), points
   at the latest release asset, and a small line under it lists the other platforms. GitHub is the second button, with the live
   star count from the GitHub API (the count is left out, not faked, if the request fails).
+- **The name may change.** The product name lives in one constant in the build (title, meta, copy, alt text, the release
+  asset patterns the download button matches), so a rename is a one-line change. The logo mark stays; no image carries a
+  wordmark (the name next to the mark is live text), and the canvas captures contain no product name.
 - **Try page:** `/try/` is a guided demo, not an IDE clone and not a tile wall: the canvas large, three stories to pick
   ("How an order is placed", "What the agent changed", "Where the message goes"), each a tour the ghost cursor plays, with
   Keep and Undo working on the agent's change. One story at a time, each a sequence, so its steps are numbered.
