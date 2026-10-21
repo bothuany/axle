@@ -4,21 +4,22 @@
 // cut from the film with stable names for the website.
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 const [shots, media] = process.argv.slice(2)
 const clips = join(media, 'clips')
 mkdirSync(clips, { recursive: true })
 const run = (cmd, args, cwd) => {
-	const r = spawnSync(cmd, args, { cwd, stdio: 'inherit', shell: false })
+	const r = spawnSync(cmd, args, { cwd, stdio: 'inherit' })
 	if (r.status !== 0) throw new Error(`${cmd} ${args.join(' ')} failed`)
 }
-const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+// npx through the running Node: the Windows npx.cmd shim (nvm) looks for npm next to the working directory.
+const NPX = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npx-cli.js')
 const ff = (...args) => run('ffmpeg', ['-loglevel', 'error', '-y', ...args])
 const master = v => join(shots, 'build', v, 'renders', `${v}.mp4`)
 
 for (const v of ['film', 'square', 'vertical', 'loop']) {
-	run(npx, ['hyperframes', 'render', '-o', `renders/${v}.mp4`, '--quality', 'delivery', '--video-frame-format', 'png', '--quiet'], join(shots, 'build', v))
+	run(process.execPath, [NPX, 'hyperframes', 'render', '-o', `renders/${v}.mp4`, '--quality', 'delivery', '--video-frame-format', 'png', '--quiet'], join(shots, 'build', v))
 }
 
 // H.264 with the moov atom first so the page can start playing before it has the whole file.

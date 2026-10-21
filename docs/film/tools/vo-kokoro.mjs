@@ -5,6 +5,7 @@
 // A line may set `speed`, and `say` + `keepFrom` when Kokoro misreads it alone: Kokoro reads a lone "Where?" as
 // "well", so it says "But where?" and the take is cut at the word "where".
 import { readFileSync, renameSync, mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { launchSync } from '../../../scripts/lib.mjs'
@@ -32,7 +33,11 @@ const transcribe = id => {
 for (const line of script.lines) {
 	if (only.length && !only.includes(line.id)) continue
 	const text = (line.say ?? line.text).replace('{spokenName}', brand.spokenName)
-	hf(['tts', text, '-v', 'bm_george', '-s', String(line.speed ?? 1), '-o', `${line.id}.wav`, '--json'])
+	if (line.text.includes('{spokenName}') && brand.spokenPhonemes) {
+		// The name goes in as phonemes (brand.json), so Kokoro stresses it as the brand says it.
+		const tts = join(homedir(), '.cache', 'hyperframes', 'tts')
+		run(process.env.HYPERFRAMES_PYTHON, ['-I', join(film, 'tools', 'kokoro-name.py'), join(tts, 'models', 'kokoro-v1.0.onnx'), join(tts, 'voices', 'voices-v1.0.bin'), `${line.id}.wav`, brand.spokenPhonemes, line.say ?? line.text])
+	} else hf(['tts', text, '-v', 'bm_george', '-s', String(line.speed ?? 1), '-o', `${line.id}.wav`, '--json'])
 	if (line.keepFrom) {
 		const from = transcribe(line.id).find(w => w.text.toLowerCase().startsWith(line.keepFrom)).start
 		renameSync(join(out, `${line.id}.wav`), join(out, `${line.id}.full.wav`))

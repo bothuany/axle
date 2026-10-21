@@ -1,7 +1,9 @@
 {
-  "productName": "Axle",
-  "spokenName": "Axle",
+  "productName": "Insilode",
+  "spokenName": "Insilode",
   "tagline": "A harness-first code editor.",
   "repoUrl": "github.com/bothuany/axle",
-  "download": "Download for Windows · macOS · Linux"
+  "download": "Download for Windows · macOS · Linux",
+  "spokenPhonemes": "ˈɪnsɪləʊd",
+  "pronunciation": "IN-sih-lohd (insight + in silico + lode)"
 }
