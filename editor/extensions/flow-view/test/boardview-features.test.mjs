@@ -186,3 +186,71 @@ test('board-sequence: the svg export has every lifeline and message, escaped', (
 	assert.match(out, /POST \/pay/)
 	assert.match(out, /stroke-dasharray="6 4"/, 'a reply is dashed')
 })
+
+let steps, player
+before(async () => {
+	steps = await load('../../../ui/src/board/steps.ts')
+	player = await load('../../../ui/src/tour/player.ts')
+})
+
+const walkBoard = (extra = {}) => board({
+	nodes: [{ id: 'a', label: 'A', group: 'g' }, { id: 'b', label: 'B', group: 'h' }, { id: 'c', label: 'C' }],
+	groups: [{ id: 'g', label: 'G' }, { id: 'h', label: 'H', parent: 'g' }],
+	edges: [{ from: 'a', to: 'b', label: 'x', order: 2 }, { from: 'b', to: 'c', label: 'y', order: 1 }],
+	...extra,
+})
+
+test('board-steps: the agent steps win; without them the message order is a walk that is offered, not started', () => {
+	const own = steps.stepsOf(walkBoard({ steps: [{ title: 'One', caption: 'c', nodes: ['a'] }] }))
+	assert.deepEqual([own.steps.length, own.derived], [1, false])
+	const derived = steps.stepsOf(walkBoard())
+	assert.equal(derived.derived, true)
+	assert.deepEqual(derived.steps.map(s => s.title), ['y', 'x'], 'ordered by `order`')
+	assert.deepEqual(derived.steps[0].edges, [['b', 'c']])
+	assert.deepEqual(steps.stepsOf(board()).steps, [], 'no order, no walk')
+	assert.deepEqual(steps.stepsOf(walkBoard({ edges: [{ from: 'a', to: 'b', order: 1 }] })).steps, [], 'one ordered edge is not a walk')
+})
+
+test('board-steps: a step becomes a tour step for the shared player, and the player walks it', () => {
+	const spec = walkBoard({ steps: [{ title: 'One', caption: 'first', nodes: ['a'] }, { title: 'Two', caption: 'second `code`', edges: [['a', 'b']] }, { title: 'Out', caption: 'outro' }] })
+	const { steps: list, derived } = steps.stepsOf(spec)
+	const tour = steps.tourOf(spec, list, derived)
+	assert.equal(tour.steps.length, 3)
+	assert.deepEqual(tour.steps[1], { title: 'Two', caption: 'second `code`', state: 'ok' })
+	assert.equal(steps.tourOf(spec, [], false), undefined)
+	let s = player.reduce(player.idle, { type: 'start', tour })
+	assert.equal(s.index, 0)
+	s = player.reduce(s, { type: 'next' })
+	s = player.reduce(s, { type: 'next' })
+	s = player.reduce(s, { type: 'next' })
+	assert.equal(s.index, 2, 'stops at the last step')
+	assert.equal(player.reduce(s, { type: 'exit' }).tour, null)
+})
+
+test('board-steps: what a step lights, and what a route lights', () => {
+	assert.deepEqual([...steps.litOf({ title: 't', caption: 'c', nodes: ['a'], edges: [['b', 'c']] }).nodes].sort(), ['a', 'b', 'c'])
+	assert.deepEqual([...steps.litOf({ title: 't', caption: 'c', edges: [['b', 'c']] }).edges], ['b>c'])
+	assert.equal(steps.litOf({ title: 'outro', caption: 'c' }), undefined, 'a caption-only step dims nothing')
+	const spec = walkBoard({ highlight: [{ path: ['a', 'b', 'c'] }, { path: ['c', 'b'] }] })
+	const lit = steps.highlightLit(spec)
+	assert.deepEqual([...lit.nodes].sort(), ['a', 'b', 'c'])
+	assert.deepEqual([...lit.edges].sort(), ['a>b', 'b>c'], 'a path against the edge direction still lights the edge')
+	assert.equal(steps.highlightLit(board()), undefined)
+})
+
+test('board-steps: a node in a collapsed group is lit as the group, and a step opens the groups around its nodes', () => {
+	const spec = walkBoard()
+	const l = model.buildLayout(spec, { ...none, isCollapsed: g => g.id === 'g' })
+	const lit = steps.litVisible({ nodes: new Set(['a', 'c']), edges: new Set(['a>b', 'b>c']) }, l.rep)
+	assert.deepEqual([...lit.nodes].sort(), ['c', 'group:g'])
+	assert.deepEqual([...lit.edges].sort(), ['b>c'.replace('b', 'group:g'), 'group:g>group:g'].sort())
+	assert.deepEqual(steps.stepOpens(spec, { title: 't', caption: 'c', nodes: ['b'] }).sort(), ['g', 'h'])
+	assert.deepEqual(steps.stepOpens(spec, { title: 't', caption: 'c', focus: 'h' }).sort(), ['g', 'h'])
+	assert.deepEqual(steps.stepOpens(spec, { title: 't', caption: 'c', nodes: ['c'] }), [])
+})
+
+test('board-steps: a new set of steps is a new walk; the same steps redrawn are not', () => {
+	const a = [{ title: 'One', caption: 'c', nodes: ['a'] }]
+	assert.equal(steps.stepsSignature(a), steps.stepsSignature(JSON.parse(JSON.stringify(a))))
+	assert.notEqual(steps.stepsSignature(a), steps.stepsSignature([{ ...a[0], caption: 'other' }]))
+})

@@ -1,11 +1,12 @@
 // Axle board webview: draws a BoardSpec (DTO relations, architecture, plans) on a pan/zoom canvas. The host
 // (flow-view/src/boardPanel.ts) sends the spec and recomputes it when the user changes focus, search or filters:
 // those controls only post a 'rebuild' with the new options, so big graphs stay a host-side computation.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MiniMap, ReactFlow, ReactFlowProvider, useReactFlow, type Node } from '@xyflow/react'
+import { MiniMap, ReactFlow, ReactFlowProvider, useReactFlow, useViewport, type Node } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import './board.css'
+import './tour.css'
 import type { BoardNode, BoardSpec } from './spec'
 import { adjacency, buildLayout, groupsHolding, groupDepth, matchNodes, type Layout } from './model'
 import { KIND_COLOR, ROLE_CHIPS, type BoardOpts, type Bootstrap, type ExportFormat, type ToHost, type ToWebview } from './protocol'
@@ -15,6 +16,11 @@ import { EdgeLayer } from './edges'
 import { sequenceSvg, toSvg, type Palette } from './svg'
 import { SequenceView, type SequenceApi } from './SequenceView'
 import type { Lit } from './sequence'
+import { idle, reduce } from '../tour/player'
+import { TourBar } from '../tour/TourBar'
+import { Caption } from '../tour/Caption'
+import { captionPlace, CAPTION_W } from '../tour/geometry'
+import { highlightLit, litOf, litVisible, stepOpens, stepsOf, stepsSignature, tourOf, type StepLit } from './steps'
 import { Legend } from './legend'
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void }
@@ -89,6 +95,27 @@ const clean = (o: BoardOpts): BoardOpts => {
   return out
 }
 
+/** The caption of the current step: beside what it lights (graph), or in the top right corner (sequence, which fits on one screen). */
+function StepCaption({ step, layout, lit, sequence, stage }: { step: import('../types').TourStep; layout: Layout; lit?: StepLit; sequence: boolean; stage: { current: HTMLDivElement | null } }) {
+  const vp = useViewport()
+  const w = stage.current?.clientWidth ?? 800
+  const h = stage.current?.clientHeight ?? 600
+  let place: { left: number; top: number; side: string } | 'centre' = 'centre'
+  if (sequence) {
+    place = { left: Math.max(8, w - CAPTION_W - 16), top: 12, side: 'left' }
+  } else if (lit) {
+    const boxes = layout.nodes.filter(v => lit.nodes.has(v.id)).map(v => v.box)
+    if (boxes.length) {
+      const x1 = Math.min(...boxes.map(b => b.x))
+      const y1 = Math.min(...boxes.map(b => b.y))
+      const x2 = Math.max(...boxes.map(b => b.x + b.w))
+      const y2 = Math.max(...boxes.map(b => b.y + b.h))
+      place = captionPlace({ x: x1 * vp.zoom + vp.x, y: y1 * vp.zoom + vp.y, w: (x2 - x1) * vp.zoom, h: (y2 - y1) * vp.zoom }, { w, h })
+    }
+  }
+  return <div className="tour-layer"><Caption step={step} place={place} /></div>
+}
+
 function BoardView() {
   const boot = window.__BOARD__
   const rf = useReactFlow()
@@ -96,6 +123,9 @@ function BoardView() {
   const searchBox = useRef<HTMLInputElement>(null)
   const canRebuild = !!boot.source
   const seqApi = useRef<SequenceApi | null>(null)
+  const stage = useRef<HTMLDivElement>(null)
+  const [pl, dispatchPl] = useReducer(reduce, idle)
+  const [routeOn, setRouteOn] = useState(true)
 
   const [spec, setSpec] = useState<BoardSpec>(boot.spec)
   const [opts, setOpts] = useState<BoardOpts>(boot.opts ?? {})
@@ -182,8 +212,35 @@ function BoardView() {
     [spec, direction, members, expandedNodes, overrides, autoOpen],
   )
   const sequence = spec.kind === 'sequence'
+  const walk = useMemo(() => stepsOf(spec), [spec])
+  const walkSig = useMemo(() => stepsSignature(walk.steps), [walk])
+  const curStep = pl.tour && !pl.paused ? walk.steps[pl.index] : undefined
+  const stepLit = useMemo(() => (curStep ? litOf(curStep) : undefined), [curStep])
+  const routeLit = useMemo(() => (!pl.tour && routeOn ? highlightLit(spec) : undefined), [spec, pl.tour, routeOn])
+  const lit: StepLit | undefined = stepLit ?? routeLit
   const seqLit = useMemo<Lit | undefined>(() => (searching ? { nodes: matched, edges: new Set() } : undefined), [searching, matched])
   const adj = useMemo(() => adjacency(layout.edges), [layout])
+  // The agent's steps start by themselves when a board arrives or its steps change; a walk made from message order waits to be asked for.
+  useEffect(() => {
+    const t = tourOf(spec, walk.steps, walk.derived)
+    if (t && !walk.derived) dispatchPl({ type: 'start', tour: t })
+    else dispatchPl({ type: 'exit' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walkSig])
+  // A step opens the groups its nodes sit in and takes the camera to them.
+  useEffect(() => {
+    if (!curStep) return
+    const open = stepOpens(spec, curStep)
+    if (open.length) {
+      setOverrides(prev => {
+        if (open.every(g => prev.get(g) === false)) return prev
+        const next = new Map(prev)
+        open.forEach(g => next.set(g, false))
+        return next
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curStep])
   const hotId = hover ?? (selected ? layout.rep.get(selected) : undefined) ?? null
 
   const cache = useRef(new Map<string, { key: string; node: Node }>())
@@ -232,6 +289,17 @@ function BoardView() {
     }
   }, [hotId, adj, nodes])
 
+  // A step (or a route) lights its nodes and fades the rest: DOM attributes again, no React work per node.
+  const litView = useMemo(() => (lit ? litVisible(lit, layout.rep) : undefined), [lit, layout])
+  useEffect(() => {
+    const el = root.current
+    if (!el) return
+    el.querySelectorAll('[data-sl-lit]').forEach(n => n.removeAttribute('data-sl-lit'))
+    el.toggleAttribute('data-sl', !!litView)
+    if (!litView) return
+    for (const id of litView.nodes) el.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`)?.setAttribute('data-sl-lit', '')
+  }, [litView, nodes])
+
   // ---- viewport --------------------------------------------------------------------------------
   const fit = useCallback(() => (seqApi.current ? seqApi.current.fit() : void rf.fitView({ padding: 0.12, duration: 0, maxZoom: 1.1 })), [rf])
   const centerOn = useCallback((id: string) => {
@@ -252,6 +320,25 @@ function BoardView() {
       setTimeout(() => viewport.current.centerOn(id), 40)
     }
   }, [layout])
+
+  // Each step takes the camera to what it lights (the graph view; a sequence fits on one screen).
+  const stepLitKey = curStep && stepLit ? `${pl.index}|${[...stepLit.nodes].join(',')}` : ''
+  useEffect(() => {
+    if (!stepLitKey || sequence || !litView) return
+    const boxes = layout.nodes.filter(v => litView.nodes.has(v.id)).map(v => v.box)
+    if (!boxes.length) return
+    const x1 = Math.min(...boxes.map(b => b.x))
+    const y1 = Math.min(...boxes.map(b => b.y))
+    const x2 = Math.max(...boxes.map(b => b.x + b.w))
+    const y2 = Math.max(...boxes.map(b => b.y + b.h))
+    const cw = stage.current?.clientWidth ?? 800
+    const ch = stage.current?.clientHeight ?? 600
+    // Room around the nodes for the caption; never closer than 1.15x.
+    const zoom = Math.max(0.1, Math.min(1.15, cw / ((x2 - x1) * 1.5 + 380), ch / ((y2 - y1) * 1.8 + 140)))
+    const t = setTimeout(() => void rf.setCenter((x1 + x2) / 2 + 80 / zoom, (y1 + y2) / 2, { zoom, duration: 400 }), 60)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepLitKey, layout])
 
   // ---- actions ---------------------------------------------------------------------------------
   const nodeOf = useMemo(() => new Map(spec.nodes.map(n => [n.id, n])), [spec])
@@ -337,6 +424,27 @@ function BoardView() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea')
+      if (pl.tour && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown') {
+          e.preventDefault()
+          dispatchPl({ type: 'next' })
+          return
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
+          e.preventDefault()
+          dispatchPl({ type: 'back' })
+          return
+        }
+        if (e.key === ' ') {
+          e.preventDefault()
+          dispatchPl({ type: 'toggle' })
+          return
+        }
+        if (e.key === 'Escape' && !q && !menu) {
+          dispatchPl({ type: 'exit' })
+          return
+        }
+      }
       if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey) {
         e.preventDefault()
         searchBox.current?.focus()
@@ -356,7 +464,7 @@ function BoardView() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [q, menu, selected, focusNode])
+  }, [q, menu, selected, focusNode, pl.tour])
 
   const firstMatch = () => {
     const first = spec.nodes.find(n => matched.has(n.id))
@@ -386,6 +494,12 @@ function BoardView() {
           <div className="bd-title" title={spec.title}>{spec.title}</div>
           <span className="bd-status">{spec.nodes.length} {spec.nodes.length === 1 ? 'node' : 'nodes'} · {spec.edges.length} {spec.edges.length === 1 ? 'edge' : 'edges'}{pending ? ' · updating…' : ''}</span>
           <div className="bd-grow" />
+          {walk.steps.length > 0 && !pl.tour && (
+            <button className="chip steps" data-act="steps" title={walk.derived ? 'Walk through the messages in order' : 'Play the steps the agent wrote'} onClick={() => { const t = tourOf(spec, walk.steps, walk.derived); if (t) dispatchPl({ type: 'start', tour: t }) }}>▶ {walk.derived ? 'Walk through' : `Steps (${walk.steps.length})`}</button>
+          )}
+          {!pl.tour && spec.highlight && spec.highlight.length > 0 && (
+            <button className="chip" data-act="route" aria-pressed={routeOn} title="Show or hide the highlighted route" onClick={() => setRouteOn(v => !v)}>{spec.highlight.length === 1 && spec.highlight[0].label ? spec.highlight[0].label : 'Route'}</button>
+          )}
           <input
             ref={searchBox}
             className="bd-search"
@@ -468,10 +582,10 @@ function BoardView() {
         {error && <div className="bd-note bd-error" role="alert">{error}</div>}
         {notice && <div className="bd-note" onClick={() => setNotice(undefined)}>{notice}</div>}
       </div>
-      <div className="bd-stage">
+      <div className="bd-stage" ref={stage}>
         <ActionsCtx.Provider value={actions}>
-          {sequence && <SequenceView spec={spec} lit={seqLit} selected={selected} apiRef={seqApi} onSelect={n => { setSelected(n.id); if (n.file) post({ type: 'open', file: n.file, line: n.line ?? 1 }) }} />}
-          {!sequence && <EdgeLayer layout={layout} direction={direction} hot={hotId ?? undefined} active={active} />}
+          {sequence && <SequenceView spec={spec} lit={lit ?? seqLit} selected={selected} apiRef={seqApi} onSelect={n => { setSelected(n.id); if (n.file) post({ type: 'open', file: n.file, line: n.line ?? 1 }) }} />}
+          {!sequence && <EdgeLayer layout={layout} direction={direction} hot={hotId ?? undefined} active={active} lit={litView?.edges} />}
           {!sequence && <ReactFlow
             nodes={nodes}
             edges={[]}
@@ -489,6 +603,16 @@ function BoardView() {
             {layout.nodes.length > 8 && <MiniMap pannable zoomable nodeStrokeWidth={0} nodeColor={n => ((n.data as CardData | undefined)?.v?.node ? KIND_COLOR[(n.data as CardData).v.node!.kind ?? 'class'] : 'var(--fl-line-strong)')} />}
           </ReactFlow>}
           {!sequence && <CalloutLayer layout={layout} direction={direction} />}
+          {pl.tour && (
+            <TourBar
+              tour={pl.tour}
+              state={pl}
+              api={{ next: () => dispatchPl({ type: 'next' }), back: () => dispatchPl({ type: 'back' }), goto: i => dispatchPl({ type: 'goto', index: i }), toggle: () => dispatchPl({ type: 'toggle' }), exit: () => dispatchPl({ type: 'exit' }) }}
+            />
+          )}
+          {pl.tour && !pl.paused && pl.tour.steps[pl.index] && (
+            <StepCaption step={pl.tour.steps[pl.index]} layout={layout} lit={litView} sequence={sequence} stage={stage} />
+          )}
         </ActionsCtx.Provider>
         {spec.nodes.length === 0 && (
           <div className="bd-empty">

@@ -1,0 +1,48 @@
+/* The tour bar and caption of the shared tour player (src/tour), for the board webview. Copied from webview.css: the board bundle does not load it. */
+:root { --tour-ink: var(--fl-signal); }
+.tour { position: absolute; z-index: 15; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; max-width: calc(100% - 24px); padding: 4px 6px 6px; border-radius: 12px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: 0 0 0 1px var(--fl-line-strong), var(--fl-lift); }
+/* How far the tour has come, in its colour, along the bar's bottom edge. */
+.tour::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 2px; height: 2px; border-radius: 2px; background: linear-gradient(to right, var(--tour-ink) var(--progress, 0%), var(--fl-line) var(--progress, 0%)); pointer-events: none; }
+.tour-pos { font: 600 11.5px var(--fl-mono); color: var(--fl-muted); min-width: 36px; text-align: center; }
+.tour-label { font: 12px var(--fl-mono); color: var(--fl-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; margin: 0 6px; }
+.icon-btn:disabled { opacity: .35; cursor: default; }
+.tour.paused::after { opacity: .35; }
+.tour-pos { background: none; border: 0; padding: 3px 4px; border-radius: 5px; cursor: pointer; }
+.tour-pos:hover { background: var(--fl-line); }
+.tour-steps { position: relative; display: inline-flex; }
+.tour-list { position: absolute; bottom: calc(100% + 10px); left: 0; z-index: 20; width: 300px; max-height: 280px; overflow: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--fl-line-strong); border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); }
+.tour-list-head { padding: 4px 8px 6px; color: var(--fl-muted); font-size: 11px; }
+.tour-item { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 5px 8px; border: 0; border-radius: 6px; background: none; color: var(--fl-text); font: 12px var(--fl-mono); text-align: left; cursor: pointer; }
+.tour-item:hover, .tour-item.on { background: var(--fl-line); }
+.tour-item-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tour-mark { color: var(--fl-muted); font: 11px var(--fl-mono); cursor: help; }
+.tour-paused { color: var(--fl-muted); }
+.tour-ask { display: flex; flex: 1 1 160px; min-width: 110px; max-width: 260px; margin: 0 4px; }
+.tour-ask input { width: 100%; min-width: 0; padding: 3px 8px; border: 1px solid var(--fl-line-strong); border-radius: 6px; background: var(--fl-card); color: var(--fl-text); font: 12px var(--fl-mono); }
+.tour-ask input:focus { outline: 1.5px solid var(--tour-ink); outline-offset: 0; }
+.tour-asking { color: var(--tour-ink); font-size: 11.5px; }
+/* The agent's arrow (tour/Arrow.tsx): flat, in the agent's colour, with a rim dark enough to read on any card. */
+.agent-arrow { display: block; overflow: visible; }
+.agent-arrow path { fill: var(--ink, var(--tour-ink)); stroke: color-mix(in srgb, var(--ink, var(--tour-ink)) 22%, #000); stroke-width: 2.2; stroke-linejoin: round; paint-order: stroke; }
+.tour-layer { position: absolute; inset: 0; z-index: 14; pointer-events: none; overflow: hidden; }
+.tour-caption { position: absolute; width: 360px; max-width: calc(100% - 16px); padding: 10px 13px 11px; border: 0; border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); color: var(--fl-text); font-size: 12.5px; line-height: 1.5; pointer-events: auto; animation: tour-in .18s ease-out; }
+.tour-caption.missing { opacity: .6; border-style: dashed; }
+.tour-caption-head { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+.tour-caption-arrow { flex: none; }
+.tour-caption-head .tour-mark { margin-left: auto; }
+.tour-caption-head b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px var(--fl-mono); }
+.tour-caption p { margin: 0; }
+.tour-caption-text.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.tour-caption code { font: 11.5px var(--fl-mono); padding: 0 4px; border-radius: 4px; background: var(--fl-line); }
+.tour-more { background: none; border: 0; padding: 0; margin-top: 2px; color: var(--tour-ink); font-size: 11.5px; cursor: pointer; }
+.tour-warn { margin-top: 6px !important; color: var(--fl-muted); font-size: 11.5px; }
+.tour-note { margin-top: 9px; padding: 1px 0 1px 10px; box-shadow: inset 2px 0 0 color-mix(in srgb, var(--tour-ink) 60%, transparent); }
+.tour-q { font-style: italic; color: var(--fl-muted); }
+.tour-from { color: var(--fl-muted); font-size: 10.5px; }
+@keyframes tour-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ---- board steps: the lit set, the step chip ---- */
+.bd[data-sl] .react-flow__node:not([data-sl-lit]) .bc, .bd[data-sl] .react-flow__node:not([data-sl-lit]) .bs, .bd[data-sl] .react-flow__node:not([data-sl-lit]) .bc-mark { opacity: .22; }
+.bd[data-sl] .react-flow__node[data-sl-lit] .bc, .bd[data-sl] .react-flow__node[data-sl-lit] .bs { box-shadow: 0 0 0 2px var(--tour-ink), var(--fl-lift); }
+.chip.steps { border-color: color-mix(in srgb, var(--tour-ink) 60%, var(--fl-line-strong)); color: var(--fl-text); }
+.bd-stage .tour { z-index: 20; }

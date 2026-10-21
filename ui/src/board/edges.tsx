@@ -70,7 +70,7 @@ const EdgePath = memo(function EdgePath({ e, state }: { e: Drawn; state: State }
   )
 })
 
-export function EdgeLayer({ layout, direction, hot, active }: { layout: Layout; direction: 'LR' | 'TB'; hot?: string; active?: { from: string; row: number } }) {
+export function EdgeLayer({ layout, direction, hot, active, lit }: { layout: Layout; direction: 'LR' | 'TB'; hot?: string; active?: { from: string; row: number }; lit?: ReadonlySet<string> }) {
   const t = useStore(s => s.transform)
   const edges = useMemo(() => drawEdges(layout, direction), [layout, direction])
   return (
@@ -78,7 +78,7 @@ export function EdgeLayer({ layout, direction, hot, active }: { layout: Layout; 
       <g transform={`translate(${t[0]} ${t[1]}) scale(${t[2]})`}>
         {edges.map(e => {
           const isActive = !!active && e.from === active.from && e.fromRow === active.row
-          const state: State = isActive ? 'active' : hot ? (e.from === hot || e.to === hot ? 'hot' : 'dim') : ''
+          const state: State = isActive ? 'active' : lit ? (lit.has(`${e.from}>${e.to}`) ? 'hot' : 'dim') : hot ? (e.from === hot || e.to === hot ? 'hot' : 'dim') : ''
           return <EdgePath key={e.key} e={e} state={state} />
         })}
       </g>
