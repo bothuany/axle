@@ -3,6 +3,7 @@
 // own desktop and nothing touches your Insilode install or profile.
 //   npm run sandbox:e2e                           the newest dist/Insilode-Setup-*.exe (npm run installer builds it)
 //   npm run sandbox:e2e -- --installer <exe>      another Setup
+//   npm run sandbox:e2e -- --old-installer <Axle-Setup-x.exe> [--only upgrade]   also: an Axle install is upgraded by this Setup (lib/upgrade.mjs)
 //   npm run sandbox:e2e -- --stage <dir>          only stage the folder the sandbox maps
 // What it does: stages the installer, node.exe and the test code into a temp folder, writes a .wsb that maps that folder read-only
 // and an output folder read-write (no network), starts Windows Sandbox minimized, waits for <out>/done.json, and prints the
@@ -33,11 +34,19 @@ export function newestInstaller(dist = join(ROOT, 'dist')) {
 }
 
 /** Lays out the folder the sandbox maps: installer, node.exe and the test code. */
-export function stage(dir, installer) {
+export function stage(dir, installer, oldInstaller, only) {
 	rmSync(dir, { recursive: true, force: true })
 	mkdirSync(join(dir, 'installer'), { recursive: true })
 	mkdirSync(join(dir, 'node'), { recursive: true })
 	cpSync(installer, join(dir, 'installer', installer.split(/[\\/]/).pop()))
+	if (oldInstaller) {
+		mkdirSync(join(dir, 'installer-old'), { recursive: true })
+		cpSync(oldInstaller, join(dir, 'installer-old', oldInstaller.split(/[\\/]/).pop()))
+	}
+	if (only) {
+		writeFileSync(join(dir, 'only.txt'), `${only}
+`)
+	}
 	// The sandbox has no Node: bring the one running this script (a single exe on Windows).
 	cpSync(process.execPath, join(dir, 'node', 'node.exe'))
 	const repo = join(dir, 'repo')
@@ -65,8 +74,12 @@ async function main() {
 	if (!installer || !existsSync(installer)) {
 		fail('No Insilode-Setup-*-x64.exe found. Build one with `npm run installer`, or pass --installer <path>.')
 	}
+	const oldInstaller = flag('--old-installer') ? resolve(flag('--old-installer')) : undefined
+	if (oldInstaller && !existsSync(oldInstaller)) {
+		fail(`--old-installer ${oldInstaller} does not exist.`)
+	}
 	if (flag('--stage')) {
-		console.log(`Staged ${stage(resolve(flag('--stage')), installer)}`)
+		console.log(`Staged ${stage(resolve(flag('--stage')), installer, oldInstaller, flag('--only'))}`)
 		return
 	}
 	const exe = sandboxExe()
@@ -79,7 +92,7 @@ async function main() {
 	}
 
 	const work = mkdtempSync(join(tmpdir(), 'insilode-sandbox-'))
-	const input = stage(join(work, 'in'), installer)
+	const input = stage(join(work, 'in'), installer, oldInstaller, flag('--only'))
 	const output = join(work, 'out')
 	mkdirSync(output, { recursive: true })
 	const wsb = join(work, 'insilode-e2e.wsb')

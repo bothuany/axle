@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { launchInsilode, withRetries } from './lib/app.mjs'
 import { refusal } from './lib/isolation.mjs'
 import { install, uninstall, updateFlow } from './lib/installer.mjs'
+import { upgradeFromAxle } from './lib/upgrade.mjs'
 import { Results } from './lib/results.mjs'
 import { APP_SCENARIOS } from './lib/scenarios.mjs'
 
@@ -78,6 +79,16 @@ async function main() {
 			record(id, title, { t0, value: await fn() })
 		} catch (e) {
 			record(id, title, { t0, value: { status: 'fail', detail: String(e.message).split('\n').slice(0, 12).join(' / '), shots: failedShots(id) } })
+		}
+	}
+
+	// First, on a machine with nothing installed: an Axle Setup, then this Setup over it (lib/upgrade.mjs). It shares the installer id with every
+	// later install, so it has to be gone (uninstalled at its end) before the plain install below.
+	if (o['old-installer'] && o.installer && (!only || only.includes('upgrade'))) {
+		await timed('upgrade', 'Windows installer: an Axle install is upgraded in place, its data copied on the first start', () => upgradeFromAxle({ oldSetup: resolve(String(o['old-installer'])), setup: resolve(String(o.installer)), out }))
+		if (only && only.length === 1) {
+			console.log(`\n${results.scenarios.filter(s => s.status === 'pass').length} passed, ${results.scenarios.filter(s => s.status === 'fail').length} failed`)
+			process.exit(results.failed ? 1 : 0)
 		}
 	}
 

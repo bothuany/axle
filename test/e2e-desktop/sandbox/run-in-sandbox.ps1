@@ -32,6 +32,11 @@ try {
 	Copy-Item -Recurse -Force (Join-Path $In 'repo') $work
 
 	$runArgs = @((Join-Path $work 'test\e2e-desktop\run.mjs'), '--label', $Label, '--out', $Out, '--installer', $setup.FullName)
+	# scripts/sandbox-e2e.mjs --old-installer <Axle Setup>: the upgrade scenario (an Axle install, then this Setup over it). --only <ids> as well.
+	$old = Get-ChildItem -Path (Join-Path $In 'installer-old') -Filter '*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+	if ($old) { $runArgs += @('--old-installer', $old.FullName) }
+	$onlyFile = Join-Path $In 'only.txt'
+	if (-not $Only -and (Test-Path $onlyFile)) { $Only = (Get-Content -Raw $onlyFile).Trim() }
 	if ($Only) { $runArgs += @('--only', $Only) }
 	Write-Host "node $($runArgs -join ' ')"
 	& $node @runArgs
