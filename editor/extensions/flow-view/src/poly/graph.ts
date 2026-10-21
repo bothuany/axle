@@ -1779,6 +1779,14 @@ export class Project {
 		return { files: [...this.files.values()].map(f => ({ ...f, funcs: f.funcs.map(slim) })), calls: [...counts.values()], entries };
 	}
 
+	/** Every schema the readers found, columns and relations included: what a generated ER board is drawn from. Sorted by table. */
+	schemaFacts(): (DbSchema & { orm: string; guess: boolean })[] {
+		this.build();
+		return [...this.schemaList.values()].flat()
+			.map(s => ({ ...s, ops: [], guess: this.guessedTables.has(`${s.file}|${s.line}`) }))
+			.sort((a, b) => (a.table < b.table ? -1 : a.table > b.table ? 1 : a.entity < b.entity ? -1 : a.entity > b.entity ? 1 : 0));
+	}
+
 	/** Every entity or model class the schema readers found with its table: what an edit to an entity file is resolved against. */
 	entities(): TableEntity[] {
 		this.build();

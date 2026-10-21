@@ -1,0 +1,20 @@
+state: States: OrderStatus
+5 states, 4 transitions read from the code (7 files scanned).
+direction LR
+
+nodes:
+  _start | start | step/initial | symbol - | 
+  NEW | NEW | step/round | symbol OrderStatus.NEW | src/main/java/com/acme/OrderStatus.java:3 | state
+  PAID | PAID | step/round | symbol OrderStatus.PAID | src/main/java/com/acme/OrderStatus.java:3 | state
+  SHIPPED | SHIPPED | step/round | symbol OrderStatus.SHIPPED | src/main/java/com/acme/OrderStatus.java:3 | state
+  CANCELLED | CANCELLED | step/round | symbol OrderStatus.CANCELLED | src/main/java/com/acme/OrderStatus.java:3 | state
+  ARCHIVED | ARCHIVED | step/round | symbol OrderStatus.ARCHIVED | src/main/java/com/acme/OrderStatus.java:3 | state
+edges:
+  _start -> NEW [next]
+  NEW -> CANCELLED [next] OrderService.cancel
+  NEW -> PAID [next] OrderService.pay
+  PAID -> SHIPPED [next] OrderService.ship
+notes:
+  - No clear transition into or out of: ARCHIVED. They are listed as states, unconnected.
+  - 1 assignment(s) were not drawn because the method does not check the state it comes from: OrderService.reopen -> NEW.
+  - Transitions are read from the source text (an assignment plus a check of the previous state in one method), not from a resolved model: a state changed by a framework, a database update or a state-machine library is not seen.

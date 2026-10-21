@@ -76,10 +76,10 @@ test('mcp-protocol: initialize echoes the client protocol version and offers too
 	assert.equal(s.lines.length, 2, 'a notification gets no answer')
 })
 
-test('mcp-protocol: tools/list has the sixteen tools, each annotated read-only with a schema', async () => {
+test('mcp-protocol: tools/list has the seventeen tools, each annotated read-only with a schema', async () => {
 	const s = session({ AXLE_BRIDGE_DIR: temp('axle-empty-') })
 	const { result } = await s.send('tools/list')
-	assert.deepEqual(result.tools.map(t => t.name), ['open', 'open_diff', 'get_diagnostics', 'find_symbol', 'go_to_definition', 'find_references', 'find_entry_points', 'show_flow', 'flow_text', 'impact', 'get_context', 'draw_board', 'update_board', 'tour', 'check_skeleton', 'tour_control'])
+	assert.deepEqual(result.tools.map(t => t.name), ['open', 'open_diff', 'get_diagnostics', 'find_symbol', 'go_to_definition', 'find_references', 'find_entry_points', 'show_flow', 'flow_text', 'impact', 'get_context', 'draw_board', 'board_from_code', 'update_board', 'tour', 'check_skeleton', 'tour_control'])
 	for (const t of result.tools) {
 		assert.equal(t.inputSchema.type, 'object', t.name)
 		assert.equal(t.annotations.readOnlyHint, true, t.name)
@@ -200,6 +200,26 @@ test('mcp-protocol: the draw_board schema is valid JSON Schema-shaped and requir
 	assert.deepEqual(draw.inputSchema.required, ['board'])
 	assert.deepEqual(draw.inputSchema.properties.board.required, ['title', 'nodes'])
 	JSON.parse(JSON.stringify(tools.TOOLS)) // serializable as is
+})
+
+test('mcp-protocol: board_from_code is read-only, takes a kind and a scope, and cannot be given nodes or edges', async () => {
+	const calls = []
+	const { dir, server } = await fakeWindow(['/work/app'], async (tool, args) => { calls.push({ tool, args }); return { content: [{ type: 'text', text: 'ok' }] } })
+	const s = session({ AXLE_BRIDGE_DIR: dir, AXLE_WORKSPACE: '/work/app' })
+	const { result } = await s.send('tools/list')
+	const t = result.tools.find(x => x.name === 'board_from_code')
+	assert.deepEqual(t.inputSchema.required, ['kind'])
+	assert.deepEqual(t.inputSchema.properties.kind.enum, ['sequence', 'er', 'architecture', 'state'])
+	assert.equal(t.inputSchema.additionalProperties, false)
+	assert.equal(t.inputSchema.properties.scope.additionalProperties, false)
+	assert.deepEqual(['nodes', 'edges', 'board', 'groups'].filter(k => k in t.inputSchema.properties), [], 'relations come from the code, never from the agent')
+	assert.deepEqual(['id', 'file', 'method', 'line', 'symbol', 'tables', 'module', 'enum'].filter(k => !(k in t.inputSchema.properties.scope.properties)), [])
+	assert.equal(t.annotations.readOnlyHint, true)
+	assert.match(t.description, /draw_board for anything the code does not show/)
+	assert.equal((await s.send('tools/call', { name: 'board_from_code', arguments: { kind: 'er', scope: { tables: ['orders'] } } })).result.content[0].text, 'ok')
+	assert.deepEqual(calls, [{ tool: 'board_from_code', args: { kind: 'er', scope: { tables: ['orders'] } } }])
+	await s.close()
+	await server.close()
 })
 
 test('mcp-protocol: impact takes a table or an entity as well as a method, and says what it cannot see', async () => {

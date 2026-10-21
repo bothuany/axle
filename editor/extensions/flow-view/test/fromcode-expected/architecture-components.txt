@@ -1,0 +1,22 @@
+architecture (component): Architecture: packages
+6 packages, 5 dependencies.
+direction TB
+
+nodes:
+  u_java_shop_com_acme_shop_dto | com.acme.shop.dto | service/rect | symbol - |  | group u_module_java_shop | tech Java | 9 types: 8 dtos, 1 enum
+  u_java_shop_com_acme_shop_model | com.acme.shop.model | service/rect | symbol - |  | group u_module_java_shop | tech Java | 2 types: 2 entities
+  u_java_shop_com_acme_shop_repo | com.acme.shop.repo | service/rect | symbol - |  | group u_module_java_shop | tech Java | 1 type: 1 repository
+  u_java_shop_com_acme_shop_service | com.acme.shop.service | service/rect | symbol - |  | group u_module_java_shop | tech Java | 2 types: 2 services
+  u_java_shop_com_acme_shop_util | com.acme.shop.util | service/rect | symbol - |  | group u_module_java_shop | tech Java | 1 type: 1 class
+  u_java_shop_com_acme_shop_web | com.acme.shop.web | service/rect | symbol - |  | group u_module_java_shop | tech Java | 1 type: 1 controller
+edges:
+  u_java_shop_com_acme_shop_repo -> u_java_shop_com_acme_shop_model [depends] 1 ref
+  u_java_shop_com_acme_shop_service -> u_java_shop_com_acme_shop_dto [depends] 3 refs
+  u_java_shop_com_acme_shop_service -> u_java_shop_com_acme_shop_repo [depends] 2 refs
+  u_java_shop_com_acme_shop_web -> u_java_shop_com_acme_shop_dto [depends] 3 refs
+  u_java_shop_com_acme_shop_web -> u_java_shop_com_acme_shop_service [depends] 2 refs, 2 calls
+groups:
+  u_module_java_shop | java-shop | boundary | Java
+notes:
+  - Dependencies are type references and calls the index resolved. Not drawn: HTTP and message links between services, a database two services share (use a flow or an ER board), and configuration-level wiring.
+  - Boxes are modules or packages, so they carry no single symbol or line; open a type through a flow or `find_symbol`.

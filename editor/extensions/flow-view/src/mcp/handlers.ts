@@ -14,6 +14,7 @@ import * as vscode from 'vscode';
 import { innermost, type Analyzer } from '../analyzer';
 import { entryName, type Endpoints, type Entry, type Source } from '../backends';
 import { parseBoard } from '../board/spec';
+import { annotate, architectureFromGraph, checkScope, erFromTables, sequenceFromFlow, stateFromEnum, strings, type Generated } from '../board/fromCode';
 import { cleanBoardId, type BoardStore } from '../board/store';
 import type { ChangeSet, ChangeSetTrace } from '../changeSet';
 import { POLY_LANGUAGES, type PolyIndex } from '../poly/client';
@@ -22,7 +23,9 @@ import { flowToText } from './flowtext';
 import { errorResult, type ToolResult } from './protocol';
 import { resolveInWorkspace } from './registry';
 import { searchEntries } from './search';
-import { isMigrationPath } from '../poly/migrations';
+import { isMigrationPath, parseMigration } from '../poly/migrations';
+import type { Migration } from '../poly/model';
+import type { TypeGraph } from '../types/model';
 import { describeChanged, NOT_CHECKED, tableImpactText, type TableIndex } from './tableIndex';
 import { tableEndpoints } from './turnImpact';
 import { NODE_STATUSES } from './tools';
@@ -59,6 +62,8 @@ export interface ToolDeps {
 	describeAgent(session: string): Promise<{ label: string; color: string } | undefined>;
 	/** Skeleton first: the answer of check_skeleton, and the boards agents draw. */
 	skeleton?: SkeletonTools;
+	/** The type graph: the architecture and state boards of board_from_code, and the relations of its ER boards. */
+	types?: { getGraph(): Promise<TypeGraph>; warnings(): string[] };
 }
 
 /** What a bridge call says about who made it. */
@@ -149,6 +154,7 @@ export class AgentTools {
 				case 'impact': return await this.impact(a);
 				case 'get_context': return await this.context();
 				case 'draw_board': return await this.draw(a, ctx);
+				case 'board_from_code': return await this.fromCode(a, ctx);
 				case 'update_board': return await this.update(a);
 				case 'tour': return await this.tour(a, ctx);
 				case 'tour_control': return await this.tourControl(a, ctx);
@@ -1119,6 +1125,111 @@ export class AgentTools {
 			spec.kind === 'plan' ? `Tick steps off with update_board (id "${id}", nodeId one of: ${spec.nodes.slice(0, 20).map(n => n.id).join(', ')}).` : `Use id "${id}" again to replace it.`,
 			...warnings,
 			...(skeleton ? ['', skeleton] : []),
+		].join('\n'));
+	}
+
+	// ── boards generated from code ──────────────────────────────────────────
+
+	/** Migration files of the workspace (SQL, Flyway, Liquibase, Alembic, Django, TypeORM, Rails): read, never run. EF Core migrations need the analyzer and are not read here. */
+	private async migrations(): Promise<Migration[]> {
+		const found = await vscode.workspace.findFiles('**/{migrations,Migrations,migrate,changelog,versions,db}/**/*.{sql,py,rb,ts,js,xml,yaml,yml,json}', '**/{node_modules,out,dist,build,target,.git,.axle}/**', 300);
+		const out: Migration[] = [];
+		for (const uri of found) {
+			if (!isMigrationPath(uri.fsPath)) {
+				continue;
+			}
+			const source = await fs.readFile(uri.fsPath, 'utf8').catch(() => undefined);
+			const m = source === undefined ? undefined : parseMigration(uri.fsPath, source);
+			if (m) {
+				out.push(m);
+			}
+		}
+		return out;
+	}
+
+	/** The file and method `scope.symbol` ("OrderService.place") names: the workspace symbol search finds the file, the index resolves the method. */
+	private async symbolTarget(symbol: string): Promise<{ file: string; method: string }> {
+		const method = symbol.split('.').pop()!;
+		const owner = symbol.includes('.') ? symbol.split('.').slice(-2, -1)[0] : undefined;
+		const found = await within(Promise.resolve(vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', method)), 20_000, 'the symbol search') ?? [];
+		const methods = found.filter(x => x.name.replace(/\(.*$/, '') === method && (x.kind === vscode.SymbolKind.Method || x.kind === vscode.SymbolKind.Function || x.kind === vscode.SymbolKind.Constructor));
+		const hit = methods.find(x => !owner || x.containerName === owner) ?? methods[0];
+		if (!hit || !(await this.inside(hit.location.uri))) {
+			throw new Error(`No method "${symbol}" found by the language servers (they may still be loading). Use find_entry_points, or pass scope.file with scope.method.`);
+		}
+		return { file: hit.location.uri.fsPath, method };
+	}
+
+	private async generate(kind: string, scope: Record<string, unknown>, a: Record<string, unknown>): Promise<Generated> {
+		const depth = num(a.depth, 6, 8);
+		const maxNodes = typeof a.maxNodes === 'number' ? num(a.maxNodes, 20, 60) : undefined;
+		if (kind === 'sequence') {
+			const target = typeof scope.symbol === 'string' && !scope.id && !scope.file ? await this.symbolTarget(scope.symbol) : undefined;
+			const r = await this.resolve(target ?? scope);
+			const root = await within(this.d.providerFor(r.target).graph(r.target), 120_000, 'the flow');
+			return sequenceFromFlow(root, `Sequence: ${r.label}`, { depth, rel: f => this.rel(f), maxParticipants: maxNodes });
+		}
+		if (!this.d.types) {
+			throw new Error('The type graph is not available in this window.');
+		}
+		const graph = await within(this.d.types.getGraph(), 90_000, 'the type graph');
+		const warnings = this.d.types.warnings().filter(Boolean);
+		let out: Generated;
+		if (kind === 'er') {
+			const schemas = this.d.poly.isReady ? await within(this.d.poly.schemas(), 30_000, 'the schema reader').catch(() => []) : [];
+			out = erFromTables({ schemas, graph, migrations: await this.migrations().catch(() => []) }, { tables: strings(scope.tables, 'scope.tables') }, { maxTables: maxNodes });
+			if (!this.d.poly.isReady) {
+				out.notes.push('The code index is still building: tables of Java, Python and JS/TS may be missing. Try again in a moment.');
+			}
+		} else if (kind === 'architecture') {
+			out = architectureFromGraph(graph, { module: typeof scope.module === 'string' ? scope.module : undefined }, { maxNodes });
+		} else {
+			// The generator reads method bodies; the files are read here, and only those inside the workspace.
+			const cache = new Map<string, string>();
+			const files = [...new Set(graph.types.map(t => t.file))].filter(f => resolveInWorkspace(f, this.folders)).slice(0, 400);
+			await Promise.all(files.map(async f => {
+				const t = await fs.readFile(f, 'utf8').catch(() => undefined);
+				if (t !== undefined) {
+					cache.set(f, t);
+				}
+			}));
+			out = stateFromEnum({ graph, readSource: f => cache.get(f) }, { enum: typeof scope.enum === 'string' ? scope.enum : undefined });
+		}
+		out.notes.push(...warnings);
+		return out;
+	}
+
+	private async fromCode(a: Record<string, unknown>, ctx: CallContext = {}): Promise<ToolResult> {
+		const { kind, scope } = checkScope(a.kind, a.scope);
+		const out = await this.generate(kind, scope, a);
+		if (!out.board) {
+			return text([`No ${kind} board was drawn: ${out.skipped}`, ...out.notes.map(n => `- ${n}`)].join('\n'));
+		}
+		const board = out.board;
+		const warnings = annotate(board, { title: a.title, description: a.description, notes: a.notes });
+		// Links to code: only files inside the workspace, spelled the way the editor spells them.
+		for (const n of board.nodes) {
+			if (n.file) {
+				const resolved = resolveInWorkspace(n.file, this.folders);
+				n.file = resolved ? vscode.Uri.file(resolved).fsPath : undefined;
+				n.line = resolved ? n.line : undefined;
+			}
+		}
+		let wanted = cleanBoardId(a.id);
+		if (wanted && this.d.skeleton?.claimed(wanted, ctx.session)) {
+			warnings.push(`id "${wanted}" is another agent's skeleton design, so this was drawn as a new board.`);
+			wanted = undefined;
+		}
+		const replaced = wanted ? !!this.d.boards.get(wanted) : false;
+		// Not through parseBoard: it would drop the fields a generated board carries (symbol, order, state, level). The host built every value here.
+		const id = await this.d.boards.set(board as unknown as Parameters<BoardStore['set']>[0], { id: wanted, origin: 'agent' });
+		const nodes = board.nodes.slice(0, 40).map(n => `${n.id}${n.symbol ? ` = ${n.symbol}` : ''}${n.file ? ` (${this.rel(n.file)}${n.line ? `:${n.line}` : ''})` : ''}`);
+		return text([
+			`Board "${id}" ${replaced ? 'replaced' : 'generated from the code and shown'} in Axle: ${board.kind}${board.level ? ` (${board.level})` : ''}, ${board.nodes.length} nodes, ${board.edges.length} edges.`,
+			'Every node and relation was read from the code index. Add titles and notes by calling again with the same id and `notes`: [{node, text}]; relations cannot be added here. To draw something the code does not show, use draw_board.',
+			...out.notes.map(n => `- ${n}`),
+			...warnings,
+			`Nodes (id = symbol): ${nodes.join('; ')}${board.nodes.length > 40 ? '; ...' : ''}`,
 		].join('\n'));
 	}
 

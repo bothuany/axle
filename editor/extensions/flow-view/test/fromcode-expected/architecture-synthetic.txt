@@ -1,0 +1,18 @@
+architecture (container): Architecture: services
+4 services, 3 dependencies.
+direction TB
+
+nodes:
+  u_billing | billing | service/rect | symbol - |  | group system | tech C# | 1 type: 1 service
+  u_mail | mail | service/rect | symbol - |  | group system | tech Python | 1 type: 1 service
+  u_orders | orders | service/rect | symbol - |  | group system | tech Java | 2 types: 1 controller, 1 service
+  u_users | users | service/rect | symbol - |  | group system | tech JavaScript/TypeScript | 1 type: 1 service
+edges:
+  u_billing -> u_mail [depends] 1 ref
+  u_orders -> u_billing [depends] 1 ref, 3 calls
+  u_orders -> u_users [depends] 1 ref
+groups:
+  system | System | boundary
+notes:
+  - Dependencies are type references and calls the index resolved. Not drawn: HTTP and message links between services, a database two services share (use a flow or an ER board), and configuration-level wiring.
+  - Boxes are modules or packages, so they carry no single symbol or line; open a type through a flow or `find_symbol`.

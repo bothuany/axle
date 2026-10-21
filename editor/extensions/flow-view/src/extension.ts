@@ -387,7 +387,7 @@ function wireAgentBridge(flow: Flow) {
 	// Skeleton first: the plan board against the type index, the stages the dock drives (docs/design/skeleton-first.md).
 	const skeleton = new SkeletonHost(boards, TypeService.get(log), log);
 	const bridge = new AgentBridge({
-		log, endpoints: endpointList, analyzer, poly, boards, tables: flow.tables, skeleton,
+		log, endpoints: endpointList, analyzer, poly, boards, tables: flow.tables, skeleton, types: TypeService.get(log),
 		providerFor: flow.providerFor,
 		showEntry: (id, label, source) => flow.showEntry(id, label, source),
 		showTarget: async (target, label) => {
@@ -437,6 +437,41 @@ function wireAgentBridge(flow: Flow) {
 				await boards.set(flowToBoard(graph, shown.label), { origin: 'user' });
 			} catch (e) {
 				flow.fail(e);
+			}
+		}),
+		// The canvas action for board_from_code: the user picks the kind and the scope, Axle draws the board from the index.
+		vscode.commands.registerCommand('flow.board.fromCode', async () => {
+			const pick = await vscode.window.showQuickPick([
+				{ label: 'Sequence', description: 'the calls of the flow on the canvas, in order', board: 'sequence' },
+				{ label: 'Tables (ER)', description: 'columns, keys and relations', board: 'er' },
+				{ label: 'Architecture', description: 'modules or packages and their dependencies', board: 'architecture' },
+				{ label: 'States', description: 'an enum and its transitions', board: 'state' },
+			], { title: 'Axle: Board from Code', placeHolder: 'Which diagram, drawn from the code?' });
+			if (!pick) {
+				return;
+			}
+			let scope: Record<string, unknown> = {};
+			if (pick.board === 'sequence') {
+				const target = flow.panel.shown?.target;
+				if (!target || target.kind === 'lsp') {
+					void vscode.window.showInformationMessage('Axle: open a flow first (Open Endpoint Flow… or Show Flow at Cursor), then draw its sequence.');
+					return;
+				}
+				scope = { id: target.id };
+			} else {
+				const key = { er: 'tables', architecture: 'module', state: 'enum' }[pick.board]!;
+				const typed = await vscode.window.showInputBox({ title: `Axle: ${pick.label} from Code`, prompt: { er: 'Table or entity names, separated by commas (empty: all tables)', architecture: 'A module or package name (empty: the whole workspace)', state: 'An enum, "OrderStatus" or "Order.status" (empty: look for one)' }[pick.board] });
+				if (typed === undefined) {
+					return;
+				}
+				const words = typed.split(',').map(x => x.trim()).filter(Boolean);
+				if (words.length) {
+					scope = { [key]: key === 'tables' ? words : words[0] };
+				}
+			}
+			const answer = await bridge.boardFromCode({ kind: pick.board, scope });
+			if (!answer.ok || /^No \w+ board was drawn/.test(answer.message)) {
+				void vscode.window.showWarningMessage(`Axle: ${answer.message.split('\n')[0]}`);
 			}
 		}),
 		vscode.commands.registerCommand('flow.agent.edited', async (session: string, files: string[], phase: 'before' | 'after') => {

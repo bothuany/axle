@@ -184,6 +184,41 @@ export const TOOLS: ToolDef[] = [
 		annotations: ro('Draw a board', true),
 	},
 	{
+		name: 'board_from_code',
+		description: 'Generate a board FROM THE CODE and show it to the user, instead of drawing it with draw_board. Use it for the common diagrams, so no relation is invented: sequence (the calls of an endpoint or method in order, between classes; guessed hops are dotted and marked "?"), er (tables with columns, keys, relations and cardinality, from the entity and migration readers), architecture (modules or packages and their dependencies, C4 container level when there are several services), state (an enum and its transitions, only where the code assigns a value and checks the previous one; otherwise it says why it drew nothing). Nodes carry their symbol and file:line from the index, boards are capped in size and the result lists what was cut or guessed. You choose `kind` and `scope`; you may add `title`, `description` and `notes` ([{node, text}], node = id or symbol), never nodes or edges. Use draw_board for anything the code does not show (a plan, a proposed design). Scope per kind: sequence {id | file+method | file+line | symbol}; er {tables?: [names]}; architecture {module?}; state {enum?}. Passing the same `id` again replaces the board.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				kind: { type: 'string', enum: ['sequence', 'er', 'architecture', 'state'], description: 'sequence: calls in order · er: tables · architecture: modules/packages and dependencies · state: enum transitions.' },
+				scope: {
+					type: 'object',
+					description: 'What to draw. sequence: id, or file with method or line, or symbol. er: tables. architecture: module. state: enum.',
+					properties: {
+						...TARGET,
+						symbol: str('sequence: a method as "Class.method".'),
+						tables: { type: 'array', items: { type: 'string' }, description: 'er: table or entity names; their directly related tables are drawn too. Omit for all tables (capped).' },
+						module: str('architecture: a module (service) name, or a package name.'),
+						enum: str('state: the enum, "OrderStatus" or "Order.status".'),
+					},
+					additionalProperties: false,
+				},
+				id: str('Stable name for the board (letters, digits, - _ . :). Reuse it to replace the board; omit for a new one.'),
+				title: str('Replaces the generated title.'),
+				description: str('Added in front of the generated description.'),
+				notes: {
+					type: 'array',
+					description: 'Short notes pinned to nodes: [{"node": "svc", "text": "Retries twice"}]. A node that does not exist is reported, never created.',
+					items: { type: 'object', properties: { node: str('Node id or symbol.'), text: str('The note.') }, required: ['node', 'text'], additionalProperties: false },
+				},
+				depth: int('sequence: call levels (default 6, at most 8).'),
+				maxNodes: int('Participants, tables or boxes drawn (default: sequence 8, er 20, architecture 30; at most 60).'),
+			},
+			required: ['kind'],
+			additionalProperties: false,
+		},
+		annotations: ro('Generate a board from the code', true),
+	},
+	{
 		name: 'update_board',
 		description: 'Update one node of a board you drew with draw_board: set its status (todo, doing, done, skipped, blocked) and/or its note. Use it to tick plan steps as you work so the user sees progress on the board.',
 		inputSchema: {

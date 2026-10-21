@@ -1,0 +1,16 @@
+er: Tables
+2 tables, 1 relation, read from the entities and migrations.
+direction LR
+
+nodes:
+  t_customers | customers | entity | symbol Customer | models.py:16 | entity Customer
+      id: Integer  PK
+      name: String
+  t_orders | orders | entity | symbol Order | models.py:24 | entity Order
+      id: Integer  PK
+      customer_id: →customers.id  FK -> t_customers
+      status: String
+edges:
+  t_orders -> t_customers [has] customer_id (0..* : 1)
+notes:
+  - Not drawn: relations declared only in the database (foreign keys no entity or migration reader sees), views, and cross-service relations.

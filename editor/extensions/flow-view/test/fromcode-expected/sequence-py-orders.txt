@@ -1,0 +1,16 @@
+sequence: Sequence: POST /orders/{order_id}/pay
+3 messages between 3 participants, from pay_order.
+direction LR
+
+nodes:
+  client | Client | actor/actor | symbol - | 
+  main | main | controller | symbol main | main.py:13
+  orders | orders | entity/cylinder | symbol Order | models.py:24 | table of Order
+edges:
+  1. client -> main [message] POST /orders/{order_id}/pay
+  2. main -> orders [reads] reads query
+  3. main -> main [message] notify
+notes:
+  - Messages are in the order the code makes the calls. Branches, loops and returns are not drawn: the index does not know them.
+  - main: main.py:13
+  - orders: models.py:24

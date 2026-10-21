@@ -1,0 +1,13 @@
+state: States: OrderStatus
+3 states, 1 transition read from the code (2 files scanned).
+direction LR
+
+nodes:
+  NEW | NEW | step/round | symbol OrderStatus.NEW | models.py:10 | state
+  PAID | PAID | step/round | symbol OrderStatus.PAID | models.py:10 | state
+  SHIPPED | SHIPPED | step/round | symbol OrderStatus.SHIPPED | models.py:10 | state
+edges:
+  NEW -> PAID [next] pay_order
+notes:
+  - No clear transition into or out of: SHIPPED. They are listed as states, unconnected.
+  - Transitions are read from the source text (an assignment plus a check of the previous state in one method), not from a resolved model: a state changed by a framework, a database update or a state-machine library is not seen.

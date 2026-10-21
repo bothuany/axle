@@ -151,6 +151,11 @@
         "category": "Axle"
       },
       {
+        "command": "flow.board.fromCode",
+        "title": "Board from Code…",
+        "category": "Axle"
+      },
+      {
         "command": "flow.types.showDtoDiagram",
         "title": "Show DTO Diagram",
         "category": "Axle",

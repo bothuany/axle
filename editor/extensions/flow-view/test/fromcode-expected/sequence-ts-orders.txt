@@ -1,0 +1,18 @@
+sequence: Sequence: POST /orders/pay
+3 messages between 4 participants, from OrdersController.pay.
+direction LR
+
+nodes:
+  client | Client | actor/actor | symbol - | 
+  OrdersController | OrdersController | controller | symbol OrdersController | src/orders.controller.ts:10
+  OrdersService | OrdersService | service | symbol OrdersService | src/orders.service.ts:10
+  orders | orders | entity/cylinder | symbol Order | src/order.entity.ts:22 | table of Order
+edges:
+  1. client -> OrdersController [message] POST /orders/pay
+  2. OrdersController -> OrdersService [message] pay
+  3. OrdersService -> orders [writes] writes save
+notes:
+  - Messages are in the order the code makes the calls. Branches, loops and returns are not drawn: the index does not know them.
+  - OrdersController: src/orders.controller.ts:10
+  - OrdersService: src/orders.service.ts:10
+  - orders: src/order.entity.ts:22

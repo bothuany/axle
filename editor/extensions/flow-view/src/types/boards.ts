@@ -67,7 +67,7 @@ const DEFAULT_ARCH_NODES = 150;
 const MAX_FIELDS = 40;
 
 /** Undirected neighbourhood of `start` within `allowed`, `depth` hops. */
-function neighbourhood(start: string[], edges: readonly { from: string; to: string }[], allowed: ReadonlySet<string>, depth: number): Set<string> {
+export function neighbourhood(start: string[], edges: readonly { from: string; to: string }[], allowed: ReadonlySet<string>, depth: number): Set<string> {
 	const adj = new Map<string, string[]>();
 	for (const e of edges) {
 		if (allowed.has(e.from) && allowed.has(e.to)) {
@@ -93,7 +93,7 @@ function neighbourhood(start: string[], edges: readonly { from: string; to: stri
 }
 
 /** The most connected `max` of `ids` (the `keep` ones always). */
-function cut(ids: Set<string>, edges: readonly { from: string; to: string }[], max: number, keep: ReadonlySet<string>): Set<string> {
+export function cut(ids: Set<string>, edges: readonly { from: string; to: string }[], max: number, keep: ReadonlySet<string>): Set<string> {
 	if (ids.size <= max) {
 		return ids;
 	}
