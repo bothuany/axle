@@ -1,0 +1,22 @@
+er: Tables
+3 tables, 2 relations, read from the entities and migrations.
+direction LR
+
+nodes:
+  t_customers | customers | entity | symbol Customer | src/main/java/com/acme/Customer.java:6 | entity Customer
+      id: Long  PK
+      name: String
+  t_order_lines | order_lines | entity | symbol OrderLine | src/main/java/com/acme/OrderLine.java:5 | entity OrderLine
+      id: Long  PK
+      order: Order  FK -> t_orders
+      sku: String
+      quantity: int
+  t_orders | orders | entity | symbol Order | src/main/java/com/acme/Order.java:6 | entity Order
+      id: Long  PK
+      customer: Customer  FK -> t_customers
+      status: OrderStatus
+edges:
+  t_orders -> t_customers [has] customer / orders (0..* : 1)
+  t_order_lines -> t_orders [has] order / lines (0..* : 1)
+notes:
+  - Not drawn: relations declared only in the database (foreign keys no entity or migration reader sees), views, and cross-service relations.

@@ -1,0 +1,15 @@
+er: Tables
+2 tables, 1 relation, read from the entities and migrations.
+direction LR
+
+nodes:
+  t_customers | customers | entity | symbol Customer | src/order.entity.ts:10 | entity Customer
+      id: number  PK
+      name: string
+  t_orders | orders | entity | symbol Order | src/order.entity.ts:22 | entity Order
+      id: number  PK
+      status: OrderStatus
+edges:
+  t_orders -> t_customers [has] customer / orders (0..* : 1)
+notes:
+  - Not drawn: relations declared only in the database (foreign keys no entity or migration reader sees), views, and cross-service relations.

@@ -1,0 +1,15 @@
+architecture (container): Architecture: services
+3 services, 0 dependencies.
+direction TB
+
+nodes:
+  u_java_shop | java-shop | service/rect | symbol - |  | group system | tech Java | 16 types: 8 dtos, 2 entities, 2 services
+  u_py_app | py-app | service/rect | symbol - |  | group system | tech Python | 6 types: 4 dtos, 1 entity, 1 enum
+  u_ts_app | ts-app | service/rect | symbol - |  | group system | tech JavaScript/TypeScript | 6 types: 2 dtos, 1 controller, 1 enum
+edges:
+groups:
+  system | System | boundary
+notes:
+  - No dependency between these boxes was found in the code: they may talk over HTTP or messages (not drawn) or not at all.
+  - Dependencies are type references and calls the index resolved. Not drawn: HTTP and message links between services, a database two services share (use a flow or an ER board), and configuration-level wiring.
+  - Boxes are modules or packages, so they carry no single symbol or line; open a type through a flow or `find_symbol`.

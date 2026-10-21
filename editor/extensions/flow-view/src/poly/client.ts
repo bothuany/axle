@@ -14,6 +14,7 @@ import { VsLsp } from './lspHost';
 import { LspRefiner, stripPending } from './lspResolve';
 import type { PolyTypeFacts } from '../types/wire';
 import { isExcludedPath, type EntryPoint, type Mention, type TableEntity, type TablesFact } from './model';
+import type { DbSchema } from '../../../../../protocol/flow';
 
 export const POLY_LANGUAGES = new Set(['java', 'python', 'javascript', 'typescript', 'javascriptreact', 'typescriptreact', 'go', 'php', 'ruby', 'rust']);
 
@@ -262,6 +263,11 @@ export class PolyIndex implements vscode.Disposable {
 	/** The entity and model classes with their tables, for a change to one of them. */
 	entities() {
 		return this.request<TableEntity[]>('entities');
+	}
+
+	/** Every entity's table with its columns, keys and relations (the schema readers' output): what a generated ER board is drawn from. */
+	schemas() {
+		return this.request<(DbSchema & { orm: string; guess: boolean })[]>('schemas');
 	}
 
 	/** Where code mentions these columns by name (in files that also mention the table or its entity): what may still use a column a migration drops. */
