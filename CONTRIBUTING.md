@@ -1,4 +1,4 @@
-# Contributing to Axle
+# Contributing to Insilode
 
 Bug reports, fixes and new language support are welcome. For anything larger than a fix, open an issue first so we can agree on the approach before you spend time on it.
 
@@ -11,7 +11,7 @@ Follow "Getting started" in [docs/building.md](docs/building.md): `npm run setup
 - `editor/extensions/*`: the four built-in extensions (TypeScript, bundled with esbuild).
 - `ui/`: the canvas (React Flow + Monaco).
 - `analyzer/`: the C# analyzer (.NET 10, Roslyn).
-- `editor/patches/flow-core.patch`: Axle's changes to VS Code itself. Keep it as small as you can; prefer an extension.
+- `editor/patches/flow-core.patch`: Insilode's changes to VS Code itself. Keep it as small as you can; prefer an extension.
 
 ## Before you open a pull request
 
@@ -37,10 +37,10 @@ Optional local scans: `npm run semgrep` (needs `semgrep` on PATH or Docker) and 
 
 ## Licence and the CLA
 
-Axle is released under the [MIT License](LICENSE). Before your first pull request can be merged, you sign the [Contributor License Agreement](CLA.md) once: a bot comments on the pull request, and you reply with the sentence it gives you. You keep the copyright of your work; the agreement lets the project keep maintaining it and, if that is ever needed, ship it under other licence terms. Code you contribute stays available under the MIT License in the releases that contain it.
+Insilode is released under the [MIT License](LICENSE). Before your first pull request can be merged, you sign the [Contributor License Agreement](CLA.md) once: a bot comments on the pull request, and you reply with the sentence it gives you. You keep the copyright of your work; the agreement lets the project keep maintaining it and, if that is ever needed, ship it under other licence terms. Code you contribute stays available under the MIT License in the releases that contain it.
 
 If you contribute as part of your job, make sure your employer allows it (see point 5 of the CLA).
 
-The Axle name and logo are not covered by the code licence: see [TRADEMARKS.md](TRADEMARKS.md).
+The Insilode name and logo are not covered by the code licence: see [TRADEMARKS.md](TRADEMARKS.md).
 
 Be kind: see the [code of conduct](CODE_OF_CONDUCT.md). Questions and ideas are welcome in [Discussions](https://github.com/bothuany/axle/discussions); bugs go to issues.

@@ -1,20 +1,20 @@
-# Axle website: design direction (checkpoint 1)
+# Insilode website: design direction (checkpoint 1)
 
 Three directions for the new site at bothuany.github.io/axle, each with a token plan, wireframes for the hero and one problem
 section at desktop and phone width, and the frontend-design skill's anti-default check. Each direction had a mock-up page and two
 headless screenshots of it (1440 and 375); screenshots are kept out of the repository, so those were shown to the user separately.
 
-The canvas in every mock-up was a real capture: `canvas.html` (Axle's canvas from `ui/` on the fake host) on the demo project's
+The canvas in every mock-up was a real capture: `canvas.html` (Insilode's canvas from `ui/` on the fake host) on the demo project's
 data, screenshotted with headless Chrome. Nothing in the canvas was drawn by hand.
 Every number in the copy comes from that data: the demo's agent change ("Claude Code: discount codes on orders") touches
 2 files and reaches 4 endpoints.
 
 ## The brief, restated
 
-- **Subject:** Axle, an open-source code editor (a VS Code fork) that shows how code runs, as a call-flow canvas, and keeps the agents
+- **Subject:** Insilode, an open-source code editor (a VS Code fork) that shows how code runs, as a call-flow canvas, and keeps the agents
   that edit it (Claude Code, Codex, any CLI) visible and in check.
 - **Audience:** developers who already work with coding agents and have felt "it changed something, where?".
-- **Primary job:** download Axle for your OS. Second job: try the real canvas on this page, with a guided tour.
+- **Primary job:** download Insilode for your OS. Second job: try the real canvas on this page, with a guided tour.
 - **The subject's vernacular:** call chains drawn card by card, orthogonal edges with handle dots, entry points marked in amber,
   database cards in teal, added lines green and removed lines red, a ghost cursor that walks the flow. Those are the materials.
 
@@ -76,11 +76,11 @@ Diff green and red appear only inside the canvas, where they mean added and remo
 ```
 Desktop 1440                                                         Phone 375
 +------------------------------------------------------------------+ +------------------------+
-| [logo] Axle        Try it  Docs  Changelog     [GitHub ★ 3]       | | [logo] Axle     [☰]    |
+| [logo] Insilode        Try it  Docs  Changelog     [GitHub ★ 3]       | | [logo] Insilode     [☰]    |
 |                                                                  | |                        |
 | │  See how your code runs.                                       | | See how your           |
 | │  Every editor shows where code is stored.                      | | code runs.             |
-| │  Axle shows how it runs.                                       | | Every editor shows...  |
+| │  Insilode shows how it runs.                                       | | Every editor shows...  |
 | │  [Download for Windows]  [GitHub ★]                            | | [Download for Windows] |
 | │  Version 0.4.3. Also for macOS (Apple silicon, Intel), Linux  | | Other platforms        |
 | │                                                                | |                        |
@@ -131,7 +131,7 @@ entry point. Below the fold the page is the navy of the logo, with each problem 
 ```
 Desktop 1440                                                         Phone 375
 +------------------------------------------------------------------+ +------------------------+
-| [logo] Axle                         Try it  Docs  [GitHub ★]      | | [logo] Axle    [GitHub]|
+| [logo] Insilode                         Try it  Docs  [GitHub ★]      | | [logo] Insilode    [GitHub]|
 |..................................................................| |........................|
 |.  +---------------------------+                                 .| |. +--------------------+.|
 |.  | See how your code runs.   |●──────┐                          .| |. | See how your code  |.|
@@ -178,10 +178,10 @@ dark canvas window overlaps the field's lower edge into a calm, near-white page 
 Desktop 1440                                                         Phone 375
 +------------------------------------------------------------------+ +------------------------+
 | ##### periwinkle field ########################################## | | ##### field ########## |
-| # [logo] Axle                     Try it  Docs  [GitHub ★]      # | | # Axle      [GitHub] # |
+| # [logo] Insilode                     Try it  Docs  [GitHub ★]      # | | # Insilode      [GitHub] # |
 | #                                                                # | | #                    # |
 | #        See how your code runs.                                 # | | # See how your      # |
-| #   Every editor shows where code is stored. Axle shows how...   # | | # code runs.        # |
+| #   Every editor shows where code is stored. Insilode shows how...   # | | # code runs.        # |
 | #        [Download for Windows]  [GitHub ★]                      # | | # [Download]        # |
 | #   +--------------------------------------------------------+   # | | # +----------------+ # |
 | ####| REAL CANVAS window, overlapping the field's edge        |#### | | ##| poster         |## |
@@ -194,11 +194,11 @@ Desktop 1440                                                         Phone 375
 
 **Anti-default check.** Closest cluster: 4 (SaaS kit, gradient washes). It is not that: the field is one flat brand colour, not a
 gradient, and the page has no card grid. Risk that remains: a big centred headline over a colour field is a common launch-page
-shape; what makes it Axle's is that the colour is the logo's and the canvas breaks the field's edge.
+shape; what makes it Insilode's is that the colour is the logo's and the canvas breaks the field's edge.
 
 ## Recommendation
 
-**A, Light table.** It is the only direction where the page's own structure says what Axle does (the trace reads as a call flow
+**A, Light table.** It is the only direction where the page's own structure says what Insilode does (the trace reads as a call flow
 from the hero down through the problems), the dark canvas is the one lit thing on the page so the product is unmistakably the
 hero, and it stays clear of the two looks a dev tool drifts to (dark with an accent, centred colour field). B's full-bleed idea
 can still be borrowed for the Try page, where the canvas should fill the screen.

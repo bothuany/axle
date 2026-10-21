@@ -1,15 +1,15 @@
 ---
 name: add-mcp-tool
-description: Add or change a tool of Axle's own `axle` MCP server (editor/extensions/flow-view/mcp and src/mcp) and keep its definition, handler, tests, user-facing lists and docs in step. Use when asked to add, rename or extend an mcp__axle__ tool.
+description: Add or change a tool of Insilode's own `insilode` MCP server (editor/extensions/flow-view/mcp and src/mcp) and keep its definition, handler, tests, user-facing lists and docs in step. Use when asked to add, rename or extend an mcp__insilode__ tool.
 argument-hint: "<tool name and what it should do>"
 ---
 
-An `axle` tool lives in several places that drift apart if one is missed. Change all of them in one go.
+An `insilode` tool lives in several places that drift apart if one is missed. Change all of them in one go.
 
 **Rules that hold for every tool**
 - Read, display or open only: a tool writes no files and runs no commands. Any path argument is resolved against, and must stay inside, an open workspace folder.
-- `mcp/axle-mcp.ts`, `src/mcp/stdio.ts` and everything they import run in plain Node with no `vscode`, even transitively. Only the host-facing files listed in `.dependency-cruiser.cjs` (such as `src/mcp/handlers.ts`) touch `vscode`.
-- The stdio server forwards calls to the Axle window over the loopback bridge (`src/mcp/bridge.ts`, `http.ts`); the work itself happens in the window.
+- `mcp/insilode-mcp.ts`, `src/mcp/stdio.ts` and everything they import run in plain Node with no `vscode`, even transitively. Only the host-facing files listed in `.dependency-cruiser.cjs` (such as `src/mcp/handlers.ts`) touch `vscode`.
+- The stdio server forwards calls to the Insilode window over the loopback bridge (`src/mcp/bridge.ts`, `http.ts`); the work itself happens in the window.
 
 **Where to change**
 1. `src/mcp/tools.ts`: the `TOOLS` entry. Its `description` tells the model when to use the tool and when to use a different one; its `inputSchema` has `additionalProperties: false`; `annotations` use `ro(...)` for read-only.
@@ -22,4 +22,4 @@ An `axle` tool lives in several places that drift apart if one is missed. Change
 **Check**
 - `cd editor/extensions/flow-view && npm test`
 - `npm run arch` from the repo root (catches a `vscode` import reaching the stdio server).
-- Smoke test: pipe an `initialize` and a `tools/list` request into `node out/axle-mcp.js --workspace <repo>` and confirm the tool is listed.
+- Smoke test: pipe an `initialize` and a `tools/list` request into `node out/insilode-mcp.js --workspace <repo>` and confirm the tool is listed.

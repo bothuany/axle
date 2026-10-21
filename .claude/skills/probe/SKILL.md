@@ -1,16 +1,16 @@
 ---
 name: probe
-description: Run Axle for real and probe a feature end to end in the built-in browser pane (web mode), without opening a desktop window - build, start `npm run web` on a demo or user project, trust the folder, drive the canvas, endpoints, callers and boards, and report what works with screenshot evidence. Use whenever the user asks to run, launch, try, smoke-test, "probe", demo or see a change working in Axle (e.g. "axle'ı çalıştır", "probe et", "uygulamada dene", "does the canvas show it"), or after a feature lands and tests alone don't prove it works in the app.
+description: Run Insilode for real and probe a feature end to end in the built-in browser pane (web mode), without opening a desktop window - build, start `npm run web` on a demo or user project, trust the folder, drive the canvas, endpoints, callers and boards, and report what works with screenshot evidence. Use whenever the user asks to run, launch, try, smoke-test, "probe", demo or see a change working in Insilode (e.g. "insilode'ı çalıştır", "probe et", "uygulamada dene", "does the canvas show it"), or after a feature lands and tests alone don't prove it works in the app.
 argument-hint: "[what to probe] [folder]"
 ---
 
-# Probe Axle in the app
+# Probe Insilode in the app
 
 Unit tests prove the index and the canvas code; a probe proves a person would see it. Run the real editor, look at the feature, and report what you saw, not what the code should do.
 
 ## Ground rules
 
-- **Don't take over the user's screen.** They often watch something while you work. Use web mode (`npm run web`) in the built-in browser pane (`mcp__Claude_Browser__*`), never `npm start` (an Electron window that grabs focus), and never global keyboard or mouse input (Windows-MCP, Claude in Chrome on their real browser). Keys and clicks inside the browser pane are fine: they go to that page only. If something truly needs the desktop window (the installer, an update, the status island, window focus or position), do not open one here: probe them in Docker: `npm run docker:e2e` runs the desktop scenarios and `npm run docker:e2e -- --probe <file>` runs your own Playwright script (test/e2e-desktop/lib/probe.mjs) in a container with a virtual display, screenshots in the output folder it prints. Windows-only checks (the installer, the update) go to `npm run sandbox:e2e` (Windows Sandbox). They never run in GitHub Actions. Docs: docs/building.md "Desktop end-to-end tests". Web mode runs headless and never brings a window to the front; the desktop e2e tests refuse to run unless `AXLE_E2E_ISOLATED=1`, which only CI and the sandbox set. Never set it yourself on the user's machine.
+- **Don't take over the user's screen.** They often watch something while you work. Use web mode (`npm run web`) in the built-in browser pane (`mcp__Claude_Browser__*`), never `npm start` (an Electron window that grabs focus), and never global keyboard or mouse input (Windows-MCP, Claude in Chrome on their real browser). Keys and clicks inside the browser pane are fine: they go to that page only. If something truly needs the desktop window (the installer, an update, the status island, window focus or position), do not open one here: probe them in Docker: `npm run docker:e2e` runs the desktop scenarios and `npm run docker:e2e -- --probe <file>` runs your own Playwright script (test/e2e-desktop/lib/probe.mjs) in a container with a virtual display, screenshots in the output folder it prints. Windows-only checks (the installer, the update) go to `npm run sandbox:e2e` (Windows Sandbox). They never run in GitHub Actions. Docs: docs/building.md "Desktop end-to-end tests". Web mode runs headless and never brings a window to the front; the desktop e2e tests refuse to run unless `INSILODE_E2E_ISOLATED=1`, which only CI and the sandbox set. Never set it yourself on the user's machine.
 - **Probe what the user means.** `$ARGUMENTS` or the conversation says which feature (HTTP links, method-level impact, a board, the agents dock...). If unclear, probe the most recent change. Say which branch or commit you are probing: unmerged branches in other worktrees are not in this checkout.
 - **Web mode serves webviews from the editor's origin** (docs/building.md), so only open the demo folder or the user's own code, never an untrusted folder.
 
@@ -47,7 +47,7 @@ The URL carries a fresh `?tkn=` token each start; open that exact URL. If port 8
 
 ### 4. Open it and trust the folder
 
-`mcp__Claude_Browser__preview_start` with the URL. Wait a few seconds for the workbench. A fresh folder opens in **Restricted Mode**, where Axle's extensions do not run: click "Restricted Mode" in the status bar, then **Trust**, then close the Workspace Trust tab.
+`mcp__Claude_Browser__preview_start` with the URL. Wait a few seconds for the workbench. A fresh folder opens in **Restricted Mode**, where Insilode's extensions do not run: click "Restricted Mode" in the status bar, then **Trust**, then close the Workspace Trust tab.
 
 ### 5. Drive the feature
 
@@ -57,7 +57,7 @@ Prefer `read_page` / `find` for text and refs; use screenshots for the canvas (i
 |---|---|
 | Open a file | `ctrl+p`, type the name, Enter |
 | Go to a line | `ctrl+g`, type the number, Enter |
-| Run an Axle command | `ctrl+shift+p`, type the title, Enter: "Show Flow at Cursor", "Open Endpoint Flow…", "Show Git Changes in Flow", "Show DTO Diagram", "Show Architecture Diagram", "Show Board…", "Home" |
+| Run an Insilode command | `ctrl+shift+p`, type the title, Enter: "Show Flow at Cursor", "Open Endpoint Flow…", "Show Git Changes in Flow", "Show DTO Diagram", "Show Architecture Diagram", "Show Board…", "Home" |
 | Give the canvas room | `ctrl+b` and `ctrl+alt+b` hide the side bars; close the code tab so the flow tab gets the full width |
 | See every card | the fit-view button, bottom left of the canvas (the square under + and -) |
 | Read a card or edge label | `computer` `zoom` on the region |

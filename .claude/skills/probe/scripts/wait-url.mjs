@@ -16,7 +16,7 @@ const tail = text => text.split(/\r?\n/).slice(-20).join('\n')
 for (;;) {
 	const text = existsSync(log) ? readFileSync(log, 'utf8') : ''
 	// The server is up once the extension host agent listens; the token URL is printed before that.
-	const url = /Axle → (http:\/\/\S+\?tkn=\S+)/.exec(text)?.[1]
+	const url = /Insilode → (http:\/\/\S+\?tkn=\S+)/.exec(text)?.[1]
 	if (url && /Extension host agent (listening|started)/.test(text)) {
 		console.log(url)
 		process.exit(0)
