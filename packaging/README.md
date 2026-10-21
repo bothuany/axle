@@ -82,6 +82,19 @@ INSILODE_UPDATE_URL=http://127.0.0.1:8123 npm start     # an installed build, no
 A build from source is never updated (`update#ctor - not built`); install a build of an older version, set the variable and
 choose Help, Check for Updates. `npm run test:update` runs the tests for the version check, the URLs and the files.
 
+## Moving from Axle
+
+The 0.5.x releases carry every update file twice: `update-<platform>-insilode.json` (what 0.5 asks for) and `update-<platform>-axle.json`
+(what an installed 0.4.x asks for, at the same `releases/latest/download` address, which GitHub redirects after the repository moves).
+Both are written by `scripts/update-manifests.mjs` (`LEGACY_QUALITY`); drop the second once the 0.4.x tail is gone. A 0.4.x app cannot install
+the update itself: its "Update available" leads to the new release. Never create a repository called `bothuany/axle` again: it would end the redirect.
+The winget manifest under `winget/manifests/b/bothuany/Insilode/0.1.0/` is the old template (its installer URL names a file the 0.1.0 release
+never had); regenerate it with `wingetcreate` from the first Insilode release.
+
+What Setup does to an Axle install (kept `AppId`), and what the app copies on its first start, is listed in
+[docs/building.md](../docs/building.md#coming-from-axle); the code is in `editor/patches/flow-core.patch` (`build/win32/code.iss`) and
+`flow-desktop.patch` (`src/insilodeMigrate.ts`).
+
 ## Not signed yet
 
 - **Windows:** the installer has no Authenticode signature, so SmartScreen warns before it runs. winget accepts unsigned

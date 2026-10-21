@@ -14,4 +14,6 @@ Insilode's code is open source under the [MIT License](LICENSE): you may use, ch
 - Use the name or logo in the name of a product, service, company or domain.
 - Suggest that your product or service is official, endorsed or supported by the Insilode project.
 
+Insilode is the new name of the project that was called Axle until 0.4.x. The name has not been registered as a trademark, and the search for conflicts is not finished; this policy says how the maintainer intends to use it, not that a registration exists.
+
 If you are unsure, open an issue and ask. Claude and Codex are marks of their owners; Insilode uses their names only to say which agents it works with.

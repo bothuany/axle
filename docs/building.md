@@ -37,6 +37,18 @@ It installs into `/usr/share/insilode`, adds `insilode` to `/usr/bin` and a desk
 
 - Later: an APT repository so that `sudo apt install insilode` and `apt upgrade` work ([how it would be hosted](../packaging/apt/README.md); not set up yet).
 
+### Coming from Axle
+
+Insilode is Axle under a new name (0.5.0 is the first release called Insilode). It keeps working from what Axle left; nothing of Axle's is deleted.
+
+- **Windows:** run `Insilode-Setup-<version>-x64.exe` over the old install. It keeps Axle's installer id, so it upgrades in place (the folder stays `%LOCALAPPDATA%\Programs\Axle`), removes `Axle.exe`, the `axle` command, the old shortcuts and "Open with Axle", and adds Insilode's. The `axle` command is gone: use `insilode`.
+- **macOS and Linux:** the app is a new one (`Insilode.app`; on Debian the `insilode` package replaces `axle`). Delete `Axle.app` yourself.
+- **Your data:** on its first start Insilode copies Axle's user data folder (`%APPDATA%\Axle`, `~/Library/Application Support/Axle` or `~/.config/Axle`: settings, keybindings, snippets, workspace trust) and `~/.axle` (extensions, `argv.json`) to `Insilode` and `~/.insilode`, once. The old folders stay as they were.
+- **Settings:** `axle.skeletonFirst.enabled`, the overlay screen `axle`, the `axleFocused` auto-hide flag and the "Axle Dark/Light" themes are moved to their new names, in the scope they were set in.
+- **Claude Code tools:** a user-level MCP server named `axle` keeps working (its tools are still `mcp__axle__*`) until you move it: Insilode asks once, and shows the two commands it would run. Permission rules you wrote for `mcp__axle__*` are yours: rename them to `mcp__insilode__*`.
+- **Agent worktrees and tours:** worktrees under `.axle/worktrees` and branches `axle/<name>` keep working; new ones go to `.insilode/worktrees` and `insilode/<name>`. Tour files with `"axleTour": 1` still load; new ones say `"insilodeTour": 1`.
+- **Versions up to 0.4.3** cannot install an update by themselves: run the new Setup once by hand. They do see "Update available" (the release carries the update files under Axle's old names too, `update-*-axle.json`).
+
 ### Updates
 
 Insilode checks the latest release by itself: **Update available** on the gear and under Help, Check for Updates. Windows downloads, installs and offers **Restart to Update**; macOS and Linux open the release page. `update.mode` (`none`, `manual`, `start`, `default`) works as in VS Code. How the update files are made, what each platform does, and how to test an update against a local server (`INSILODE_UPDATE_URL`): [packaging/README.md](../packaging/README.md#updates).
