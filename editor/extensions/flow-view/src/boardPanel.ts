@@ -85,7 +85,7 @@ export class BoardPanel implements vscode.Disposable {
 			this.post(tab);
 			return;
 		}
-		const panel = vscode.window.createWebviewPanel('flow.board', spec.title, { viewColumn: options.viewColumn ?? vscode.ViewColumn.Beside, preserveFocus: options.preserveFocus ?? false }, {
+		const panel = vscode.window.createWebviewPanel('flow.board', spec.title, { viewColumn: options.viewColumn ?? vscode.ViewColumn.Active, preserveFocus: options.preserveFocus ?? true }, {
 			enableScripts: true,
 			retainContextWhenHidden: true,
 		});

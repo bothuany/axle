@@ -127,7 +127,8 @@ export class FlowPanel implements vscode.Disposable {
 	}
 
 	private async open(target: FlowTarget, label: string) {
-		const panel = vscode.window.createWebviewPanel('flow.canvas', `Flow: ${label}`, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, {
+		// A tab in the group the user is in, not a new split: an agent's flow or tour must not feel like another window. preserveFocus keeps the caret where it was.
+		const panel = vscode.window.createWebviewPanel('flow.canvas', `Flow: ${label}`, { viewColumn: vscode.ViewColumn.Active, preserveFocus: true }, {
 			enableScripts: true,
 			retainContextWhenHidden: true,
 		});
@@ -252,6 +253,8 @@ export class FlowPanel implements vscode.Disposable {
 		if (pointed && Date.now() - pointed.at < 15 * 60_000 && tour.source === 'agent' && tour.steps[0]) {
 			tour.steps[0].notes = [{ text: pointed.question, by: 'user' as const, at: pointed.at }, ...(tour.steps[0].notes ?? [])].slice(0, MAX_NOTES);
 		}
+		// The tour plays in its tab: bring it forward when another tab (a board, a file) is on top, without taking the keyboard.
+		panel.reveal(undefined, true);
 		this.playing = { id: tour.id, steps: tour.steps.length, tour, session };
 		this.tourAt = undefined;
 		this.asked = undefined;
