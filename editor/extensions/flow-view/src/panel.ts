@@ -127,7 +127,8 @@ export class FlowPanel implements vscode.Disposable {
 	}
 
 	private async open(target: FlowTarget, label: string) {
-		const panel = vscode.window.createWebviewPanel('flow.canvas', `Flow: ${label}`, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, {
+		// A tab in the group the user is in, not a new split: an agent's flow or tour must not feel like another window. preserveFocus keeps the caret where it was.
+		const panel = vscode.window.createWebviewPanel('flow.canvas', `Flow: ${label}`, { viewColumn: vscode.ViewColumn.Active, preserveFocus: true }, {
 			enableScripts: true,
 			retainContextWhenHidden: true,
 		});

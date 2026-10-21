@@ -36,7 +36,7 @@
       "workbench.tree.indent": 14,
       "workbench.tree.renderIndentGuides": "none",
       "workbench.list.smoothScrolling": true,
-      "workbench.layoutControl.enabled": false,
+      "workbench.layoutControl.enabled": true,
       "workbench.editor.tabActionLocation": "right",
       "window.commandCenter": true,
       "editor.fontFamily": "'Cascadia Code', 'JetBrains Mono', 'SF Mono', ui-monospace, Consolas, Menlo, monospace",
