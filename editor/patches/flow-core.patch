@@ -1061,7 +1061,7 @@ index 067580a4..ab885bd0 100644
  			description: localize('workbench.welcomePage.experimentalOnboarding', "When enabled, show the new onboarding experience instead of the classic walkthrough on first launch."),
  			experiment: {
 diff --git a/build/win32/code.iss b/build/win32/code.iss
-index 5b430614..955dde1f 100644
+index 5b43061..1bef915 100644
 --- a/build/win32/code.iss
 +++ b/build/win32/code.iss
 @@ -8,10 +8,10 @@
@@ -1079,7 +1079,35 @@ index 5b430614..955dde1f 100644
  DefaultGroupName={#NameLong}
  AllowNoIcons=yes
  OutputDir={#OutputDir}
-@@ -1382,7 +1382,7 @@ begin
+@@ -67,6 +67,14 @@ Name: "hungarian"; MessagesFile: "{#RepoDir}\build\win32\i18n\Default.hu.isl,{#R
+ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl,{#RepoDir}\build\win32\i18n\messages.tr.isl" {#LocalizedLanguageFile("trk")}
+ 
+ [InstallDelete]
++; Insilode was called Axle until 0.4.x and keeps its installer identity (AppId), so this Setup upgrades an Axle install in place. What carried the old name goes.
++Type: files; Name: "{app}\Axle.exe"
++Type: files; Name: "{app}\Axle.VisualElementsManifest.xml"
++Type: files; Name: "{app}\bin\axle"
++Type: files; Name: "{app}\bin\axle.cmd"
++Type: files; Name: "{group}\Axle.lnk"
++Type: files; Name: "{autodesktop}\Axle.lnk"
++Type: files; Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\Axle.lnk"
+ Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\out"; Check: IsNotBackgroundUpdate
+ Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\plugins"; Check: IsNotBackgroundUpdate
+ Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\extensions"; Check: IsNotBackgroundUpdate
+@@ -125,6 +133,12 @@ Filename: "{app}\{#ExeBasename}.exe"; Description: "{cm:LaunchProgram,{#NameLong
+ #define SoftwareClassesRootKey "HKLM"
+ #endif
+ 
++; The "Open with Axle" entries of an install from before the rename.
++Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\*\shell\Axle"; ValueType: none; Flags: deletekey
++Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\directory\shell\Axle"; ValueType: none; Flags: deletekey
++Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\directory\background\shell\Axle"; ValueType: none; Flags: deletekey
++Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\Drive\shell\Axle"; ValueType: none; Flags: deletekey
++
+ Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\.ascx\OpenWithProgids"; ValueType: none; ValueName: "{#RegValueName}"; Flags: deletevalue uninsdeletevalue; Tasks: associatewithfiles
+ Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\.ascx\OpenWithProgids"; ValueType: string; ValueName: "{#RegValueName}.ascx"; ValueData: ""; Flags: uninsdeletevalue; Tasks: associatewithfiles
+ Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\{#RegValueName}.ascx"; ValueType: string; ValueName: ""; ValueData: "{cm:SourceFile,ASCX}"; Flags: uninsdeletekey; Tasks: associatewithfiles
+@@ -1382,7 +1396,7 @@ begin
  
    #if "user" == InstallTarget
      if not WizardSilent() and IsAdmin() then begin
@@ -1088,6 +1116,16 @@ index 5b430614..955dde1f 100644
          Result := False;
        end;
      end;
+@@ -1636,7 +1650,8 @@ begin
+   if IsBackgroundUpdate() then
+     Result := ''
+   else
+-    Result := '{#AppMutex}';
++    // Also the mutex of an Axle that is still running (0.4.x), so Setup waits for it as it would for Insilode.
++    Result := '{#AppMutex},axle';
+ end;
+ 
+ function GetSetupMutex(Value: string): string;
 diff --git a/build/lib/electron.ts b/build/lib/electron.ts
 index 27151cc4..aae0fa00 100644
 --- a/build/lib/electron.ts
