@@ -24,7 +24,7 @@
       <nav aria-label="Site">
         <ul class="nav-links">
           <li><a href="./" aria-current="page">Try it</a></li>
-          <li class="wide"><a href="https://github.com/{{repo}}#readme">Docs</a></li>
+          <li class="wide"><a href="../docs/">Docs</a></li>
           <li class="wide"><a href="https://github.com/{{repo}}/releases">Changelog</a></li>
         </ul>
       </nav>
@@ -63,13 +63,22 @@
         <div class="prose">
           <h2 class="branch" id="agents-title">Three agents, one of them waiting for you.</h2>
           <p>This is the app's Agents dock, and the status island that sits at the top of your screen. Codex wants to run the billing tests, so it is ranked first; the finished turn lists the flows it touched.</p>
-          <p>The agents here are a fixed moment written for this page. The ranking and the island are the app's own code.</p>
-          <p><button class="btn btn-primary" type="button" data-allow>Allow the test run</button></p>
-          <p class="quiet" data-agents-note role="status"></p>
+          <p>The agents here are a fixed moment written for this page. The ranking and the island are the app's own code. Answer Codex under the dock, and switch between the app's two avatar styles.</p>
         </div>
-        <div class="agents-stage">
-          <iframe class="island" title="Status island" src="../pages/island.html" tabindex="-1"></iframe>
-          <iframe class="dock" title="Agents dock" src="../pages/dock.html"></iframe>
+        <div>
+          <div class="agents-stage">
+            <iframe class="island" title="Status island" src="../pages/island.html" tabindex="-1"></iframe>
+            <iframe class="dock" title="Agents dock" src="../pages/dock.html"></iframe>
+          </div>
+          <div class="agents-actions">
+            <fieldset class="switch">
+              <legend>Avatars</legend>
+              <label><input type="radio" name="avatar" value="gyro" checked /> Gyro</label>
+              <label><input type="radio" name="avatar" value="pixel" /> Pixel</label>
+            </fieldset>
+            <button class="btn btn-primary" type="button" data-allow>Allow the test run</button>
+          </div>
+          <p class="quiet" data-agents-note role="status"></p>
         </div>
       </section>
 

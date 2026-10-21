@@ -1,7 +1,7 @@
 // The Try page: the canvas with three stories a guide walks (two tours of the demo's flows and the canvas's own review of an agent's
 // change), and the Agents dock with the status island.
 import './site.css'
-import { allowWaiting, mountAgents } from './agents'
+import { allowWaiting, mountAgents, setAvatar } from './agents'
 import type { DemoData } from './demo'
 import { wireDownloads } from './download'
 import { Stage } from './stage'
@@ -74,3 +74,4 @@ allow.addEventListener('click', () => {
     allow.textContent = 'Allowed'
   }
 })
+document.querySelectorAll<HTMLInputElement>('input[name="avatar"]').forEach(r => r.addEventListener('change', () => r.checked && setAvatar(r.value === 'pixel' ? 'pixel' : 'gyro')))

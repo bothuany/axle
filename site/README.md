@@ -5,7 +5,8 @@ https://bothuany.github.io/axle/: the home page and the Try page, with the real 
 ## The pages
 
 - **Home** (`index.html`, `src/home.ts`): the canvas as the hero, over a poster of itself, with a button that plays a guided tour; one section per problem, each with a still in a clip slot; how it works with Claude Code, Codex and MCP; what a visitor can check (licence, releases, CI, this folder); the downloads.
-- **Try** (`try/index.html`, `src/try.ts`): the canvas large with three stories (two guided tours and the canvas's own review of an agent's change, with Keep and Undo), and the Agents dock with the status island. `#order`, `#changes` and `#invoice` in the address play that story at once.
+- **Try** (`try/index.html`, `src/try.ts`): the canvas large with three stories (two guided tours and the canvas's own review of an agent's change, with Keep and Undo), and the Agents dock with the status island, in either of the app's avatar styles (gyro or pixel). `#order`, `#changes` and `#invoice` in the address play that story at once.
+- **Docs** (`docs/`, `src/docs.ts`): the repository's own Markdown as pages of the site: `README.md` (from its first section) and `docs/building.md`, `languages.md`, `agent-tools.md` and `boards.md`. `scripts/docs-pages.mjs` writes them before every build and dev start (generated, not committed); links between these documents stay on the site, links to any other file go to it on GitHub.
 - **canvas.html**: the iframe page both use. It imports `ui/` after `src/host.ts` has set the globals the webview reads.
 
 ## What is Axle's own, and what is not

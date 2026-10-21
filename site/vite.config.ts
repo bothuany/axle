@@ -1,11 +1,16 @@
 import react from '@vitejs/plugin-react'
+import { existsSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import { NAME, REPO } from './src/brand.ts'
 
 /** Where the site is served from: pages that must name their own address (the canonical link, the social cards, the sitemap) use it. */
 const SITE = (process.env.SITE_URL ?? 'https://bothuany.github.io/axle').replace(/\/$/, '')
-const PAGES = ['', 'try/']
+/** The documentation pages scripts/docs-pages.mjs has written (docs/ and docs/<page>/). */
+const DOC_PAGES = existsSync(resolve(import.meta.dirname, 'docs'))
+  ? ['docs/', ...readdirSync(resolve(import.meta.dirname, 'docs'), { withFileTypes: true }).filter(d => d.isDirectory()).map(d => `docs/${d.name}/`)]
+  : []
+const PAGES = ['', 'try/', ...DOC_PAGES]
 
 /**
  * Writes the site's address and the product's name into the pages (`{{site}}`, `{{name}}`, `{{repo}}`, all from src/brand.ts and
@@ -49,6 +54,7 @@ export default defineConfig({
         index: resolve(import.meta.dirname, 'index.html'),
         try: resolve(import.meta.dirname, 'try/index.html'),
         canvas: resolve(import.meta.dirname, 'canvas.html'),
+        ...Object.fromEntries(DOC_PAGES.map(p => [p.replace(/\/$/, '').replace('/', '-'), resolve(import.meta.dirname, p, 'index.html')])),
       },
     },
   },
