@@ -1,4 +1,4 @@
-"""Builds the images Axle's installer shows (editor/installer/inno-big-*.bmp and inno-small-*.bmp) and its Start tile logos
+"""Builds the images Insilode's installer shows (editor/installer/inno-big-*.bmp and inno-small-*.bmp) and its Start tile logos
 (code_70x70.png, code_150x150.png) from editor/branding/icon.png.
 
 Inno Setup shows the big one on the welcome and finish pages and the small one in the header of the others, once per
@@ -37,7 +37,7 @@ def big(width: int, height: int) -> Image.Image:
     icon = Image.open(ICON).convert('RGBA').resize((side, side), Image.LANCZOS)
     top = round(height * 0.16)
     img.paste(icon, ((width - side) // 2, top), icon)
-    text, f = 'Axle', font(round(width * 0.2))
+    text, f = 'Insilode', font(round(width * 0.2))
     box = draw.textbbox((0, 0), text, font=f)
     draw.text(((width - (box[2] - box[0])) // 2 - box[0], top + side + round(height * 0.05)), text, font=f, fill=(235, 239, 250))
     draw.rectangle([round(width * 0.38), height - round(height * 0.09), round(width * 0.62), height - round(height * 0.09) + max(2, round(width * 0.015))], fill=ACCENT)

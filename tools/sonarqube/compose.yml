@@ -1,6 +1,6 @@
 # A local SonarQube for `npm run sonar`. Data lives in named volumes, so the server, its token and its history survive
 # `npm run sonar:down`; `docker compose -f tools/sonarqube/compose.yml down -v` wipes them.
-name: axle-sonarqube
+name: insilode-sonarqube
 
 services:
   sonarqube:

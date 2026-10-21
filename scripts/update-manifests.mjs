@@ -1,5 +1,5 @@
-// Writes the update files a release carries next to its installers: one update-<platform>-axle.json per platform,
-// which the update service of the Axle app (editor/patches/flow-update.patch) reads from
+// Writes the update files a release carries next to its installers: one update-<platform>-insilode.json per platform,
+// which the update service of the Insilode app (editor/patches/flow-update.patch) reads from
 // https://github.com/<repo>/releases/latest/download/. The app compares productVersion with its own version, so a
 // release never needs a server to say "no update".
 //
@@ -14,15 +14,15 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 /** Product `quality` of the app: part of every file name. Must equal "quality" in product.json (test/update checks it). */
-export const QUALITY = 'axle'
+export const QUALITY = 'insilode'
 
 /** What each update file points at: the asset it is the checksum of and whether the app installs it itself. */
 export function platforms(version) {
 	return [
-		{ platform: 'win32-x64-user', asset: `Axle-Setup-${version}-x64.exe`, install: true },
-		{ platform: 'darwin', asset: `Axle-${version}-darwin-x64.zip`, install: false },
-		{ platform: 'darwin-arm64', asset: `Axle-${version}-darwin-arm64.zip`, install: false },
-		{ platform: 'linux-x64', asset: `axle_${version}_amd64.deb`, install: false },
+		{ platform: 'win32-x64-user', asset: `Insilode-Setup-${version}-x64.exe`, install: true },
+		{ platform: 'darwin', asset: `Insilode-${version}-darwin-x64.zip`, install: false },
+		{ platform: 'darwin-arm64', asset: `Insilode-${version}-darwin-arm64.zip`, install: false },
+		{ platform: 'linux-x64', asset: `insilode_${version}_amd64.deb`, install: false },
 	]
 }
 
@@ -43,7 +43,7 @@ export function buildManifests({ version, commit, repo, hashes, timestamp }) {
 		}
 		files[`update-${platform}-${QUALITY}.json`] = {
 			url: install ? `https://github.com/${repo}/releases/download/${tag}/${asset}` : `https://github.com/${repo}/releases/tag/${tag}`,
-			name: `Axle ${version}`,
+			name: `Insilode ${version}`,
 			version: commit,
 			productVersion: version,
 			sha256hash,

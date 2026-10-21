@@ -1,21 +1,21 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 # Not submitted yet: see packaging/README.md.
 
-PackageIdentifier: bothuany.Axle
+PackageIdentifier: bothuany.Insilode
 PackageVersion: 0.1.0
 PackageLocale: en-US
 Publisher: bothuany
 PublisherUrl: https://github.com/bothuany
 PublisherSupportUrl: https://github.com/bothuany/axle/issues
-PackageName: Axle
+PackageName: Insilode
 PackageUrl: https://github.com/bothuany/axle
 License: MIT
 LicenseUrl: https://github.com/bothuany/axle/blob/main/LICENSE
 ShortDescription: A harness-first code editor built on Code - OSS.
 Description: |-
-  Axle is a code editor built on Code - OSS: a call-flow canvas from an endpoint to the database, terminal agents with
+  Insilode is a code editor built on Code - OSS: a call-flow canvas from an endpoint to the database, terminal agents with
   live status, and tools for Claude Code harness engineering. C# flows need the .NET 10 SDK.
-Moniker: axle
+Moniker: insilode
 Tags:
 - code-editor
 - editor

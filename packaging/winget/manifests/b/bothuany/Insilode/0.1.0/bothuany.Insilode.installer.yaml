@@ -1,22 +1,22 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
 # Not submitted yet: see packaging/README.md. InstallerSha256 is the release's SHA256SUMS.txt line for the .exe.
 
-PackageIdentifier: bothuany.Axle
+PackageIdentifier: bothuany.Insilode
 PackageVersion: 0.1.0
 InstallerLocale: en-US
 InstallerType: inno
 Scope: user
-# The installer's own "run Axle when done" box stays unticked for a silent install.
+# The installer's own "run Insilode when done" box stays unticked for a silent install.
 InstallerSwitches:
   Custom: /mergetasks=!runcode
 UpgradeBehavior: install
 Commands:
-- axle
+- insilode
 Protocols:
-- axle
+- insilode
 Installers:
 - Architecture: x64
-  InstallerUrl: https://github.com/bothuany/axle/releases/download/v0.1.0/Axle-Setup-0.1.0-x64.exe
+  InstallerUrl: https://github.com/bothuany/axle/releases/download/v0.1.0/Insilode-Setup-0.1.0-x64.exe
   InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
   # Inno's uninstall key: product.json's win32x64UserAppId plus "_is1".
   ProductCode: '{9AC14A02-7196-4110-BF80-CFF0243083BC}_is1'

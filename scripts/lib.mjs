@@ -9,7 +9,7 @@ export const VSCODE = join(ROOT, 'editor', 'vscode')
 export const EXTENSIONS = join(ROOT, 'editor', 'extensions')
 export const isWin = process.platform === 'win32'
 
-/** The Axle extensions that have a build of their own (an esbuild.mjs), in folder order. */
+/** The Insilode extensions that have a build of their own (an esbuild.mjs), in folder order. */
 export function buildableExtensions() {
 	return readdirSync(EXTENSIONS).filter(name => name.startsWith('flow-') && existsSync(join(EXTENSIONS, name, 'esbuild.mjs')))
 }

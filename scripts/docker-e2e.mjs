@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Runs Axle's desktop end-to-end scenarios, or one probe script, inside a Docker container: Axle from source on a virtual display
+// Runs Insilode's desktop end-to-end scenarios, or one probe script, inside a Docker container: Insilode from source on a virtual display
 // (xvfb), so nothing opens on your screen, takes your pointer or shares your network ports.
 //   npm run docker:e2e                                   the desktop scenarios (test/e2e-desktop) on the working tree
 //   npm run docker:e2e -- --scenario island,canvas-tour  only these
 //   npm run docker:e2e -- --probe my-probe.mjs [args]    a Playwright script: see test/e2e-desktop/lib/probe.mjs
 //   options: --out <dir>  --reset-volume (throw the VS Code build away)  --rebuild-image
 // The first run builds the image and the VS Code checkout (20 to 40 minutes); the checkout lives in the named volume
-// axle-e2e-work, so later runs take minutes. Screenshots, results.json and logs go to the output folder, which is printed.
+// insilode-e2e-work, so later runs take minutes. Screenshots, results.json and logs go to the output folder, which is printed.
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -82,7 +82,7 @@ async function main() {
 		docker(['volume', 'rm', '-f', WORK_VOLUME])
 	}
 
-	const work = mkdtempSync(join(tmpdir(), 'axle-docker-e2e-'))
+	const work = mkdtempSync(join(tmpdir(), 'insilode-docker-e2e-'))
 	const ctl = join(work, 'ctl')
 	mkdirSync(ctl)
 	writeFileSync(join(ctl, 'files'), sourceFiles().join('\0'))
@@ -91,7 +91,7 @@ async function main() {
 
 	const modeArgs = o.probe ? [basename(o.probe), ...o.rest] : o.scenario ? ['--only', o.scenario] : []
 	const args = dockerRunArgs({
-		image, name: `axle-e2e-${Date.now()}`, repo: ROOT, ctl, out, mode: o.probe ? 'probe' : 'run', modeArgs,
+		image, name: `insilode-e2e-${Date.now()}`, repo: ROOT, ctl, out, mode: o.probe ? 'probe' : 'run', modeArgs,
 		probeDir: o.probe ? dirname(resolve(o.probe)) : undefined,
 	})
 	console.log(`Running in Docker (no ports, display or input shared with this machine)\n  output  ${out}`)

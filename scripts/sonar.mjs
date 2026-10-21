@@ -1,7 +1,7 @@
 // Local SonarQube: a server in Docker (tools/sonarqube/compose.yml) and a scan of this checkout against it.
 //   npm run sonar:up            start the server on http://localhost:9000 and wait until it is up
-//   npm run sonar               scan the TypeScript/JavaScript side (project `axle`, sonar-project.properties)
-//   npm run sonar -- --dotnet   also scan the C# analyzer (project `axle-analyzer`, needs the .NET SDK)
+//   npm run sonar               scan the TypeScript/JavaScript side (project `insilode`, sonar-project.properties)
+//   npm run sonar -- --dotnet   also scan the C# analyzer (project `insilode-analyzer`, needs the .NET SDK)
 //   npm run sonar:down          stop the server (its data stays in Docker volumes)
 // The scan needs a token: SONAR_TOKEN, or the first line of tools/sonarqube/.token (git-ignored).
 import { existsSync, readFileSync } from 'fs'
@@ -9,7 +9,7 @@ import { join } from 'path'
 import { ROOT, launchSync } from './lib.mjs'
 
 const COMPOSE = ['compose', '-f', join(ROOT, 'tools', 'sonarqube', 'compose.yml')]
-const NETWORK = 'axle-sonarqube_default'
+const NETWORK = 'insilode-sonarqube_default'
 const SCANNER = 'sonarsource/sonar-scanner-cli:12.2.0.4256_8.1.0'
 const HOST = 'http://localhost:9000'
 
@@ -47,11 +47,11 @@ if (command === 'up') {
 	if (flags.has('--dotnet')) {
 		// dotnet-sonarscanner only takes the token as an argument; it is visible in this machine's process list while it runs.
 		run('dotnet', ['tool', 'restore'])
-		run('dotnet', ['dotnet-sonarscanner', 'begin', '/k:axle-analyzer', '/n:Axle analyzer', `/d:sonar.host.url=${HOST}`, '/d:sonar.token=' + t])
+		run('dotnet', ['dotnet-sonarscanner', 'begin', '/k:insilode-analyzer', '/n:Insilode analyzer', `/d:sonar.host.url=${HOST}`, '/d:sonar.token=' + t])
 		run('dotnet', ['build', 'analyzer', '-nologo', '-v', 'q', '--no-incremental'])
 		run('dotnet', ['dotnet-sonarscanner', 'end', '/d:sonar.token=' + t])
 	}
-	console.log(`Results: ${HOST}/dashboard?id=axle`)
+	console.log(`Results: ${HOST}/dashboard?id=insilode`)
 } else {
 	console.error('usage: node scripts/sonar.mjs [up | down | scan [--dotnet]]')
 	process.exit(2)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Axle's postinst, in place of VS Code's (which also adds Microsoft's VS Code apt repository and key).
+# Insilode's postinst, in place of VS Code's (which also adds Microsoft's VS Code apt repository and key).
 # scripts/package.mjs replaces @@NAME@@ with product.json's applicationName.
 
 # Symlink the command to /usr/bin

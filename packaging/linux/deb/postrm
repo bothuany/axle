@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Axle's postrm, in place of VS Code's (which also deletes Microsoft's VS Code apt source and signing key, breaking a
+# Insilode's postrm, in place of VS Code's (which also deletes Microsoft's VS Code apt source and signing key, breaking a
 # VS Code installed from that repository).
 
 rm -f /usr/bin/@@NAME@@

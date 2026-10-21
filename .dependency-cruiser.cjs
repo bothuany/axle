@@ -75,8 +75,8 @@ module.exports = {
 		{
 			name: 'headless-entries-stay-off-vscode',
 			severity: 'error',
-			comment: 'The polyglot worker (a worker thread) and the axle MCP server (a plain Node process) have no `vscode` module: importing it, even transitively, crashes them at load.',
-			from: { path: '^editor/extensions/flow-view/(src/poly/worker\\.ts|mcp/axle-mcp\\.ts)$' },
+			comment: 'The polyglot worker (a worker thread) and the insilode MCP server (a plain Node process) have no `vscode` module: importing it, even transitively, crashes them at load.',
+			from: { path: '^editor/extensions/flow-view/(src/poly/worker\\.ts|mcp/insilode-mcp\\.ts)$' },
 			to: { reachable: true, path: '^vscode$' },
 		},
 		{
@@ -107,7 +107,7 @@ module.exports = {
 			comment: 'A module nothing imports is dead code or a missing entry point.',
 			from: {
 				orphan: true,
-				pathNot: ['\\.d\\.ts$', '(^|/)(esbuild|vite\\.[^/]+\\.config)\\.(mjs|ts)$', '/src/extension\\.ts$', '/poly/worker\\.ts$', '/mcp/axle-mcp\\.ts$', '^ui/src/(webview|board/board)\\.tsx$', '^site/src/(canvas|home|try)\\.ts$'],
+				pathNot: ['\\.d\\.ts$', '(^|/)(esbuild|vite\\.[^/]+\\.config)\\.(mjs|ts)$', '/src/extension\\.ts$', '/poly/worker\\.ts$', '/mcp/insilode-mcp\\.ts$', '^ui/src/(webview|board/board)\\.tsx$', '^site/src/(canvas|home|try)\\.ts$'],
 			},
 			to: {},
 		},
