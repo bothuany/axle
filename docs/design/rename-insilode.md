@@ -210,3 +210,23 @@ never to the user's screen. Not merged, not released.
 6. Update outside places: GitHub repo description/topics/social preview, winget PR (if submitted), any posts, `google-site-verification`
    for the new domain, Sonar/CLA-bot (the CLA signatures file lives in the repo/branch the action uses: check it moved with the repo).
 7. Approve D1–D6, and the release timing (the version-bump and tag are not done by phase 2).
+
+## 7. What phase 2 did, and where it differs from the plan above
+
+Approved 2026-10-22 with D1-D6 as recommended (D1: `com.insilode.Insilode`, in its own last commit).
+
+- **Mechanical rename** of every `Axle`/`axle`/`AXLE_` (case-sensitive, so `maxLength` is untouched) in 316 tracked files and 13 file names,
+  except `docs/research` and this document. Commits are by area: docs, patches/scripts/packaging, sources, tests, site, lockfiles.
+- **Held back until the repository moves (D4):** every `github.com/bothuany/axle` and `bothuany.github.io/axle` URL (about 40 places: `product.json`'s
+  `updateUrl`, `site/src/brand.ts` `REPO`, `SITE_URL`, workflows, README/docs, winget/brew, `scripts/package.mjs`, tests). After the move:
+  `git grep -F -e bothuany/axle -e bothuany.github.io/axle` and replace; the Pages base path is a separate change.
+- **Done as planned:** data-folder copy (`src/insilodeMigrate.ts`, tested), installer upgrade in place with legacy cleanup, legacy `update-*-axle.json`
+  files, settings migration (`legacySettings.ts`, tested), theme ids, `axleTour` still read, `out/axle-mcp.js` stub plus `AXLE_WORKSPACE`, the one-time
+  confirmed move of the `axle` MCP registration, `.axle/worktrees` and `axle/<name>` still recognised, the old Codex profile removed.
+- **Not done, because it turned out unnecessary:** accepting both `x-axle-*` headers and mirroring `~/.axle/bridge` (the stub runs the new server,
+  which talks to the new bridge); a "move tours" prompt (tours are found by `*.tour.json` anywhere, there is no fixed folder to move); a lint
+  that flags `mcp__axle__*` permission rules (the move dialog tells the user to rename them instead).
+- **Not verified here (needs the Windows Sandbox / a real install, section 5):** that Setup upgrades `...\Programs\Axle` in place (D2's premise:
+  upstream `code.iss` sets no `UsePreviousAppDir`, so Inno's default applies, but it is unrun), the legacy cleanup entries, what a 0.4.3 build does with
+  the legacy update file, and the migration on a real Axle profile.
+- `docs/media/insilode-*` were renamed; the demo video and the social image still show the old name until the film session re-captures them.
