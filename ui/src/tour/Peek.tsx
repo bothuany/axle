@@ -1,5 +1,6 @@
 // A step whose code is on no drawn card: a lighter, dashed card beside the flow with the code the host sent. The tour never
 // switches the flow under the reader; the peek card is only a place to point at.
+import { langOf, useColorized } from '../nodes'
 import { CODE_PAD, HEADER_H, LINE_H } from '../layout'
 import type { TourStep } from '../types'
 import { highlightedLines, type Box } from './geometry'
@@ -12,6 +13,8 @@ export function Peek({ step, box }: { step: TourStep; box: Box }) {
   const lines = peek.code.replace(/\t/g, '    ').replace(/\r/g, '').split('\n').slice(0, PEEK_MAX_LINES).map(l => l.slice(0, 300))
   const lit = new Set(highlightedLines(step.highlights))
   const file = step.at?.file.split(/[\\/]/).pop()
+  // The same colours as the cards: the code is coloured by the language of the file it came from.
+  const html = useColorized(lines.join('\n'), langOf(step.at?.file))
   return (
     <div className="tour-peek" style={{ left: box.x, top: box.y, width: box.w, height: box.h }}>
       <div className="tour-peek-head" style={{ height: HEADER_H }}>
@@ -25,7 +28,7 @@ export function Peek({ step, box }: { step: TourStep; box: Box }) {
         {lines.map((text, i) => (
           <div key={i} className={`ln${lit.has(peek.startLine + i) ? ' tour-lit' : ''}`} style={{ height: LINE_H }}>
             <span className="gutter">{peek.startLine + i}</span>
-            <span className="src">{text}</span>
+            {html ? <span className="src" dangerouslySetInnerHTML={{ __html: html[i] ?? '' }} /> : <span className="src">{text}</span>}
           </div>
         ))}
       </div>

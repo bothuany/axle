@@ -51,7 +51,9 @@ export const ActionsCtx = createContext<CanvasActions>({ toggle() {}, toggleAll(
 
 export const LANG_BY_EXT: Record<string, string> = {
   cs: 'csharp', ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript', mjs: 'javascript',
-  java: 'java', kt: 'kotlin', py: 'python', go: 'go', rs: 'rust', rb: 'ruby', php: 'php', swift: 'swift', cpp: 'cpp', c: 'c',
+  java: 'java', kt: 'kotlin', kts: 'kotlin', py: 'python', go: 'go', rs: 'rust', rb: 'ruby', php: 'php', swift: 'swift', cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp', h: 'cpp', c: 'c',
+  scala: 'scala', groovy: 'java', gradle: 'java', sql: 'sql', vb: 'vb', fs: 'fsharp', dart: 'dart', lua: 'lua', sh: 'shell', ps1: 'powershell',
+  json: 'json', yml: 'yaml', yaml: 'yaml', xml: 'xml', html: 'html', css: 'css', scss: 'scss',
 }
 export function langOf(file: string | null | undefined) {
   return LANG_BY_EXT[file?.split('.').pop()?.toLowerCase() ?? ''] ?? 'plaintext'
@@ -290,23 +292,44 @@ function SchemaBody({ schema, change }: { schema: DbSchema; change?: FlowNode['t
   )
 }
 
-/** Monaco's colorizer gives one HTML fragment per line; cache by text so re-layouts are cheap. */
+/**
+ * Monaco's colorizer gives one HTML fragment per line; cached by language and text so re-layouts are cheap. A theme change
+ * empties the cache (the token classes are per theme) and asks the cards to colour again (`recolor`).
+ */
 const colorCache = new Map<string, string[]>()
-function useColorized(text: string, lang: string) {
-  const [html, setHtml] = useState<string[] | null>(colorCache.get(text) ?? null)
+const recolorers = new Set<() => void>()
+export function recolor(theme: string) {
+  monaco.editor.setTheme(theme)
+  colorCache.clear()
+  recolorers.forEach(f => f())
+}
+export function useColorized(text: string, lang: string) {
+  const key = `${lang} ${text}`
+  const [version, setVersion] = useState(0)
+  const [done, setDone] = useState<{ key: string; lines: string[] } | null>(() => (colorCache.has(key) ? { key, lines: colorCache.get(key)! } : null))
   useEffect(() => {
-    if (colorCache.has(text)) return setHtml(colorCache.get(text)!)
+    const again = () => setVersion(v => v + 1)
+    recolorers.add(again)
+    return () => void recolorers.delete(again)
+  }, [])
+  useEffect(() => {
+    if (colorCache.has(key)) return setDone({ key, lines: colorCache.get(key)! })
     let live = true
-    monaco.editor.colorize(text, lang, { tabSize: 4 }).then(out => {
-      const lines = out.replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '').split('<br/>')
-      colorCache.set(text, lines)
-      if (live) setHtml(lines)
-    })
+    monaco.editor.colorize(text, lang, { tabSize: 4 }).then(
+      out => {
+        const lines = out.replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '').split('<br/>')
+        colorCache.set(key, lines)
+        if (live) setDone({ key, lines })
+      },
+      // A language Monaco cannot load leaves the plain text: never an unhandled rejection.
+      () => {},
+    )
     return () => {
       live = false
     }
-  }, [text, lang])
-  return html
+  }, [key, version]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Colours made for other text (the card just changed, the colouring is on its way) are not applied to these lines: the cached ones are, at once.
+  return colorCache.get(key) ?? (done?.key === key ? done.lines : null)
 }
 
 /** Character offset of a click inside a (colorized) line, counting text across its spans. */
@@ -466,6 +489,7 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
   // A database card is named after its table; the entity and context go underneath.
   const { owner, member } = schema ? { owner: schema.dbSchemaName ?? '', member: schema.table } : splitLabel(node.label)
   const rawLines = node.code?.replace(/\t/g, '    ').replace(/\r/g, '').split('\n') ?? []
+  // A tour is read, not edited: the host of the canvas leaves `edit` out while one plays.
   const editable = !!(node.code && actions.edit)
   // Below this zoom the code is too small to aim at: the first click zooms in, the next one edits.
   const zoomedOut = useStore(st => st.transform[2] < 0.75)

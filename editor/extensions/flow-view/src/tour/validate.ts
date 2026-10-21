@@ -8,6 +8,7 @@
 
 import * as path from 'path';
 import type { Tour, TourStep } from '../../../../../protocol/flow';
+import { prose } from './ask';
 import { parseHighlights, placeStep, positive, type Method, type StepInput } from './resolve';
 
 export const MAX_STEPS = 30;
@@ -133,7 +134,7 @@ function cleanStep(raw: unknown, i: number, host: TourFileHost, strict: boolean)
 		throw new TourFileError(`${where} is not an object.`);
 	}
 	noStrangers(where, raw, STEP_KEYS, strict);
-	const caption = plain(raw.caption);
+	const caption = prose(raw.caption);
 	if (!caption) {
 		throw new TourFileError(`${where}.caption is missing: every step says something.`);
 	}

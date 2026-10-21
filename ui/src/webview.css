@@ -184,13 +184,14 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .tour { position: absolute; z-index: 15; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; max-width: calc(100% - 24px); padding: 4px 6px 6px; border-radius: 12px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: 0 0 0 1px var(--fl-line-strong), var(--fl-lift); }
 /* How far the tour has come, in its colour, along the bar's bottom edge. */
 .tour::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 2px; height: 2px; border-radius: 2px; background: linear-gradient(to right, var(--tour-ink) var(--progress, 0%), var(--fl-line) var(--progress, 0%)); pointer-events: none; }
-.tour-pos { font: 600 11.5px var(--fl-mono); color: var(--fl-muted); min-width: 36px; text-align: center; }
+.tour-pos { flex: none; white-space: nowrap; font: 600 11.5px var(--fl-mono); font-variant-numeric: tabular-nums; color: var(--fl-muted); min-width: 36px; text-align: center; }
+.tour > .icon-btn, .tour .tour-steps { flex: none; }
 .tour-label { font: 12px var(--fl-mono); color: var(--fl-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; margin: 0 6px; }
 .icon-btn:disabled { opacity: .35; cursor: default; }
 .tour.paused::after { opacity: .35; }
 .tour-pos { background: none; border: 0; padding: 3px 4px; border-radius: 5px; cursor: pointer; }
 .tour-pos:hover { background: var(--fl-line); }
-.tour-steps { position: relative; display: inline-flex; }
+.tour-steps { position: relative; display: inline-flex; flex: none; }
 .tour-list { position: absolute; bottom: calc(100% + 10px); left: 0; z-index: 20; width: 300px; max-height: 280px; overflow: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--fl-line-strong); border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); }
 .tour-list-head { padding: 4px 8px 6px; color: var(--fl-muted); font-size: 11px; }
 .tour-item { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 5px 8px; border: 0; border-radius: 6px; background: none; color: var(--fl-text); font: 12px var(--fl-mono); text-align: left; cursor: pointer; }
@@ -222,14 +223,31 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .tour-cursor-name { position: absolute; left: 20px; top: 21px; padding: 2px 5px 3px; border-radius: 4px; background: var(--ink, var(--tour-ink)); color: color-mix(in srgb, var(--ink, var(--tour-ink)) 18%, #000); font: 650 10.5px/1 var(--fl-ui); white-space: nowrap; box-shadow: 0 1px 2px rgb(0 0 0 / .35); }
 .tour-layer { position: absolute; inset: 0; z-index: 14; pointer-events: none; overflow: hidden; }
 .tour-caption { position: absolute; width: 360px; max-width: calc(100% - 16px); padding: 10px 13px 11px; border: 0; border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); color: var(--fl-text); font-size: 12.5px; line-height: 1.5; pointer-events: auto; animation: tour-in .18s ease-out; }
-.tour-caption.missing { opacity: .6; border-style: dashed; }
+.tour-caption.missing { outline: 1px dashed var(--fl-line-strong); outline-offset: -1px; }
 .tour-caption-head { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
 .tour-caption-arrow { flex: none; }
 .tour-caption-head .tour-mark { margin-left: auto; }
 .tour-caption-head b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 12px var(--fl-mono); }
+.tour-caption { display: flex; flex-direction: column; overflow: hidden; }
+.tour-caption-head { flex: none; }
+/* The bubble has a largest size (set from the canvas height): what is longer scrolls here, and the ask box stays under it. */
+.tour-caption-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin-right: -6px; padding-right: 6px; scrollbar-width: thin; overflow-wrap: anywhere; }
 .tour-caption p { margin: 0; }
-.tour-caption-text.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.md > * + * { margin-top: 6px; }
+.md ul, .md ol { margin: 0; padding-left: 18px; }
+.md li + li { margin-top: 2px; }
+.md-h { font-weight: 650; }
+.md blockquote { margin: 0; padding-left: 9px; color: var(--fl-muted); box-shadow: inset 2px 0 0 var(--fl-line-strong); }
+.md a { color: var(--tour-ink); text-decoration: underline; text-underline-offset: 2px; }
+.md pre { margin: 0; padding: 7px 9px; overflow-x: auto; border-radius: 6px; background: var(--fl-line); font: 11.5px/1.45 var(--fl-mono); scrollbar-width: thin; }
+.md pre code { padding: 0; background: none; white-space: pre; }
+.tour-caption-text.clamp { max-height: 4.5em; overflow: hidden; }
+.tour-caption-text.clamp.cut { -webkit-mask-image: linear-gradient(#000 60%, transparent); mask-image: linear-gradient(#000 60%, transparent); }
 .tour-caption code { font: 11.5px var(--fl-mono); padding: 0 4px; border-radius: 4px; background: var(--fl-line); }
+.tour-caption-ask { flex: none; margin-top: 8px; }
+.tour-caption-ask input { width: 100%; box-sizing: border-box; padding: 5px 8px; border: 1px solid var(--fl-line-strong); border-radius: 6px; background: var(--fl-card); color: var(--fl-text); font: 12px var(--fl-mono); }
+.tour-caption-ask input:focus { outline: 1.5px solid var(--tour-ink); outline-offset: 0; }
+@media (max-width: 560px) { .tour-label { display: none; } .tour-ask { flex-basis: 90px; min-width: 80px; } }
 .tour-more { background: none; border: 0; padding: 0; margin-top: 2px; color: var(--tour-ink); font-size: 11.5px; cursor: pointer; }
 .tour-warn { margin-top: 6px !important; color: var(--fl-muted); font-size: 11.5px; }
 .tour-note { margin-top: 9px; padding: 1px 0 1px 10px; box-shadow: inset 2px 0 0 color-mix(in srgb, var(--tour-ink) 60%, transparent); }

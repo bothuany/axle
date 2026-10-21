@@ -96,7 +96,5 @@ export function stepMark(step: TourStep): { glyph: string; label: string } {
   }
 }
 
-/** Plain text with `code` spans: the only formatting a caption has. Never HTML. */
-export function captionParts(text: string): { text: string; code: boolean }[] {
-  return text.split('`').flatMap((t, i) => (t ? [{ text: t, code: i % 2 === 1 }] : []))
-}
+/** "3 / 7" with no-break spaces: the counter is one word, so it never wraps between its numbers. */
+export const counterText = (index: number, total: number) => `${index + 1} / ${total}`

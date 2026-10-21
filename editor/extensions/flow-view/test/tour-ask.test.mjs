@@ -89,7 +89,7 @@ test('the prompt for pointing at code asks for a tour that starts there, and a t
 })
 
 test('notes: plain text, cut to 2000 characters', () => {
-	assert.equal(a.noteText('It is\n\nnot   needed.'), 'It is not needed.')
+	assert.equal(a.noteText('It is\n\n\n\nnot   needed.\n- a\n  - b  \n'), 'It is\n\nnot   needed.\n- a\n  - b')
 	assert.equal(a.noteText('x'.repeat(5000)).length, 2000)
 	assert.equal(a.noteText(7), '')
 	assert.equal(a.MAX_NOTES, 10)

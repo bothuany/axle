@@ -75,5 +75,15 @@ export function pointAskPrompt(p: { label: string; where: string; flow?: string;
 	].join(' ');
 }
 
-/** A note an agent pins to a step: plain text, cut, or nothing. */
-export const noteText = (v: unknown) => oneLine(v, MAX_NOTE);
+const KEEP_BREAKS = new RegExp('[\u0000-\u0009\u000b-\u001f\u007f-\u009f' + String.fromCharCode(0x2028, 0x2029) + ']', 'g');
+
+/**
+ * Markdown text the canvas renders (captions and notes): control characters become spaces, but line breaks stay (a list or a code
+ * block needs them) and so does indentation; trailing spaces go and more than one blank line becomes one. Cut to `max`.
+ */
+export function prose(v: unknown, max = Infinity): string {
+	return typeof v === 'string' ? v.replace(/\r\n?/g, '\n').replace(KEEP_BREAKS, ' ').replace(/ +\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, max) : '';
+}
+
+/** A note an agent pins to a step: Markdown, cut, or nothing. */
+export const noteText = (v: unknown) => prose(v, MAX_NOTE);

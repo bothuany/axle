@@ -77,7 +77,7 @@ The agent sends a tour, and the window resolves it, shows it and answers with a 
             },
             "table": { "type": "string", "description": "A database card instead of code: the table name." },
             "title": { "type": "string", "maxLength": 80, "description": "Short label for the step list; defaults to the method." },
-            "caption": { "type": "string", "maxLength": 600, "description": "What to say here: one or two sentences on WHY, not a restatement of the code. Plain text; `code` in backticks is shown as code." }
+            "caption": { "type": "string", "maxLength": 600, "description": "What to say here: one or two sentences on WHY, not a restatement of the code. Short Markdown: `code`, **bold**, a list or a fenced block are shown formatted; HTML is not." }
           },
           "required": ["caption"],
           "additionalProperties": false
@@ -120,7 +120,7 @@ Tour "place-order" (7 steps) playing on POST /orders. The user is on step 1.
       "id": { "type": "string", "description": "Tour id." },
       "action": { "type": "string", "enum": ["go", "note", "resume", "end"] },
       "step": { "type": "integer", "minimum": 1 },
-      "text": { "type": "string", "maxLength": 2000, "description": "note: the answer, plain text." }
+      "text": { "type": "string", "maxLength": 2000, "description": "note: the answer, as Markdown." }
     },
     "required": ["id", "action"],
     "additionalProperties": false
@@ -151,7 +151,7 @@ Canvas side: the host sends each step as `{ file, startLine, endLine, highlights
 | Thing | Limit | Why |
 | --- | --- | --- |
 | Steps per tour | 30 (`maxItems`); the instructions ask for 3–12 | Longer is a document, not a tour. |
-| Caption | 600 chars, plain text | Fits three lines in the bubble. |
+| Caption | 600 chars, Markdown | Fits three lines in the bubble. |
 | Highlights per step | 3 ranges, each ≤ 80 lines | |
 | Note text | 2000 chars; 10 notes per step | |
 | Active tours per window | 1. A new tour replaces the old one, and the toolbar says "replaced by <title>". | |
@@ -253,8 +253,10 @@ The player lives in `ui/src/tour/`: `player.ts` is a pure state reducer, `Cursor
 ### 3.3 Caption bubble
 
 - It is anchored to the card's right edge, and flips to the left or below when there is no room. It is at most 360 px wide and three lines tall, with "more" when longer.
-- It shows the caption as **plain text**. The only formatting is `` `code` ``, rendered as `<code>` by splitting the string. There is no HTML, no Markdown links and no images.
-- Under the caption sit the step's pinned notes: Q in italics, A as plain text, and a "from Claude" tag.
+- It shows the caption as **Markdown** (`ui/src/tour/mdparse.ts`, `Markdown.tsx`): paragraphs, lists, headings, quotes, fenced code, `` `code` ``, bold, italic and http(s)/mailto links, built into React elements. There is no HTML and no images; a tag in the text is shown as text, and any other link address (`javascript:`, `command:`) stays plain text.
+- The bubble has a largest size (the canvas height above the bar, at most 440px) and scrolls inside it. "more" appears only when the caption really overflows its three lines. Under the notes sits an "Ask about this step…" box, the same as the bar's.
+- Under the caption sit the step's pinned notes: Q in italics, A as Markdown, and a "from Claude" tag.
+- Cards are read-only while a tour plays (the review of changes included) and editable again when it ends.
 - `aria-live="polite"` on the bubble lets screen readers read each caption as it appears.
 
 ### 3.4 Steps that are not on the drawn flow
@@ -421,7 +423,7 @@ Tour questions then go back to the author with `flow.agents.ask`, using a "to se
 
 | Risk | Rule |
 | --- | --- |
-| Model text in the webview (captions, notes, titles) | Plain text only. Never `dangerouslySetInnerHTML`; `` `code` `` is split and rendered as React text. Control characters are stripped and lengths capped on the host. |
+| Model text in the webview (captions, notes, titles) | Titles are plain text. Captions and notes are Markdown parsed to a tree and rendered as React elements: no HTML, links limited to http(s)/mailto. Control characters (not line breaks) are stripped and lengths capped on the host. |
 | Paths from MCP calls, tour files, canvas messages | `safeFile()` / `workspaceFile()`: inside a workspace folder or dropped. The canvas never gets file content for a path the host has not resolved itself. |
 | Command ids | None in the tool schemas, the tour file or any canvas message. Every action of the new canvas messages is a fixed `type` the host switches on, so `axle-command-id-not-allowlisted` stays satisfied. Its fixture gains the `tourAsk`/`pointAsk` handlers as `ok:` cases. |
 | Dock "Explain this" | The page sends a row index; flow-agent looks the session up itself (as with `data-flow`). |

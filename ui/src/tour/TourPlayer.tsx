@@ -1,14 +1,14 @@
 // The one tour player on the canvas. Whoever made the tour (an agent, a file, the canvas's own review of changes) it plays
 // the same way: a ghost cursor glides to the step's card, the rest dims, the lines it talks about are lit and a caption
 // says why. The reader steps by hand. Everything that moves is skipped under reduced motion.
-import { useEffect, useMemo, useReducer, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { ViewportPortal, useReactFlow, useStore, useViewport, type Edge, type Node } from '@xyflow/react'
 import { CODE_PAD, HEADER_H, LINE_H, type CardData } from '../layout'
 import type { CanvasToHostTour, FlowNode, Tour, TourStep } from '../types'
 import { pathTo, resolveStep } from './cards'
-import { Caption } from './Caption'
+import { Caption, type StepAsk } from './Caption'
 import { Cursor, GLIDE_MS } from './Cursor'
-import { CAPTION_W, captionPlace, firstLine, highlightedLines, lineY, type Box, type Pt } from './geometry'
+import { BAR_RESERVE, BUBBLE_MAX_H, CAPTION_H, CAPTION_W, captionPlace, firstLine, highlightedLines, lineY, type Box, type Pt } from './geometry'
 import { Peek, PEEK_MAX_LINES, PEEK_W } from './Peek'
 import { idle, reduce } from './player'
 import { reviewSignature, tourFromChanges } from './review'
@@ -235,7 +235,19 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
       if (lastSig.current === sig) return
       lastSig.current = sig
       setMotion(m => ({ ...m, sig, focus: null, peek: undefined }))
-      arrive(sig, 0)
+      // The step before may have left the view beside the flow (a side card): come back to the flow, so the caption is not over empty canvas.
+      const cards = rf.getNodes().filter(n => n.type === 'card')
+      const { x, y, zoom } = rf.getViewport()
+      const seen = cards.some(n => {
+        const w = Number(n.style?.width) || 0
+        const h = Number(n.style?.height) || 0
+        // A sliver at the edge does not count: the middle of the card has to be in view.
+        const mx = (n.position.x + w / 2) * zoom + x
+        const my = (n.position.y + h / 2) * zoom + y
+        return mx > 0 && mx < cw && my > 0 && my < ch
+      })
+      if (cards.length && !seen) void rf.fitView({ nodes: cards, padding: 0.15, maxZoom: 1, duration: panMs })
+      arrive(sig, seen || !cards.length ? 0 : panMs)
       return
     }
 
@@ -339,11 +351,11 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
   const flowLayer = tour && (
     <ViewportPortal>
       {current && motion.peek && <Peek step={motion.peek.step} box={motion.peek.box} />}
-      <Cursor seq={motion.seq} stops={motion.stops} agent={tour.agent} visible={!state.paused || !!state.asking} instant={reduced || document.hidden} />
+      <Cursor seq={motion.seq} stops={motion.stops} agent={tour.agent} visible={(!state.paused || !!state.asking) && target.kind !== 'none'} instant={reduced || document.hidden} />
     </ViewportPortal>
   )
 
-  const captionLayer = tour && step && lit ? <CaptionLayer asking={state.asking === 'waiting' ? tour.agent?.label ?? 'the agent' : undefined} step={target.kind === 'peek' && step.state === 'ok' ? { ...step, state: 'offflow' } : step} focus={target.kind === 'none' ? null : motion.focus} /> : null
+  const captionLayer = tour && step && lit ? <CaptionLayer asking={state.asking === 'waiting' ? tour.agent?.label ?? 'the agent' : undefined} step={target.kind === 'peek' && step.state === 'ok' ? { ...step, state: 'offflow' } : step} focus={target.kind === 'none' ? null : motion.focus} ask={tour.source === 'agent' ? { ask, waiting: state.asking === 'waiting' } : undefined} /> : null
 
   return {
     state,
@@ -364,14 +376,18 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
 }
 
 /** The caption beside its card, in canvas pixels, whatever the zoom. */
-function CaptionLayer({ step, focus, asking }: { step: TourStep; focus: Box | null; asking?: string }) {
+function CaptionLayer({ step, focus, asking, ask }: { step: TourStep; focus: Box | null; asking?: string; ask?: StepAsk }) {
   const { x, y, zoom } = useViewport()
   const w = useStore(s => s.width)
   const h = useStore(s => s.height)
-  const place = focus ? captionPlace({ x: focus.x * zoom + x, y: focus.y * zoom + y, w: focus.w * zoom, h: focus.h * zoom }, { w, h }) : 'centre'
+  const [height, setHeight] = useState(CAPTION_H)
+  const onSize = useCallback((n: number) => setHeight(n), [])
+  // Never taller than the canvas above the tour bar; what does not fit scrolls inside the bubble.
+  const maxH = Math.max(140, Math.min(BUBBLE_MAX_H, h - BAR_RESERVE - 16))
+  const place = focus ? captionPlace({ x: focus.x * zoom + x, y: focus.y * zoom + y, w: focus.w * zoom, h: focus.h * zoom }, { w, h }, BAR_RESERVE, { w: CAPTION_W, h: Math.min(height, maxH) }) : 'centre'
   return (
     <div className="tour-layer">
-      <Caption key={`${step.title}|${step.caption}`} step={step} place={place} asking={asking} />
+      <Caption key={`${step.title}|${step.caption}`} step={step} place={place} asking={asking} maxH={maxH} ask={ask} onSize={onSize} />
     </div>
   )
 }
