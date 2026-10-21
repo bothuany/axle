@@ -12,7 +12,7 @@ Axle is installed from the files on the [Releases](https://github.com/bothuany/a
 
 ### Windows
 
-Download `Axle-Setup-<version>-x64.exe` and run it. It installs for the current user (no admin rights) into `%LOCALAPPDATA%\Programs\Axle`, adds a Start menu entry and, if you leave the options ticked, the `axle` command on your PATH and "Open with Axle" on folders in Explorer. Updating means running a newer Setup over the old install; uninstalling is Windows Settings, Apps.
+Download `Axle-Setup-<version>-x64.exe` and run it. It installs for the current user (no admin rights) into `%LOCALAPPDATA%\Programs\Axle`, adds a Start menu entry and, if you leave the options ticked, the `axle` command on your PATH and "Open with Axle" on folders in Explorer. Axle updates itself (Restart to Update in the title bar), or you run a newer Setup over the old install; 0.4.3 and older cannot update themselves, so run the Setup once by hand over those. Uninstalling is Windows Settings, Apps.
 
 - Install into a short path (the default, `%LOCALAPPDATA%\Programs\Axle`, is fine). The longest file in Axle is about 155 characters below the install folder, and Windows stops at 260 in total, so an install folder that is itself 100 characters deep fails with "MoveFile failed; code 3".
 - The installer is not code-signed yet, so Windows SmartScreen shows "Windows protected your PC" the first time: choose *More info*, then *Run anyway*.
