@@ -861,19 +861,6 @@ index 1f0f2d9e..c439cde1 100644
  			ExeBasename: product.nameShort,
  			RegValueName: product.win32RegValueName,
  			ShellNameShort: product.win32ShellNameShort,
-diff --git a/build/win32/code.iss b/build/win32/code.iss
-index 5b430614..bb9c88a2 100644
---- a/build/win32/code.iss
-+++ b/build/win32/code.iss
-@@ -1382,7 +1382,7 @@ begin
- 
-   #if "user" == InstallTarget
-     if not WizardSilent() and IsAdmin() then begin
--      if MsgBox('This User Installer is not meant to be run as an Administrator. If you would like to install VS Code for all users in this system, download the System Installer instead from https://code.visualstudio.com. Are you sure you want to continue?', mbError, MB_OKCANCEL) = IDCANCEL then begin
-+      if MsgBox('This User Installer is not meant to be run as an Administrator. If you would like to install {#NameShort} for all users in this system, download the System Installer instead from https://github.com/bothuany/axle/releases. Are you sure you want to continue?', mbError, MB_OKCANCEL) = IDCANCEL then begin
-         Result := False;
-       end;
-     end;
 diff --git a/build/win32/i18n/messages.de.isl b/build/win32/i18n/messages.de.isl
 index 3a3c7fa6..15b8ebcc 100644
 --- a/build/win32/i18n/messages.de.isl
@@ -1073,3 +1060,64 @@ index 067580a4..ab885bd0 100644
  			tags: ['experimental'],
  			description: localize('workbench.welcomePage.experimentalOnboarding', "When enabled, show the new onboarding experience instead of the classic walkthrough on first launch."),
  			experiment: {
+diff --git a/build/win32/code.iss b/build/win32/code.iss
+index 5b430614..955dde1f 100644
+--- a/build/win32/code.iss
++++ b/build/win32/code.iss
+@@ -8,10 +8,10 @@
+ AppId={#AppId}
+ AppName={#NameLong}
+ AppVerName={#NameVersion}
+-AppPublisher=Microsoft Corporation
+-AppPublisherURL=https://code.visualstudio.com/
+-AppSupportURL=https://code.visualstudio.com/
+-AppUpdatesURL=https://code.visualstudio.com/
++AppPublisher=Recep Batuhan Dikmen
++AppPublisherURL=https://github.com/bothuany/axle
++AppSupportURL=https://github.com/bothuany/axle/issues
++AppUpdatesURL=https://github.com/bothuany/axle/releases
+ DefaultGroupName={#NameLong}
+ AllowNoIcons=yes
+ OutputDir={#OutputDir}
+@@ -1382,7 +1382,7 @@ begin
+ 
+   #if "user" == InstallTarget
+     if not WizardSilent() and IsAdmin() then begin
+-      if MsgBox('This User Installer is not meant to be run as an Administrator. If you would like to install VS Code for all users in this system, download the System Installer instead from https://code.visualstudio.com. Are you sure you want to continue?', mbError, MB_OKCANCEL) = IDCANCEL then begin
++      if MsgBox('This User Installer is not meant to be run as an Administrator. If you would like to install {#NameShort} for all users in this system, download the System Installer instead from https://github.com/bothuany/axle/releases. Are you sure you want to continue?', mbError, MB_OKCANCEL) = IDCANCEL then begin
+         Result := False;
+       end;
+     end;
+diff --git a/build/lib/electron.ts b/build/lib/electron.ts
+index 27151cc4..aae0fa00 100644
+--- a/build/lib/electron.ts
++++ b/build/lib/electron.ts
+@@ -143,8 +143,8 @@ const electronAssetResolver = electronFeed
+ export const config = {
+ 	version: electronVersion,
+ 	productAppName: product.nameLong,
+-	companyName: 'Microsoft Corporation',
+-	copyright: 'Copyright (C) 2026 Microsoft. All rights reserved',
++	companyName: 'Recep Batuhan Dikmen',
++	copyright: 'Copyright (C) 2026 Recep Batuhan Dikmen',
+ 	darwinExecutable: product.nameShort,
+ 	darwinIcon: 'resources/darwin/code.icns',
+ 	darwinBundleIdentifier: product.darwinBundleIdentifier,
+diff --git a/build/gulpfile.vscode.ts b/build/gulpfile.vscode.ts
+index 34cc2f2f..0affe987 100644
+--- a/build/gulpfile.vscode.ts
++++ b/build/gulpfile.vscode.ts
+@@ -517,11 +517,11 @@ function patchWin32DependenciesTask(destinationFolderName: string) {
+ 			await rcedit(fullPath, {
+ 				'file-version': baseVersion,
+ 				'version-string': {
+-					'CompanyName': 'Microsoft Corporation',
++					'CompanyName': 'Recep Batuhan Dikmen',
+ 					'FileDescription': product.nameLong,
+ 					'FileVersion': packageJson.version,
+ 					'InternalName': basename,
+-					'LegalCopyright': 'Copyright (C) 2026 Microsoft. All rights reserved',
++					'LegalCopyright': 'Copyright (C) 2026 Recep Batuhan Dikmen',
+ 					'OriginalFilename': basename,
+ 					'ProductName': product.nameLong,
+ 					'ProductVersion': packageJson.version,
