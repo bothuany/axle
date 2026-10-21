@@ -142,3 +142,25 @@ test('the PR comment has the table, links the screenshots when they are publishe
 	assert.match(buildBody({ runs, runUrl: 'u' }), /1 screenshots are in the run's artifacts/)
 	assert.match(buildBody({ runs: [{ label: 'l', scenarios: [{ title: 'A', status: 'pass' }] }], runUrl: 'u' }), /Desktop e2e passed/)
 })
+
+test('the Docker run shares nothing of the host screen, network or input, and maps the repository read-only', async () => {
+	const { dockerRunArgs, imageTag, dockerMissingMessage, WORK_VOLUME } = await import('../../../scripts/docker-config.mjs')
+	const args = dockerRunArgs({ image: 'axle-e2e:x', name: 'n', repo: 'C:\repo', ctl: 'C:\ctl', out: 'C:\out', mode: 'run', modeArgs: ['--only', 'island'] })
+	const line = args.join(' ')
+	assert.ok(!args.includes('-p') && !args.includes('--publish') && !/--network|--net\b|--pid|--ipc|--privileged/.test(line), line)
+	assert.doesNotMatch(line, /X11|DISPLAY|\/dev\/|\.Xauthority/)
+	assert.deepEqual(args.filter((a, i) => args[i - 1] === '-v'), [`${WORK_VOLUME}:/work/axle`, 'C:\repo:/src:ro', 'C:\ctl:/ctl:ro', 'C:\out:/out'])
+	// The isolation switch is set by the entrypoint inside the container, never passed in from the host's environment.
+	assert.ok(!args.includes('-e') && !args.includes('--env'))
+	assert.deepEqual(args.slice(-4), ['axle-e2e:x', 'run', '--only', 'island'])
+	assert.ok(dockerRunArgs({ image: 'i', name: 'n', repo: 'r', ctl: 'c', out: 'o', probeDir: 'C:\p', mode: 'probe', modeArgs: ['a.mjs'] }).includes('C:\p:/probe:ro'))
+	assert.notEqual(imageTag('a', 'b'), imageTag('a', 'c'))
+	assert.match(dockerMissingMessage('no daemon'), /Docker Desktop[\s\S]*desktop-e2e\.yml/)
+})
+
+test('the container entrypoint sets the isolation switch itself and the host launcher never does', async () => {
+	const { readFileSync } = await import('node:fs')
+	const entry = readFileSync(new URL('../docker/entrypoint.sh', import.meta.url), 'utf8')
+	assert.match(entry, /export AXLE_E2E_ISOLATED=1/)
+	assert.doesNotMatch(readFileSync(new URL('../../../scripts/docker-e2e.mjs', import.meta.url), 'utf8'), /AXLE_E2E_ISOLATED\s*[=:]/)
+})

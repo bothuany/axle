@@ -123,7 +123,7 @@ scripts/            setup, start, build-extensions, install-shortcut and install
 
 ## Desktop end-to-end tests
 
-Some things can only be tested in the real desktop app: the installer, the in-app update, the status island, window focus and position. They are never tested on your own desktop (a test that opens windows takes over your screen and your pointer). UI checks that do not need a desktop window run headless in web mode (`npm run web`, the [probe skill](../.claude/skills/probe/SKILL.md)) and never bring a window to the front. Everything desktop-only goes to one of two disposable machines. Both run the same code, `test/e2e-desktop` (Playwright's `_electron` API, with a remote-debugging fallback for a packaged build that has Electron's inspector off):
+Some things can only be tested in the real desktop app: the installer, the in-app update, the status island, window focus and position. They are never tested on your own desktop (a test that opens windows takes over your screen and your pointer). UI checks that do not need a desktop window run headless in web mode (`npm run web`, the [probe skill](../.claude/skills/probe/SKILL.md)) and never bring a window to the front. Everything desktop-only goes to a disposable machine: a Docker container (Linux, from source), GitHub Actions or Windows Sandbox (Windows). They all run the same code, `test/e2e-desktop` (Playwright's `_electron` API, with a remote-debugging fallback for a packaged build that has Electron's inspector off):
 
 | Scenario | What it checks |
 |---|---|
@@ -131,6 +131,16 @@ Some things can only be tested in the real desktop app: the installer, the in-ap
 | Canvas and tour | the flow canvas opens (as an editor tab where the build does that) and a tour plays on it |
 | Status island | it shows; where the build has the controls it also minimizes, is dragged, hides while Axle is focused and closes (a fake agent list comes from `test/e2e-desktop/driver`) |
 | Installer (Windows) | silent install, the update through `AXLE_UPDATE_URL` against a local static server (detect, download, ready, Update, relaunch on the new version), silent uninstall |
+
+**Docker** (any OS with Docker Desktop in Linux-containers mode), the quick local run of the desktop app on Linux, and where a session probes desktop UI:
+
+```bash
+npm run docker:e2e                                    # the scenarios above on the working tree, from source, under xvfb
+npm run docker:e2e -- --scenario island,canvas-tour   # only these
+npm run docker:e2e -- --probe my-probe.mjs            # one Playwright script, see test/e2e-desktop/lib/probe.mjs
+```
+
+The container has its own virtual display, no published ports and no host network, display or input; `AXLE_E2E_ISOLATED=1` is set inside it only. The first run builds the image and the VS Code checkout (20 to 40 minutes); the checkout and its build live in the named volume `axle-e2e-work` (a changed patch or setup script rebuilds it by itself; `--reset-volume` forces that), so later runs take minutes. Screenshots, `results.json` and logs are written to the output folder the command prints (`--out <dir>` picks it). It tests the working tree, uncommitted files included.
 
 **GitHub Actions** (`.github/workflows/desktop-e2e.yml`, on every pull request and on demand): Windows runs the installed build, Linux runs the app from source under xvfb. The first run builds VS Code (60 to 90 minutes); the VS Code checkout and the packaged app are then cached, and a run takes 15 to 30. Screenshots and logs are artifacts; one PR comment (updated on every push) has a pass/fail table and the screenshots.
 

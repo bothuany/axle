@@ -28,6 +28,7 @@ npm run semgrep:test                           # Axle's semgrep rules against th
 npm run sonar:up && npm run sonar              # local SonarQube, see tools/sonarqube/README.md
 cd editor/extensions/flow-view && npm test     # build + node tests; UPDATE=1 rewrites expected output
 npm run test:e2e-unit                          # the desktop e2e harness: sandbox config, installer command lines, result table (no windows)
+npm run docker:e2e                             # desktop e2e (or a probe script, -- --probe <file>) from source in Docker, under xvfb
 npm run sandbox:e2e                            # desktop e2e inside Windows Sandbox (Windows only, needs the feature turned on), docs/building.md
 cd ui && npm run typecheck && npm run build
 dotnet build analyzer
@@ -38,5 +39,5 @@ dotnet build analyzer
 - Match the file you are in: extension TypeScript uses tabs and semicolons; `ui/` uses 2 spaces and no semicolons; `scripts/*.mjs` use tabs and no semicolons. Comments explain why, in full sentences.
 - Spawning processes: argument arrays, no `shell: true` (use `launch`/`launchSync` from scripts/lib.mjs in scripts).
 - Never start GUI windows or steal focus from scripts or hooks.
-- Where tests run: UI tests run headless in web mode (`npm run web` in the built-in browser pane, the probe skill) and never bring a window to the front. Desktop-only tests (installer, update, status island, window behaviour) go to the desktop-e2e workflow or Windows Sandbox (`npm run sandbox:e2e`), never to the developer's desktop. `test/e2e-desktop/run.mjs` refuses to open a window unless `AXLE_E2E_ISOLATED=1`, which only CI and the sandbox script set: never set it on your own machine.
+- Where tests run: UI tests run headless in web mode (`npm run web` in the built-in browser pane, the probe skill) and never bring a window to the front. Desktop-only tests (installer, update, status island, window behaviour) go to Docker (`npm run docker:e2e`, `-- --probe <file>` for a probe), the desktop-e2e workflow or, for Windows-only checks, Windows Sandbox (`npm run sandbox:e2e`), never to the developer's desktop. `test/e2e-desktop/run.mjs` refuses to open a window unless `AXLE_E2E_ISOLATED=1`, which only CI, the sandbox script and the Docker entrypoint set (inside the machine they isolate): never set it on your own machine.
 - A test that runs the C# analyzer on a copy in `os.tmpdir()` resolves it with `realpathSync.native` first: a Windows runner's temp folder has an 8.3 short name and the analyzer reports long names (checked by `npm run arch`).

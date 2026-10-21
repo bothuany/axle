@@ -27,7 +27,8 @@
     "sonar": "node scripts/sonar.mjs scan",
     "sonar:up": "node scripts/sonar.mjs up",
     "sonar:down": "node scripts/sonar.mjs down",
-    "sandbox:e2e": "node scripts/sandbox-e2e.mjs"
+    "sandbox:e2e": "node scripts/sandbox-e2e.mjs",
+    "docker:e2e": "node scripts/docker-e2e.mjs"
   },
   "devDependencies": {
     "dependency-cruiser": "18.6.0",
