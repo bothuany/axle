@@ -253,6 +253,8 @@ export class FlowPanel implements vscode.Disposable {
 		if (pointed && Date.now() - pointed.at < 15 * 60_000 && tour.source === 'agent' && tour.steps[0]) {
 			tour.steps[0].notes = [{ text: pointed.question, by: 'user' as const, at: pointed.at }, ...(tour.steps[0].notes ?? [])].slice(0, MAX_NOTES);
 		}
+		// The tour plays in its tab: bring it forward when another tab (a board, a file) is on top, without taking the keyboard.
+		panel.reveal(undefined, true);
 		this.playing = { id: tour.id, steps: tour.steps.length, tour, session };
 		this.tourAt = undefined;
 		this.asked = undefined;
