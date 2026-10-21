@@ -27,8 +27,8 @@ cask "insilode" do
   zap trash: [
     "~/.insilode",
     "~/Library/Application Support/Insilode",
-    "~/Library/Preferences/io.github.bothuany.axle.plist",
-    "~/Library/Saved Application State/io.github.bothuany.axle.savedState",
+    "~/Library/Preferences/com.insilode.Insilode.plist",
+    "~/Library/Saved Application State/com.insilode.Insilode.savedState",
   ]
 
   caveats <<~EOS
