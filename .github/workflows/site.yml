@@ -60,6 +60,10 @@ jobs:
 
       - name: Site (type-check, build, play the demo in Chrome)
         working-directory: site
+        env:
+          # Empty: the project site at <owner>.github.io/<repo>. After DNS points insilode.dev at Pages, set the repository variable SITE_URL
+          # (Settings, Secrets and variables, Actions, Variables) to https://insilode.dev; the build then also writes the CNAME file.
+          SITE_URL: ${{ vars.SITE_URL }}
         run: |
           npm ci --no-audit --no-fund
           npm run typecheck

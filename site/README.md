@@ -34,6 +34,15 @@ https://bothuany.github.io/axle/: the home page and the Try page, with the real 
 
 Each page sets its title, description, canonical address, Open Graph tags and a Content-Security-Policy; the home page adds `SoftwareApplication` JSON-LD and the `google-site-verification` tag. `{{site}}` comes from `SITE_URL` (default `https://bothuany.github.io/axle`). The build emits `sitemap.xml` with both pages. The framed pages (`canvas.html`, `pages/dock.html`, `pages/island.html`) carry `noindex`. There is no `robots.txt`: on a project site it would have to sit at the domain's root.
 
+## A custom domain (insilode.dev)
+
+The site is a project site today: `https://bothuany.github.io/axle/`. For `https://insilode.dev` the owner (nothing here does it for them):
+1. points the domain at GitHub Pages (four `A` records for the apex, or `ALIAS`/`ANAME`; see GitHub's "Managing a custom domain for your GitHub Pages site"; `AAAA` records are optional),
+2. sets the repository variable `SITE_URL` to `https://insilode.dev` (Settings, Secrets and variables, Actions, Variables),
+3. in Settings, Pages, enters the custom domain and ticks Enforce HTTPS once the certificate is issued.
+
+With `SITE_URL` set, `{{site}}` (canonical links, the social cards, the sitemap) names that address and the build writes `CNAME` into `dist/`. All URLs in the pages are relative, so the move from `/axle/` to `/` needs no other change. Verify the domain on GitHub (Settings, Pages) before pointing DNS, so nobody else can claim it.
+
 ## Run it
 
 ```bash

@@ -8,6 +8,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { preview } from 'vite'
 import puppeteer from 'puppeteer-core'
 
+// The address the build was made for (SITE_URL, as in vite.config.ts).
+const SITE_URL = (process.env.SITE_URL || 'https://bothuany.github.io/axle').replace(/\/$/, '')
+
 const CHROMES = [process.env.CHROME_PATH, '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser', 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].filter(Boolean)
 const chrome = CHROMES.find(p => existsSync(p))
 const skip = chrome ? false : 'no Chrome or Edge found (set CHROME_PATH)'
@@ -282,7 +285,7 @@ test('the pages can be found: titles, descriptions, canonical addresses and a si
 		})
 		assert.ok(head.title.length <= 60, `"${head.title}" fits a search result`)
 		assert.ok(head.description.length >= 70 && head.description.length <= 160, `the description of /${path} fits a search result (${head.description.length} characters)`)
-		assert.equal(head.canonical, `https://bothuany.github.io/axle/${path}`)
+		assert.equal(head.canonical, `${SITE_URL}/${path}`)
 		assert.equal(head.ogUrl, head.canonical)
 		assert.match(head.csp, /default-src 'none'/)
 		assert.equal(head.h1, 1)
@@ -292,7 +295,7 @@ test('the pages can be found: titles, descriptions, canonical addresses and a si
 	}
 	const sitemap = await (await fetch(new URL('sitemap.xml', url))).text()
 	const pages = ['', 'try/', 'docs/', 'docs/agent-tools/', 'docs/boards/', 'docs/install/', 'docs/languages/']
-	assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1]).sort(), pages.map(p => `https://bothuany.github.io/axle/${p}`).sort())
+	assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1]).sort(), pages.map(p => `${SITE_URL}/${p}`).sort())
 	for (const part of ['canvas.html', 'pages/dock.html', 'pages/island.html']) {
 		assert.match(await (await fetch(new URL(part, url))).text(), /<meta name="robots" content="noindex"/, `${part} asks not to be indexed`)
 	}

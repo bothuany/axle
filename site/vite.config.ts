@@ -5,7 +5,7 @@ import { defineConfig, type Plugin } from 'vite'
 import { NAME, REPO } from './src/brand.ts'
 
 /** Where the site is served from: pages that must name their own address (the canonical link, the social cards, the sitemap) use it. */
-const SITE = (process.env.SITE_URL ?? 'https://bothuany.github.io/axle').replace(/\/$/, '')
+const SITE = (process.env.SITE_URL || 'https://bothuany.github.io/axle').replace(/\/$/, '')
 /** The documentation pages scripts/docs-pages.mjs has written (docs/ and docs/<page>/). */
 const DOC_PAGES = existsSync(resolve(import.meta.dirname, 'docs'))
   ? ['docs/', ...readdirSync(resolve(import.meta.dirname, 'docs'), { withFileTypes: true }).filter(d => d.isDirectory()).map(d => `docs/${d.name}/`)]
@@ -24,6 +24,12 @@ function site(): Plugin {
     transformIndexHtml: html => html.replaceAll('{{site}}', SITE).replaceAll('{{name}}', NAME).replaceAll('{{repo}}', REPO),
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemap(new Date().toISOString().slice(0, 10)) })
+      // On a custom domain (SITE_URL=https://insilode.dev) GitHub Pages needs a CNAME file in the published folder. Not on <owner>.github.io.
+      const host = new URL(SITE).hostname
+      if (!host.endsWith('.github.io')) {
+        this.emitFile({ type: 'asset', fileName: 'CNAME', source: `${host}
+` })
+      }
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
