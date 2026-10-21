@@ -4,7 +4,7 @@
 // release never needs a server to say "no update".
 //
 //   node scripts/update-manifests.mjs --dir <folder with the release files> --out <folder> --version 0.4.2 \
-//     --commit <sha> --repo bothuany/axle
+//     --commit <sha> --repo bothuany/insilode
 //
 // Per platform: the Windows file points at the per-user installer (it is downloaded and run silently); the macOS and
 // Linux files point at the release page, because those apps are not updated in place (see packaging/README.md).

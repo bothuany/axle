@@ -16,7 +16,7 @@ Protocols:
 - insilode
 Installers:
 - Architecture: x64
-  InstallerUrl: https://github.com/bothuany/axle/releases/download/v0.1.0/Insilode-Setup-0.1.0-x64.exe
+  InstallerUrl: https://github.com/bothuany/insilode/releases/download/v0.1.0/Insilode-Setup-0.1.0-x64.exe
   InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
   # Inno's uninstall key: product.json's win32x64UserAppId plus "_is1".
   ProductCode: '{9AC14A02-7196-4110-BF80-CFF0243083BC}_is1'

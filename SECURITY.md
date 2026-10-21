@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please do not open a public issue for a security problem. Report it privately through GitHub: on the repository's **Security** tab, choose **Report a vulnerability** ([private vulnerability reporting](https://github.com/bothuany/axle/security/advisories/new)).
+Please do not open a public issue for a security problem. Report it privately through GitHub: on the repository's **Security** tab, choose **Report a vulnerability** ([private vulnerability reporting](https://github.com/bothuany/insilode/security/advisories/new)).
 
 Include what you found, the steps to reproduce it, and the Insilode version or commit. You can expect an acknowledgement within a few days. Insilode is maintained by volunteers, so fix times vary; we will tell you when it is fixed and credit you if you wish.
 

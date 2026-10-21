@@ -65,7 +65,7 @@ index 64e1c4d2..12b78386 100644
 -	"urlProtocol": "code-oss",
 +	"urlProtocol": "insilode",
 +	"quality": "insilode",
-+	"updateUrl": "https://github.com/bothuany/axle/releases/latest/download",
++	"updateUrl": "https://github.com/bothuany/insilode/releases/latest/download",
  	"agentsTelemetryAppName": "agents",
  	"webviewContentExternalBaseUrlTemplate": "https://{{uuid}}.vscode-cdn.net/insider/ef65ac1ba57f57f2a3961bfe94aa20481caca4c6/out/vs/workbench/contrib/webview/browser/pre/",
  	"builtInExtensions": [
@@ -1073,9 +1073,9 @@ index 5b43061..1bef915 100644
 -AppSupportURL=https://code.visualstudio.com/
 -AppUpdatesURL=https://code.visualstudio.com/
 +AppPublisher=Recep Batuhan Dikmen
-+AppPublisherURL=https://github.com/bothuany/axle
-+AppSupportURL=https://github.com/bothuany/axle/issues
-+AppUpdatesURL=https://github.com/bothuany/axle/releases
++AppPublisherURL=https://github.com/bothuany/insilode
++AppSupportURL=https://github.com/bothuany/insilode/issues
++AppUpdatesURL=https://github.com/bothuany/insilode/releases
  DefaultGroupName={#NameLong}
  AllowNoIcons=yes
  OutputDir={#OutputDir}
@@ -1112,7 +1112,7 @@ index 5b43061..1bef915 100644
    #if "user" == InstallTarget
      if not WizardSilent() and IsAdmin() then begin
 -      if MsgBox('This User Installer is not meant to be run as an Administrator. If you would like to install VS Code for all users in this system, download the System Installer instead from https://code.visualstudio.com. Are you sure you want to continue?', mbError, MB_OKCANCEL) = IDCANCEL then begin
-+      if MsgBox('This User Installer is not meant to be run as an Administrator. If you would like to install {#NameShort} for all users in this system, download the System Installer instead from https://github.com/bothuany/axle/releases. Are you sure you want to continue?', mbError, MB_OKCANCEL) = IDCANCEL then begin
++      if MsgBox('This User Installer is not meant to be run as an Administrator. If you would like to install {#NameShort} for all users in this system, download the System Installer instead from https://github.com/bothuany/insilode/releases. Are you sure you want to continue?', mbError, MB_OKCANCEL) = IDCANCEL then begin
          Result := False;
        end;
      end;

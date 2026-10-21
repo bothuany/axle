@@ -14,7 +14,7 @@ folder `.insilode/`, Windows shell accelerator `I&nsilode`.
 | D1 | Reverse-DNS id for `darwinBundleIdentifier` / `linuxDesktopName` (permanent: macOS preferences, Keychain, Gatekeeper, Linux desktop file) | Buy `insilode.com` first, then `com.insilode.Insilode`. Without the domain: `io.github.insilode.insilode` (needs the GitHub org). Do not ship before this is fixed. |
 | D2 | Windows Inno `AppId` GUIDs: keep or new | **Keep** (they are random GUIDs, not branded). The new Setup then upgrades the old install in place (section 3). New GUIDs install beside the old one and leave two uninstall entries. |
 | D3 | First release number | `0.5.0` (a rename is a minor bump; the legacy update files below are keyed to it). |
-| D4 | Repo location | **Changed 2026-10-22: no transfer for now.** The repository stays `bothuany/axle`; the `insilode` organisation is only reserved. Every repo, release, `updateUrl` and CLA URL stays on `bothuany/axle`, and the site lives at https://insilode.dev (GitHub Pages custom domain, set on this repository). If the repo moves later: never create a new `bothuany/axle` afterwards, because GitHub's redirect is what installed 0.4.x apps rely on. |
+| D4 | Repo location | **Changed twice on 2026-10-22; final: the repository was renamed in place to `bothuany/insilode`** (same owner; the `insilode` organisation is only reserved). GitHub 301-redirects `bothuany/axle`, release downloads and update URLs included, so installed 0.4.x apps keep finding their update files. **No repository named `bothuany/axle` may ever be created again**: it would end the redirect. The site is https://insilode.dev (Pages custom domain). |
 | D5 | CLA / TRADEMARKS wording | Retitle both; add to the CLA one sentence that the project was renamed from Axle and earlier signatures cover it. Legal text: the user confirms. |
 | D6 | Keep an `axle` command-line shim | No. The `axle` CLI is dropped (it is a PATH entry from the installer; stale shells fail with "not found"). Say so in the release notes. |
 
@@ -202,8 +202,7 @@ never to the user's screen. Not merged, not released.
 1. Trademark search for INSILODE (USPTO/EUIPO/TÜRKPATENT, class 9 and 42, code analysis) and a look at "insilo*" neighbours. Decide before the release.
 2. Buy `insilode.com` and `insilode.dev` (and optionally `.app`); D1 depends on it. Re-check availability the day of purchase.
 3. Create the GitHub organisation `insilode` (also reserve the npm scope `@insilode` and the `insilode` npm name).
-4. ~~Rename or transfer `bothuany/axle` → `insilode/insilode`~~ (D4: postponed, no transfer for now). After it: `updateUrl`, `REPO`, workflow URLs, CLA document URL.
-   Keep the redirect alive: no new `bothuany/axle`. Settings → Pages is re-enabled in the new repo.
+4. ~~Rename or transfer the repository~~ done by the coordinating session: `bothuany/axle` is now `bothuany/insilode`. Never create a repository called `bothuany/axle` again.
 5. Pages: `bothuany.github.io/axle/` does **not** redirect after a rename. The new address is `insilode.github.io/insilode/`, or the custom domain
    (DNS + `CNAME`); the old link in READMEs, posts and the film description is dead, update them. The apt/homebrew repos named in
    the packaging docs are not created yet, so create them under the new name.
@@ -217,7 +216,7 @@ Approved 2026-10-22 with D1-D6 as recommended (D1: `com.insilode.Insilode`, in i
 
 - **Mechanical rename** of every `Axle`/`axle`/`AXLE_` (case-sensitive, so `maxLength` is untouched) in 316 tracked files and 13 file names,
   except `docs/research` and this document. Commits are by area: docs, patches/scripts/packaging, sources, tests, site, lockfiles.
-- **Repository URLs stay on `bothuany/axle` (D4, changed: no transfer).** They are read from few places, so a later move stays small: `package.json` `repository` (scripts/package.mjs builds the deb/rpm homepage from it), `product.json` `updateUrl` and the Inno publisher URLs in `flow-core.patch`, `site/src/brand.ts` `REPO`, the workflows (release.yml uses `${GITHUB_REPOSITORY}`; `cla.yml` names the CLA document), the winget/brew files, and prose in the docs. `git grep -F bothuany/axle` finds them all.
+- **Repository URLs are `bothuany/insilode`** (D4: the repository was renamed in place while this PR was open). They are read from few places, so another move stays small: `package.json` `repository` (scripts/package.mjs builds the deb/rpm homepage from it), `product.json` `updateUrl` and the Inno publisher URLs in `flow-core.patch`, `site/src/brand.ts` `REPO`, the workflows (release.yml uses `${GITHUB_REPOSITORY}`; `cla.yml` names the CLA document), the winget/brew files, and prose in the docs. `git grep -F bothuany/insilode` finds them all.
 - **The site is https://insilode.dev**, served from the root; `SITE_URL` defaults to it and every build writes the `CNAME` file, so a deploy keeps the custom domain.
 - **Done as planned:** data-folder copy (`src/insilodeMigrate.ts`, tested), installer upgrade in place with legacy cleanup, legacy `update-*-axle.json`
   files, settings migration (`legacySettings.ts`, tested), theme ids, `axleTour` still read, `out/axle-mcp.js` stub plus `AXLE_WORKSPACE`, the one-time

@@ -43,4 +43,4 @@ If you contribute as part of your job, make sure your employer allows it (see po
 
 The Insilode name and logo are not covered by the code licence: see [TRADEMARKS.md](TRADEMARKS.md).
 
-Be kind: see the [code of conduct](CODE_OF_CONDUCT.md). Questions and ideas are welcome in [Discussions](https://github.com/bothuany/axle/discussions); bugs go to issues.
+Be kind: see the [code of conduct](CODE_OF_CONDUCT.md). Questions and ideas are welcome in [Discussions](https://github.com/bothuany/insilode/discussions); bugs go to issues.

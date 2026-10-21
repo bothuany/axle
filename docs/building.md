@@ -2,13 +2,13 @@
 
 ## Install
 
-Insilode is installed from the files on the [Releases](https://github.com/bothuany/axle/releases) page: an installer for Windows, an app for macOS and packages for Linux, with `SHA256SUMS.txt` beside them. Each one ships with everything it needs, so no Node, git or build tools are required. Your data lives in `~/.insilode` on every OS. Insilode installs beside, not over, a stock VS Code or Code - OSS: it has its own app id (bundle id on macOS, desktop entry on Linux), install folder, `insilode://` link scheme and data folder.
+Insilode is installed from the files on the [Releases](https://github.com/bothuany/insilode/releases) page: an installer for Windows, an app for macOS and packages for Linux, with `SHA256SUMS.txt` beside them. Each one ships with everything it needs, so no Node, git or build tools are required. Your data lives in `~/.insilode` on every OS. Insilode installs beside, not over, a stock VS Code or Code - OSS: it has its own app id (bundle id on macOS, desktop entry on Linux), install folder, `insilode://` link scheme and data folder.
 
 **C# flows need the .NET 10 SDK** ([download](https://dotnet.microsoft.com/download/dotnet/10.0)), whatever the OS. Insilode's C# analyzer is a .NET 10 program that loads your solution with MSBuild, so the runtime alone is not enough. Without the SDK everything else works; the first time a C# flow is asked for, Insilode shows one notice that says so. Other languages need nothing.
 
 > **Not published yet:** `winget install bothuany.Insilode`, `brew install --cask bothuany/tap/insilode` and an APT repository are prepared in [`packaging/`](../packaging/README.md) but not submitted or hosted. Until they are, install from the release files below; updating means installing the newer release over the old one.
 >
-> **macOS and Linux packages are new:** 0.1.0 is the first release that ships them. They are built and packaged on GitHub's runners, but have not been run on a Mac or a Linux desktop yet; please [report problems](https://github.com/bothuany/axle/issues).
+> **macOS and Linux packages are new:** 0.1.0 is the first release that ships them. They are built and packaged on GitHub's runners, but have not been run on a Mac or a Linux desktop yet; please [report problems](https://github.com/bothuany/insilode/issues).
 
 ### Windows
 
@@ -47,6 +47,7 @@ Insilode is Axle under a new name (0.5.0 is the first release called Insilode). 
 - **Settings:** `axle.skeletonFirst.enabled`, the overlay screen `axle`, the `axleFocused` auto-hide flag and the "Axle Dark/Light" themes are moved to their new names, in the scope they were set in.
 - **Claude Code tools:** a user-level MCP server named `axle` may keep working after the update (its tools are still `mcp__axle__*`) but is not guaranteed to: it can point at a program the new install no longer has. Insilode asks once whether to move it to `insilode`, and shows the two commands it would run first. Permission rules you wrote for `mcp__axle__*` are yours: rename them to `mcp__insilode__*`.
 - **Agent worktrees and tours:** worktrees under `.axle/worktrees` and branches `axle/<name>` keep working; new ones go to `.insilode/worktrees` and `insilode/<name>`. Tour files with `"axleTour": 1` still load; new ones say `"insilodeTour": 1`.
+- **The repository** is now `bothuany/insilode`; `bothuany/axle` redirects to it (releases, downloads and the update files of installed 0.4.x apps included). No repository called `bothuany/axle` may be created again: that would end the redirect.
 - **Versions up to 0.4.3** cannot install an update by themselves: run the new Setup once by hand. They do see "Update available" (the release carries the update files under Axle's old names too, `update-*-axle.json`).
 
 ### Updates
@@ -87,7 +88,7 @@ It does what the installer does up to VS Code's production build, then signs the
 ## Getting started
 
 ```bash
-git clone https://github.com/bothuany/axle.git
+git clone https://github.com/bothuany/insilode.git
 cd insilode
 npm run setup
 npm start

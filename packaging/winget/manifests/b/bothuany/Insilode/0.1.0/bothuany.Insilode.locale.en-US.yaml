@@ -6,11 +6,11 @@ PackageVersion: 0.1.0
 PackageLocale: en-US
 Publisher: bothuany
 PublisherUrl: https://github.com/bothuany
-PublisherSupportUrl: https://github.com/bothuany/axle/issues
+PublisherSupportUrl: https://github.com/bothuany/insilode/issues
 PackageName: Insilode
-PackageUrl: https://github.com/bothuany/axle
+PackageUrl: https://github.com/bothuany/insilode
 License: MIT
-LicenseUrl: https://github.com/bothuany/axle/blob/main/LICENSE
+LicenseUrl: https://github.com/bothuany/insilode/blob/main/LICENSE
 ShortDescription: A harness-first code editor built on Code - OSS.
 Description: |-
   Insilode is a code editor built on Code - OSS: a call-flow canvas from an endpoint to the database, terminal agents with
@@ -22,6 +22,6 @@ Tags:
 - ide
 - claude-code
 - vscode
-ReleaseNotesUrl: https://github.com/bothuany/axle/releases/tag/v0.1.0
+ReleaseNotesUrl: https://github.com/bothuany/insilode/releases/tag/v0.1.0
 ManifestType: defaultLocale
 ManifestVersion: 1.12.0

@@ -26,7 +26,7 @@ const dir = mkdtempSync(join(realpathSync.native(tmpdir()), 'insilode-update-'))
 writeFileSync(join(dir, 'insilodeUpdate.ts'), addedLines('src/vs/platform/update/electron-main/insilodeUpdate.ts').join('\n') + '\n')
 const { createInsilodeUpdateURL, resolveInsilodeUpdateBaseUrl, compareVersions, parseInsilodeUpdate } = await import(pathToFileURL(join(dir, 'insilodeUpdate.ts')).href)
 
-const BASE = 'https://github.com/bothuany/axle/releases/latest/download'
+const BASE = 'https://github.com/bothuany/insilode/releases/latest/download'
 const update = (productVersion, extra = {}) => ({ url: 'https://example.test/x.exe', name: 'Insilode', version: 'abc123', productVersion, sha256hash: 'f'.repeat(64), timestamp: 1, ...extra })
 
 test('the update file of a platform sits next to the release assets', () => {
@@ -79,7 +79,7 @@ test('an incomplete or empty update file is no update', () => {
 const hashes = Object.fromEntries(platforms('0.4.2').map(({ asset }, i) => [asset, String(i).repeat(64)]))
 
 test('the release job writes one update file per platform in the shape VS Code reads', () => {
-	const files = buildManifests({ version: '0.4.2', commit: 'deadbeef', repo: 'bothuany/axle', hashes, timestamp: 1234 })
+	const files = buildManifests({ version: '0.4.2', commit: 'deadbeef', repo: 'bothuany/insilode', hashes, timestamp: 1234 })
 	assert.deepEqual(Object.keys(files).sort(), [
 		`update-darwin-arm64-${QUALITY}.json`,
 		`update-darwin-${QUALITY}.json`,
@@ -105,11 +105,11 @@ test('the release job writes one update file per platform in the shape VS Code r
 		assert.equal(parseInsilodeUpdate(json, '0.4.2'), null)
 	}
 	const win = files[`update-win32-x64-user-${QUALITY}.json`]
-	assert.equal(win.url, 'https://github.com/bothuany/axle/releases/download/v0.4.2/Insilode-Setup-0.4.2-x64.exe')
+	assert.equal(win.url, 'https://github.com/bothuany/insilode/releases/download/v0.4.2/Insilode-Setup-0.4.2-x64.exe')
 	assert.equal(win.sha256hash, hashes['Insilode-Setup-0.4.2-x64.exe'])
 	// macOS and Linux are not updated in place: the button opens the release page.
 	for (const name of [`update-darwin-${QUALITY}.json`, `update-darwin-arm64-${QUALITY}.json`, `update-linux-x64-${QUALITY}.json`]) {
-		assert.equal(files[name].url, 'https://github.com/bothuany/axle/releases/tag/v0.4.2')
+		assert.equal(files[name].url, 'https://github.com/bothuany/insilode/releases/tag/v0.4.2')
 	}
 	assert.equal(files[`update-darwin-arm64-${QUALITY}.json`].sha256hash, hashes['Insilode-0.4.2-darwin-arm64.zip'])
 	assert.equal(files[`update-linux-x64-${QUALITY}.json`].sha256hash, hashes['insilode_0.4.2_amd64.deb'])
@@ -124,7 +124,7 @@ test('a release with a missing file, or a bad version, writes nothing', () => {
 test('the product points at the release assets with a quality the build has no other meaning for', () => {
 	const product = addedLines('product.json', corePatch).join('\n')
 	assert.match(product, new RegExp(`"quality": "${QUALITY}"`))
-	assert.match(product, /"updateUrl": "https:\/\/github\.com\/bothuany\/axle\/releases\/latest\/download"/)
+	assert.match(product, /"updateUrl": "https:\/\/github\.com\/bothuany\/insilode\/releases\/latest\/download"/)
 	// "stable" and "insider" switch on VS Code's own installer parts (the Windows 11 context menu) and a "switch to Insiders" prompt.
 	assert.notEqual(QUALITY, 'stable')
 	assert.notEqual(QUALITY, 'insider')
@@ -141,7 +141,7 @@ test('every update file name is the one the app asks for', () => {
 
 test('a local server of update files, named by INSILODE_UPDATE_URL, tells an older app about the new release', async () => {
 	const { createServer } = await import('node:http')
-	const files = buildManifests({ version: '0.4.2', commit: 'c0ffee', repo: 'bothuany/axle', hashes, timestamp: 1 })
+	const files = buildManifests({ version: '0.4.2', commit: 'c0ffee', repo: 'bothuany/insilode', hashes, timestamp: 1 })
 	const server = createServer((req, res) => {
 		const json = files[decodeURIComponent((req.url ?? '').slice(1))]
 		res.writeHead(json ? 200 : 404, { 'content-type': 'application/json' })

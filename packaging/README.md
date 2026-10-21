@@ -32,7 +32,7 @@ A running Insilode updates itself from the release files, without an update serv
 (Update available on the gear, Help, Check for Updates, `update.mode`), but it reads a static file instead of
 `/api/update/<platform>/<quality>/<commit>` (`editor/patches/flow-update.patch`):
 
-1. `product.json` has `"quality": "insilode"` and `"updateUrl": "https://github.com/bothuany/axle/releases/latest/download"`.
+1. `product.json` has `"quality": "insilode"` and `"updateUrl": "https://github.com/bothuany/insilode/releases/latest/download"`.
    GitHub redirects `releases/latest/download/<file>` to the newest release that is not a draft or prerelease.
 2. The app asks for `<updateUrl>/update-<platform>-insilode.json`, where `<platform>` is `win32-x64-user`, `darwin`,
    `darwin-arm64` or `linux-x64`. Each file is `{ url, name, version, productVersion, sha256hash, timestamp }`;
@@ -74,7 +74,7 @@ A running Insilode updates itself from the release files, without an update serv
 **Test it without a release.** `INSILODE_UPDATE_URL` replaces `updateUrl` (https, or http on this machine only):
 
 ```bash
-node scripts/update-manifests.mjs --dir <folder with the four release files> --out /tmp/insilode-update --version 9.9.9 --commit test --repo bothuany/axle
+node scripts/update-manifests.mjs --dir <folder with the four release files> --out /tmp/insilode-update --version 9.9.9 --commit test --repo bothuany/insilode
 (cd /tmp/insilode-update && python -m http.server 8123 --bind 127.0.0.1)
 INSILODE_UPDATE_URL=http://127.0.0.1:8123 npm start     # an installed build, not `npm start`: updates are off when running from source
 ```
@@ -85,7 +85,7 @@ choose Help, Check for Updates. `npm run test:update` runs the tests for the ver
 ## Moving from Axle
 
 The 0.5.x releases carry every update file twice: `update-<platform>-insilode.json` (what 0.5 asks for) and `update-<platform>-axle.json`
-(what an installed 0.4.x asks for, at the same `releases/latest/download` address, which GitHub redirects after the repository moves).
+(what an installed 0.4.x asks for, at `github.com/bothuany/axle/releases/latest/download`, which GitHub redirects to `bothuany/insilode` since the repository was renamed).
 Both are written by `scripts/update-manifests.mjs` (`LEGACY_QUALITY`); drop the second once the 0.4.x tail is gone. A 0.4.x app cannot install
 the update itself: its "Update available" leads to the new release. Never create a repository called `bothuany/axle` again: it would end the redirect.
 The winget manifest under `winget/manifests/b/bothuany/Insilode/0.1.0/` is the old template (its installer URL names a file the 0.1.0 release

@@ -8,10 +8,10 @@ cask "insilode" do
   sha256 arm:   "0000000000000000000000000000000000000000000000000000000000000000",
          intel: "0000000000000000000000000000000000000000000000000000000000000000"
 
-  url "https://github.com/bothuany/axle/releases/download/v#{version}/Insilode-#{version}-darwin-#{arch}.zip"
+  url "https://github.com/bothuany/insilode/releases/download/v#{version}/Insilode-#{version}-darwin-#{arch}.zip"
   name "Insilode"
   desc "Harness-first code editor with a call-flow canvas and terminal agents"
-  homepage "https://github.com/bothuany/axle"
+  homepage "https://github.com/bothuany/insilode"
 
   livecheck do
     url :url

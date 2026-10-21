@@ -39,7 +39,7 @@ Each page sets its title, description, canonical address, Open Graph tags and a 
 The site is served from the root of https://insilode.dev through GitHub Pages with a custom domain. The build writes `CNAME` (the host of `SITE_URL`) into `dist/`, so a deploy never drops the domain, and every URL in the pages is relative, so the site also works under a sub-path. Owner's steps (nothing in the repository does them):
 1. DNS at the registrar: the apex `insilode.dev` points at GitHub Pages (four `A` records, optionally the `AAAA` ones; see GitHub's "Managing a custom domain for your GitHub Pages site"). Verify the domain in GitHub (Settings, Pages) first, so nobody else can claim it.
 2. Settings, Pages: custom domain `insilode.dev`, then Enforce HTTPS once the certificate is issued.
-3. The old address `https://bothuany.github.io/axle/` is redirected to the domain by GitHub as soon as the custom domain is set. After the repository moves to the `insilode` organisation the project address changes with it (`insilode.github.io/insilode`), which redirects the same way.
+3. The old address `https://bothuany.github.io/axle/` is redirected to the domain by GitHub once the custom domain is set, and the repository `bothuany/axle` redirects to `bothuany/insilode` (never create a repository of the old name again: installed 0.4.x apps rely on that redirect).
 
 To serve a fork or a preview from elsewhere set `SITE_URL` (the repository variable of the same name in the workflow, or the environment variable locally): `{{site}}` and the sitemap follow it, and `CNAME` is written only for hosts that are not `*.github.io`.
 

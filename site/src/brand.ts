@@ -2,7 +2,7 @@
 // the release assets the download buttons look for all read it from here, so a rename is a change to this file.
 
 export const NAME = 'Insilode'
-export const REPO = 'bothuany/axle'
+export const REPO = 'bothuany/insilode'
 export const GITHUB = `https://github.com/${REPO}`
 export const RELEASES = `${GITHUB}/releases/latest`
 

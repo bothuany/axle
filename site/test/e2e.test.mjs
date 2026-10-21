@@ -21,11 +21,11 @@ const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 
 const PHONE = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36'
 
 /** What GitHub's API answers, in the shape it has. The asset names are the real ones of a release. */
-const asset = (name, size) => ({ name, size, browser_download_url: `https://github.com/bothuany/axle/releases/download/v9.9.9/${name}` })
+const asset = (name, size) => ({ name, size, browser_download_url: `https://github.com/bothuany/insilode/releases/download/v9.9.9/${name}` })
 const RELEASE = {
 	tag_name: 'v9.9.9',
 	published_at: '2026-10-20T10:00:00Z',
-	html_url: 'https://github.com/bothuany/axle/releases/tag/v9.9.9',
+	html_url: 'https://github.com/bothuany/insilode/releases/tag/v9.9.9',
 	assets: [asset('Insilode-Setup-9.9.9-x64.exe', 140_000_000), asset('Insilode-9.9.9-darwin-arm64.dmg', 160_000_000), asset('Insilode-9.9.9-darwin-x64.dmg', 165_000_000), asset('insilode_9.9.9_amd64.deb', 120_000_000), asset('insilode-9.9.9-1.x86_64.rpm', 121_000_000), asset('Insilode-9.9.9-linux-x64.tar.gz', 150_000_000), asset('SHA256SUMS.txt', 1000)],
 }
 
@@ -153,9 +153,9 @@ test('home: the download button names the visitor\'s system and points at its fi
 test('home: when GitHub does not answer, the buttons lead to the releases page and no count is shown', { skip }, async () => {
 	const { page, problems } = await open('', { github: false })
 	await wait(1500)
-	assert.equal(await page.$eval('.hero [data-download]', a => a.href), 'https://github.com/bothuany/axle/releases/latest')
+	assert.equal(await page.$eval('.hero [data-download]', a => a.href), 'https://github.com/bothuany/insilode/releases/latest')
 	assert.equal(await page.$eval('.nav [data-stars]', s => s.hidden), true)
-	assert.ok((await page.$$eval('[data-download-list] li a', as => as.map(a => a.href))).every(h => h === 'https://github.com/bothuany/axle/releases/latest'))
+	assert.ok((await page.$$eval('[data-download-list] li a', as => as.map(a => a.href))).every(h => h === 'https://github.com/bothuany/insilode/releases/latest'))
 	assert.deepEqual(problems, [])
 	await page.close()
 })
@@ -248,7 +248,7 @@ test('docs: the documents of the repository are pages of the site, linked to eac
 	// A link between documents stays on the site; a link to another file of the repository goes to GitHub.
 	const links = await page.$$eval('.doc-body a', as => as.map(a => a.href))
 	assert.ok(links.some(h => h.endsWith('/docs/languages/')), 'the support table link opens the Languages page')
-	assert.ok(links.some(h => h === 'https://github.com/bothuany/axle/blob/main/CONTRIBUTING.md'))
+	assert.ok(links.some(h => h === 'https://github.com/bothuany/insilode/blob/main/CONTRIBUTING.md'))
 	await page.click('.doc-nav a[href$="docs/languages/"]')
 	await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'Languages')
 	assert.match(await page.$eval('.doc-body', b => b.textContent), /Tables and entities/)
