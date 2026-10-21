@@ -10,6 +10,7 @@ import type { BoardNode, BoardSpec } from './spec'
 import { adjacency, buildLayout, groupsHolding, groupDepth, matchNodes, type Layout } from './model'
 import { KIND_COLOR, ROLE_CHIPS, type BoardOpts, type Bootstrap, type ExportFormat, type ToHost, type ToWebview } from './protocol'
 import { ActionsCtx, nodeTypes, type Actions, type CardData, type GroupData } from './cards'
+import { CalloutLayer } from './callouts'
 import { EdgeLayer } from './edges'
 import { toSvg, type Palette } from './svg'
 import { Legend } from './legend'
@@ -54,6 +55,7 @@ function readPalette(): Palette {
     signal: resolve('--fl-signal', '#6f86ff'),
     add: resolve('--fl-add', '#5fe0a1'),
     del: resolve('--fl-del', '#ff6b7d'),
+    warn: resolve('--fl-warn', '#e6a23c'),
     groupFill: resolve('--fl-line', '#262626'),
   }
 }
@@ -480,6 +482,7 @@ function BoardView() {
           >
             {layout.nodes.length > 8 && <MiniMap pannable zoomable nodeStrokeWidth={0} nodeColor={n => ((n.data as CardData | undefined)?.v?.node ? KIND_COLOR[(n.data as CardData).v.node!.kind ?? 'class'] : 'var(--fl-line-strong)')} />}
           </ReactFlow>
+          <CalloutLayer layout={layout} direction={direction} />
         </ActionsCtx.Provider>
         {spec.nodes.length === 0 && (
           <div className="bd-empty">

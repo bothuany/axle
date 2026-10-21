@@ -1,6 +1,6 @@
 // What the board webview and its host (flow-view/src/boardPanel.ts) say to each other, and the look-up tables both the
 // renderer and the SVG export use. Pure: no DOM, no React.
-import type { BoardSpec, EdgeKind, NodeKind } from './spec'
+import type { BoardSpec, ChangeMark, EdgeKind, EdgeLine, NodeKind } from './spec'
 
 /** What a rebuild asks the host for. Mirrors flow-view's BoardOptions: the host recomputes the board from these. */
 export interface BoardOpts {
@@ -71,7 +71,7 @@ export interface EdgeStyle {
   dash?: string
   head: Head
   /** One of the --fl-* colour names (text, muted, signal, add, del). */
-  color: 'text' | 'muted' | 'signal' | 'add' | 'del'
+  color: 'text' | 'muted' | 'signal' | 'add' | 'del' | 'warn'
 }
 
 export const EDGE_STYLE: Record<EdgeKind, EdgeStyle> = {
@@ -91,6 +91,24 @@ export const EDGE_STYLE: Record<EdgeKind, EdgeStyle> = {
 }
 
 export const edgeStyle = (kind: EdgeKind | undefined): EdgeStyle => EDGE_STYLE[kind ?? 'calls']
+
+const LINE_DASH: Record<EdgeLine, string | undefined> = { solid: undefined, dashed: '6 4', dotted: '2 3' }
+
+/** Compare colours, shared with the skeleton-first language: added is green, removed red, changed amber. */
+export const CHANGE_COLOR: Record<ChangeMark, EdgeStyle['color']> = { added: 'add', removed: 'del', changed: 'warn' }
+
+/** The look of an edge: its kind's style, then what the edge itself says (a dashed return, an async open head, a change mark). */
+export function lineStyle(e: { kind?: EdgeKind; style?: EdgeLine; async?: boolean; change?: ChangeMark }): EdgeStyle {
+  const base = edgeStyle(e.kind)
+  return {
+    dash: e.style ? LINE_DASH[e.style] : base.dash,
+    head: e.async && base.head === 'fill' ? 'vee' : base.head,
+    color: e.change ? CHANGE_COLOR[e.change] : base.color,
+  }
+}
+
+/** The text on an edge: "[guard] label ×N". The order is a badge of its own. */
+export const edgeText = (e: { label?: string; guard?: string; count?: number }): string => [e.guard ? `[${e.guard}]` : '', e.label ?? '', (e.count ?? 1) > 1 ? `×${e.count}` : ''].filter(Boolean).join(' ')
 
 /** The kinds a role chip can hide, in the order they are shown. Entities and enums have their own toggles. */
 export const ROLE_CHIPS: { role: NodeKind; label: string }[] = [

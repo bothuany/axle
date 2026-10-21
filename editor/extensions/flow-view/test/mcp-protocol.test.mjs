@@ -223,7 +223,7 @@ test('mcp-protocol: the server tells the agent to show code with `tour`, and lis
 	const init = await s.send('initialize', {})
 	assert.match(init.result.instructions, /SHOW it with `tour`/)
 	const list = await s.send('prompts/list')
-	assert.deepEqual(list.result.prompts.map(p => p.name), ['skeleton_first', 'tour_guide', 'explain_change'])
+	assert.deepEqual(list.result.prompts.map(p => p.name), ['skeleton_first', 'tour_guide', 'diagram_guide', 'explain_change'])
 	const explain = (await s.send('prompts/get', { name: 'explain_change' })).result.messages[0].content.text
 	for (const part of [/`tour`/, /"changes": true/, /get_context/, /impact/, /`table` step/, /risks/, /tour_guide/]) assert.match(explain, part)
 	const got = await s.send('prompts/get', { name: 'tour_guide' })

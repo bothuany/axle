@@ -5,7 +5,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createHash } from 'crypto';
-import type { BoardNode, BoardSpec, NodeStatus } from './spec';
+import type { BoardHighlight, BoardNode, BoardSpec, ChangeMark, NodeStatus } from './spec';
+
+export interface NodePatch { status?: NodeStatus; note?: string; change?: ChangeMark }
 
 /** Whatever shows boards. `show` opens (or reveals) a board; `update` redraws one that is already shown. */
 export interface BoardHost {
@@ -16,6 +18,8 @@ export interface BoardHost {
 export interface StoredBoard {
 	id: string;
 	spec: BoardSpec;
+	/** The version this board replaced: what "changes since the last draw" compares with. Memory only. */
+	previous?: BoardSpec;
 	createdAt: number;
 	updatedAt: number;
 	/** agent: drawn by a tool call · plan: parsed from a plan an agent proposed. */
@@ -102,7 +106,7 @@ export class BoardStore {
 		const id = cleanBoardId(opts.id) ?? this.freshId(spec.title);
 		const old = this.boards.get(id);
 		const now = Date.now();
-		this.boards.set(id, { id, spec, createdAt: old?.createdAt ?? now, updatedAt: now, origin: opts.origin ?? old?.origin ?? 'agent', session: opts.session ?? old?.session, planFile: opts.planFile ?? old?.planFile });
+		this.boards.set(id, { id, spec, previous: old?.spec, createdAt: old?.createdAt ?? now, updatedAt: now, origin: opts.origin ?? old?.origin ?? 'agent', session: opts.session ?? old?.session, planFile: opts.planFile ?? old?.planFile });
 		while (this.boards.size > MAX_BOARDS) {
 			const oldest = [...this.boards.values()].sort((a, b) => a.updatedAt - b.updatedAt)[0];
 			this.boards.delete(oldest.id);
@@ -134,21 +138,33 @@ export class BoardStore {
 	}
 
 	/** Changes one node. Throws a message naming the valid ids, so an agent can correct itself. */
-	async updateNode(id: string, nodeId: string, patch: { status?: NodeStatus; note?: string }): Promise<BoardNode> {
+	async updateNode(id: string, nodeId: string, patch: NodePatch): Promise<BoardNode> {
+		const [node] = await this.update(id, { nodes: [{ nodeId, ...patch }] });
+		return node;
+	}
+
+	/** Changes several nodes and/or the highlighted routes in one redraw. Throws a message naming the valid ids. */
+	async update(id: string, patch: { nodes?: (NodePatch & { nodeId: string })[]; highlight?: BoardHighlight[] }): Promise<BoardNode[]> {
 		const board = this.boards.get(id);
 		if (!board) {
 			throw new Error(`No board "${id}". Boards: ${this.list().map(b => b.id).join(', ') || 'none drawn yet'}.`);
 		}
-		const node = board.spec.nodes.find(n => n.id === nodeId);
-		if (!node) {
-			throw new Error(`Board "${id}" has no node "${nodeId}". Nodes: ${board.spec.nodes.slice(0, 40).map(n => n.id).join(', ')}.`);
+		let nodes = board.spec.nodes;
+		const touched: BoardNode[] = [];
+		for (const p of patch.nodes ?? []) {
+			const node = nodes.find(n => n.id === p.nodeId);
+			if (!node) {
+				throw new Error(`Board "${id}" has no node "${p.nodeId}". Nodes: ${board.spec.nodes.slice(0, 40).map(n => n.id).join(', ')}.`);
+			}
+			const next: BoardNode = { ...node, ...(p.status ? { status: p.status } : {}), ...(p.note !== undefined ? { note: p.note.slice(0, 600) } : {}), ...(p.change ? { change: p.change } : {}) };
+			nodes = nodes.map(n => n === node ? next : n);
+			touched.push(next);
 		}
-		const next: BoardNode = { ...node, ...(patch.status ? { status: patch.status } : {}), ...(patch.note !== undefined ? { note: patch.note.slice(0, 600) } : {}) };
-		const spec = { ...board.spec, nodes: board.spec.nodes.map(n => n === node ? next : n) };
+		const spec: BoardSpec = { ...board.spec, nodes, ...(patch.highlight ? { highlight: patch.highlight.length ? patch.highlight : undefined } : {}) };
 		this.boards.set(id, { ...board, spec, updatedAt: Date.now() });
 		this.changed.fire({ type: 'node', id });
 		await this.host?.update(id, this.shown(id, spec));
-		return next;
+		return touched;
 	}
 
 	/** Plan boards of one agent session, newest first. */

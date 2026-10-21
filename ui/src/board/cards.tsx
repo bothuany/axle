@@ -3,7 +3,7 @@
 import { createContext, memo, useContext, type CSSProperties } from 'react'
 import type { Node, NodeProps } from '@xyflow/react'
 import type { BoardMember, BoardNode } from './spec'
-import { DETAIL_H, GROUP_HEAD, HEADER_H, type VGroup, type VNode } from './model'
+import { DETAIL_H, detailOf, GROUP_HEAD, HEADER_H, MARK_SIZE, type VGroup, type VNode } from './model'
 import { KIND_COLOR, STEREOTYPE, VISIBILITY_NAME } from './protocol'
 
 export interface Actions {
@@ -62,24 +62,40 @@ export const CardNode = memo(function CardNode({ data }: NodeProps<CardNodeT>) {
   const kind = n.kind ?? 'class'
   const st = STEREOTYPE[kind]
   const style = { '--k': KIND_COLOR[kind], height: '100%' } as CSSProperties
+  const detail = detailOf(n)
+  if (n.shape && MARK_SIZE[n.shape]) {
+    // A pseudo-state (initial, final, choice) is a mark with no text: the label is its tooltip.
+    return (
+      <div
+        className={cls('bc-mark', `sh-${n.shape}`, data.selected && 'sel', data.match && 'match', data.dim && 'dim', n.change && `ch-${n.change}`)}
+        title={n.label}
+        onMouseEnter={() => a.hover(v.id)}
+        onMouseLeave={() => a.hover(null)}
+        onClick={() => a.select(v.id, n)}
+      />
+    )
+  }
   return (
     <div
-      className={cls('bc', data.selected && 'sel', data.focus && 'foc', data.match && 'match', data.dim && 'dim', n.status && `s-${n.status}`, n.check && `c-${n.check}`, n.warn && 'warned', kind === 'enum' && 'enum')}
+      className={cls('bc', data.selected && 'sel', data.focus && 'foc', data.match && 'match', data.dim && 'dim', n.status && `s-${n.status}`, n.check && `c-${n.check}`, n.change && `ch-${n.change}`, n.shape && `sh-${n.shape}`, n.warn && 'warned', kind === 'enum' && 'enum')}
       style={style}
       onMouseEnter={() => a.hover(v.id)}
       onMouseLeave={() => a.hover(null)}
     >
       <div
         className="bc-head"
-        style={{ height: HEADER_H + (n.detail ? DETAIL_H : 0) }}
+        style={{ height: HEADER_H + (detail ? DETAIL_H : 0) }}
         title={[n.label, n.detail, n.file ? `${n.file}${n.line ? ':' + n.line : ''}` : '', n.note, checkTitle(n)].filter(Boolean).join('\n')}
         onClick={() => a.select(v.id, n)}
         onDoubleClick={() => data.canFocus && a.focus(v.id)}
       >
         {n.check && <span className={`bc-check c-${n.check}`}>{n.warn ? '⚠ ' : ''}{n.check}</span>}
+        {!n.check && n.change && <span className={`bc-check ch-${n.change}`}>{n.change}</span>}
+        {!n.check && !n.change && n.note && <span className="bc-note" title={n.note}>✎</span>}
+        {n.zoom && <span className="bc-zoom" title="Open the board below this box">⤓</span>}
         {st && <div className="bc-st">«{st}»</div>}
         <div className="bc-name">{n.label}</div>
-        {n.detail && <div className="bc-detail">{n.detail}</div>}
+        {detail && <div className="bc-detail">{detail}</div>}
       </div>
       {v.rows.length > 0 && (
         <div className="bc-rows">

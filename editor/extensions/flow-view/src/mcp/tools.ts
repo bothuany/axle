@@ -12,7 +12,12 @@ export interface ToolDef {
 	annotations: { title: string; readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean; openWorldHint: boolean };
 }
 
-export const BOARD_KINDS = ['flow', 'plan', 'class', 'er', 'sequence', 'architecture'] as const;
+export const BOARD_KINDS = ['flow', 'plan', 'class', 'er', 'sequence', 'architecture', 'state'] as const;
+export const BOARD_LEVELS = ['context', 'container', 'component'] as const;
+export const NODE_SHAPES = ['rect', 'round', 'diamond', 'cylinder', 'actor', 'cloud', 'initial', 'final', 'choice'] as const;
+export const CHANGE_MARKS = ['added', 'removed', 'changed'] as const;
+export const EDGE_LINES = ['solid', 'dashed', 'dotted'] as const;
+export const GROUP_KINDS = ['boundary', 'lane', 'layer', 'alt', 'loop', 'opt'] as const;
 export const NODE_KINDS = ['entry', 'controller', 'service', 'repository', 'entity', 'dto', 'enum', 'interface', 'class', 'external', 'step', 'decision', 'note', 'actor'] as const;
 export const NODE_STATUSES = ['todo', 'doing', 'done', 'skipped', 'blocked'] as const;
 export const EDGE_KINDS = ['calls', 'extends', 'implements', 'uses', 'has', 'has-many', 'depends', 'next', 'yes', 'no', 'reads', 'writes', 'message'] as const;
@@ -34,10 +39,51 @@ export const BOARD_SCHEMA = {
 	type: 'object',
 	description: 'The board to draw.',
 	properties: {
-		kind: { type: 'string', enum: [...BOARD_KINDS], description: 'flow: how a request/process runs · plan: ordered steps to do · class: classes and their relations · er: tables/entities · sequence: messages between actors in order · architecture: layers/services.' },
-		title: str('Short title shown above the diagram.'),
+		kind: { type: 'string', enum: [...BOARD_KINDS], description: 'flow: how a request/process runs · plan: ordered steps to do · class: classes and their relations · er: tables/entities · sequence: messages between actors in order (give every edge an `order`) · architecture: layers/services · state: the states of one thing and its transitions. An unknown kind is drawn as flow, and the answer says so.' },
+		title: str('Short title shown above the diagram: the question it answers.'),
 		description: str('Optional one or two sentences.'),
 		direction: { type: 'string', enum: ['LR', 'TB'], description: 'Left-to-right (default for flows) or top-to-bottom (default for plans).' },
+		level: { type: 'string', enum: [...BOARD_LEVELS], description: 'architecture only (C4): context = who uses the system and what it talks to · container = the deployable parts · component = the parts of one container. One board per level; link a box to the board below it with its `zoom`.' },
+		legend: {
+			type: 'array',
+			description: 'What your own colours or edge kinds mean, e.g. [{"key":"writes","text":"persists to the database"}].',
+			items: { type: 'object', properties: { key: str('Edge kind, node kind or word.'), text: str('What it means here.') }, required: ['key', 'text'] },
+		},
+		focus: str('Id of the node or group to open first, so the first view is the answer, not the whole system.'),
+		base: str('Id of another board to compare this one with: what is added, removed or changed is coloured. Use it for "what did I change in the design".'),
+		steps: {
+			type: 'array',
+			description: 'Explain the board by walking through it instead of writing a paragraph in chat: 3-10 steps, each lights up the nodes and edges it names and shows its caption, played like a tour. Caption says why and what to watch.',
+			items: {
+				type: 'object',
+				properties: {
+					title: str('Short step title.'),
+					caption: str('Why this part matters, one or two sentences, plain text (`code` spans allowed).'),
+					nodes: { type: 'array', items: { type: 'string' }, description: 'Node ids to light up.' },
+					edges: { type: 'array', items: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 2 }, description: 'Edges to light up as [from, to] node ids.' },
+					focus: str('Group (or node) id to open for this step.'),
+				},
+				required: ['title'],
+			},
+		},
+		highlight: {
+			type: 'array',
+			description: 'Routes drawn bold with the rest dimmed, e.g. [{"path":["api","svc","db"],"label":"happy path"}].',
+			items: { type: 'object', properties: { path: { type: 'array', items: { type: 'string' }, description: 'Node ids in order (at least two).' }, label: str('Name of the route.') }, required: ['path'] },
+		},
+		callouts: {
+			type: 'array',
+			description: 'Notes drawn as a bubble on a node or an edge, e.g. [{"node":"svc","text":"Retries twice, then dead-letters"}].',
+			items: {
+				type: 'object',
+				properties: {
+					node: str('Node id to attach to.'),
+					edge: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 2, description: 'Or an edge as [from, to] node ids.' },
+					text: str('The note, one or two sentences.'),
+				},
+				required: ['text'],
+			},
+		},
 		nodes: {
 			type: 'array',
 			description: 'At most 400. Each node needs a unique id.',
@@ -51,8 +97,14 @@ export const BOARD_SCHEMA = {
 					group: str('Id of a group in `groups` this node belongs to.'),
 					file: str('Source file the node stands for (workspace path); clicking it opens the file.'),
 					line: int('1-based line in `file`.'),
-					status: { type: 'string', enum: [...NODE_STATUSES], description: 'Progress of a plan step. Update later with update_board.' },
-					note: str('Longer free text, e.g. what a plan step changes.'),
+					status: { type: 'string', enum: [...NODE_STATUSES], description: 'Progress of any node: a plan step, a stage of the work. Update later with update_board.' },
+					note: str('Longer free text on any kind of board, e.g. what a plan step changes or why a box exists. For a note on one edge use `callouts`.'),
+					symbol: str('The real code symbol this node stands for ("OrderService.Place"), taken from find_symbol or flow_text. Axle checks it against the index and fills `file` and `line`; leave it out for something that does not exist yet (a proposed class).'),
+					tech: str('C4: the technology under the label, e.g. "Spring Boot", "PostgreSQL".'),
+					shape: { type: 'string', enum: [...NODE_SHAPES], description: 'Overrides the shape the kind gives: initial/final/choice for state boards, cylinder for a database, actor for a person, cloud for an outside service.' },
+					change: { type: 'string', enum: [...CHANGE_MARKS], description: 'For a proposed design: added, removed or changed. With a `base` board Axle fills this itself.' },
+					lane: str('Swimlane: id of a group with kind "lane" this node sits in.'),
+					zoom: str('C4: id of the board that shows this box one level down; a click on the box opens it.'),
 					members: {
 						type: 'array',
 						description: 'Fields/methods listed inside a class or entity node, each an object: [{"text":"id: UUID"},{"text":"findByStatus(status: BillStatus): List<Bill>"}].',
@@ -79,20 +131,33 @@ export const BOARD_SCHEMA = {
 				properties: {
 					from: str('Node id.'),
 					to: str('Node id.'),
-					label: str('Text on the arrow.'),
-					kind: { type: 'string', enum: [...EDGE_KINDS] },
+					label: str('Text on the arrow: a verb or the payload ("validates", "OrderPlaced event"), not "calls".'),
+					kind: { type: 'string', enum: [...EDGE_KINDS], description: 'Carries meaning (reads vs writes, extends vs uses): use it instead of prose.' },
 					fromCard: str('ER cardinality at the `from` end, e.g. "1".'),
 					toCard: str('ER cardinality at the `to` end, e.g. "0..*".'),
+					order: int('Order of a message or step (1, 2, 3...), shown as a number badge. Sequence boards are drawn in this order; it is also the default step order.'),
+					style: { type: 'string', enum: [...EDGE_LINES], description: 'dashed is a return or reply, dotted a weak or optional link.' },
+					async: { type: 'boolean', description: 'An asynchronous message (open arrow head): events, queues, fire-and-forget.' },
+					guard: str('State transition condition, shown as [guard], e.g. "amount > 0".'),
+					change: { type: 'string', enum: [...CHANGE_MARKS], description: 'For a proposed design: added, removed or changed. With a `base` board Axle fills this itself.' },
+					fragment: str('Sequence: id of the alt, loop or opt group this message sits in.'),
 				},
 				required: ['from', 'to'],
 			},
 		},
 		groups: {
 			type: 'array',
-			description: 'Optional boxes around nodes (a layer, a service, a phase).',
+			description: 'Optional boxes around nodes (a layer, a service, a phase), at most 2 levels deep. On a sequence board a group of kind alt, loop or opt is a fragment that boxes the messages whose `fragment` names it; a group of the same kind whose `parent` is an alt group is its else branch.',
 			items: {
 				type: 'object',
-				properties: { id: str('Group id.'), label: str('Title of the box.'), parent: str('Id of an enclosing group.'), collapsed: { type: 'boolean' } },
+				properties: {
+					id: str('Group id.'),
+					label: str('Title of the box; for a fragment its condition, e.g. "[card valid]".'),
+					parent: str('Id of an enclosing group.'),
+					collapsed: { type: 'boolean' },
+					kind: { type: 'string', enum: [...GROUP_KINDS], description: 'boundary: a C4 system or container boundary · lane: a swimlane · layer · alt/loop/opt: a sequence fragment.' },
+					tech: str('C4: the technology of a boundary.'),
+				},
 				required: ['id', 'label'],
 			},
 		},
@@ -179,22 +244,37 @@ export const TOOLS: ToolDef[] = [
 	},
 	{
 		name: 'draw_board',
-		description: 'Draw a diagram that Axle shows to the user next to the editor, like an artifact. Use it in plan mode to show the flow or architecture you designed, when explaining a design, or to lay out a multi-step plan the user can follow. kinds: flow (how something runs), plan (ordered steps with status), class, er (tables), sequence, architecture. Give every node a unique id and a short label; link nodes to code with file (+ line); connect them with edges. Passing the same `id` again replaces that board, so redraw instead of drawing a second copy. Example: {"id":"order-flow","board":{"kind":"flow","title":"Place order","nodes":[{"id":"api","label":"POST /orders","kind":"entry","file":"src/OrdersController.cs","line":24},{"id":"svc","label":"OrderService.Place","kind":"service"},{"id":"db","label":"orders","kind":"entity"}],"edges":[{"from":"api","to":"svc"},{"from":"svc","to":"db","kind":"writes","label":"insert"}]}}. For a plan use kind "plan" with step nodes in order joined by "next" edges, then tick them off with update_board while you work.',
+		description: 'Draw a diagram that Axle shows to the user next to the editor, like an artifact. Use it in plan mode to show the flow or architecture you designed, when explaining a design, or to lay out a multi-step plan the user can follow. The answer carries a LINT list (dropped items, unknown ids, orphans, too many nodes, crossings): fix what it names by calling again with the same `id`. Rules: one question per board, said in `title`, about 15-20 visible nodes at most (split, or collapse `groups`) · pick the kind by the question: how does it run -> sequence (order matters) or flow, what is it made of -> architecture or class, how is data stored -> er, what states can it be in -> state, what will we do -> plan, what changed -> `base` · ground nodes: take names from find_symbol or flow_text and give `symbol` (and `file`) for real code, leave it off for proposed things · label edges with verbs or payloads, not "calls" · group by layer or service, 2 levels at most · edge `kind` carries meaning (reads vs writes, extends vs uses) · number messages with `order` · then EXPLAIN it with `steps` (3-10, each lights some nodes and edges with a caption) instead of a paragraph in chat. Kinds: flow, plan (ordered steps with status), class, er (tables), sequence, architecture (with `level` context/container/component for C4), state. Give every node a unique id and a short label; link nodes to code with symbol or file (+ line); connect them with edges; no coordinates, layout is automatic. Passing the same `id` again replaces that board (the previous version is kept for "what changed"), so redraw instead of drawing a second copy. The `diagram_guide` prompt has the full advice. Example: {"id":"order-flow","board":{"kind":"flow","title":"Place order","nodes":[{"id":"api","label":"POST /orders","kind":"entry","file":"src/OrdersController.cs","line":24},{"id":"svc","label":"OrderService.Place","kind":"service"},{"id":"db","label":"orders","kind":"entity"}],"edges":[{"from":"api","to":"svc"},{"from":"svc","to":"db","kind":"writes","label":"insert"}]}}. For a plan use kind "plan" with step nodes in order joined by "next" edges, then tick them off with update_board while you work.',
 		inputSchema: { type: 'object', properties: { board: BOARD_SCHEMA, id: str('Stable name for the board (letters, digits, - _ . :). Reuse it to replace the board; omit for a new one.') }, required: ['board'], additionalProperties: false },
 		annotations: ro('Draw a board', true),
 	},
 	{
 		name: 'update_board',
-		description: 'Update one node of a board you drew with draw_board: set its status (todo, doing, done, skipped, blocked) and/or its note. Use it to tick plan steps as you work so the user sees progress on the board.',
+		description: 'Update a board you drew with draw_board without redrawing it: set the status of a node (todo, doing, done, skipped, blocked), its note and/or its change mark (added, removed, changed); pass several nodes at once in `updates`; or light a route with `highlight` (e.g. to answer "what about the cache?" by lighting the path to it). Use it to tick plan steps as you work so the user sees progress on the board.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				id: str('Board id returned by draw_board.'),
-				nodeId: str('Node id within that board.'),
+				nodeId: str('Node id within that board (for one node; use `updates` for several).'),
 				status: { type: 'string', enum: [...NODE_STATUSES], description: 'New status of the node.' },
 				note: str('New note text for the node.'),
+				change: { type: 'string', enum: [...CHANGE_MARKS], description: 'New change mark of the node.' },
+				updates: {
+					type: 'array',
+					description: 'Several node updates in one call (at most 100).',
+					items: {
+						type: 'object',
+						properties: { nodeId: str('Node id.'), status: { type: 'string', enum: [...NODE_STATUSES] }, note: str('Note text.'), change: { type: 'string', enum: [...CHANGE_MARKS] } },
+						required: ['nodeId'],
+					},
+				},
+				highlight: {
+					type: 'array',
+					description: 'Replaces the highlighted routes of the board ([] clears them): [{"path":["api","svc","db"],"label":"happy path"}].',
+					items: { type: 'object', properties: { path: { type: 'array', items: { type: 'string' }, description: 'Node ids in order.' }, label: str('Name of the route.') }, required: ['path'] },
+				},
 			},
-			required: ['id', 'nodeId'],
+			required: ['id'],
 			additionalProperties: false,
 		},
 		annotations: ro('Update a board node'),
