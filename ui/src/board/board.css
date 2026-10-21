@@ -196,3 +196,13 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .bd-changes .add { color: var(--fl-add); }
 .bd-changes .del { color: var(--fl-del); }
 .bd-changes .warn { color: var(--fl-warn); }
+
+/* ---- C4: levels and boundaries ---- */
+.bd-level { padding: 1px 8px; border-radius: 10px; background: color-mix(in srgb, var(--fl-signal) 18%, transparent); color: var(--fl-text); font: 600 10.5px var(--fl-ui); text-transform: capitalize; white-space: nowrap; }
+.bg.k-boundary { border: 1.5px dashed color-mix(in srgb, var(--fl-signal) 55%, var(--fl-line-strong)); background: transparent; }
+.bg.k-boundary .bg-name { color: var(--fl-text); }
+.bg.k-lane { border-radius: 4px; background: color-mix(in srgb, var(--fl-text) 3%, transparent); }
+.bg.k-layer { border-style: dotted; }
+.bg-tech { margin-left: 6px; color: var(--fl-muted); font: 10.5px var(--fl-mono); white-space: nowrap; }
+.bc-zoom { cursor: pointer; padding: 0 3px; border-radius: 3px; }
+.bc-zoom:hover { background: color-mix(in srgb, var(--fl-signal) 22%, transparent); }

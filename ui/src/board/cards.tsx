@@ -14,9 +14,11 @@ export interface Actions {
   member(node: BoardNode, member: BoardMember, row: number): void
   more(id: string): void
   hover(id: string | null): void
+  /** C4: open the board below this box. */
+  zoom(board: string): void
 }
 
-export const ActionsCtx = createContext<Actions>({ select() {}, focus() {}, toggleGroup() {}, member() {}, more() {}, hover() {} })
+export const ActionsCtx = createContext<Actions>({ select() {}, focus() {}, toggleGroup() {}, member() {}, more() {}, hover() {}, zoom() {} })
 
 export interface CardData extends Record<string, unknown> {
   v: VNode
@@ -28,6 +30,8 @@ export interface CardData extends Record<string, unknown> {
   activeRow?: number
   /** `canFocus`: the host can rebuild around this node. */
   canFocus: boolean
+  /** The board the node's `zoom` names exists: a double click or the badge opens it. */
+  zoomable?: boolean
 }
 
 export interface GroupData extends Record<string, unknown> {
@@ -85,14 +89,14 @@ export const CardNode = memo(function CardNode({ data }: NodeProps<CardNodeT>) {
       <div
         className="bc-head"
         style={{ height: HEADER_H + (detail ? DETAIL_H : 0) }}
-        title={[n.label, n.detail, n.file ? `${n.file}${n.line ? ':' + n.line : ''}` : '', n.note, checkTitle(n)].filter(Boolean).join('\n')}
+        title={[n.label, detailOf(n), n.symbol, n.zoom && data.zoomable ? 'Double-click to zoom in' : '', n.file ? `${n.file}${n.line ? ':' + n.line : ''}` : '', n.note, checkTitle(n)].filter(Boolean).join('\n')}
         onClick={() => a.select(v.id, n)}
-        onDoubleClick={() => data.canFocus && a.focus(v.id)}
+        onDoubleClick={() => (data.zoomable && n.zoom ? a.zoom(n.zoom) : data.canFocus && a.focus(v.id))}
       >
         {n.check && <span className={`bc-check c-${n.check}`}>{n.warn ? '⚠ ' : ''}{n.check}</span>}
         {!n.check && n.change && <span className={`bc-check ch-${n.change}`}>{n.change}</span>}
         {!n.check && !n.change && n.note && <span className="bc-note" title={n.note}>✎</span>}
-        {n.zoom && <span className="bc-zoom" title="Open the board below this box">⤓</span>}
+        {n.zoom && data.zoomable && <span className="bc-zoom" title="Zoom in: open the board below this box" onClick={e => { e.stopPropagation(); a.zoom(n.zoom!) }}>⤓</span>}
         {st && <div className="bc-st">«{st}»</div>}
         <div className="bc-name">{n.label}</div>
         {detail && <div className="bc-detail">{detail}</div>}
@@ -144,10 +148,11 @@ export const GroupNode = memo(function GroupNode({ data }: NodeProps<GroupNodeT>
   const a = useContext(ActionsCtx)
   const { g } = data
   return (
-    <div className="bg" style={{ '--d': Math.min(g.depth, 3) } as CSSProperties}>
+    <div className={cls('bg', g.group.kind && `k-${g.group.kind}`)} style={{ '--d': Math.min(g.depth, 3) } as CSSProperties}>
       <div className="bg-head" style={{ height: GROUP_HEAD }} onClick={() => a.toggleGroup(g.group.id)} title="Collapse">
         <span className="chev">▾</span>
         <span className="bg-name">{g.group.label}</span>
+        {g.group.tech && <span className="bg-tech">[{g.group.tech}]</span>}
         <span className="bg-count">{g.count}</span>
       </div>
     </div>

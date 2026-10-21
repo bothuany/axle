@@ -19,6 +19,14 @@ export interface BoardHost {
 /** What a host shows next to the board: the board compared with its previous draw, for the "what changed" switch. */
 export interface BoardExtra {
 	since?: BoardSpec;
+	/** The boards the store holds, for C4 zoom: a box with `zoom` opens one of them, and `up` marks the ones that zoom into this board. */
+	boards?: BoardRef[];
+}
+
+export interface BoardRef {
+	id: string;
+	title: string;
+	up: boolean;
 }
 
 export interface StoredBoard {
@@ -102,14 +110,28 @@ export class BoardStore {
 		}
 	}
 
-	/** The board against its previous draw, when there is one and something changed. */
+	/** What goes next to a board: the board against its previous draw (when something changed), and the boards C4 zoom can reach. */
 	private since(id: string): BoardExtra {
 		const board = this.boards.get(id);
-		if (!board?.previous) {
-			return {};
+		const refs = this.list().filter(b => b.id !== id).map((b): BoardRef => ({ id: b.id, title: b.spec.title, up: b.spec.nodes.some(n => n.zoom === id) }));
+		const extra: BoardExtra = refs.length ? { boards: refs } : {};
+		if (board?.previous) {
+			const diff = compareBoards(board.previous, board.spec);
+			if (hasChanges(diff)) {
+				extra.since = diff;
+			}
 		}
-		const diff = compareBoards(board.previous, board.spec);
-		return hasChanges(diff) ? { since: diff } : {};
+		return extra;
+	}
+
+	/** Shows a board again, in its tab (opened if it was closed): what a click on a C4 box that zooms into it does. */
+	async present(id: string): Promise<boolean> {
+		const board = this.boards.get(id);
+		if (!board) {
+			return false;
+		}
+		await this.host?.show(id, this.shown(id, board.spec), this.since(id));
+		return true;
 	}
 
 	/** Shows a board again through the decorator, in the tab that has it (the decoration changed, the board did not). */

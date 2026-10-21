@@ -366,18 +366,19 @@ function wireAgentBridge(flow: Flow) {
 	// viewer stays as the fallback when the canvas cannot open one.
 	const boardPanel = registerTypeViews({ context, log });
 	const canvas = boardPanel.asHost();
+	boardPanel.setStore(boards);
 	boards.setHost({
-		show: async (id, spec) => {
+		show: async (id, spec, extra) => {
 			try {
-				await canvas.show(id, spec);
+				await canvas.show(id, spec, extra);
 			} catch (e) {
 				log.warn(`Board canvas failed (${(e as Error).message}): showing the board as Markdown`);
 				await viewer.show(id, spec);
 			}
 		},
-		update: async (id, spec) => {
+		update: async (id, spec, extra) => {
 			try {
-				await canvas.update(id, spec);
+				await canvas.update(id, spec, extra);
 			} catch (e) {
 				log.warn(`Board canvas update failed: ${(e as Error).message}`);
 				await viewer.update(id, spec);

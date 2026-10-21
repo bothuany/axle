@@ -1090,6 +1090,9 @@ export class AgentTools {
 			wanted = undefined;
 		}
 		const replaced = wanted ? !!this.d.boards.get(wanted) : false;
+		for (const n of spec.nodes.filter(x => x.zoom && x.zoom !== wanted && !this.d.boards.get(x.zoom)).slice(0, 4)) {
+			found.push(`node \`${n.id}\` zooms into board "${n.zoom}", which is not drawn yet: draw it next with that id, or the box has nothing to open.`);
+		}
 		if (spec.base) {
 			const ids = this.d.boards.list().map(b => b.id);
 			if (spec.base === wanted ? !replaced : !ids.includes(spec.base)) {

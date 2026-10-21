@@ -9,7 +9,7 @@ import './board.css'
 import './tour.css'
 import type { BoardNode, BoardSpec } from './spec'
 import { adjacency, buildLayout, groupsHolding, groupDepth, matchNodes, type Layout } from './model'
-import { countChanges, KIND_COLOR, ROLE_CHIPS, type BoardOpts, type Bootstrap, type ExportFormat, type ToHost, type ToWebview } from './protocol'
+import { countChanges, KIND_COLOR, ROLE_CHIPS, type BoardOpts, type BoardRef, type Bootstrap, type ExportFormat, type ToHost, type ToWebview } from './protocol'
 import { ActionsCtx, nodeTypes, type Actions, type CardData, type GroupData } from './cards'
 import { CalloutLayer } from './callouts'
 import { EdgeLayer } from './edges'
@@ -130,6 +130,7 @@ function BoardView() {
   const [sent, setSpec] = useState<BoardSpec>(boot.spec)
   const [since, setSince] = useState<BoardSpec | undefined>(boot.since)
   const [showSince, setShowSince] = useState(false)
+  const [refs, setRefs] = useState<BoardRef[]>(boot.boards ?? [])
   // "Since the last draw" swaps in the board with its changes marked; the layout is the same, so the picture only gets colours (and ghosts).
   const spec = showSince && since ? since : sent
   const [opts, setOpts] = useState<BoardOpts>(boot.opts ?? {})
@@ -161,6 +162,7 @@ function BoardView() {
         if (m.seq !== undefined && m.seq < seq.current) return
         setSpec(m.spec)
         setSince(m.since)
+        setRefs(m.boards ?? [])
         if (!m.since) setShowSince(false)
         setPending(false)
         setError(undefined)
@@ -272,17 +274,18 @@ function BoardView() {
       const isSel = selected !== undefined && layout.rep.get(selected) === v.id
       const isMatch = matched.has(v.id) || (v.group !== undefined && [...matched].some(id => layout.rep.get(id) === v.id))
       const activeRow = active?.from === v.id ? active.row : undefined
-      const key = `${isSel}|${focusRep === v.id}|${isMatch}|${searching && !isMatch}|${activeRow}|${canRebuild}`
+      const zoomable = !!v.node?.zoom && refs.some(b => b.id === v.node!.zoom)
+      const key = `${isSel}|${focusRep === v.id}|${isMatch}|${searching && !isMatch}|${activeRow}|${canRebuild}|${zoomable}`
       pick(v.id, key, () => ({
         id: v.id, type: v.group ? 'summary' : 'card', position: v.rel, parentId: v.parent ? `frame:${v.parent}` : undefined,
-        data: { v, selected: isSel, focus: focusRep === v.id, match: isMatch, dim: searching && !isMatch, activeRow, canFocus: canRebuild } satisfies CardData,
+        data: { v, selected: isSel, focus: focusRep === v.id, match: isMatch, dim: searching && !isMatch, activeRow, canFocus: canRebuild, zoomable } satisfies CardData,
         width: v.box.w, height: v.box.h, style: { width: v.box.w, height: v.box.h }, draggable: false, selectable: false, focusable: false, zIndex: 2,
       }))
     }
     cache.current = next
     return out
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout, selected, matched, searching, active, canRebuild, opts.focusId])
+  }, [layout, selected, matched, searching, active, canRebuild, opts.focusId, refs])
 
   // Neighbours of the hovered or selected card stay lit, the rest fades (DOM attributes: no React work per hover).
   useEffect(() => {
@@ -390,6 +393,7 @@ function BoardView() {
       setExpandedNodes(prev => new Set(prev).add(id))
     },
     hover: setHover,
+    zoom: board => post({ type: 'zoom', board }),
   }), [focusNode, nodeOf, spec, canRebuild, rebuild, revealGroups])
 
   const setLevel = (level: number) => {
@@ -504,6 +508,10 @@ function BoardView() {
           {walk.steps.length > 0 && !pl.tour && (
             <button className="chip steps" data-act="steps" title={walk.derived ? 'Walk through the messages in order' : 'Play the steps the agent wrote'} onClick={() => { const t = tourOf(spec, walk.steps, walk.derived); if (t) dispatchPl({ type: 'start', tour: t }) }}>▶ {walk.derived ? 'Walk through' : `Steps (${walk.steps.length})`}</button>
           )}
+          {spec.level && <span className="bd-level" title="C4 level of this diagram">C4 · {spec.level}</span>}
+          {refs.filter(b => b.up).map(b => (
+            <button key={b.id} className="chip" data-act="up" title={`Zoom out: open ${b.title}`} onClick={() => post({ type: 'zoom', board: b.id })}>↑ {b.title}</button>
+          ))}
           {since && (
             <button className="chip" data-act="since" aria-pressed={showSince} title="Colour what changed since the previous draw of this board" onClick={() => setShowSince(v => !v)}>Changes</button>
           )}

@@ -116,3 +116,18 @@ test('board-store: update_board redraws keep the since diff, and take several no
 	await assert.rejects(s.update('d', { nodes: [{ nodeId: 'ghost', status: 'done' }] }), /no node "ghost"/)
 	await assert.rejects(s.update('nope', {}), /No board "nope"/)
 })
+
+test('board-store: C4 zoom: the host is told which boards exist and which ones zoom into this one, and a board can be presented again', async () => {
+	const s = new store.BoardStore()
+	const h = host()
+	s.setHost(h)
+	await s.set(board({ level: 'container', title: 'Containers', nodes: [{ id: 'api', label: 'API', zoom: 'components' }, { id: 'db', label: 'DB' }], edges: [] }), { id: 'containers' })
+	assert.equal(h.shown.at(-1)[3].boards, undefined, 'no other board yet')
+	await s.set(board({ level: 'component', title: 'API components', nodes: [{ id: 'ctl', label: 'Controller' }], edges: [] }), { id: 'components' })
+	assert.deepEqual(h.shown.at(-1)[3].boards, [{ id: 'containers', title: 'Containers', up: true }], 'the container board zooms into this one')
+	const before = h.shown.length
+	assert.equal(await s.present('containers'), true)
+	assert.equal(h.shown.length, before + 1)
+	assert.deepEqual(h.shown.at(-1)[3].boards, [{ id: 'components', title: 'API components', up: false }])
+	assert.equal(await s.present('nope'), false)
+})

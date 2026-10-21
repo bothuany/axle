@@ -13,6 +13,13 @@ export interface BoardOpts {
   collapseLevel?: number
 }
 
+export interface BoardRef {
+  id: string
+  title: string
+  /** This board is the one the other board's box zooms into. */
+  up: boolean
+}
+
 export type ExportFormat = 'mermaid' | 'plantuml' | 'png' | 'svg' | 'json'
 
 export interface Bootstrap {
@@ -20,6 +27,8 @@ export interface Bootstrap {
   /** The board compared with its previous draw (changes marked), when something changed: the "since last draw" switch shows it. */
   since?: BoardSpec
   /** The host's name for the source that can rebuild this board ('dto', 'architecture'); absent: the board is fixed. */
+  /** The other boards the host holds: which ones a box's `zoom` can open, and which ones zoom into this one. */
+  boards?: BoardRef[]
   source?: string
   opts: BoardOpts
   dark: boolean
@@ -32,10 +41,12 @@ export type ToHost =
   | { type: 'open'; file: string; line: number }
   | { type: 'rebuild'; seq: number; kind: string; opts: BoardOpts }
   | { type: 'export'; format: ExportFormat; data?: string; name?: string }
+  /** C4: open the board a box zooms into (the host checks the id). */
+  | { type: 'zoom'; board: string }
 
 export type ToWebview =
   /** `refresh`: the same board drawn again because the code changed: the search, selection and viewport stay as they are. */
-  | { type: 'board'; spec: BoardSpec; since?: BoardSpec; opts?: BoardOpts; seq?: number; refresh?: boolean }
+  | { type: 'board'; spec: BoardSpec; since?: BoardSpec; boards?: BoardRef[]; opts?: BoardOpts; seq?: number; refresh?: boolean }
   | { type: 'error'; message: string; seq?: number }
 
 /** Colour per node kind (the accent of a card). */
