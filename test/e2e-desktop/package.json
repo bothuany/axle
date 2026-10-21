@@ -1,0 +1,12 @@
+{
+	"name": "axle-e2e-desktop",
+	"private": true,
+	"description": "Desktop end-to-end tests: Axle's Electron app driven by Playwright, only ever on a CI runner or in Windows Sandbox.",
+	"type": "module",
+	"scripts": {
+		"start": "node run.mjs"
+	},
+	"dependencies": {
+		"playwright-core": "1.52.0"
+	}
+}
