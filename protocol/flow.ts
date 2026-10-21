@@ -144,5 +144,5 @@ export type CanvasToHostTour =
 	| { type: 'tourAsk'; id: string; index: number; question: string }
 	| { type: 'tourSave'; id: string }
 	| { type: 'tourExit'; id: string }
-	| { type: 'pointAsk'; file: string; startLine: number; endLine: number; label: string; question: string }
+	| { type: 'pointAsk'; kind?: 'ask' | 'explain' | 'edit'; file: string; startLine: number; endLine: number; label: string; question: string }
 	| { type: 'gazeReplay'; session: string };

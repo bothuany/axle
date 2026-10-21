@@ -11,6 +11,8 @@ export interface Pointing {
   startLine: number
   endLine: number
   label: string
+  /** Asking about the lines, or asking the agent to change them. */
+  kind?: 'ask' | 'edit'
 }
 
 /** The lines selected in one card's code, by the `data-line` of the rows the selection starts and ends in. */
@@ -41,6 +43,7 @@ export function PointAsk({ pointing, onSend, onClose }: { pointing: Pointing; on
   // Just under the card's header, kept inside the canvas.
   const left = Math.max(8, Math.min(card.position.x * zoom + x + 12, w - WIDTH - 8))
   const top = Math.max(8, Math.min(card.position.y * zoom + y + (HEADER_H + 4) * zoom, h - 120))
+  const edit = pointing.kind === 'edit'
   const lines = pointing.startLine === pointing.endLine ? `line ${pointing.startLine}` : `lines ${pointing.startLine}-${pointing.endLine}`
   return (
     <div className="tour-layer">
@@ -48,7 +51,7 @@ export function PointAsk({ pointing, onSend, onClose }: { pointing: Pointing; on
         className="point-ask"
         style={{ left, top, width: WIDTH }}
         role="dialog"
-        aria-label="Ask the agent about this code"
+        aria-label={edit ? 'Ask the agent to change this code' : 'Ask the agent about this code'}
         onSubmit={e => {
           e.preventDefault()
           if (question.trim()) onSend(question)
@@ -61,14 +64,14 @@ export function PointAsk({ pointing, onSend, onClose }: { pointing: Pointing; on
           ref={input}
           value={question}
           maxLength={1000}
-          placeholder="Ask about this code…"
-          aria-label="Your question"
+          placeholder={edit ? 'How should it change?' : 'Ask about this code…'}
+          aria-label={edit ? 'What to change' : 'Your question'}
           onChange={e => setQuestion(e.target.value)}
           onKeyDown={e => e.key === 'Escape' && (e.stopPropagation(), onClose())}
         />
         <div className="point-ask-actions">
           <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn solid" disabled={!question.trim()}>Ask</button>
+          <button type="submit" className="btn solid" disabled={!question.trim()}>{edit ? 'Edit' : 'Ask'}</button>
         </div>
       </form>
     </div>

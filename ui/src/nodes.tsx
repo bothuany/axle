@@ -594,7 +594,7 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
       )}
 
       {!editing && rows.length > 0 && (
-        <div className="code" style={{ paddingTop: CODE_PAD, paddingBottom: CODE_PAD }}>
+        <div className="code nodrag nopan" style={{ paddingTop: CODE_PAD, paddingBottom: CODE_PAD }}>
           {rows.map(r => {
             if ('del' in r)
               return (

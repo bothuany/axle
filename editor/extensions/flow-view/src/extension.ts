@@ -33,6 +33,7 @@ import { FlowPanel } from './panel';
 import { PolyIndex, PolyProvider, POLY_LANGUAGES } from './poly/client';
 import { RoslynProvider, type FlowProvider, type FlowTarget } from './providers';
 import { registerResolveNames } from './resolveNames';
+import { registerSelectionActions } from './selectionAi';
 import { playTourFile } from './tourFile';
 import { FlowTrail } from './trail';
 
@@ -328,6 +329,7 @@ function wireClaudeCode({ context, log, panel, changes }: Flow) {
 	panel.onAnswer = (id, accept) => bridge.answer(id, accept);
 	panel.onMention = (file, start, end) => bridge.mention(file, start, end);
 	context.subscriptions.push(bridge,
+		...registerSelectionActions(),
 		vscode.commands.registerCommand('flow.ide.accept', () => bridge.answer(undefined, true)),
 		vscode.commands.registerCommand('flow.ide.reject', () => bridge.answer(undefined, false)),
 		vscode.commands.registerCommand('flow.ide.mention', () => {
