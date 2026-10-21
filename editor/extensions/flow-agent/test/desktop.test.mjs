@@ -32,7 +32,7 @@ test('settings: defaults are the badge on and the overlay off', () => {
 	assert.equal(s.opacity, 0.95)
 	assert.equal(s.details, false)
 	assert.deepEqual(s.show, d.DEFAULT_SHOW)
-	assert.deepEqual(s.autoHide, { noAgents: true, axleFocused: false })
+	assert.deepEqual(s.autoHide, { noAgents: true, axleFocused: true })
 })
 
 test('settings: badge and overlay switch on and off independently', () => {

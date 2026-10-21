@@ -91,7 +91,7 @@ export function readSettings(get: (key: string) => unknown): DesktopSettings {
 		opacity: typeof opacity === 'number' && Number.isFinite(opacity) ? Math.min(1, Math.max(0.3, opacity)) : 0.95,
 		theme: oneOf('overlay.theme', ['black', 'editor', 'dark', 'light'], 'black'),
 		show: flags('overlay.show', DEFAULT_SHOW),
-		autoHide: flags('overlay.autoHide', { noAgents: true, axleFocused: false }),
+		autoHide: flags('overlay.autoHide', { noAgents: true, axleFocused: true }),
 		details: bool('overlay.details', false),
 	};
 }
