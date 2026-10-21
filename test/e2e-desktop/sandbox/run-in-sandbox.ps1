@@ -1,5 +1,5 @@
 # Runs the Windows desktop e2e scenarios on a machine that is not yours: inside Windows Sandbox (scripts/sandbox-e2e.mjs maps the
-# folders and runs this at logon) and on a GitHub Actions Windows runner (the same staged folder, the same script).
+# folders and runs this at logon).
 #   -In        the staged folder: installer\Axle-Setup-*.exe, node\node.exe, repo\ (test code and demo script)
 #   -Out       where results.json, shots\ and the logs go
 #   -Shutdown  power the sandbox off at the end (Windows Sandbox only; never on a runner)

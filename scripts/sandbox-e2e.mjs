@@ -3,7 +3,7 @@
 // own desktop and nothing touches your Axle install or profile.
 //   npm run sandbox:e2e                           the newest dist/Axle-Setup-*.exe (npm run installer builds it)
 //   npm run sandbox:e2e -- --installer <exe>      another Setup
-//   npm run sandbox:e2e -- --stage <dir>          only stage the folder the sandbox maps (what CI runs the in-sandbox script on)
+//   npm run sandbox:e2e -- --stage <dir>          only stage the folder the sandbox maps
 // What it does: stages the installer, node.exe and the test code into a temp folder, writes a .wsb that maps that folder read-only
 // and an output folder read-write (no network), starts Windows Sandbox minimized, waits for <out>/done.json, and prints the
 // results and the screenshot paths. Turn Windows Sandbox on once: docs/building.md "Desktop end-to-end tests".
@@ -32,7 +32,7 @@ export function newestInstaller(dist = join(ROOT, 'dist')) {
 	return newest && join(dist, newest.n)
 }
 
-/** Lays out the folder the sandbox maps (also what the in-sandbox script is run on in CI): installer, node.exe and the test code. */
+/** Lays out the folder the sandbox maps: installer, node.exe and the test code. */
 export function stage(dir, installer) {
 	rmSync(dir, { recursive: true, force: true })
 	mkdirSync(join(dir, 'installer'), { recursive: true })
@@ -59,7 +59,7 @@ async function main() {
 	const args = process.argv.slice(2)
 	const flag = name => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined)
 	if (!isWin) {
-		fail('Windows Sandbox is a Windows feature. On Linux and macOS these scenarios run on GitHub Actions (.github/workflows/desktop-e2e.yml).')
+		fail('Windows Sandbox is a Windows feature. On Linux the desktop scenarios run in Docker: npm run docker:e2e.')
 	}
 	const installer = flag('--installer') ? resolve(flag('--installer')) : newestInstaller()
 	if (!installer || !existsSync(installer)) {

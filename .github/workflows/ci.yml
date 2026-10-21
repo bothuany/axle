@@ -46,6 +46,10 @@ jobs:
       - name: Update service (version check, update files)
         run: npm run test:update
 
+      # The desktop e2e harness itself (no windows: the scenarios run in Docker or Windows Sandbox, never here).
+      - name: Desktop e2e harness
+        run: npm run test:e2e-unit
+
       - name: Analyzer
         run: dotnet build analyzer -nologo -v q
 
