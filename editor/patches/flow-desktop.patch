@@ -1300,10 +1300,10 @@ index 74be4ca..60cbf66 100644
  
 diff --git a/src/insilodeMigrate.ts b/src/insilodeMigrate.ts
 new file mode 100644
-index 0000000..ecd097a
+index 0000000..a0cb80e
 --- /dev/null
 +++ b/src/insilodeMigrate.ts
-@@ -0,0 +1,134 @@
+@@ -0,0 +1,135 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Insilode: what an Axle install left behind (the product was called Axle until 0.4.x).
 + *
@@ -1412,7 +1412,8 @@ index 0000000..ecd097a
 +/** Never throws: a start must not fail because an old folder could not be copied. It is tried again at the next start. */
 +export function migrateLegacyData(i: MigrationInput): MigrationResult {
 +	const result: MigrationResult = { copied: [], failed: [] };
-+	if (i.isPortable || i.env['VSCODE_PORTABLE']) {
++	// A build run from source (VSCODE_DEV) works on folders of its own ("Insilode Dev", ".insilode-dev"): it never takes a person's real data.
++	if (i.isPortable || i.env['VSCODE_PORTABLE'] || i.env['VSCODE_DEV']) {
 +		return result;
 +	}
 +	try {

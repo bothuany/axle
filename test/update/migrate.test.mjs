@@ -95,6 +95,9 @@ test('nothing to migrate, a chosen folder and portable mode are left alone', () 
 	const p = axleMachine()
 	assert.deepEqual(migrateLegacyData(p.input({ isPortable: true })), { copied: [], failed: [] })
 	assert.deepEqual(migrateLegacyData(p.input({ env: { APPDATA: p.appData, VSCODE_PORTABLE: '/x' } })), { copied: [], failed: [] })
+	// A build run from source uses folders of its own and must not copy a person's real data into them.
+	assert.deepEqual(migrateLegacyData(p.input({ env: { APPDATA: p.appData, VSCODE_DEV: '1' } })), { copied: [], failed: [] })
+	assert.ok(!existsSync(join(p.appData, 'Insilode')) && !existsSync(join(p.home, '.insilode')))
 })
 
 test('where the user data folder is, on each platform', () => {
