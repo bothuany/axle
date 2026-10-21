@@ -49,3 +49,27 @@ export async function shot(page, results, name) {
 	await page.screenshot({ path: `${results.out}/${file}` })
 	return file
 }
+
+const WELCOME = /Welcome to VS Code|Sign in to use GitHub Copilot/
+
+/** Whether VS Code's first-run "Welcome" dialog (a Copilot sign-in) is on screen. */
+export async function welcomeDialog(page) {
+	return (await page.getByText(WELCOME).count()) > 0
+}
+
+/** Closes that dialog the way a person would, so a scenario that is not about onboarding can go on. Returns whether it was there. */
+export async function dismissWelcome(page) {
+	if (!await welcomeDialog(page)) {
+		return false
+	}
+	for (let i = 0; i < 4 && await welcomeDialog(page); i++) {
+		const skip = page.getByText(/^(Continue without Signing In|Skip|Next|Get Started|Finish|Done)$/i).first()
+		if (await skip.count()) {
+			await skip.click({ force: true }).catch(() => undefined)
+		} else {
+			await page.keyboard.press('Escape')
+		}
+		await page.waitForTimeout(800)
+	}
+	return true
+}

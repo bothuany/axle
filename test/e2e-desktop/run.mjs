@@ -69,13 +69,15 @@ async function main() {
 	const settings = { 'flow.agents.desktop.overlay.enabled': true, 'flow.agents.desktop.overlay.autoHide': { noAgents: true, axleFocused: false } }
 	let exe, args, cwd, env
 	let installDir
+	/** The window as it was when a scenario failed, for the comment's gallery. */
+	const failedShots = id => readdirSync(join(out, 'shots')).filter(n => n.startsWith(`${label}-${id}-failed`)).map(n => `shots/${n}`)
 	const record = (id, title, r) => results.add({ id, title, ms: Date.now() - r.t0, ...r.value })
 	const timed = async (id, title, fn) => {
 		const t0 = Date.now()
 		try {
 			record(id, title, { t0, value: await fn() })
 		} catch (e) {
-			record(id, title, { t0, value: { status: 'fail', detail: String(e.message).split('\n').slice(0, 12).join(' / '), shots: [] } })
+			record(id, title, { t0, value: { status: 'fail', detail: String(e.message).split('\n').slice(0, 12).join(' / '), shots: failedShots(id) } })
 		}
 	}
 

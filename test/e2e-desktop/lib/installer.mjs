@@ -7,7 +7,7 @@ import { createServer } from 'node:http'
 import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { launchAxle, sleep, until } from './app.mjs'
-import { runCommand, shot } from './ui.mjs'
+import { dismissWelcome, runCommand, shot } from './ui.mjs'
 
 /** Inno Setup's command line for a silent per-user install: no dialogs, no restart, no "launch Axle" at the end. */
 export function installArgs(dir, log) {
@@ -100,6 +100,7 @@ export async function updateFlow({ setup, dir, out, label, version, workdir }) {
 	const app = await launchAxle({ exe: join(dir, 'Axle.exe'), out, updates: true, env: { AXLE_UPDATE_URL: base }, settings: { 'update.mode': 'manual' } })
 	try {
 		const page = await app.workbench()
+		await dismissWelcome(page)
 		const before = axlePids(dir)
 		await runCommand(page, 'Check for Updates')
 		await until('the update file to be requested', () => server.log.some(p => p.endsWith('update-win32-x64-user-axle.json')), { ms: 60000 })

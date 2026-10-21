@@ -4,7 +4,7 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { until, sleep } from './app.mjs'
 import { movePointer } from './pointer.mjs'
-import { answerPrompt, findCanvas, runCommand, shot, tabTitles } from './ui.mjs'
+import { dismissWelcome, findCanvas, runCommand, shot, tabTitles, welcomeDialog } from './ui.mjs'
 
 const pass = (detail, shots = []) => ({ status: 'pass', detail, shots })
 
@@ -35,16 +35,21 @@ export async function branding(ctx) {
 	// Give a startup editor time to open itself before asserting that none did.
 	await sleep(3000)
 	const tabs = await tabTitles(page)
+	const picture = await shot(page, ctx.results, 'branding')
+	if (await welcomeDialog(page)) {
+		throw new Error(`VS Code's first-run Welcome dialog ("Welcome to VS Code", sign in to use GitHub Copilot) opens over Axle: ${picture}`)
+	}
 	const onboarding = tabs.filter(t => /welcome|get started|walkthrough/i.test(t))
 	if (onboarding.length || await page.locator('.gettingStartedContainer').count()) {
 		throw new Error(`VS Code's onboarding opened: ${onboarding.join(', ') || 'the Get Started page'}`)
 	}
-	return pass(`title "${title}", tabs: ${tabs.length ? tabs.join(' | ') : 'none'}`, [await shot(page, ctx.results, 'branding')])
+	return pass(`title "${title}", tabs: ${tabs.length ? tabs.join(' | ') : 'none'}`, [picture])
 }
 
 /** The flow canvas opens (as an editor tab where this build does that) and a tour plays on it. */
 export async function canvasTour(ctx) {
 	const page = await ctx.app.workbench()
+	await dismissWelcome(page)
 	const file = tourFile(ctx.folder)
 	await runCommand(page, 'Axle: Play Tour from File')
 	// With a tour file in the workspace the command lists it; the file we wrote is the only one.
@@ -79,6 +84,7 @@ async function saveOverlayShot(ctx, overlay, name) {
 /** The status island: it appears with the fake agents, and (where this build has the controls) minimizes, drags, closes and hides while Axle is focused. */
 export async function island(ctx) {
 	const page = await ctx.app.workbench()
+	await dismissWelcome(page)
 	const steps = []
 	const shots = []
 	const direct = ctx.app.mode === '_electron'
