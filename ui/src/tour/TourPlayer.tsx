@@ -241,7 +241,10 @@ export function useTourPlayer(env: TourEnv & { changed: FlowNode[] }) {
       const seen = cards.some(n => {
         const w = Number(n.style?.width) || 0
         const h = Number(n.style?.height) || 0
-        return n.position.x * zoom + x < cw && (n.position.x + w) * zoom + x > 0 && n.position.y * zoom + y < ch && (n.position.y + h) * zoom + y > 0
+        // A sliver at the edge does not count: the middle of the card has to be in view.
+        const mx = (n.position.x + w / 2) * zoom + x
+        const my = (n.position.y + h / 2) * zoom + y
+        return mx > 0 && mx < cw && my > 0 && my < ch
       })
       if (cards.length && !seen) void rf.fitView({ nodes: cards, padding: 0.15, maxZoom: 1, duration: panMs })
       arrive(sig, seen || !cards.length ? 0 : panMs)

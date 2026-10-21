@@ -223,7 +223,7 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .tour-cursor-name { position: absolute; left: 20px; top: 21px; padding: 2px 5px 3px; border-radius: 4px; background: var(--ink, var(--tour-ink)); color: color-mix(in srgb, var(--ink, var(--tour-ink)) 18%, #000); font: 650 10.5px/1 var(--fl-ui); white-space: nowrap; box-shadow: 0 1px 2px rgb(0 0 0 / .35); }
 .tour-layer { position: absolute; inset: 0; z-index: 14; pointer-events: none; overflow: hidden; }
 .tour-caption { position: absolute; width: 360px; max-width: calc(100% - 16px); padding: 10px 13px 11px; border: 0; border-radius: 10px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); color: var(--fl-text); font-size: 12.5px; line-height: 1.5; pointer-events: auto; animation: tour-in .18s ease-out; }
-.tour-caption.missing { opacity: .85; border-style: dashed; }
+.tour-caption.missing { outline: 1px dashed var(--fl-line-strong); outline-offset: -1px; }
 .tour-caption-head { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
 .tour-caption-arrow { flex: none; }
 .tour-caption-head .tour-mark { margin-left: auto; }

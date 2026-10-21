@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import type { TourStep } from '../types'
 import { Arrow } from './Arrow'
 import { Markdown } from './Markdown'
+import { BAR_RESERVE, CAPTION_W } from './geometry'
 import { stepMark } from './player'
 
 export interface StepAsk {
@@ -14,6 +15,7 @@ export interface StepAsk {
 
 export function Caption({ step, place, asking, maxH, ask, onSize }: { step: TourStep; place: { left: number; top: number; side: string } | 'centre'; asking?: string; maxH?: number; ask?: StepAsk; onSize?: (h: number) => void }) {
   const [open, setOpen] = useState(false)
+  const [height, setHeight] = useState(150)
   const [question, setQuestion] = useState('')
   const root = useRef<HTMLDivElement>(null)
   const body = useRef<HTMLDivElement>(null)
@@ -30,10 +32,14 @@ export function Caption({ step, place, asking, maxH, ask, onSize }: { step: Tour
   // The bubble's own height, so the layer can place it fully inside the canvas.
   useEffect(() => {
     const el = root.current
-    if (!el || !onSize) return
-    const ro = new ResizeObserver(() => onSize(el.offsetHeight))
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      setHeight(el.offsetHeight)
+      onSize?.(el.offsetHeight)
+    })
     ro.observe(el)
-    onSize(el.offsetHeight)
+    setHeight(el.offsetHeight)
+    onSize?.(el.offsetHeight)
     return () => ro.disconnect()
   }, [onSize])
 
@@ -45,7 +51,14 @@ export function Caption({ step, place, asking, maxH, ask, onSize }: { step: Tour
     seen.current = notes
   }, [notes])
 
-  const style: CSSProperties = { ...(place === 'centre' ? { left: 0, right: 0, top: `max(8px, min(18%, calc(100% - ${(maxH ?? 440) + 72}px)))`, margin: '0 auto' } : { left: place.left, top: place.top }), ...(maxH ? { maxHeight: maxH } : {}) }
+  // The layer's own size is what counts: React Flow's measured width can lag a resize of the editor group, so the position is
+  // clamped in CSS as well, against the real size of the layer. A canvas narrower than the bubble shrinks the bubble (max-width).
+  const style: CSSProperties = {
+    ...(place === 'centre'
+      ? { left: 0, right: 0, top: `max(8px, min(18%, calc(100% - ${(maxH ?? 440) + 72}px)))`, margin: '0 auto' }
+      : { left: `max(8px, min(${place.left}px, calc(100% - ${CAPTION_W + 8}px)))`, top: `max(8px, min(${place.top}px, calc(100% - ${height + BAR_RESERVE}px)))` }),
+    ...(maxH ? { maxHeight: maxH } : {}),
+  }
   return (
     <div ref={root} className={`tour-caption${step.state === 'missing' ? ' missing' : ''}`} data-side={place === 'centre' ? 'centre' : place.side} style={style} role="status" aria-live="polite">
       <div className="tour-caption-head">
