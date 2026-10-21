@@ -77,7 +77,7 @@ export function routeEdge(a: Anchors, dir: 'LR' | 'TB', par = 0, pars = 1): Rout
     startDir = { x: 1, y: 0 }
     endDir = { x: -1, y: 0 }
   } else if (dir === 'LR') {
-    const sy = (rowY ?? s.y + (a.from.node ? 22 : s.h / 2)) + (rowY === undefined ? off : 0)
+    const sy = (rowY ?? s.y + (a.from.node ? Math.min(22, s.h / 2) : s.h / 2)) + (rowY === undefined ? off : 0)
     const ty = tHead + off
     if (t.x >= s.x + s.w + 10) {
       start = { x: s.x + s.w, y: sy }

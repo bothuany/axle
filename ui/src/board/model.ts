@@ -408,7 +408,9 @@ export function buildLayout(spec: BoardSpec, o: LayoutOptions): Layout {
     const rows = all.slice(0, cap)
     const more = all.length - rows.length
     const size = cardSize(n, rows, more, o.members)
-    vnodes.set(n.id, { id: n.id, node: n, box: { x: 0, y: 0, ...size }, rel: { x: 0, y: 0 }, rows, more, parent: chain.length ? chain[chain.length - 1] : undefined })
+    // The states of a state diagram are rounded unless the agent chose a shape.
+    const drawn = spec.kind === 'state' && !n.shape ? { ...n, shape: 'round' as const } : n
+    vnodes.set(n.id, { id: n.id, node: drawn, box: { x: 0, y: 0, ...size }, rel: { x: 0, y: 0 }, rows, more, parent: chain.length ? chain[chain.length - 1] : undefined })
     items.set(n.id, { id: n.id, w: size.w, h: size.h })
   }
 

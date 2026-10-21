@@ -254,3 +254,23 @@ test('board-steps: a new set of steps is a new walk; the same steps redrawn are 
 	assert.equal(steps.stepsSignature(a), steps.stepsSignature(JSON.parse(JSON.stringify(a))))
 	assert.notEqual(steps.stepsSignature(a), steps.stepsSignature([{ ...a[0], caption: 'other' }]))
 })
+
+test('board-state: states are rounded unless a shape is given, pseudo-states are marks, guards read [g] label, self transitions route', () => {
+	const spec = {
+		version: 1, kind: 'state', title: 'S',
+		nodes: [{ id: 's', label: 'start', shape: 'initial' }, { id: 'a', label: 'Draft' }, { id: 'b', label: 'Paid', shape: 'rect' }, { id: 'e', label: 'end', shape: 'final' }],
+		edges: [{ from: 's', to: 'a' }, { from: 'a', to: 'b', label: 'pay', guard: 'amount > 0' }, { from: 'b', to: 'b', label: 'retry' }, { from: 'b', to: 'e' }],
+	}
+	const l = model.buildLayout(spec, none)
+	const shape = id => l.nodes.find(n => n.id === id).node.shape
+	assert.deepEqual(['s', 'a', 'b', 'e'].map(shape), ['initial', 'round', 'rect', 'final'])
+	assert.equal(spec.nodes[1].shape, undefined, 'the board itself is not changed')
+	assert.equal(protocol.edgeText(l.edges[1]), '[amount > 0] pay')
+	for (const e of l.edges) {
+		const r = route.routeEdge({ from: l.nodes.find(n => n.id === e.from), to: l.nodes.find(n => n.id === e.to), edge: e }, 'LR')
+		assert.ok(Number.isFinite(r.mid.x) && Number.isFinite(r.mid.y), `edge ${e.from}>${e.to} has a finite route`)
+	}
+	const mark = l.nodes.find(n => n.id === 's').box
+	const out = route.routeEdge({ from: l.nodes.find(n => n.id === 's'), to: l.nodes.find(n => n.id === 'a'), edge: l.edges[0] }, 'LR')
+	assert.ok(out.start.y >= mark.y && out.start.y <= mark.y + mark.h, 'an edge leaves a mark through its middle, not below it')
+})
