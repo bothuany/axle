@@ -194,3 +194,14 @@ test('mermaid-import: the result is a valid board: ids, orders and fragments sur
 		assert.ok(p.spec.nodes.length >= 2 && p.spec.edges.length >= 1)
 	}
 })
+
+test('mermaid-import: a diagram bigger than a board is refused while it is read, not after millions of edges', () => {
+	const ids = prefix => Array.from({ length: 2500 }, (_, i) => `${prefix}${i}`).join('&')
+	const started = Date.now()
+	assert.throws(() => read(`flowchart LR\n${ids('a')}-->${ids('b')}`), /more than a board holds \(400 nodes, 1200 edges, 100 groups\)/)
+	assert.ok(Date.now() - started < 1500, 'it stops early')
+	assert.throws(() => read('stateDiagram-v2\n' + Array.from({ length: 500 }, (_, i) => `S${i} --> S${i + 1}`).join('\n')), /more than a board holds/)
+	const many = 'sequenceDiagram\n' + Array.from({ length: 700 }, (_, i) => `P${i}->>P${i + 1}: x`).join('\n')
+	assert.throws(() => read(many), /more than a board holds/)
+	assert.equal(read('flowchart LR\n' + Array.from({ length: 100 }, (_, i) => `N${i} --> N${i + 1}`).join('\n')).board.edges.length, 100, 'a big but fitting diagram still reads')
+})

@@ -8,6 +8,17 @@
 
 export const MAX_MERMAID_CHARS = 60_000;
 export const MAX_MERMAID_LINES = 800;
+/** The board's own limits (spec.ts), checked while reading: a line like `a&b&c --> d&e&f` must not build millions of edges before parseBoard looks. */
+const MAX_NODES = 400;
+const MAX_EDGES = 1200;
+const MAX_GROUPS = 100;
+
+/** Throws once a diagram holds more than a board can. */
+function within(nodes: unknown[], edges: unknown[], groups: unknown[] = []): void {
+	if (nodes.length > MAX_NODES || edges.length > MAX_EDGES || groups.length > MAX_GROUPS) {
+		throw new Error(`The Mermaid diagram has more than a board holds (${MAX_NODES} nodes, ${MAX_EDGES} edges, ${MAX_GROUPS} groups). Split it into several boards.`);
+	}
+}
 
 /** A board as an agent would send it (before parseBoard checks it). */
 export interface ImportedBoard {
@@ -161,6 +172,7 @@ function sequence(rest: Line[]): ImportResult {
 	let order = 0;
 	let frames = 0;
 	for (const { no, text } of rest) {
+		within(nodes, edges, groups);
 		let m: RegExpExecArray | null;
 		if (/^(autonumber|activate|deactivate|box|end box)\b/.test(text)) {
 			continue;
@@ -263,6 +275,7 @@ function state(rest: Line[]): ImportResult {
 		return id;
 	};
 	for (const { no, text } of rest) {
+		within(nodes, edges, groups);
 		let m: RegExpExecArray | null;
 		if ((m = /^direction\s+(LR|RL|TB|BT|TD)\s*$/.exec(text))) {
 			direction = m[1] === 'LR' || m[1] === 'RL' ? 'LR' : 'TB';
@@ -469,6 +482,7 @@ function flow(head: string, rest: Line[]): ImportResult {
 			n = { id, label: id, ...(scope() ? { group: scope() } : {}) };
 			known.set(id, n);
 			nodes.push(n);
+			within(nodes, edges, groups);
 		}
 		// A node named inside a subgraph belongs to it, even when an earlier line already drew it.
 		if (scope() && n.group === undefined) {
@@ -523,6 +537,7 @@ function flow(head: string, rest: Line[]): ImportResult {
 				}
 				for (const a of from.ids) {
 					for (const b of to.ids) {
+						within(nodes, edges, groups);
 						edges.push({ from: a, to: b, ...(arrow.label ? { label: arrow.label } : {}), ...(arrow.dashed ? { style: 'dashed' } : {}), ...(arrow.thick ? { kind: 'writes' } : {}) });
 					}
 				}
