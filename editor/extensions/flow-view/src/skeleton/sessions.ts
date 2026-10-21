@@ -55,11 +55,11 @@ export const newSession = (session: string): SkeletonSession => ({ session, stag
 const SIGNATURES = 'and on EVERY type you add or change the members the developer is to write, as signatures: for a new type all its fields and methods, for an existing type only the members this change adds to it. Each member is an object: "members": [{"text": "findByStatus(status: BillStatus): List<Bill>"}, {"text": "amount: BigDecimal"}]';
 
 /** The developer reads from the agent which types are new and which existing types get what, so a "matches" never looks like the agent wrote it. */
-const TELL = 'tell the developer which types are new and which existing types get which new members';
+const TELL = 'tell the developer which types are new, the file path each new type goes in (draw_board lists them), and which existing types get which new members';
 
 /** What draw_board adds to its answer for a skeleton design: what the design asks of the developer, or why it must be redrawn. */
 /** `taken`: the board is the design even so (a redraw, or a second try with the same empty types). */
-export function drawnAnswer(summary: DesignSummary | undefined, boardId: string, taken = false): string {
+export function drawnAnswer(summary: DesignSummary | undefined, boardId: string, taken = false, rel: (file: string) => string = f => f): string {
 	if (!summary) {
 		return `Skeleton first: this is the design (board "${boardId}"). The code index is still loading, so the board colours it in a moment. Now STOP and ${TELL}, as you planned them.`;
 	}
@@ -71,7 +71,7 @@ export function drawnAnswer(summary: DesignSummary | undefined, boardId: string,
 	}
 	return [
 		`Skeleton first: this is the design (board "${boardId}"). On the board, types that already exist stay neutral and only the members this change adds are marked; everything new is missing until the developer writes it.`,
-		designText(summary),
+		designText(summary, rel),
 		`Now STOP: do not create or edit any file. In your reply ${TELL} (as listed above), then that they write them with empty bodies and say "check", "hand over" or "just do it".`,
 	].filter(Boolean).join('\n');
 }

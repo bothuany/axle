@@ -57,6 +57,8 @@ export interface BoardNode {
 	check?: CheckState;
 	checkNote?: string;
 	warn?: string;
+	/** Host-only (skeleton first): the file a new type belongs in (workspace-relative), what that follows, and whether clicking offers to create it. */
+	target?: { path: string; reason: string; create?: boolean };
 }
 
 export interface BoardEdge {

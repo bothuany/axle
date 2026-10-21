@@ -62,11 +62,11 @@ test('the design asks for members on every new or changed type, with the exact f
 	const text = sessions.toolAnswer(true, sessions.newSession('m'))
 	assert.match(text, /on EVERY type you add or change the members the developer is to write/)
 	assert.match(text, /"members": \[\{"text": "findByStatus\(status: BillStatus\): List<Bill>"\}/)
-	assert.match(text, /which types are new and which existing types get which new members/)
+	assert.match(text, /which types are new, the file path each new type goes in .* and which existing types get which new members/)
 })
 
 test('draw_board\'s answer: new and existing types for the developer, and a new type without members is turned down', () => {
-	const summary = { added: ['BillReportDTO'], extended: [{ name: 'BillRepository', members: ['findForReport(from: LocalDate): List<Bill>'] }], context: ['CustomerClient'], empty: [] }
+	const summary = { added: ['BillReportDTO'], extended: [{ name: 'BillRepository', members: ['findForReport(from: LocalDate): List<Bill>'] }], context: ['CustomerClient'], empty: [], paths: [{ name: 'BillReportDTO', file: '/w/billing/src/main/java/com/acme/billing/dtos/BillReportDTO.java', reason: 'next to BillResponseDTO' }] }
 	const taken = sessions.drawnAnswer(summary, 'skeleton-x')
 	assert.match(taken, /this is the design \(board "skeleton-x"\)/)
 	assert.match(taken, /New types the developer writes: BillReportDTO\./)

@@ -204,11 +204,39 @@ Review follow-ups in the same change:
 - If reading the index fails while the design is drawn, the board is still drawn and the answer just has no summary.
 - At the hand-over, members that were already there are kept as the developer's declarations too, as before (they used to read as "matches"): an agent that changes an existing signature gets a warning.
 
+## Where each file goes, and live updates (2026-10-21)
+
+A developer used it on a CRM (analytics-service) and had to ask the agent which path to create the controller in; and a file they had created still read MISSING. The exact file of that report was not available, so the second case was not reproduced as such: what follows is what was found to drop or delay a written type, and what was made faster.
+
+**Paths** (`src/skeleton/paths.ts`, pure). Every planned type that is new gets a target file, worked out from the layout the project already has, never invented:
+- **Module**: the one the plan's existing types live in (a `CustomerClient` that three services have is taken in the module the plan is about: the plan's types that exist, then a module named in the title, then the module of the file the developer has open).
+- **Package**: that of the siblings of the same kind in the module (by the name's last word: Controller, Service, Impl, Dto, Client, Config, ...; by the node kind when the name says nothing). An `Impl` goes where the project keeps its impls, else under its interface's package in `impl`. With no sibling, the module's base package plus a folder spelled the way the module spells its own (`controllers` against `controller`).
+- **File**: the directory of a sibling with its package path swapped, a file name in the siblings' style. A label that is not an identifier gets no path. The layout is the code as it was when the design was drawn (the baseline), so a type the developer wrote in the wrong place never becomes the convention.
+- The board shows the path on the node (`＋ …/controller/BillUserReportController.java`, the whole path and why in the tooltip); `draw_board`'s answer and `check_skeleton` list them, and the agent is told to pass them on and not invent its own.
+- **Clicking** a new type sends the node id to the host, which works out the path again from the diff, refuses a path outside the open folders, never overwrites a file, and offers "Create file" (the package line and an empty declaration: Java, C#, TypeScript, Python) or "Copy path". The developer writes the members. The webview never names a path, and an agent cannot send one (`target` is host-only, like `check`).
+- **A new type written in another module, or in another package than its siblings'**, is DIFFERS with the reason. The package check applies only when the path came from siblings, not from the fallback convention.
+
+**Live.** Verified: a file that does not parse lost its type (the first item). Improved: the other two.
+- **A file that does not parse lost its type.** tree-sitter turns a file with a broken import or a call cut off mid-typing into one ERROR node whose tokens are flat, so `class_declaration` is gone and the type was not in the index at all. `src/poly/javaRecover.ts` now reads the declarations and members of the text itself when the tree has an error, and only adds what the tree did not find. The members are not taken for accessors, since their bodies were never read.
+- **A file written outside the editor** (IntelliJ, a formatter, git, the shell) fires no save in this window. The index's own watcher did catch it, but only after it re-listed every entry point, and the file never counted as "written since the design" (which the rename rule and the choice between same-named types depend on). The skeleton host now watches code files itself (create, change, delete), marks them as written, re-reads them and recolours, about a second after the write.
+- **Nothing happened while typing.** The index read only the disk. A new worker op, `overlay`, reads an editor buffer as the file's content until the next save (its mtime never equals a file's, so it is never cached); the host sends the buffers of the files being typed in after a 500 ms pause (`ChangeBatcher`, `src/skeleton/changes.ts`). Closing a file without saving reads the disk again.
+
+Probe (web mode, Claude Code 2.1.306, Haiku 5.5 from the demo copy's `.claude/settings.json`, auto mode; a copy of the two-service CRM fixture; screenshots in `docs/design/skeleton-paths/`):
+- The request "a bill + user report in analytics-service" through the dock (Skeleton on): the agent called `check_skeleton`, drew four new types and stopped. Every node shows `＋ …/controller/BillUserReportController.java` and so on (1).
+- A click on the controller offers "Create file" or "Copy path" (2); "Create file" wrote the package line and an empty class and opened it.
+- A write from the shell, as another tool would (3): the members of the controller ticked within two seconds; the DTO written the same way turned MATCHES (4, "1 matches · 3 missing").
+- Found while probing: a first board of only new types, with no module on it, got no paths. It now takes the module from any text on the board, then from the open file, and otherwise `draw_board` tells the agent to put the module in the title (test `a plan that names no module`).
+- Not probed live: typing without saving (covered by the `overlay` test only), and the terminal-started Claude (no dock row, so no reminders: it skipped the design and wrote the files, as the design doc says an agent that skips the call does).
+
+**Differs, not missing.** A planned method that is not there by name but has the same parameters under another name (`getReportById` for `getReportByCustomerId`), or a name that is close, pairs with it and shows DIFFERS with the code's text.
+
+Tests: `test/skeleton-paths.test.mjs` (golden `paths-crm`, `broken-java`; fixture `types-fixtures/skeleton-crm`: a file with errors, a newly created file, an unsaved buffer, a deleted one, wrong module and package, the batcher with mock timers).
+
 ## Known gaps
 
 - A redraw while the developer writes the skeleton becomes the plan even when it has new types without members; the answer asks for members, but the board follows the agent. If the index is still loading when the design is drawn, the turn-down cannot happen then; `check_skeleton` names the empty types later.
 - TypeScript interface method signatures are not in the type graph, so a planned interface method shows as missing. This needs work in the poly index.
 - Codex gets no approval-time reminder; it has only the server instructions.
 - The stages live in window memory, so a reload ends them.
-- A file written outside the editor (not saved in it) recolours only on the next save or index refresh.
+- Only Java is read from a file that does not parse; the other languages rely on tree-sitter's own recovery.
 - Revert leaves a body that may use the reverted parameter. The agent is not told automatically; the warning text says what changed.

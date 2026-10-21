@@ -72,7 +72,7 @@ export const CardNode = memo(function CardNode({ data }: NodeProps<CardNodeT>) {
       <div
         className="bc-head"
         style={{ height: HEADER_H + (n.detail ? DETAIL_H : 0) }}
-        title={[n.label, n.detail, n.file ? `${n.file}${n.line ? ':' + n.line : ''}` : '', n.note, checkTitle(n)].filter(Boolean).join('\n')}
+        title={[n.label, n.target ? `${n.target.path}\n${n.target.reason}${n.target.create ? '\nClick to create this file or copy its path' : ''}` : n.detail, n.file ? `${n.file}${n.line ? ':' + n.line : ''}` : '', n.note, checkTitle(n)].filter(Boolean).join('\n')}
         onClick={() => a.select(v.id, n)}
         onDoubleClick={() => data.canFocus && a.focus(v.id)}
       >

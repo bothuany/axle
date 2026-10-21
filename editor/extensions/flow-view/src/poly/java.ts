@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { Ann, CallFact, FieldFact, FileFacts, FuncFact, ParamFact, TypeFact } from './model';
+import { recoverJava } from './javaRecover';
 import { endLine, line, receiverText, same, splitType, stringValue, walk, type TsNode } from './ts';
 
 function annotations(mods: TsNode | null | undefined): Ann[] {
@@ -108,11 +109,19 @@ export function extractJava(root: TsNode, file: string, mtime: number): FileFact
 			}
 		}
 	}
+	let broken = false;
 	walk(root, n => {
+		if (n.type === 'ERROR') {
+			broken = true;
+		}
 		if (n.type === 'class_declaration' || n.type === 'interface_declaration' || n.type === 'enum_declaration' || n.type === 'record_declaration') {
 			typeDecl(n, facts);
 		}
 	});
+	// A file that does not parse (half-typed, a broken import) still declares its types: the tree lost them, so read them from the text.
+	if (broken) {
+		recoverJava(root.text, file, line(root), facts);
+	}
 	return facts;
 }
 

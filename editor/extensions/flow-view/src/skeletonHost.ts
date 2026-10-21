@@ -7,9 +7,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { promises as fs } from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import type { BoardSpec } from './board/spec';
 import type { BoardStore } from './board/store';
+import { ChangeBatcher } from './skeleton/changes';
+import { stubFor } from './skeleton/paths';
 import { goneIn, headersOf, locate, revertRange, stillThere, warningText, type Header, type Warning } from './skeleton/guard';
 import { baselineOf, decorate, designSummary, extendBaseline, matchPlan, type DesignSummary } from './skeleton/match';
 import { drawnAnswer, newSession, toolAnswer, type SkeletonSession, type SkeletonStep, type SkeletonTools } from './skeleton/sessions';
@@ -20,6 +23,9 @@ const SETTING = 'axle.skeletonFirst';
 /** Agent sessions with a stage at once: more is a caller making up ids. */
 const MAX_SESSIONS = 20;
 const RECOMPUTE_MS = 250;
+/** Typing settles for this long before the buffer is read; a save or a file written outside the editor waits less. */
+const TYPING_MS = 500;
+const DISK_MS = 250;
 /** The files the code index reads: a save of anything else changes no type. */
 const CODE_FILE = /\.(cs|ts|tsx|js|jsx|mjs|cjs|java|kt|py|go|rs|php|rb)$/i;
 
@@ -35,15 +41,22 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 	private readonly timers = new Map<string, NodeJS.Timeout>();
 	private warningSeq = 0;
 	private readonly disposables: vscode.Disposable[] = [];
+	/** Buffers being typed in (latest document per file) and files written or created outside the editor: each burst is read once. */
+	private readonly typing: ChangeBatcher<vscode.TextDocument>;
+	private readonly onDisk: ChangeBatcher<string>;
+	/** Files whose unsaved text the index read: closing them without saving puts the disk version back. */
+	private readonly overlaid = new Set<string>();
 
 	constructor(private readonly boards: BoardStore, private readonly types: TypeService, private readonly log: vscode.LogOutputChannel) {
+		this.typing = new ChangeBatcher(TYPING_MS, batch => this.typed(batch), e => this.warn(e));
+		this.onDisk = new ChangeBatcher(DISK_MS, batch => this.written([...batch.values()]), e => this.warn(e));
 		boards.setDecorator((id, spec) => {
 			const s = this.byBoard(id);
 			return s && s.stage !== 'design' && s.diff ? decorate(spec, s.diff, [
 				...s.warnings.map(w => ({ owner: w.owner, name: w.name, text: `${warningText(w)}\nTo put yours back: ask the agent, or run "Axle: Revert an Agent's Change to Your Declaration".` })),
 				// A keep the agent passed on stays visible: the developer can see what was kept, not only what is still open.
 				...s.accepted.map(w => ({ owner: w.owner, name: w.name, text: `Kept (the agent was told to keep it): ${warningText(w)}` })),
-			]) : spec;
+			], f => vscode.workspace.asRelativePath(f, false)) : spec;
 		});
 		this.disposables.push(
 			{ dispose: () => boards.setDecorator(undefined) },
@@ -61,6 +74,22 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 				}
 			}),
 			vscode.workspace.onDidSaveTextDocument(d => void this.saved(d)),
+			// While typing: the buffer is read after a short pause, so a type turns from missing to written as it is written.
+			vscode.workspace.onDidChangeTextDocument(e => {
+				const d = e.document;
+				if (e.contentChanges.length && d.uri.scheme === 'file' && CODE_FILE.test(d.uri.fsPath) && this.live()) {
+					this.typing.add(fileKey(d.uri.fsPath), d);
+				}
+			}),
+			vscode.workspace.onDidCloseTextDocument(d => {
+				// A discarded buffer is usually reverted before it closes (not dirty any more), so the mark alone decides.
+				if (this.overlaid.delete(fileKey(d.uri.fsPath))) {
+					this.onDisk.add(fileKey(d.uri.fsPath), d.uri.fsPath);
+				}
+			}),
+			// A file another tool wrote or created (IntelliJ, a formatter, git, the shell) never fires a save in this window.
+			...this.watchDisk(),
+			vscode.commands.registerCommand('flow.skeleton.createFile', (board: unknown, node: unknown) => this.createFile(board, node)),
 			types.onDidChange(() => [...this.sessions.values()].forEach(s => s.stage !== 'design' && this.changed(s))),
 			// flow-agent: the agent's switch went off, so its change leaves skeleton first.
 			vscode.commands.registerCommand('flow.skeleton.finish', (session: unknown) => {
@@ -71,6 +100,51 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			}),
 			vscode.commands.registerCommand('flow.skeleton.revert', () => this.revertPicked()),
 		);
+	}
+
+	/** Whether any agent session is comparing a design with the code now. */
+	private live() {
+		return [...this.sessions.values()].some(s => s.stage !== 'design');
+	}
+
+	private warn(e: unknown) {
+		this.log.warn(`skeleton: ${(e as Error).message ?? e}`);
+	}
+
+	private watchDisk(): vscode.Disposable[] {
+		const watcher = vscode.workspace.createFileSystemWatcher('**/*.{cs,ts,tsx,js,jsx,mjs,cjs,java,kt,py,go,rs,php,rb}');
+		const seen = (u: vscode.Uri) => {
+			if (u.scheme === 'file' && this.live() && vscode.workspace.getWorkspaceFolder(u)) {
+				this.onDisk.add(fileKey(u.fsPath), u.fsPath);
+			}
+		};
+		return [watcher, watcher.onDidCreate(seen), watcher.onDidChange(seen), watcher.onDidDelete(seen)];
+	}
+
+	/** The pause after typing: the index reads these buffers, then the boards recolour. */
+	private async typed(batch: Map<string, vscode.TextDocument>) {
+		const active = [...this.sessions.values()].filter(s => s.stage !== 'design');
+		if (!active.length) {
+			return;
+		}
+		const buffers = [...batch.values()].filter(d => !d.isClosed).map(d => ({ file: d.uri.fsPath, text: d.getText() }));
+		buffers.forEach(b => {
+			this.overlaid.add(fileKey(b.file));
+			active.forEach(s => s.recent.add(fileKey(b.file)));
+		});
+		await this.types.refreshBuffers(buffers);
+		active.forEach(s => this.changed(s));
+	}
+
+	/** Files that changed on disk outside this window's saves (or were created or deleted): the index re-reads them, the boards recolour. */
+	private async written(files: string[]) {
+		const active = [...this.sessions.values()].filter(s => s.stage !== 'design');
+		if (!active.length) {
+			return;
+		}
+		files.forEach(f => active.forEach(s => s.recent.add(fileKey(f))));
+		await this.types.refreshFiles(files);
+		active.forEach(s => this.changed(s));
 	}
 
 	private byBoard(id: string) {
@@ -158,7 +232,7 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			// What exists now is the baseline: taken once, on the first design, so a redraw never turns the developer's new types into old ones.
 			if (ready) {
 				s.baseline = s.baseline ? extendBaseline(s.baseline, graph.types, plan) : baselineOf(graph.types, plan);
-				summary = designSummary(matchPlan(plan, graph, { ready, baseline: s.baseline }));
+				summary = designSummary(matchPlan(plan, graph, { ready, baseline: s.baseline, hintModule: this.hintModule(graph.types) }));
 			}
 		} catch (e) {
 			// The board is drawn either way: an index that failed only means no summary, never a failed draw the agent would repeat.
@@ -178,7 +252,7 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			s.stage = 'skeleton';
 			this.changed(s);
 		}
-		return drawnAnswer(summary, id, redraw || take);
+		return drawnAnswer(summary, id, redraw || take, f => vscode.workspace.asRelativePath(f, false));
 	}
 
 	/** Whether a board id is another agent session's skeleton design: draw_board then draws a new board instead of replacing it. */
@@ -261,6 +335,7 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			return;
 		}
 		active.forEach(s => s.recent.add(fileKey(file)));
+		this.overlaid.delete(fileKey(file));
 		await this.types.refreshFiles([file]);
 		const text = doc.getText();
 		for (const s of active.filter(x => x.stage === 'handover')) {
@@ -340,8 +415,50 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			// A redraw that names more types adds their members.
 			s.baseline = s.baseline ? extendBaseline(s.baseline, graph.types, s.plan) : baselineOf(graph.types, s.plan, recent);
 		}
-		s.diff = matchPlan(s.plan, graph, { recent, ready: this.types.complete, baseline: s.baseline });
+		s.diff = matchPlan(s.plan, graph, { recent, ready: this.types.complete, baseline: s.baseline, hintModule: this.hintModule(graph.types) });
 		await this.boards.redraw(s.boardId);
+	}
+
+	/** The module of the file the developer has open: where a plan that names no module is probably about. */
+	private hintModule(types: { file: string; module: string }[]): string | undefined {
+		const open = vscode.window.activeTextEditor?.document.uri;
+		return open?.scheme === 'file' ? types.find(t => same(t.file, open.fsPath))?.module : undefined;
+	}
+
+	/** The board's "create this file": the webview names the node, the host works out the path itself, inside a workspace folder, never over a file. */
+	private async createFile(board: unknown, nodeId: unknown) {
+		const s = typeof board === 'string' ? this.byBoard(board) : undefined;
+		const r = typeof nodeId === 'string' ? s?.diff?.nodes.find(n => n.id === nodeId) : undefined;
+		const node = r && s?.plan?.nodes.find(n => n.id === r.id);
+		// Only a type that is not written yet is offered its file; the label the path was derived for is the one the stub is made from (a redraw may have changed the plan since).
+		if (!s || !r || !node?.label || !r.target || r.file || node.label !== r.label) {
+			return;
+		}
+		const uri = vscode.Uri.file(r.target.file);
+		const shown = vscode.workspace.asRelativePath(uri, false);
+		if (!vscode.workspace.getWorkspaceFolder(uri)) {
+			void vscode.window.showWarningMessage(`Axle: ${shown} is outside the open folders, so it is not created.`);
+			return;
+		}
+		const exists = await Promise.resolve(vscode.workspace.fs.stat(uri)).then(() => true, () => false);
+		if (exists) {
+			await vscode.window.showTextDocument(uri, { preview: true });
+			return;
+		}
+		const stub = stubFor(node, r.target.packageName, r.target.file);
+		const choice = await vscode.window.showInformationMessage(`${node.label} belongs in ${shown}`, ...(stub === undefined ? [] : ['Create file']), 'Copy path');
+		if (choice === 'Copy path') {
+			await vscode.env.clipboard.writeText(shown);
+		} else if (choice === 'Create file' && stub !== undefined) {
+			await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(r.target.file)));
+			// 'wx': a prompt left open while another tool wrote the file must not overwrite it.
+			await fs.writeFile(r.target.file, stub, { encoding: 'utf8', flag: 'wx' }).catch(e => {
+				if ((e as NodeJS.ErrnoException).code !== 'EEXIST') {
+					throw e;
+				}
+			});
+			await vscode.window.showTextDocument(uri, { preview: false });
+		}
 	}
 
 	private async read(file: string): Promise<string | undefined> {
@@ -356,6 +473,8 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 	}
 
 	dispose() {
+		this.typing.dispose();
+		this.onDisk.dispose();
 		this.timers.forEach(t => clearTimeout(t));
 		this.disposables.forEach(d => d.dispose());
 	}

@@ -263,7 +263,8 @@ function BoardView() {
     select(id, node) {
       setSelected(id)
       setActive(undefined)
-      if (node?.file) post({ type: 'open', file: node.file, line: node.line ?? 1 })
+      if (node?.target?.create) post({ type: 'create', node: id })
+      else if (node?.file) post({ type: 'open', file: node.file, line: node.line ?? 1 })
     },
     focus: focusNode,
     toggleGroup(id) {

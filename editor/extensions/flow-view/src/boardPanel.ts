@@ -189,6 +189,14 @@ export class BoardPanel implements vscode.Disposable {
 				await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.One, selection: new vscode.Range(at, at), preview: true, preserveFocus: true });
 				return;
 			}
+			case 'create': {
+				// Skeleton first: the node id only. The path, the folder check and the write are the skeleton host's own work.
+				const id = [...this.tabs].find(([, t]) => t === tab)?.[0];
+				if (id?.startsWith('board:') && typeof m.node === 'string') {
+					await vscode.commands.executeCommand('flow.skeleton.createFile', id.slice('board:'.length), m.node);
+				}
+				return;
+			}
 			case 'rebuild': {
 				const seq = typeof m.seq === 'number' ? m.seq : undefined;
 				const source = tab.source;

@@ -113,18 +113,26 @@ function pyModule(file: string) {
 	return path.relative(root, file).replace(/\.py$/, '').split(path.sep).filter(p => p !== '__init__').join('.');
 }
 
-function parseFile(file: string, mtime: number): FileFacts | undefined {
+/** `source`: the text of an editor buffer that is not saved yet, parsed instead of the file. */
+function parseFile(file: string, mtime: number, source?: string): FileFacts | undefined {
 	const lang = langOf(file);
 	if (!lang) {
 		return undefined;
 	}
 	let text: string;
 	try {
-		const st = fs.statSync(file);
-		if (st.size > MAX_BYTES) {
-			return undefined;
+		if (source !== undefined) {
+			if (source.length > MAX_BYTES) {
+				return undefined;
+			}
+			text = source;
+		} else {
+			const st = fs.statSync(file);
+			if (st.size > MAX_BYTES) {
+				return undefined;
+			}
+			text = fs.readFileSync(file, 'utf8');
 		}
-		text = fs.readFileSync(file, 'utf8');
 	} catch {
 		return undefined;
 	}
@@ -407,6 +415,17 @@ parentPort!.on('message', async (m: { id: number; op: string; args: unknown[] })
 				}
 				saveSoon();
 				result = true;
+				break;
+			}
+			case 'overlay': {
+				// An editor buffer the developer is still typing in: the index reads it as the file for now. The mtime never equals a
+				// file's, so this is never taken for a cached parse; the next save (a 'changed') reads the disk again.
+				const [file, text] = m.args as [string, string];
+				const facts = isIgnored(file, ignored) ? undefined : parseFile(file, -1, text);
+				if (facts) {
+					project.set(facts);
+				}
+				result = !!facts;
 				break;
 			}
 			case 'removedDir': {

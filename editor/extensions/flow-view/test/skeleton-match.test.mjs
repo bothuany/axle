@@ -214,7 +214,9 @@ test('existing types are neutral with only their new members marked, a new DTO i
 	assert.deepEqual(diff.nodes.map(n => `${n.label}:${n.check}`), ['BillingController:existing', 'BilingService:existing', 'BillingServiceImpl:existing', 'BillRepository:existing', 'CustomerClient:existing', 'BillReportDTO:missing'])
 	assert.equal(byLabel(diff, 'BillRepository').members[0].check, 'missing', 'the method the plan adds is missing until written')
 	assert.equal(byLabel(diff, 'CustomerClient').members[0].check, 'existing', 'a member it already had is neutral too')
-	assert.deepEqual(match.designSummary(diff), {
+	const { paths, ...summary } = match.designSummary(diff)
+	assert.deepEqual(paths.map(p => `${p.name} → ${rel('skeleton-billing')(p.file)}`), ['BillReportDTO → src/main/java/com/acme/billing/dtos/BillReportDTO.java'], 'the new DTO goes beside the other DTOs, in the same package convention')
+	assert.deepEqual(summary, {
 		added: ['BillReportDTO'],
 		extended: [
 			{ name: 'BillingController', members: ['getBillReport(status: BillStatus, from: LocalDateTime, to: LocalDateTime): ResponseEntity<List<BillReportDTO>>'] },

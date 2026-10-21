@@ -72,6 +72,12 @@ export class TypeService implements vscode.Disposable {
 		this.invalidate();
 	}
 
+	/** Buffers the developer is typing in (not saved): the index reads their text now, and the next graph is built from it. */
+	async refreshBuffers(buffers: { file: string; text: string }[]): Promise<void> {
+		await Promise.all(buffers.map(b => PolyIndex.current?.overlay(b.file, b.text)));
+		this.invalidate();
+	}
+
 	/** Whether the last graph had every source it needs: false while the index builds or C# is loading. */
 	get complete(): boolean {
 		return !this.incomplete;

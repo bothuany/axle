@@ -1,0 +1,5 @@
+Skeleton check of "Bill + User report (analytics-service)": 0 match · 1 missing · 0 differ.
+MISSING BillUserReportDto: no type called BillUserReportDto in the code yet
+  path: analytics-service/src/main/java/com/turkcell/analyticsservice/dto/BillUserReportDto.java (next to BillBehaviorDto, in com.turkcell.analyticsservice.dto)
+  MISSING customerId: String
+  MISSING amount: BigDecimal
