@@ -16,4 +16,4 @@ MISSING BillUserReportDto: no type called BillUserReportDto in the code yet
   path: analytics-service/src/main/java/com/turkcell/analyticsservice/dto/BillUserReportDto.java (next to BillBehaviorDto, in com.turkcell.analyticsservice.dto)
   MISSING customerId: String
   MISSING amount: BigDecimal
-existing CustomerClient (interface at analytics-service/src/main/java/com/turkcell/analyticsservice/client/CustomerClient.java:3): in the code before the design; the plan adds no members to it; 2 types are called CustomerClient; checked the one in <project>/analytics-service/src/main/java/com/turkcell/analyticsservice/client/CustomerClient.java
+existing CustomerClient (interface at analytics-service/src/main/java/com/turkcell/analyticsservice/client/CustomerClient.java:3): in the code before the design; the plan adds no members to it; 2 types are called CustomerClient; checked the one in analytics-service, the module the plan is about

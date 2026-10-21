@@ -159,7 +159,7 @@ test('a type written in the wrong module or package differs, with the reason', a
 	}
 })
 
-// The developer's file, as a real session showed it: a broken import and calls cut off mid-typing, so tree-sitter turns the whole
+// A half-typed file (reconstructed from a real session: a bad import line and calls cut off mid-typing): tree-sitter turns the whole
 // file into one ERROR node and the class is gone from the index. Also two honest slips: a method called getReportById where the
 // plan says getReportByCustomerId, and a return type of another DTO.
 const BROKEN = `package com.turkcell.analyticsservice.controller;
@@ -237,8 +237,11 @@ test('a file created after the design turns from missing to written, and an unsa
 		const baseline = match.baselineOf((await p.graph()).types, PLAN)
 		const plan = spec.parseBoard({ kind: 'class', title: PLAN.title, nodes: [PLAN.nodes[3]] })
 		const recent = f => slash(f).endsWith('BillUserReportDto.java')
-		const state = async () => byLabel(match.matchPlan(plan, await p.graph(), { baseline, recent }), 'BillUserReportDto')
+		const diffNow = async () => match.matchPlan(plan, await p.graph(), { baseline, recent })
+		const state = async () => byLabel(await diffNow(), 'BillUserReportDto')
+		const text = async () => slash(match.diffText(await diffNow(), PLAN.title, p.rel).split(p.root).join('<project>'))
 		assert.equal((await state()).check, 'missing')
+		snapshot('created-before', await text())
 		// Created by another tool (the watcher's case): the index is told the file changed.
 		const file = p.write(`${A}/dto/BillUserReportDto.java`, 'package com.turkcell.analyticsservice.dto;\n\npublic class BillUserReportDto {\n\tprivate String customerId;\n}\n')
 		await p.index.request('changed', file)
@@ -246,6 +249,7 @@ test('a file created after the design turns from missing to written, and an unsa
 		assert.equal(now.check, 'missing', 'one of two fields: the type is there, the rest is not')
 		assert.equal(now.members[0].check, 'matches')
 		assert.match(now.note, /1 of 2 members written/)
+		snapshot('created-after', await text())
 		// Typing in the editor, not saved: the buffer is read as the file.
 		await p.index.request('overlay', file, 'package com.turkcell.analyticsservice.dto;\n\npublic class BillUserReportDto {\n\tprivate String customerId;\n\tprivate java.math.BigDecimal amount;\n}\n')
 		now = await state()
@@ -298,4 +302,13 @@ test('the empty file for a new type: the package line and the declaration, no me
 	assert.equal(paths.stubFor(node('Order', 'class'), 'Shop', 'x/Order.cs'), 'namespace Shop;\n\npublic class Order\n{\n}\n')
 	assert.equal(paths.stubFor(node('Order', 'class'), '', 'x/order.ts'), 'export class Order {\n}\n')
 	assert.equal(paths.stubFor(node('Order', 'class'), '', 'x/order.go'), undefined, 'a language without a stub only offers the path')
+})
+
+test('a label that is not a safe type name gets no path and no stub', () => {
+	for (const label of ['../../evil', 'X {} /*', 'CON', 'nul', 'COM1', 'a b']) {
+		assert.equal(paths.isTypeName(label), false, label)
+		assert.equal(paths.stubFor({ id: 'x', label, kind: 'class' }, 'a.b', 'x/Y.java'), undefined, label)
+	}
+	assert.equal(paths.isTypeName('BillUserReportController'), true)
+	assert.equal(paths.isTypeName('Console'), true)
 })

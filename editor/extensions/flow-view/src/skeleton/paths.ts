@@ -96,6 +96,9 @@ function fileNameFor(name: string, sibling: TypeInfo): string {
 	return words.join(stem.includes('_') ? '_' : '-') + ext;
 }
 
+/** A label that may become a file name and a declaration: an identifier, and not a Windows device name (CON.java is the console there). */
+export const isTypeName = (label: string) => /^[A-Za-z_$][\w$]*$/.test(label) && !/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(label);
+
 export interface PathContext {
 	/** Types that count as the layout of the project: the code as it was when the design was drawn (the developer's new types are not the convention). */
 	existing: (t: TypeInfo) => boolean;
@@ -129,7 +132,7 @@ export function moduleOfPlan(plan: BoardSpec, types: TypeInfo[], ctx: PathContex
  */
 export function targetFor(node: BoardNode, plan: BoardSpec, types: TypeInfo[], ctx: PathContext, module = moduleOfPlan(plan, types, ctx)): Target | undefined {
 	// The label becomes a file name and a declaration: only an identifier is one (an agent's label is not trusted to be).
-	if (!module || !/^[A-Za-z_$][\w$]*$/.test(node.label)) {
+	if (!module || !isTypeName(node.label)) {
 		return undefined;
 	}
 	const inModule = types.filter(t => t.module === module && ctx.existing(t) && key(t.name) !== key(node.label));
@@ -171,6 +174,9 @@ export function targetFor(node: BoardNode, plan: BoardSpec, types: TypeInfo[], c
 /** The empty file for a type: the package line and the declaration, nothing else. The developer writes the members. */
 export function stubFor(node: BoardNode, packageName: string, file: string): string | undefined {
 	const name = node.label;
+	if (!isTypeName(name)) {
+		return undefined;
+	}
 	const ext = extOf(file).toLowerCase();
 	const kind = node.kind;
 	if (ext === '.java') {

@@ -497,7 +497,10 @@ export function matchPlan(plan: BoardSpec, graph: Pick<TypeGraph, 'types' | 'edg
 		// Equally good matches are named, so the developer sees which one was checked and why.
 		const others = ranked.slice(1).filter(o => fit(o) === fit(t));
 		const why = opts.recent?.(t.file) && !others.every(o => opts.recent?.(o.file)) ? ', the one changed since the design was drawn' : '';
-		found.set(n.id, { t, note: others.length ? `${others.length + 1} types are called ${t.name}; checked the one in ${t.file}${why}` : undefined });
+		// In another module each, the module says which one (and keeps absolute paths out of the text the agent reads).
+		const modules = new Set([t, ...others].map(x => x.module));
+		const where = modules.size > 1 ? `${t.module}${planModule === t.module ? ', the module the plan is about' : ''}` : t.file;
+		found.set(n.id, { t, note: others.length ? `${others.length + 1} types are called ${t.name}; checked the one in ${where}${why}` : undefined });
 	}
 	// Then renames: an unplanned type of a similar name that the developer wrote since the design was drawn (a file they changed, a
 	// type that was not there before) and that has most of the planned members. Anything looser took an unrelated type that happens

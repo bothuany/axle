@@ -82,7 +82,8 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 				}
 			}),
 			vscode.workspace.onDidCloseTextDocument(d => {
-				if (d.isDirty && this.overlaid.delete(fileKey(d.uri.fsPath))) {
+				// A discarded buffer is usually reverted before it closes (not dirty any more), so the mark alone decides.
+				if (this.overlaid.delete(fileKey(d.uri.fsPath))) {
 					this.onDisk.add(fileKey(d.uri.fsPath), d.uri.fsPath);
 				}
 			}),
@@ -429,7 +430,8 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		const s = typeof board === 'string' ? this.byBoard(board) : undefined;
 		const r = typeof nodeId === 'string' ? s?.diff?.nodes.find(n => n.id === nodeId) : undefined;
 		const node = r && s?.plan?.nodes.find(n => n.id === r.id);
-		if (!s || !r || !node?.label || !r.target) {
+		// Only a type that is not written yet is offered its file; the label the path was derived for is the one the stub is made from (a redraw may have changed the plan since).
+		if (!s || !r || !node?.label || !r.target || r.file || node.label !== r.label) {
 			return;
 		}
 		const uri = vscode.Uri.file(r.target.file);
@@ -449,7 +451,12 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			await vscode.env.clipboard.writeText(shown);
 		} else if (choice === 'Create file' && stub !== undefined) {
 			await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(r.target.file)));
-			await vscode.workspace.fs.writeFile(uri, Buffer.from(stub, 'utf8'));
+			// 'wx': a prompt left open while another tool wrote the file must not overwrite it.
+			await fs.writeFile(r.target.file, stub, { encoding: 'utf8', flag: 'wx' }).catch(e => {
+				if ((e as NodeJS.ErrnoException).code !== 'EEXIST') {
+					throw e;
+				}
+			});
 			await vscode.window.showTextDocument(uri, { preview: false });
 		}
 	}

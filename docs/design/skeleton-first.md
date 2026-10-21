@@ -206,7 +206,7 @@ Review follow-ups in the same change:
 
 ## Where each file goes, and live updates (2026-10-21)
 
-A developer used it on a CRM (analytics-service) and had to ask the agent which path to create the controller in; and a file they had created still read MISSING.
+A developer used it on a CRM (analytics-service) and had to ask the agent which path to create the controller in; and a file they had created still read MISSING. The exact file of that report was not available, so the second case was not reproduced as such: what follows is what was found to drop or delay a written type, and what was made faster.
 
 **Paths** (`src/skeleton/paths.ts`, pure). Every planned type that is new gets a target file, worked out from the layout the project already has, never invented:
 - **Module**: the one the plan's existing types live in (a `CustomerClient` that three services have is taken in the module the plan is about: the plan's types that exist, then a module named in the title, then the module of the file the developer has open).
@@ -216,9 +216,9 @@ A developer used it on a CRM (analytics-service) and had to ask the agent which 
 - **Clicking** a new type sends the node id to the host, which works out the path again from the diff, refuses a path outside the open folders, never overwrites a file, and offers "Create file" (the package line and an empty declaration: Java, C#, TypeScript, Python) or "Copy path". The developer writes the members. The webview never names a path, and an agent cannot send one (`target` is host-only, like `check`).
 - **A new type written in another module, or in another package than its siblings'**, is DIFFERS with the reason. The package check applies only when the path came from siblings, not from the fallback convention.
 
-**Live.** Three causes were found for "written but MISSING":
+**Live.** Verified: a file that does not parse lost its type (the first item). Improved: the other two.
 - **A file that does not parse lost its type.** tree-sitter turns a file with a broken import or a call cut off mid-typing into one ERROR node whose tokens are flat, so `class_declaration` is gone and the type was not in the index at all. `src/poly/javaRecover.ts` now reads the declarations and members of the text itself when the tree has an error, and only adds what the tree did not find. The members are not taken for accessors, since their bodies were never read.
-- **A file saved outside the editor** (IntelliJ, a formatter, git, the shell) fires no save in this window. The skeleton host now watches code files (create, change, delete), adds them to the "written since the design" set, re-reads them and recolours, about a second after the write.
+- **A file written outside the editor** (IntelliJ, a formatter, git, the shell) fires no save in this window. The index's own watcher did catch it, but only after it re-listed every entry point, and the file never counted as "written since the design" (which the rename rule and the choice between same-named types depend on). The skeleton host now watches code files itself (create, change, delete), marks them as written, re-reads them and recolours, about a second after the write.
 - **Nothing happened while typing.** The index read only the disk. A new worker op, `overlay`, reads an editor buffer as the file's content until the next save (its mtime never equals a file's, so it is never cached); the host sends the buffers of the files being typed in after a 500 ms pause (`ChangeBatcher`, `src/skeleton/changes.ts`). Closing a file without saving reads the disk again.
 
 Probe (web mode, Claude Code 2.1.306, Haiku 5.5 from the demo copy's `.claude/settings.json`, auto mode; a copy of the two-service CRM fixture; screenshots in `docs/design/skeleton-paths/`):
