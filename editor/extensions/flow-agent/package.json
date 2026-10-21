@@ -286,6 +286,10 @@
           "default": false,
           "description": "Skeleton first for agents you have not switched yourself (each agent has its own switch in the Agents dock, next to Explain this). When it is on for an agent and a change adds or changes types, entities or interfaces, the agent draws its design and you write the skeleton before it fills the bodies. Just do it is always one click."
         },
+        "axle.skeletonFirst.enabled": {
+          "type": "boolean",
+          "deprecationMessage": "Renamed to insilode.skeletonFirst.enabled; Insilode copies this value over once."
+        },
         "flow.agents.planBoard": {
           "type": "boolean",
           "default": true,
@@ -504,6 +508,10 @@
               "type": "boolean",
               "default": true,
               "description": "Hide while an Insilode window has focus"
+            },
+            "axleFocused": {
+              "type": "boolean",
+              "deprecationMessage": "Renamed to insilodeFocused; Insilode moves this value over once."
             }
           },
           "additionalProperties": false,

@@ -241,7 +241,7 @@ export const EXCLUDED_DIRS = new Set([
 	'.idea', '.vscode', '.gradle', '.mvn', '.claude', 'site-packages', '.tox', '.mypy_cache', '.pytest_cache',
 	// Insilode's own folder: the agents' worktrees live in .insilode/worktrees, each a second copy of the project. It is excluded
 	// through .git/info/exclude, which the index reads once at start, so a worktree made later would be indexed.
-	'.insilode',
+	'.insilode', '.axle',
 ]);
 
 /**

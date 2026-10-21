@@ -22,6 +22,7 @@ import { Command } from './commands';
 import { EndpointsView } from './endpoints';
 import { FlowHome } from './home';
 import { ClaudeIdeBridge } from './ide';
+import { legacySettingUpdates } from './legacySettings';
 import { PolyLenses, RoslynLenses } from './lenses';
 import { LspLenses, LspProvider } from './lsp';
 import { AgentBridge } from './mcp/bridge';
@@ -531,7 +532,22 @@ function wireAgentBridge(flow: Flow) {
 		}),
 	);
 	registerMcpCommands(context, log);
+	void migrateLegacySettings(log);
 	void bridge.start();
+}
+
+/** Moves settings written under the old name (Axle) to the new ones, in the scope they were set in (see legacySettings.ts). */
+async function migrateLegacySettings(log: vscode.LogOutputChannel) {
+	const targets = { global: vscode.ConfigurationTarget.Global, workspace: vscode.ConfigurationTarget.Workspace, folder: vscode.ConfigurationTarget.WorkspaceFolder };
+	const config = vscode.workspace.getConfiguration();
+	for (const u of legacySettingUpdates(key => config.inspect(key))) {
+		try {
+			await config.update(u.key, u.value, targets[u.scope]);
+			log.info(`Moved the setting ${u.key} (${u.scope}) from its name before the rename.`);
+		} catch (e) {
+			log.warn(`Could not move the setting ${u.key} (${u.scope}): ${(e as Error).message}`);
+		}
+	}
 }
 
 /** Any change on disk (editor save, agent edit, git checkout) re-draws the open flow. */

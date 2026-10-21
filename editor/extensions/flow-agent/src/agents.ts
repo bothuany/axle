@@ -459,6 +459,11 @@ export class Agents implements vscode.Disposable {
 			await fs.writeFile(file, text);
 			this.log.info(`Agents: wrote the Codex profile ${file}; Codex asks once to trust its hooks (/hooks)`);
 		}
+		// The profile of the same name before the rename (`codex -p axle`): ours only if it still says so.
+		const legacy = path.join(path.dirname(file), 'axle.config.toml');
+		if ((await fs.readFile(legacy, 'utf8').catch(() => '')).startsWith('# Written by Axle.')) {
+			await fs.rm(legacy, { force: true }).catch(() => undefined);
+		}
 	}
 
 	/**

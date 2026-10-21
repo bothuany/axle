@@ -3,10 +3,14 @@
 // stdout carries JSON-RPC only; diagnostics go to stderr.
 import { runStdio } from '../src/mcp/stdio';
 
-if (require.main === module) {
+export function main(): void {
 	runStdio({ argv: process.argv.slice(2), stdin: process.stdin, stdout: process.stdout, stderr: process.stderr })
 		.then(() => process.exit(0), e => {
 			process.stderr.write(`[insilode-mcp] ${(e as Error)?.stack ?? e}\n`);
 			process.exit(1);
 		});
+}
+
+if (require.main === module) {
+	main();
 }

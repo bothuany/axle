@@ -26,7 +26,7 @@ export function isProjectTranscriptDir(name: string, root: string, platform: Nod
 	const fold = (s: string) => platform === 'win32' ? s.toLowerCase() : s;
 	const key = fold(root.replace(/[^A-Za-z0-9]/g, '-'));
 	const n = fold(name);
-	return n === key || n.startsWith(`${key}--claude-worktrees-`) || n.startsWith(`${key}--insilode-worktrees-`);
+	return n === key || n.startsWith(`${key}--claude-worktrees-`) || n.startsWith(`${key}--insilode-worktrees-`) || n.startsWith(`${key}--axle-worktrees-`);
 }
 
 /** The transcripts of this project and of its agent worktrees. */

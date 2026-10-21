@@ -22,10 +22,10 @@ export interface StdioOptions {
 	timeoutMs?: number;
 }
 
-/** The folder this server works for: --workspace, else INSILODE_WORKSPACE, else where it was started. */
+/** The folder this server works for: --workspace, else INSILODE_WORKSPACE (AXLE_WORKSPACE in a registration made before the rename), else where it was started. */
 export function workspaceOf(argv: string[], env: NodeJS.ProcessEnv, cwd: string): string {
 	const i = argv.indexOf('--workspace');
-	return (i >= 0 && argv[i + 1]) || env.INSILODE_WORKSPACE || cwd;
+	return (i >= 0 && argv[i + 1]) || env.INSILODE_WORKSPACE || env.AXLE_WORKSPACE || cwd;
 }
 
 export function makeForward(o: Required<Pick<StdioOptions, 'env' | 'argv' | 'cwd'>> & Pick<StdioOptions, 'alive' | 'timeoutMs'>): Forward {

@@ -220,8 +220,10 @@ export function parseTourFile(raw: unknown, host: TourFileHost): ParsedTour {
 	if (!isObject(raw)) {
 		throw new TourFileError('A tour file is a JSON object.');
 	}
-	if (raw.insilodeTour !== 1) {
-		throw new TourFileError(`"insilodeTour": 1 is missing (this file says ${JSON.stringify(raw.insilodeTour)}): not a tour file, or one from a newer Insilode.`);
+	// Tour files saved before the rename (Axle) carry "axleTour": they are the users' own files, so they keep loading.
+	const format = raw.insilodeTour ?? raw.axleTour;
+	if (format !== 1) {
+		throw new TourFileError(`"insilodeTour": 1 is missing (this file says ${JSON.stringify(format)}): not a tour file, or one from a newer Insilode.`);
 	}
 	const id = plain(raw.id);
 	if (!/^[\w.-]{1,64}$/.test(id)) {

@@ -227,7 +227,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// One watcher per pattern, with no brace group nested in another: the single nested pattern missed a new
 	// .claude/settings.json and its later edits.
 	const watchers = WATCHED.map(g => vscode.workspace.createFileSystemWatcher(g));
-	const ignored = /[\\/](?:\.claude[\\/]worktrees|\.insilode[\\/]worktrees|node_modules|\.git)[\\/]/;
+	const ignored = /[\\/](?:\.claude[\\/]worktrees|\.insilode[\\/]worktrees|\.axle[\\/]worktrees|node_modules|\.git)[\\/]/;
 	let timer: NodeJS.Timeout | undefined;
 	const soon = (uri?: vscode.Uri) => {
 		if (uri && ignored.test(uri.fsPath)) {

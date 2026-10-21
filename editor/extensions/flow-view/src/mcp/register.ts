@@ -100,6 +100,45 @@ export function registerMcpCommands(context: vscode.ExtensionContext, log: vscod
 			: vscode.window.showErrorMessage(`Insilode: removing failed. ${result.out.slice(0, 400)}`));
 	};
 
+	// A registration made before the rename is named `axle` and runs out/axle-mcp.js (kept as a stub for it). It keeps working, with the old
+	// mcp__axle__* tool names; this offers, once, to move it to `insilode`. Never silently: it edits the user's Claude Code configuration.
+	const moveLegacy = async () => {
+		if (context.globalState.get<boolean>('insilode.mcpLegacyAsked') || (await run(commandLine(['--version']))).code !== 0) {
+			return;
+		}
+		if ((await run(commandLine(['mcp', 'get', 'axle']))).code !== 0) {
+			return;
+		}
+		await context.globalState.update('insilode.mcpLegacyAsked', true);
+		if (await exists() || !existsSync(script())) {
+			return;
+		}
+		const cmd = mcpAddCommand(script(), { pathNode: findOnPath('node'), execPath: process.execPath });
+		const pick = await vscode.window.showInformationMessage('Move Claude Code tools from Axle to Insilode?', {
+			modal: true,
+			detail: [
+				'Claude Code has an MCP server named "axle" from before Axle was renamed Insilode. It still works, but its tools are called mcp__axle__*, and Insilode now offers them as mcp__insilode__*.',
+				'',
+				'This runs the Claude Code CLI twice:',
+				'',
+				commandLine(['mcp', 'remove', 'axle', '--scope', 'user']),
+				commandLine(cmd.args),
+				'',
+				'Permission rules you wrote for mcp__axle__* in .claude/settings.json are not changed: rename them to mcp__insilode__* yourself.',
+			].join('\n'),
+		}, 'Move');
+		if (pick !== 'Move') {
+			return;
+		}
+		const removed = await run(commandLine(['mcp', 'remove', 'axle', '--scope', 'user']));
+		const added = removed.code === 0 ? await run(commandLine(cmd.args)) : removed;
+		log.info(`claude mcp move axle → insilode: ${added.code}: ${added.out}`);
+		void (added.code === 0
+			? vscode.window.showInformationMessage('Insilode tools are connected. A running `claude` session needs /mcp reconnect or a restart.')
+			: vscode.window.showErrorMessage(`Insilode: moving the tools failed. ${added.out.slice(0, 400)}`));
+	};
+	setTimeout(() => void moveLegacy().catch(e => log.warn(`mcp legacy check: ${(e as Error).message}`)), 8000);
+
 	context.subscriptions.push(
 		vscode.commands.registerCommand('flow.mcp.connect', () => connect().catch(e => vscode.window.showErrorMessage(`Insilode: ${(e as Error).message}`))),
 		vscode.commands.registerCommand('flow.mcp.disconnect', () => disconnect(false).catch(e => vscode.window.showErrorMessage(`Insilode: ${(e as Error).message}`))),

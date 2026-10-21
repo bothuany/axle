@@ -107,6 +107,8 @@ test('limits name the bad field: 31 steps, a long caption, a long title, no capt
 test('the header: a version, an id that is a plain name, a title', () => {
 	fails({ ...file(), insilodeTour: 2 }, /"insilodeTour": 1 is missing/)
 	fails({ ...file(), insilodeTour: undefined }, /"insilodeTour": 1 is missing/)
+	// A file saved before the rename still loads.
+	assert.equal(parse({ ...file(), insilodeTour: undefined, axleTour: 1 }).title, 'A tour')
 	fails(file({ id: '../x' }), /"id"/)
 	fails(file({ id: '' }), /"id"/)
 	fails(file({ title: '' }), /"title" is missing/)
