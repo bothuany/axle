@@ -146,3 +146,10 @@ test('the container entrypoint sets the isolation switch itself and the host lau
 	assert.match(entry, /export AXLE_E2E_ISOLATED=1/)
 	assert.doesNotMatch(readFileSync(new URL('../../../scripts/docker-e2e.mjs', import.meta.url), 'utf8'), /AXLE_E2E_ISOLATED\s*[=:]/)
 })
+
+test('a run copies only the files that changed since the last one', async () => {
+	const { changedFiles } = await import('../../../scripts/docker-config.mjs')
+	assert.deepEqual(changedFiles({ a: '1:1', b: '2:2' }, undefined), ['a', 'b'])
+	assert.deepEqual(changedFiles({ a: '1:1', b: '2:2' }, { a: '1:1', b: '2:2' }), [])
+	assert.deepEqual(changedFiles({ a: '1:1', b: '3:2', c: '1:1' }, { a: '1:1', b: '2:2' }), ['b', 'c'])
+})

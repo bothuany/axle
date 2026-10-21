@@ -6,7 +6,7 @@
 //   npm run sandbox:e2e -- --stage <dir>          only stage the folder the sandbox maps
 // What it does: stages the installer, node.exe and the test code into a temp folder, writes a .wsb that maps that folder read-only
 // and an output folder read-write (no network), starts Windows Sandbox minimized, waits for <out>/done.json, and prints the
-// results and the screenshot paths. Turn Windows Sandbox on once: docs/building.md "Desktop end-to-end tests".
+// results and the screenshot paths. Turn Windows Sandbox on once: docs/building.md "Probing and testing the app without taking over your screen".
 import { spawn, spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

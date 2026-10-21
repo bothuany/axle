@@ -121,28 +121,44 @@ scripts/            setup, start, build-extensions, install-shortcut and install
   `git -C editor/vscode checkout -- product.json && git -C editor/vscode apply --include=product.json ../patches/flow-core.patch`. After any other patch change, delete `editor/vscode` and run `npm run setup` for a clean checkout.
 - Tests: `cd editor/extensions/flow-view && npm test` builds the index worker and checks what it finds in every project under `test/fixtures` against `test/expected` (after an intended change: `UPDATE=1 npm test`, then read the diff). `npm run typecheck` there checks the types.
 
-## Desktop end-to-end tests
+## Probing and testing the app without taking over your screen
 
-Some things can only be tested in the real desktop app: the installer, the in-app update, the status island, window focus and position. They are never tested on your own desktop (a test that opens windows takes over your screen and your pointer). UI checks that do not need a desktop window run headless in web mode (`npm run web`, the [probe skill](../.claude/skills/probe/SKILL.md)) and never bring a window to the front. Everything desktop-only goes to a disposable machine you run locally: a Docker container (Linux, from source) or Windows Sandbox (Windows). Never GitHub Actions, and never your desktop. Both run the same code, `test/e2e-desktop` (Playwright's `_electron` API, with a remote-debugging fallback for a packaged build that has Electron's inspector off):
+An agent (or you) that wants to see Axle running must not open a window on a machine somebody is using. There are three ways, by what you need to see:
+
+| You need | Use | Why |
+|---|---|---|
+| Most UI: the canvas, cards, tours, boards, the dock, endpoints, callers | **Web mode**: `npm run web` in the built-in browser pane (the [probe skill](../.claude/skills/probe/SKILL.md)) | Headless, seconds to start, no window. Everything an extension or the canvas draws is the same code as in the desktop app |
+| What only the desktop app has: the status island (a second window), focus and window behaviour, the taskbar badge, native menus, a first-run dialog | **Docker**: `npm run docker:e2e` or `-- --probe <file>` | Real Electron on a virtual display (xvfb) inside a container: no window, pointer or port reaches your machine |
+| Windows-only: the installer, the in-app update, uninstall | **Windows Sandbox**: `npm run sandbox:e2e` | A disposable Windows; Docker is Linux only |
+
+Never your own desktop, and never GitHub Actions (nothing here runs there except the harness's own unit tests in `ci.yml`). `test/e2e-desktop/run.mjs` refuses to open a window unless `AXLE_E2E_ISOLATED=1`, which only the Docker entrypoint and the sandbox script set, inside the machine they isolate: do not set it on a machine you use.
+
+### Docker (any OS with Docker Desktop in Linux-containers mode)
+
+```bash
+npm run docker:e2e                                    # the scenarios below on the working tree
+npm run docker:e2e -- --scenario island,canvas-tour   # only these
+npm run docker:e2e -- --probe my-probe.mjs [args]     # one Playwright script; test/e2e-desktop/probes/hello.mjs is the smallest
+```
+
+A probe script imports `startAxle`, `shot` and `runCommand` from `/work/axle/test/e2e-desktop/lib/probe.mjs` (the path inside the container), starts Axle on the demo project and drives it with Playwright's `page`. Screenshots, `results.json` and logs go to the output folder the command prints (a new folder in the temp directory; `--out <dir>` picks another), never into the repository. Read the screenshots from there; do not commit them.
+
+How it stays fast. The image holds only the toolchain. The copy of Axle, the VS Code checkout and its build live in the named volume `axle-e2e-work`, and each run copies only the files that changed since the last one and rebuilds only what that needs: nothing for unchanged sources, the canvas and the extensions (a few seconds) for a change in `ui/`, `protocol/` or an extension, the whole setup for a change to the C# analyzer or a package lock, and a new VS Code checkout for a changed patch or `scripts/setup.mjs` (the 20 to 40 minute step). `--reset-volume` starts over; `--volume <name>` uses another volume.
+
+Time (this machine, Docker Desktop, 16 cores, 16 GB for the VM): the first run builds the image and the VS Code checkout (about 5 minutes for the image and 20 to 40 for the checkout, one time; not timed to the minute); a probe on an unchanged tree takes about 30 seconds (the app starting is most of it); after a change in an extension about 35 seconds. Disk: the image 2.5 GB, the volume 9 GB (7.7 GB of it the VS Code checkout and its build). To reclaim it, `docker image rm` the `axle-e2e:*` tags and `docker volume rm axle-e2e-work`; Docker's shared build cache (`docker builder prune`) also holds our image's layers, but it belongs to everything you build, so prune it deliberately.
+
+What the scenarios check:
 
 | Scenario | What it checks |
 |---|---|
-| Branding | the window title says Axle, nothing says Code - OSS, no Welcome or Get Started page opens |
-| Canvas and tour | the flow canvas opens (as an editor tab where the build does that) and a tour plays on it |
-| Status island | it shows; where the build has the controls it also minimizes, is dragged, hides while Axle is focused and closes (a fake agent list comes from `test/e2e-desktop/driver`) |
-| Installer (Windows) | silent install, the update through `AXLE_UPDATE_URL` against a local static server (detect, download, ready, Update, relaunch on the new version), silent uninstall |
+| Branding | the window title says Axle, nothing says Code - OSS, no Welcome or Get Started page or dialog opens |
+| Canvas and tour | the flow canvas opens as an editor tab and a tour plays on it |
+| Status island | it shows, minimizes, is dragged, hides while Axle is focused and closes (a fake agent list comes from `test/e2e-desktop/driver`) |
+| Installer (Windows Sandbox only) | silent install, the update through `AXLE_UPDATE_URL` against a local static server (detect, download, ready, Update, relaunch on the new version), silent uninstall |
 
-**Docker** (any OS with Docker Desktop in Linux-containers mode), the quick local run of the desktop app on Linux, and where a session probes desktop UI:
+In the container Chromium needs `--disable-dev-shm-usage` (Docker's `/dev/shm` is small; without it a few percent of the module loads fail and the workbench never starts); the harness sets it.
 
-```bash
-npm run docker:e2e                                    # the scenarios above on the working tree, from source, under xvfb
-npm run docker:e2e -- --scenario island,canvas-tour   # only these
-npm run docker:e2e -- --probe my-probe.mjs            # one Playwright script, see test/e2e-desktop/lib/probe.mjs
-```
-
-The container has its own virtual display, no published ports and no host network, display or input; `AXLE_E2E_ISOLATED=1` is set inside it only. The first run builds the image and the VS Code checkout (20 to 40 minutes); the checkout and its build live in the named volume `axle-e2e-work` (a changed patch or setup script rebuilds it by itself; `--reset-volume` forces that), so later runs take minutes. Screenshots, `results.json` and logs are written to the output folder the command prints (`--out <dir>` picks it). It tests the working tree, uncommitted files included.
-
-**Windows Sandbox** (Windows 10/11 Pro, Enterprise or Education), for a quick local run of the Windows scenarios on an installer you built:
+### Windows Sandbox (Windows 10/11 Pro, Enterprise or Education)
 
 ```bash
 npm run installer                   # once: dist/Axle-Setup-<version>-x64.exe
@@ -151,7 +167,7 @@ npm run sandbox:e2e                 # newest installer in dist/, or: npm run san
 
 Turn the feature on once: "Turn Windows features on or off", tick **Windows Sandbox**, OK, restart (or, as administrator, `Enable-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -All`); virtualization must be on in the BIOS. If it is missing, the command says so and stops. The launcher stages the installer, `node.exe` and the test code into a temp folder, writes a `.wsb` that maps that folder **read-only** and an output folder read-write (networking, clipboard, audio and GPU off), starts the sandbox minimized, and waits for `done.json`. Inside, a logon command runs `test/e2e-desktop/sandbox/run-in-sandbox.ps1` (it only needs Windows, so it also runs on any Windows machine that is not yours): install, the scenarios, update, uninstall, screenshots to the output folder, shutdown. The launcher prints the results and the screenshot paths. Your own Axle install and profile are never touched. Only one sandbox can run at a time, and its window opens minimized.
 
-`npm run test:e2e-unit` tests the harness itself (the `.wsb`, the command lines, the result table) with no window. `run.mjs` refuses to start Axle unless `AXLE_E2E_ISOLATED=1`, which the workflow and the sandbox script set; do not set it on a machine you use.
+`npm run test:e2e-unit` tests the harness itself (the `.wsb`, the Docker arguments, the command lines) with no window; it runs in `ci.yml`.
 
 ## The website
 
