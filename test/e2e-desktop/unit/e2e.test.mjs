@@ -49,7 +49,7 @@ test('a machine without Windows Sandbox is told how to turn it on', () => {
 	assert.match(message, /WindowsSandbox\.exe does not exist/)
 	assert.match(message, /Containers-DisposableClientVM/)
 	assert.match(message, /Restart/)
-	assert.match(message, /desktop-e2e\.yml/)
+	assert.match(message, /docker:e2e/)
 })
 
 test('the summary lists every scenario and the screenshots by their host path', () => {
@@ -73,7 +73,7 @@ test('newestInstaller picks the newest Setup and ignores other files', () => {
 
 test('without AXLE_E2E_ISOLATED nothing opens a window, and the message says where the tests run', () => {
 	assert.match(refusal({}), /Refusing to open Axle windows/)
-	assert.match(refusal({ AXLE_E2E_ISOLATED: '0' }), /desktop-e2e\.yml/)
+	assert.match(refusal({ AXLE_E2E_ISOLATED: '0' }), /docker:e2e/)
 	assert.equal(refusal({ AXLE_E2E_ISOLATED: '1' }), '')
 })
 
@@ -137,7 +137,7 @@ test('the Docker run shares nothing of the host screen, network or input, and ma
 	assert.deepEqual(args.slice(-4), ['axle-e2e:x', 'run', '--only', 'island'])
 	assert.ok(dockerRunArgs({ image: 'i', name: 'n', repo: 'r', ctl: 'c', out: 'o', probeDir: 'C:\p', mode: 'probe', modeArgs: ['a.mjs'] }).includes('C:\p:/probe:ro'))
 	assert.notEqual(imageTag('a', 'b'), imageTag('a', 'c'))
-	assert.match(dockerMissingMessage('no daemon'), /Docker Desktop[\s\S]*desktop-e2e\.yml/)
+	assert.match(dockerMissingMessage('no daemon'), /Docker Desktop[\s\S]*sandbox:e2e/)
 })
 
 test('the container entrypoint sets the isolation switch itself and the host launcher never does', async () => {
