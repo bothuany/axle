@@ -236,8 +236,38 @@ test('try: the dock ranks the waiting agent first, and allowing it moves it on',
 	await page.close()
 })
 
+test('docs: the documents of the repository are pages of the site, linked to each other, with the rest on GitHub', { skip }, async () => {
+	const { page, problems } = await open()
+	await page.click('.nav-links a[href="./docs/"]')
+	await page.waitForSelector('.doc-body')
+	assert.equal(await page.$eval('h1', h => h.textContent), 'Overview')
+	assert.deepEqual(await page.$$eval('.doc-nav a', as => as.map(a => a.textContent)), ['Overview', 'Install and build', 'Languages', 'Agent tools', 'Boards'])
+	// A link between documents stays on the site; a link to another file of the repository goes to GitHub.
+	const links = await page.$$eval('.doc-body a', as => as.map(a => a.href))
+	assert.ok(links.some(h => h.endsWith('/axle/docs/languages/')), 'the support table link opens the Languages page')
+	assert.ok(links.some(h => h === 'https://github.com/bothuany/axle/blob/main/CONTRIBUTING.md'))
+	await page.click('.doc-nav a[href$="docs/languages/"]')
+	await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'Languages')
+	assert.match(await page.$eval('.doc-body', b => b.textContent), /Tables and entities/)
+	assert.equal(await page.$eval('#tables-and-entities', h => h.tagName), 'H2', 'headings carry their anchors')
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('try: the agents can be drawn in either avatar style of the app', { skip }, async () => {
+	const { page, problems } = await open('try/')
+	const dock = await inside(page, 'iframe.dock')
+	await until(() => dock.evaluate(() => document.querySelectorAll('.agent').length === 3), 'three agents in the dock')
+	const avatars = () => dock.evaluate(() => [...document.querySelectorAll('.agent .av')].map(a => a.getAttribute('data-k')).join(' '))
+	assert.match(await avatars(), /\|gyro\|/)
+	await page.click('input[value="pixel"]')
+	await until(async () => /\|pixel\|/.test(await avatars()), 'the dock to draw pixel avatars')
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
 test('the pages can be found: titles, descriptions, canonical addresses and a sitemap that lists them', { skip }, async () => {
-	for (const path of ['', 'try/']) {
+	for (const path of ['', 'try/', 'docs/', 'docs/languages/']) {
 		const { page, problems } = await open(path)
 		const head = await page.evaluate(() => {
 			const meta = s => document.querySelector(s)?.getAttribute('content') ?? ''
@@ -261,7 +291,8 @@ test('the pages can be found: titles, descriptions, canonical addresses and a si
 		await page.close()
 	}
 	const sitemap = await (await fetch(new URL('sitemap.xml', url))).text()
-	assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1]), ['https://bothuany.github.io/axle/', 'https://bothuany.github.io/axle/try/'])
+	const pages = ['', 'try/', 'docs/', 'docs/agent-tools/', 'docs/boards/', 'docs/install/', 'docs/languages/']
+	assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1]).sort(), pages.map(p => `https://bothuany.github.io/axle/${p}`).sort())
 	for (const part of ['canvas.html', 'pages/dock.html', 'pages/island.html']) {
 		assert.match(await (await fetch(new URL(part, url))).text(), /<meta name="robots" content="noindex"/, `${part} asks not to be indexed`)
 	}

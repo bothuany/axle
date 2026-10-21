@@ -857,6 +857,218 @@ figcaption {
   background: transparent;
 }
 
+/* Under the dock: the avatar style on the left, the answer to the waiting agent on the right. */
+.agents-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 16px 0 0;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--film-2);
+}
+
+.switch legend {
+  float: left;
+  padding: 0 10px 0 8px;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.switch label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+}
+
+.switch label:has(input:checked) {
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--rule);
+  font-weight: 600;
+}
+
+.switch label:has(input:focus-visible) {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+/* ---- documentation pages ------------------------------------------------------------------------------------------------ */
+
+.page.docs {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 56px;
+  padding-bottom: 120px;
+}
+
+.doc-nav ul {
+  position: sticky;
+  top: 24px;
+  list-style: none;
+  margin: 40px 0 0;
+  padding: 0;
+}
+
+.doc-nav a {
+  display: block;
+  padding: 9px 0 9px 14px;
+  border-left: 2px solid var(--rule);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.doc-nav a:hover {
+  text-decoration: underline;
+}
+
+.doc-nav a[aria-current='page'] {
+  border-left-color: var(--signal);
+  font-weight: 650;
+}
+
+.doc {
+  min-width: 0;
+  max-width: 78ch;
+  padding-top: 32px;
+}
+
+.doc h1 {
+  font-size: clamp(36px, 4vw, 54px);
+  max-width: none;
+}
+
+.doc-toc {
+  margin: 28px 0 0;
+  padding: 18px 22px;
+  background: var(--film-2);
+  border-radius: var(--radius);
+}
+
+.doc-toc p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.doc-toc ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.doc-toc li {
+  margin: 4px 0;
+}
+
+.doc-body h2 {
+  margin: 56px 0 0;
+  font-size: clamp(26px, 2.6vw, 34px);
+  max-width: none;
+  scroll-margin-top: 24px;
+}
+
+.doc-body h3 {
+  margin: 36px 0 0;
+  scroll-margin-top: 24px;
+}
+
+.doc-body h4 {
+  margin: 28px 0 0;
+  font-size: 17px;
+}
+
+.doc-body p,
+.doc-body li {
+  max-width: 72ch;
+}
+
+.doc-body ul,
+.doc-body ol {
+  margin: 16px 0 0;
+  padding-left: 22px;
+}
+
+.doc-body li + li {
+  margin-top: 8px;
+}
+
+.doc-body pre {
+  margin: 20px 0 0;
+  background: var(--window);
+  color: #d7dce5;
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  overflow-x: auto;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.doc-body pre code {
+  font-size: inherit;
+  background: none;
+  padding: 0;
+}
+
+.doc-body :not(pre) > code {
+  background: var(--film-2);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.doc-body table {
+  display: block;
+  overflow-x: auto;
+  margin: 24px 0 0;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.doc-body th,
+.doc-body td {
+  text-align: left;
+  vertical-align: top;
+  padding: 10px 14px 10px 0;
+  border-bottom: 1px solid var(--rule);
+  min-width: 120px;
+}
+
+.doc-body th {
+  font-weight: 650;
+  border-bottom: 2px solid var(--ink);
+}
+
+.doc-body blockquote {
+  margin: 20px 0 0;
+  padding: 2px 0 2px 18px;
+  border-left: 3px solid var(--signal);
+  color: var(--ink-2);
+}
+
+.doc-source {
+  margin: 64px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+
 /* ---- narrow screens ------------------------------------------------------------------------------------------------------- */
 
 @media (max-width: 900px) {
@@ -879,6 +1091,30 @@ figcaption {
 
   .try {
     grid-template-columns: 1fr;
+  }
+
+  .page.docs {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .doc-nav ul {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 24px;
+  }
+
+  .doc-nav a {
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 15px;
+  }
+
+  .doc-nav a[aria-current='page'] {
+    border-color: var(--signal);
   }
 }
 

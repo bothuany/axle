@@ -2,7 +2,7 @@
 // rises to the top"), the attention kinds and the overlay's model come from flow-agent's own vscode-free modules, so the two pages
 // draw what the real ones would draw for the same sessions.
 import { attentionKind, rank } from '../../editor/extensions/flow-agent/src/attention'
-import { overlayModel, overlayOptions, readSettings, type OverlaySource } from '../../editor/extensions/flow-agent/src/desktopModel'
+import { overlayModel, overlayOptions, readSettings, type AvatarKind, type OverlaySource } from '../../editor/extensions/flow-agent/src/desktopModel'
 import type { AgentImpact, IslandColors } from './demo'
 
 export interface Todo {
@@ -64,10 +64,10 @@ export function dockList(list: DemoSession[]) {
 }
 
 /** What the overlay page is told: flow-agent's mapping, with the settings the app starts with. On this page the island floats on the stage; in the app it hangs from the notch. */
-export function islandModel(list: DemoSession[], colors: IslandColors) {
+export function islandModel(list: DemoSession[], colors: IslandColors, avatar: AvatarKind = 'gyro') {
   const settings = readSettings(key => (key === 'overlay.enabled' ? true : undefined))
   const model = overlayModel(list, settings)
-  const options = overlayOptions(settings, 'gyro')
+  const options = overlayOptions(settings, avatar)
   return {
     items: model.items.map((item, i) => ({ ...item, key: `k${i}` })),
     counts: model.counts,

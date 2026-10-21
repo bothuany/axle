@@ -1,6 +1,7 @@
 // The Try page's agents: the app's own Agents dock page and its status island, in iframes, told about three agents at work on the
 // demo project. The agents are written here (a fixed moment, not a live session); how they are ranked and what the island makes of
 // them is flow-agent's own code (sessions.ts). Allowing the waiting one moves it on, the way the app would.
+import type { AvatarKind } from '../../editor/extensions/flow-agent/src/desktopModel'
 import type { DemoData } from './demo'
 import { addSession, allSessions, clearSessions, dockList, islandModel, subscribeSessions, updateSession, type DemoSession } from './sessions'
 
@@ -59,20 +60,33 @@ function cast(data: DemoData, now: number): DemoSession[] {
   ]
 }
 
+/** How the agents are drawn (the app's `flow.agents.avatar` setting): the page lets the visitor switch. */
+let avatar: AvatarKind = 'gyro'
+let redraw = () => {}
+
+export function setAvatar(kind: AvatarKind) {
+  avatar = kind
+  redraw()
+}
+
 export function mountAgents(dock: HTMLIFrameElement, island: HTMLIFrameElement, data: DemoData, onNote: (text: string) => void) {
   clearSessions()
   cast(data, Date.now()).forEach(addSession)
   let dockReady = false
-  const sendDock = () => dockReady && dock.contentWindow?.postMessage({ type: 'data', list: dockList(allSessions()), now: Date.now(), avatar: 'gyro' }, location.origin)
+  const sendDock = () => dockReady && dock.contentWindow?.postMessage({ type: 'data', list: dockList(allSessions()), now: Date.now(), avatar }, location.origin)
   const drawIsland = () => {
     const render = (island.contentWindow as (Window & { axleRender?: (m: unknown) => void }) | null)?.axleRender
-    render?.(islandModel(allSessions(), data.islandColors))
+    render?.(islandModel(allSessions(), data.islandColors, avatar))
   }
   subscribeSessions(() => {
     sendDock()
     drawIsland()
   })
   island.addEventListener('load', drawIsland)
+  redraw = () => {
+    sendDock()
+    drawIsland()
+  }
   window.addEventListener('message', e => {
     if (e.origin !== location.origin) return
     const m = e.data as { source?: string; message?: { type: string; id?: string; width?: number; height?: number } }
