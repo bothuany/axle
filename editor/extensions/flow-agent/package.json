@@ -194,6 +194,18 @@
         "title": "Change Agent for Questions…",
         "category": "Axle",
         "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "flow.agents.desktop.showOverlay",
+        "title": "Show the Agent Status Island",
+        "category": "Axle",
+        "enablement": "flow.agents.desktop.available"
+      },
+      {
+        "command": "flow.agents.desktop.hideOverlay",
+        "title": "Hide the Agent Status Island",
+        "category": "Axle",
+        "enablement": "flow.agents.desktop.available"
       }
     ],
     "keybindings": [
@@ -330,7 +342,7 @@
         "flow.agents.desktop.overlay.enabled": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "A small status overlay that stays on top of other apps and shows each live agent with its state: working, needs you (approval, question, error) or done. It never takes focus; clicking an agent shows its terminal in Axle. On a Mac with a notch, `top-center` sits over the notch. Desktop app only. Independent of `#flow.agents.desktop.badge#`."
+          "markdownDescription": "A small status overlay that stays on top of other apps and shows each live agent with its state: working, needs you (approval, question, error) or done. It never takes focus; clicking an agent shows its terminal in Axle. Drag it to move it (double-click puts it back), minimize it to a dot, or close it with its x, which turns this setting off: bring it back from this setting, the status bar, the Agents view menu or the command \"Show the Agent Status Island\". It hides itself while an Axle window has focus (`#flow.agents.desktop.overlay.autoHide#`). On a Mac with a notch, `top-center` sits over the notch. Desktop app only. Independent of `#flow.agents.desktop.badge#`."
         },
         "flow.agents.desktop.overlay.position": {
           "type": "string",
@@ -490,14 +502,14 @@
             },
             "axleFocused": {
               "type": "boolean",
-              "default": false,
+              "default": true,
               "description": "Hide while an Axle window has focus"
             }
           },
           "additionalProperties": false,
           "default": {
             "noAgents": true,
-            "axleFocused": false
+            "axleFocused": true
           },
           "description": "When the status overlay hides itself."
         },
@@ -519,7 +531,27 @@
       }
     },
     "menus": {
+      "commandPalette": [
+        {
+          "command": "flow.agents.desktop.showOverlay",
+          "when": "flow.agents.desktop.available && !config.flow.agents.desktop.overlay.enabled"
+        },
+        {
+          "command": "flow.agents.desktop.hideOverlay",
+          "when": "flow.agents.desktop.available && config.flow.agents.desktop.overlay.enabled"
+        }
+      ],
       "view/title": [
+        {
+          "command": "flow.agents.desktop.showOverlay",
+          "when": "view == flow.agents && flow.agents.desktop.available && !config.flow.agents.desktop.overlay.enabled",
+          "group": "1_island"
+        },
+        {
+          "command": "flow.agents.desktop.hideOverlay",
+          "when": "view == flow.agents && flow.agents.desktop.available && config.flow.agents.desktop.overlay.enabled",
+          "group": "1_island"
+        },
         {
           "command": "flow.agents.resume",
           "when": "view == flow.agents",
