@@ -16,7 +16,7 @@ export function installArgs(dir, log) {
 
 /** The update file for the Windows per-user build: what scripts/update-manifests.mjs writes, pointing at a local server. */
 export function updateManifest({ url, file, version, sha256hash, timestamp = Date.now() }) {
-	return { url: `${url}/${basename(file)}`, name: `Axle ${version}`, version: 'e2e-update-commit', productVersion: version, sha256hash, timestamp }
+	return { url: `${url}/${file.split(/[\\/]/).pop()}`, name: `Axle ${version}`, version: 'e2e-update-commit', productVersion: version, sha256hash, timestamp }
 }
 
 const sha256 = file => createHash('sha256').update(readFileSync(file)).digest('hex')
