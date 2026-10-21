@@ -221,6 +221,13 @@ A developer used it on a CRM (analytics-service) and had to ask the agent which 
 - **A file saved outside the editor** (IntelliJ, a formatter, git, the shell) fires no save in this window. The skeleton host now watches code files (create, change, delete), adds them to the "written since the design" set, re-reads them and recolours, about a second after the write.
 - **Nothing happened while typing.** The index read only the disk. A new worker op, `overlay`, reads an editor buffer as the file's content until the next save (its mtime never equals a file's, so it is never cached); the host sends the buffers of the files being typed in after a 500 ms pause (`ChangeBatcher`, `src/skeleton/changes.ts`). Closing a file without saving reads the disk again.
 
+Probe (web mode, Claude Code 2.1.306, Haiku 5.5 from the demo copy's `.claude/settings.json`, auto mode; a copy of the two-service CRM fixture; screenshots in `docs/design/skeleton-paths/`):
+- The request "a bill + user report in analytics-service" through the dock (Skeleton on): the agent called `check_skeleton`, drew four new types and stopped. Every node shows `＋ …/controller/BillUserReportController.java` and so on (1).
+- A click on the controller offers "Create file" or "Copy path" (2); "Create file" wrote the package line and an empty class and opened it.
+- A write from the shell, as another tool would (3): the members of the controller ticked within two seconds; the DTO written the same way turned MATCHES (4, "1 matches · 3 missing").
+- Found while probing: a first board of only new types, with no module on it, got no paths. It now takes the module from any text on the board, then from the open file, and otherwise `draw_board` tells the agent to put the module in the title (test `a plan that names no module`).
+- Not probed live: typing without saving (covered by the `overlay` test only), and the terminal-started Claude (no dock row, so no reminders: it skipped the design and wrote the files, as the design doc says an agent that skips the call does).
+
 **Differs, not missing.** A planned method that is not there by name but has the same parameters under another name (`getReportById` for `getReportByCustomerId`), or a name that is close, pairs with it and shows DIFFERS with the code's text.
 
 Tests: `test/skeleton-paths.test.mjs` (golden `paths-crm`, `broken-java`; fixture `types-fixtures/skeleton-crm`: a file with errors, a newly created file, an unsaved buffer, a deleted one, wrong module and package, the batcher with mock timers).
