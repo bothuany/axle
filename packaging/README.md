@@ -53,6 +53,14 @@ A running Axle updates itself from the release files, without an update server. 
   target is `user`. A system-wide install (`--system`, not released) would look for `win32-x64` files that are not published.
   The app id, `axle` mutex and install folder come from `product.json`, so they are Axle's and not Code - OSS's; the installer's
   `/update` flow shares them with the app. The update cache is `%TEMP%\axle-axle-user-x64`, not VS Code's.
+  The update is installed when you choose Restart to Update: the app quits and runs the installer silently over the install,
+  which starts Axle again. VS Code's background updates (the new build is staged in `{app}\_` while the app runs, and
+  `inno_updater` swaps it in on restart) are switched off in the update patch, and the `update.enableWindowsBackgroundUpdates`
+  setting is hidden. `inno_updater` 0.26 only knows the *versioned* layout (`win32VersionedUpdate`: `Axle.exe` is a proxy at the
+  install root and the app lives in a commit-named folder), and that layout needs Microsoft's custom Electron build with
+  `electron_proxy.exe`; the Electron from electronjs.org that Axle uses fails to start from it ("Invalid file descriptor to
+  ICU data"). Installs of 0.4.3 and older still have the background mode, which fails at the swap: install the next release
+  once by hand (run the Setup over it, or uninstall first), and updates are in place from then on.
 - **macOS** cannot install in place yet: Squirrel.Mac only replaces an app that is signed with a Developer ID and notarized,
   and Axle's ad hoc signature would make every download fail. So the app never calls Squirrel; it reads the file and offers the
   page. When signing is added (the section below), point the file at the zip and restore Squirrel's check in

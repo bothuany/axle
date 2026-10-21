@@ -861,3 +861,215 @@ index 1f0f2d9e..c439cde1 100644
  			ExeBasename: product.nameShort,
  			RegValueName: product.win32RegValueName,
  			ShellNameShort: product.win32ShellNameShort,
+diff --git a/build/win32/code.iss b/build/win32/code.iss
+index 5b430614..bb9c88a2 100644
+--- a/build/win32/code.iss
++++ b/build/win32/code.iss
+@@ -1382,7 +1382,7 @@ begin
+ 
+   #if "user" == InstallTarget
+     if not WizardSilent() and IsAdmin() then begin
+-      if MsgBox('This User Installer is not meant to be run as an Administrator. If you would like to install VS Code for all users in this system, download the System Installer instead from https://code.visualstudio.com. Are you sure you want to continue?', mbError, MB_OKCANCEL) = IDCANCEL then begin
++      if MsgBox('This User Installer is not meant to be run as an Administrator. If you would like to install {#NameShort} for all users in this system, download the System Installer instead from https://github.com/bothuany/axle/releases. Are you sure you want to continue?', mbError, MB_OKCANCEL) = IDCANCEL then begin
+         Result := False;
+       end;
+     end;
+diff --git a/build/win32/i18n/messages.de.isl b/build/win32/i18n/messages.de.isl
+index 3a3c7fa6..15b8ebcc 100644
+--- a/build/win32/i18n/messages.de.isl
++++ b/build/win32/i18n/messages.de.isl
+@@ -7,4 +7,4 @@ RunAfter=%1 nach der Installation ausführen
+ Other=Andere:
+ SourceFile=%1-Quelldatei
+ OpenWithCodeContextMenu=Mit %1 öffnen
+-UpdatingVisualStudioCode=Visual Studio Code wird aktualisiert...
+\ No newline at end of file
++UpdatingVisualStudioCode=Axle wird aktualisiert...
+\ No newline at end of file
+diff --git a/build/win32/i18n/messages.en.isl b/build/win32/i18n/messages.en.isl
+index 6255123d..ed53f216 100644
+--- a/build/win32/i18n/messages.en.isl
++++ b/build/win32/i18n/messages.en.isl
+@@ -14,4 +14,4 @@ RunAfter=Run %1 after installation
+ Other=Other:
+ SourceFile=%1 Source File
+ OpenWithCodeContextMenu=Open w&ith %1
+-UpdatingVisualStudioCode=Updating Visual Studio Code...
++UpdatingVisualStudioCode=Updating Axle...
+diff --git a/build/win32/i18n/messages.es.isl b/build/win32/i18n/messages.es.isl
+index 7f6f1bd0..d1e1f46d 100644
+--- a/build/win32/i18n/messages.es.isl
++++ b/build/win32/i18n/messages.es.isl
+@@ -7,4 +7,4 @@ RunAfter=Ejecutar %1 después de la instalación
+ Other=Otros:
+ SourceFile=Archivo de origen %1
+ OpenWithCodeContextMenu=Abrir &con %1
+-UpdatingVisualStudioCode=Actualizando Visual Studio Code...
+\ No newline at end of file
++UpdatingVisualStudioCode=Actualizando Axle...
+\ No newline at end of file
+diff --git a/build/win32/i18n/messages.fr.isl b/build/win32/i18n/messages.fr.isl
+index 65ad8f19..580c102e 100644
+--- a/build/win32/i18n/messages.fr.isl
++++ b/build/win32/i18n/messages.fr.isl
+@@ -7,4 +7,4 @@ RunAfter=Exécuter %1 après l'installation
+ Other=Autre :
+ SourceFile=Fichier source %1
+ OpenWithCodeContextMenu=Ouvrir avec %1
+-UpdatingVisualStudioCode=Mise à jour de Visual Studio Code...
+\ No newline at end of file
++UpdatingVisualStudioCode=Mise à jour d'Axle...
+\ No newline at end of file
+diff --git a/build/win32/i18n/messages.hu.isl b/build/win32/i18n/messages.hu.isl
+index 87487f60..11d56488 100644
+--- a/build/win32/i18n/messages.hu.isl
++++ b/build/win32/i18n/messages.hu.isl
+@@ -7,4 +7,4 @@ RunAfter=%1 indítása a telepítés után
+ Other=Egyéb:
+ SourceFile=%1 forrásfájl
+ OpenWithCodeContextMenu=Megnyitás a következővel: %1
+-UpdatingVisualStudioCode=A Visual Studio Code frissítése...
+\ No newline at end of file
++UpdatingVisualStudioCode=Az Axle frissítése...
+\ No newline at end of file
+diff --git a/build/win32/i18n/messages.it.isl b/build/win32/i18n/messages.it.isl
+index ac64aae7..5e9553a9 100644
+--- a/build/win32/i18n/messages.it.isl
++++ b/build/win32/i18n/messages.it.isl
+@@ -7,4 +7,4 @@ RunAfter=Esegui %1 dopo l'installazione
+ Other=Altro:
+ SourceFile=File di origine %1
+ OpenWithCodeContextMenu=Apri con %1
+-UpdatingVisualStudioCode=Aggiornamento di Visual Studio Code...
+\ No newline at end of file
++UpdatingVisualStudioCode=Aggiornamento di Axle...
+\ No newline at end of file
+diff --git a/build/win32/i18n/messages.ja.isl b/build/win32/i18n/messages.ja.isl
+index 76e634fd..9248371c 100644
+--- a/build/win32/i18n/messages.ja.isl
++++ b/build/win32/i18n/messages.ja.isl
+@@ -7,4 +7,4 @@ RunAfter=インストール後に %1 を実行する
+ Other=その他:
+ SourceFile=%1 ソース ファイル
+ OpenWithCodeContextMenu=%1 で開く
+-UpdatingVisualStudioCode=Visual Studio Code を更新しています...
+\ No newline at end of file
++UpdatingVisualStudioCode=Axle を更新しています...
+\ No newline at end of file
+diff --git a/build/win32/i18n/messages.ko.isl b/build/win32/i18n/messages.ko.isl
+index 40abfafa..779a69dc 100644
+--- a/build/win32/i18n/messages.ko.isl
++++ b/build/win32/i18n/messages.ko.isl
+@@ -7,4 +7,4 @@ RunAfter=설치 후 %1 실행
+ Other=기타:
+ SourceFile=%1 원본 파일
+ OpenWithCodeContextMenu=%1(으)로 열기
+-UpdatingVisualStudioCode=Visual Studio Code 업데이트 중...
+\ No newline at end of file
++UpdatingVisualStudioCode=Axle 업데이트 중...
+\ No newline at end of file
+diff --git a/build/win32/i18n/messages.pt-br.isl b/build/win32/i18n/messages.pt-br.isl
+index 08c77290..a97f831b 100644
+--- a/build/win32/i18n/messages.pt-br.isl
++++ b/build/win32/i18n/messages.pt-br.isl
+@@ -7,4 +7,4 @@ RunAfter=Executar %1 após a instalação
+ Other=Outros:
+ SourceFile=Arquivo Fonte %1
+ OpenWithCodeContextMenu=Abrir com %1
+-UpdatingVisualStudioCode=Atualizando o Visual Studio Code...
+\ No newline at end of file
++UpdatingVisualStudioCode=Atualizando o Axle...
+\ No newline at end of file
+diff --git a/build/win32/i18n/messages.ru.isl b/build/win32/i18n/messages.ru.isl
+index d4f427a1..f5a4b17a 100644
+--- a/build/win32/i18n/messages.ru.isl
++++ b/build/win32/i18n/messages.ru.isl
+@@ -7,4 +7,4 @@ RunAfter=Запустить %1 после установки
+ Other=Другое:
+ SourceFile=Исходный файл %1
+ OpenWithCodeContextMenu=Открыть с помощью %1
+-UpdatingVisualStudioCode=Обновление Visual Studio Code...
+\ No newline at end of file
++UpdatingVisualStudioCode=Обновление Axle...
+\ No newline at end of file
+diff --git a/build/win32/i18n/messages.tr.isl b/build/win32/i18n/messages.tr.isl
+index 7cc65864..4306d769 100644
+--- a/build/win32/i18n/messages.tr.isl
++++ b/build/win32/i18n/messages.tr.isl
+@@ -7,4 +7,4 @@ RunAfter=Kurulumdan sonra %1 uygulamasını çalıştır.
+ Other=Diğer:
+ SourceFile=%1 Kaynak Dosyası
+ OpenWithCodeContextMenu=%1 İle Aç
+-UpdatingVisualStudioCode=Visual Studio Code güncelleniyor...
+\ No newline at end of file
++UpdatingVisualStudioCode=Axle güncelleniyor...
+\ No newline at end of file
+diff --git a/build/win32/i18n/messages.zh-cn.isl b/build/win32/i18n/messages.zh-cn.isl
+index 79e9cdbb..dce9816c 100644
+--- a/build/win32/i18n/messages.zh-cn.isl
++++ b/build/win32/i18n/messages.zh-cn.isl
+@@ -7,4 +7,4 @@ RunAfter=安装后运行 %1
+ Other=其他:
+ SourceFile=%1 源文件
+ OpenWithCodeContextMenu=通过 %1 打开
+-UpdatingVisualStudioCode=正在更新 Visual Studio Code...
+\ No newline at end of file
++UpdatingVisualStudioCode=正在更新 Axle...
+\ No newline at end of file
+diff --git a/build/win32/i18n/messages.zh-tw.isl b/build/win32/i18n/messages.zh-tw.isl
+index d7a95a94..181a8892 100644
+--- a/build/win32/i18n/messages.zh-tw.isl
++++ b/build/win32/i18n/messages.zh-tw.isl
+@@ -7,4 +7,4 @@ RunAfter=安裝後執行 %1
+ Other=其他:
+ SourceFile=%1 來源檔案
+ OpenWithCodeContextMenu=以 %1 開啟
+-UpdatingVisualStudioCode=正在更新 Visual Studio Code...
+\ No newline at end of file
++UpdatingVisualStudioCode=正在更新 Axle...
+\ No newline at end of file
+diff --git a/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts b/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts
+index ff993368..6c484caf 100644
+--- a/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts
++++ b/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts
+@@ -183,7 +183,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 		this.overlay = append(container, $('.onboarding-a-overlay'));
+ 		this.overlay.setAttribute('role', 'dialog');
+ 		this.overlay.setAttribute('aria-modal', 'true');
+-		this.overlay.setAttribute('aria-label', localize('onboarding.a.aria', "Welcome to Visual Studio Code"));
++		this.overlay.setAttribute('aria-label', localize('onboarding.a.aria', "Welcome to {0}", product.nameShort));
+ 
+ 		// Card
+ 		this.card = append(this.overlay, $('.onboarding-a-card'));
+@@ -486,7 +486,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 		const content = append(wrapper, $('.onboarding-a-signin-content'));
+ 		const contentMain = append(content, $('.onboarding-a-signin-content-main'));
+ 		const title = append(contentMain, $('h2.onboarding-a-signin-title'));
+-		title.textContent = localize('onboarding.signIn.heroTitle', "Welcome to VS Code");
++		title.textContent = localize('onboarding.signIn.heroTitle', "Welcome to {0}", product.nameShort);
+ 
+ 		const subtitle = append(contentMain, $('p.onboarding-a-signin-subtitle'));
+ 		subtitle.textContent = localize('onboarding.signIn.heroSubtitle', "Sign in to use GitHub Copilot.");
+@@ -928,7 +928,7 @@ export class OnboardingVariationA extends Disposable implements IOnboardingServi
+ 			this._createKbd(localize('onboarding.personalize.tip.shift', "Shift")),
+ 			'+',
+ 			this._createKbd(localize('onboarding.personalize.tip.p', "P")),
+-			localize('onboarding.personalize.tip.suffix', " to access all VS Code commands."),
++			localize('onboarding.personalize.tip.suffix', " to access all {0} commands.", product.nameShort),
+ 		);
+ 	}
+ 
+diff --git a/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts b/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
+index 067580a4..ab885bd0 100644
+--- a/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
++++ b/src/vs/workbench/contrib/welcomeGettingStarted/browser/gettingStarted.contribution.ts
+@@ -342,7 +342,8 @@ configurationRegistry.registerConfiguration({
+ 		'workbench.welcomePage.experimentalOnboarding': {
+ 			scope: ConfigurationScope.APPLICATION,
+ 			type: 'boolean',
+-			default: true,
++			// Axle: its first run must not show VS Code's GitHub Copilot sign-in page; Axle has no Copilot.
++			default: false,
+ 			tags: ['experimental'],
+ 			description: localize('workbench.welcomePage.experimentalOnboarding', "When enabled, show the new onboarding experience instead of the classic walkthrough on first launch."),
+ 			experiment: {

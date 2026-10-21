@@ -303,7 +303,7 @@ index dbb08664..68551ea2 100644
  				// If updates were disabled mid-check, ignore the result so we don't leave the Disabled state.
  				if (this.state.type !== StateType.CheckingForUpdates) {
 diff --git a/src/vs/platform/update/electron-main/updateService.win32.ts b/src/vs/platform/update/electron-main/updateService.win32.ts
-index 06092f10..3a0b8f6d 100644
+index 06092f10..62110f30 100644
 --- a/src/vs/platform/update/electron-main/updateService.win32.ts
 +++ b/src/vs/platform/update/electron-main/updateService.win32.ts
 @@ -30,7 +30,7 @@ import { ILogService } from '../../log/common/log.js';
@@ -315,7 +315,17 @@ index 06092f10..3a0b8f6d 100644
  import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
  import { ITelemetryService } from '../../telemetry/common/telemetry.js';
  import { AvailableForDownload, DisablementReason, IUpdate, State, StateType, UpdateType } from '../common/update.js';
-@@ -63,7 +63,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
+@@ -49,6 +49,9 @@ interface IAvailableUpdate {
+ 
+ const RELAUNCH_ARGUMENTS_FILE_PREFIX = 'relaunch-args-';
+ 
++// Axle never updates in the background: that mode stages the new build next to the old one and lets inno_updater swap
++// them, which only works in the versioned install layout, and that needs a custom Electron build (an Electron from
++// electronjs.org cannot start from it). Without it the update is installed when the app restarts (Restart to Update).
+ export class Win32UpdateService extends AbstractUpdateService implements IRelaunchHandler {
+ 
+ 	private availableUpdate: IAvailableUpdate | undefined;
+@@ -63,7 +66,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
  	private readonly setupMutexName: string;
  
  	private get cachePathSync(): string {
@@ -324,7 +334,16 @@ index 06092f10..3a0b8f6d 100644
  	}
  
  	@memoize
-@@ -238,7 +238,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
+@@ -179,7 +182,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
+ 			return;
+ 		}
+ 
+-		const fastUpdatesEnabled = this.configurationService.getValue('update.enableWindowsBackgroundUpdates');
++		const fastUpdatesEnabled = false;
+ 		// GC for background updates in system setup happens via inno_setup since it requires elevated permissions.
+ 		if (!fastUpdatesEnabled || this.productService.target !== 'user' || !this.productService.commit) {
+ 			return;
+@@ -238,7 +241,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
  
  		const headers = getUpdateRequestHeaders(this.productService.version);
  		const promise = this.requestService.request({ url, headers, callSite: 'updateService.win32.checkForUpdates' }, token)
@@ -333,3 +352,43 @@ index 06092f10..3a0b8f6d 100644
  			.then(update => {
  				const updateType = this.getUpdateType();
  
+@@ -323,7 +326,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
+ 						this.saveUpdateMetadata(update);
+ 						this.setState(State.Downloaded(update, explicit, this._overwrite));
+ 
+-						const fastUpdatesEnabled = this.configurationService.getValue('update.enableWindowsBackgroundUpdates');
++						const fastUpdatesEnabled = false;
+ 						if (fastUpdatesEnabled && this.productService.target === 'user') {
+ 							this.doApplyUpdate();
+ 						} else {
+@@ -706,7 +709,7 @@ export class Win32UpdateService extends AbstractUpdateService implements IRelaun
+ 			return;
+ 		}
+ 
+-		const fastUpdatesEnabled = this.configurationService.getValue('update.enableWindowsBackgroundUpdates');
++		const fastUpdatesEnabled = false;
+ 		const update: IUpdate = await this.loadUpdateMetadata() ?? { version: commit ?? 'unknown', productVersion: 'unknown' };
+ 
+ 		this.setState(State.Downloading(update, true, false));
+diff --git a/src/vs/platform/update/common/update.config.contribution.ts b/src/vs/platform/update/common/update.config.contribution.ts
+index f00f77df..bb81c19d 100644
+--- a/src/vs/platform/update/common/update.config.contribution.ts
++++ b/src/vs/platform/update/common/update.config.contribution.ts
+@@ -3,7 +3,7 @@
+  *  Licensed under the MIT License. See License.txt in the project root for license information.
+  *--------------------------------------------------------------------------------------------*/
+ 
+-import { isWeb, isWindows } from '../../../base/common/platform.js';
++import { isWeb } from '../../../base/common/platform.js';
+ import { PolicyCategory } from '../../../base/common/policy.js';
+ import { localize } from '../../../nls.js';
+ import { ConfigurationScope, Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
+@@ -69,7 +69,7 @@ configurationRegistry.registerConfiguration({
+ 			scope: ConfigurationScope.APPLICATION,
+ 			title: localize('enableWindowsBackgroundUpdatesTitle', "Enable Background Updates"),
+ 			description: localize('enableWindowsBackgroundUpdates', "Enable to download and install new VS Code versions in the background."),
+-			included: isWindows && !isWeb
++			included: false // Axle: the Windows update is installed when the app restarts (see updateService.win32.ts)
+ 		},
+ 		'update.showReleaseNotes': {
+ 			type: 'boolean',
