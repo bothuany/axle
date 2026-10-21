@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { QUALITY, buildManifests, platforms } from '../../scripts/update-manifests.mjs'
+import { LEGACY_QUALITY, QUALITY, buildManifests, platforms } from '../../scripts/update-manifests.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const readPatch = name => readFileSync(join(ROOT, 'editor', 'patches', name), 'utf8').replace(/\r\n/g, '\n')
@@ -85,7 +85,16 @@ test('the release job writes one update file per platform in the shape VS Code r
 		`update-darwin-${QUALITY}.json`,
 		`update-linux-x64-${QUALITY}.json`,
 		`update-win32-x64-user-${QUALITY}.json`,
+		// What an installed 0.4.x (Axle) asks for.
+		`update-darwin-arm64-${LEGACY_QUALITY}.json`,
+		`update-darwin-${LEGACY_QUALITY}.json`,
+		`update-linux-x64-${LEGACY_QUALITY}.json`,
+		`update-win32-x64-user-${LEGACY_QUALITY}.json`,
 	].sort())
+	for (const p of ['win32-x64-user', 'darwin', 'darwin-arm64', 'linux-x64']) {
+		assert.deepEqual(files[`update-${p}-${LEGACY_QUALITY}.json`], files[`update-${p}-${QUALITY}.json`], `${p}: the old name carries the same release`)
+	}
+	assert.equal(LEGACY_QUALITY, 'axle')
 	for (const json of Object.values(files)) {
 		assert.deepEqual(Object.keys(json).sort(), ['name', 'productVersion', 'sha256hash', 'timestamp', 'url', 'version'])
 		assert.equal(json.productVersion, '0.4.2')
@@ -115,7 +124,7 @@ test('a release with a missing file, or a bad version, writes nothing', () => {
 test('the product points at the release assets with a quality the build has no other meaning for', () => {
 	const product = addedLines('product.json', corePatch).join('\n')
 	assert.match(product, new RegExp(`"quality": "${QUALITY}"`))
-	assert.match(product, /"updateUrl": "https:\/\/github\.com\/bothuany\/insilode\/releases\/latest\/download"/)
+	assert.match(product, /"updateUrl": "https:\/\/github\.com\/bothuany\/axle\/releases\/latest\/download"/)
 	// "stable" and "insider" switch on VS Code's own installer parts (the Windows 11 context menu) and a "switch to Insiders" prompt.
 	assert.notEqual(QUALITY, 'stable')
 	assert.notEqual(QUALITY, 'insider')
@@ -123,7 +132,7 @@ test('the product points at the release assets with a quality the build has no o
 
 test('every update file name is the one the app asks for', () => {
 	// The app asks for <updateUrl>/update-<platform>-<quality>.json, the platform being VS Code's own name for it.
-	const asked = ['win32-x64-user', 'darwin', 'darwin-arm64', 'linux-x64'].map(p => `update-${p}-${QUALITY}.json`)
+	const asked = ['win32-x64-user', 'darwin', 'darwin-arm64', 'linux-x64'].flatMap(p => [QUALITY, LEGACY_QUALITY].map(q => `update-${p}-${q}.json`))
 	assert.deepEqual(Object.keys(buildManifests({ version: '1.0.0', commit: 'c', repo: 'o/r', hashes: Object.fromEntries(platforms('1.0.0').map(({ asset }) => [asset, 'a'.repeat(64)])), timestamp: 1 })).sort(), asked.sort())
 	for (const platform of ['win32-x64-user', 'darwin', 'darwin-arm64', 'linux-x64']) {
 		assert.equal(createInsilodeUpdateURL(BASE, platform, QUALITY), `${BASE}/update-${platform}-${QUALITY}.json`)

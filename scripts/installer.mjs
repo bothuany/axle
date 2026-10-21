@@ -298,7 +298,7 @@ for (const name of flowExtensions) {
 		problems.push(`extensions/${name}: ${main} is missing (the extension was not built)`)
 	}
 }
-for (const file of ['extensions/flow-view/analyzer/FlowAnalyzer.dll', 'extensions/flow-view/ui/dist-webview/webview.js', 'extensions/flow-view/ui/dist-webview/board.js', 'extensions/flow-view/out/insilode-mcp.js']) {
+for (const file of ['extensions/flow-view/analyzer/FlowAnalyzer.dll', 'extensions/flow-view/ui/dist-webview/webview.js', 'extensions/flow-view/ui/dist-webview/board.js', 'extensions/flow-view/out/insilode-mcp.js', 'extensions/flow-view/out/axle-mcp.js']) {
 	if (!existsSync(join(appDir, file))) {
 		problems.push(`${file} is missing`)
 	}

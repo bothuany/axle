@@ -1,4 +1,4 @@
-// Writes the update files a release carries next to its installers: one update-<platform>-insilode.json per platform,
+// Writes the update files a release carries next to its installers: one update-<platform>-insilode.json per platform (and the same under the old name, update-<platform>-axle.json),
 // which the update service of the Insilode app (editor/patches/flow-update.patch) reads from
 // https://github.com/<repo>/releases/latest/download/. The app compares productVersion with its own version, so a
 // release never needs a server to say "no update".
@@ -15,6 +15,13 @@ import { pathToFileURL } from 'node:url'
 
 /** Product `quality` of the app: part of every file name. Must equal "quality" in product.json (test/update checks it). */
 export const QUALITY = 'insilode'
+
+/**
+ * The quality of the app before the rename (it was called Axle): an installed 0.4.x asks for `update-<platform>-axle.json`, at the same
+ * releases/latest/download address (GitHub redirects a renamed repository). The same file is written under that name too, for the 0.5.x
+ * releases, so those users are told of the new release. Drop it when the 0.4.x tail is gone.
+ */
+export const LEGACY_QUALITY = 'axle'
 
 /** What each update file points at: the asset it is the checksum of and whether the app installs it itself. */
 export function platforms(version) {
@@ -41,13 +48,16 @@ export function buildManifests({ version, commit, repo, hashes, timestamp }) {
 		if (!sha256hash) {
 			throw new Error(`${asset} is missing: the ${platform} update file cannot be written`)
 		}
-		files[`update-${platform}-${QUALITY}.json`] = {
+		const file = {
 			url: install ? `https://github.com/${repo}/releases/download/${tag}/${asset}` : `https://github.com/${repo}/releases/tag/${tag}`,
 			name: `Insilode ${version}`,
 			version: commit,
 			productVersion: version,
 			sha256hash,
 			timestamp,
+		}
+		for (const quality of [QUALITY, LEGACY_QUALITY]) {
+			files[`update-${platform}-${quality}.json`] = file
 		}
 	}
 	return files
