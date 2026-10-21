@@ -85,3 +85,104 @@ test('board-svg: the export draws badges, guards and open heads', () => {
 	assert.match(out, /<circle[^>]*r="8"/)
 	assert.match(out, /stroke="#0f0"/)
 })
+
+let seq
+before(async () => {
+	seq = await load('../../../ui/src/board/sequence.ts')
+})
+
+const sequenceBoard = (extra = {}) => ({
+	version: 1, kind: 'sequence', title: 'Pay',
+	nodes: [{ id: 'cli', label: 'Client', kind: 'actor' }, { id: 'api', label: 'API' }, { id: 'db', label: 'DB' }],
+	edges: [
+		{ from: 'cli', to: 'api', label: 'POST /pay', order: 1 },
+		{ from: 'api', to: 'db', label: 'insert payment', order: 2 },
+		{ from: 'db', to: 'api', label: 'row id', order: 3, style: 'dashed' },
+		{ from: 'api', to: 'cli', label: '201', order: 4, style: 'dashed' },
+	],
+	...extra,
+})
+
+test('board-sequence: messages run top to bottom in `order`, not in array order', () => {
+	const spec = sequenceBoard()
+	spec.edges = [spec.edges[3], spec.edges[1], spec.edges[0], spec.edges[2]]
+	const l = seq.buildSequence(spec)
+	assert.deepEqual(l.messages.map(m => m.edge.order), [1, 2, 3, 4])
+	assert.ok(l.messages.every((m, i) => i === 0 || m.y > l.messages[i - 1].y))
+	assert.equal(l.unordered, false)
+	assert.equal(seq.buildSequence(sequenceBoard({ edges: [{ from: 'cli', to: 'api' }, { from: 'api', to: 'db', order: 1 }] })).unordered, true)
+	assert.deepEqual(seq.orderedEdges(sequenceBoard({ edges: [{ from: 'cli', to: 'api', label: 'b' }, { from: 'api', to: 'db', order: 1, label: 'a' }, { from: 'db', to: 'api', label: 'c' }] })).map(e => e.label), ['a', 'b', 'c'], 'the unnumbered follow, in array order')
+})
+
+test('board-sequence: lifelines keep the node order, with room for long labels', () => {
+	const l = seq.buildSequence(sequenceBoard({ edges: [{ from: 'cli', to: 'db', label: 'x'.repeat(80), order: 1 }] }))
+	assert.deepEqual(l.lifelines.map(x => x.id), ['cli', 'api', 'db'])
+	assert.ok(l.lifelines[2].x - l.lifelines[0].x > 80 * 6, 'the label fits between the lifelines it crosses')
+	for (let i = 1; i < l.lifelines.length; i++) assert.ok(l.lifelines[i].x - l.lifelines[i - 1].x >= 190, 'heads never touch')
+})
+
+test('board-sequence: a call opens an activation bar that its reply closes; nested calls nest', () => {
+	const l = seq.buildSequence(sequenceBoard())
+	const api = l.activations.filter(a => l.lifelines[a.lifeline].id === 'api')
+	const db = l.activations.filter(a => l.lifelines[a.lifeline].id === 'db')
+	assert.equal(api.length, 1)
+	assert.equal(db.length, 1)
+	assert.ok(api[0].y1 < db[0].y1 && api[0].y2 > db[0].y2, 'the API is active around the DB call')
+	assert.equal(l.messages[2].ret, true)
+	const open = seq.buildSequence(sequenceBoard({ edges: [{ from: 'cli', to: 'api', order: 1 }, { from: 'api', to: 'db', order: 2 }] }))
+	assert.equal(open.activations.length, 2, 'a call with no reply still gets a bar')
+	const asy = seq.buildSequence(sequenceBoard({ edges: [{ from: 'cli', to: 'api', order: 1, async: true }] }))
+	assert.equal(asy.activations.length, 0, 'an asynchronous message activates nothing')
+})
+
+test('board-sequence: alt, else and loop boxes wrap their messages and nest', () => {
+	const spec = sequenceBoard({
+		groups: [{ id: 'ok', label: '[valid]', kind: 'alt' }, { id: 'bad', label: '[invalid]', kind: 'alt', parent: 'ok' }, { id: 'again', label: 'retry', kind: 'loop', parent: 'ok' }],
+		edges: [
+			{ from: 'cli', to: 'api', order: 1 },
+			{ from: 'api', to: 'db', order: 2, fragment: 'ok' },
+			{ from: 'db', to: 'api', order: 3, fragment: 'again', style: 'dashed' },
+			{ from: 'api', to: 'cli', order: 4, fragment: 'bad', label: '400' },
+		],
+	})
+	const l = seq.buildSequence(spec)
+	const frame = id => l.frames.find(f => f.id === id)
+	assert.equal(l.frames.length, 3)
+	assert.equal(frame('bad').isElse, true)
+	assert.equal(frame('again').isElse, false, 'a loop inside an alt is a nested box, not an else')
+	assert.equal(frame('ok').depth, 0)
+	assert.equal(frame('again').depth, 1)
+	const m = i => l.messages[i].y
+	assert.ok(frame('ok').y1 < m(1) && frame('ok').y2 > m(3), 'the alt box covers its messages and its else branch')
+	assert.ok(frame('again').y1 < m(2) && frame('again').y2 > m(2) && frame('again').y2 < frame('ok').y2, 'the loop sits inside')
+	assert.ok(frame('bad').y1 > m(2) && frame('bad').y1 < m(3), 'the else divider is above its first message')
+	assert.ok(frame('ok').x1 < frame('again').x1, 'the outer box is wider than the inner one')
+	assert.ok(m(0) < frame('ok').y1, 'a message outside is not boxed')
+})
+
+test('board-sequence: shapes carry ids for clicks and highlights, and a lit set dims the rest', () => {
+	const spec = sequenceBoard({ callouts: [{ node: 'api', text: 'Retries twice' }, { edge: ['api', 'db'], text: 'idempotent' }] })
+	const l = seq.buildSequence(spec)
+	const all = seq.sequenceShapes(l, spec)
+	assert.ok(all.shapes.some(s => s.node === 'api' && s.t === 'rect'))
+	assert.ok(all.shapes.some(s => s.edge === 'api>db' && s.t === 'line'))
+	assert.equal(all.dim.size, 0)
+	const some = seq.sequenceShapes(l, spec, { nodes: new Set(['api', 'db']), edges: new Set(['api>db']) })
+	const dimmed = [...some.dim.keys()]
+	assert.ok(dimmed.some(s => s.node === 'cli'), 'a lifeline outside the step fades')
+	assert.ok(!dimmed.some(s => s.edge === 'api>db'), 'a lit message stays')
+	assert.ok(dimmed.some(s => s.edge === 'cli>api'))
+	assert.ok(all.shapes.filter(s => s.t === 'text').some(s => s.text === 'Retries twice'), 'callouts become notes')
+	assert.ok(all.shapes.filter(s => s.t === 'text').some(s => s.text === '2' ), 'order badges show')
+})
+
+test('board-sequence: the svg export has every lifeline and message, escaped', () => {
+	const spec = sequenceBoard({ nodes: [{ id: 'cli', label: 'A <script>' }, { id: 'api', label: 'API' }, { id: 'db', label: 'DB' }] })
+	const palette = { canvas: '#000', card: '#111', line: '#222', text: '#eee', muted: '#999', signal: '#66f', add: '#0f0', del: '#f00', warn: '#fa0', groupFill: '#222' }
+	const out = svg.sequenceSvg(spec, palette, 'Pay <b>')
+	assert.match(out, /^<svg /)
+	assert.match(out, /A &lt;script&gt;/)
+	assert.doesNotMatch(out, /<script>/)
+	assert.match(out, /POST \/pay/)
+	assert.match(out, /stroke-dasharray="6 4"/, 'a reply is dashed')
+})

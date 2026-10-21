@@ -12,7 +12,9 @@ import { KIND_COLOR, ROLE_CHIPS, type BoardOpts, type Bootstrap, type ExportForm
 import { ActionsCtx, nodeTypes, type Actions, type CardData, type GroupData } from './cards'
 import { CalloutLayer } from './callouts'
 import { EdgeLayer } from './edges'
-import { toSvg, type Palette } from './svg'
+import { sequenceSvg, toSvg, type Palette } from './svg'
+import { SequenceView, type SequenceApi } from './SequenceView'
+import type { Lit } from './sequence'
 import { Legend } from './legend'
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void }
@@ -93,6 +95,7 @@ function BoardView() {
   const root = useRef<HTMLDivElement>(null)
   const searchBox = useRef<HTMLInputElement>(null)
   const canRebuild = !!boot.source
+  const seqApi = useRef<SequenceApi | null>(null)
 
   const [spec, setSpec] = useState<BoardSpec>(boot.spec)
   const [opts, setOpts] = useState<BoardOpts>(boot.opts ?? {})
@@ -178,6 +181,8 @@ function BoardView() {
     () => buildLayout(spec, { direction, members, expanded: expandedNodes, isCollapsed: g => !autoOpen.has(g.id) && (overrides.get(g.id) ?? g.collapsed === true) }),
     [spec, direction, members, expandedNodes, overrides, autoOpen],
   )
+  const sequence = spec.kind === 'sequence'
+  const seqLit = useMemo<Lit | undefined>(() => (searching ? { nodes: matched, edges: new Set() } : undefined), [searching, matched])
   const adj = useMemo(() => adjacency(layout.edges), [layout])
   const hotId = hover ?? (selected ? layout.rep.get(selected) : undefined) ?? null
 
@@ -228,7 +233,7 @@ function BoardView() {
   }, [hotId, adj, nodes])
 
   // ---- viewport --------------------------------------------------------------------------------
-  const fit = useCallback(() => void rf.fitView({ padding: 0.12, duration: 0, maxZoom: 1.1 }), [rf])
+  const fit = useCallback(() => (seqApi.current ? seqApi.current.fit() : void rf.fitView({ padding: 0.12, duration: 0, maxZoom: 1.1 })), [rf])
   const centerOn = useCallback((id: string) => {
     const v = layout.nodes.find(n => n.id === (layout.rep.get(id) ?? id))
     if (!v) return
@@ -313,7 +318,7 @@ function BoardView() {
       if (format === 'json') {
         post({ type: 'export', format, data: JSON.stringify(spec, null, 2), name })
       } else if (format === 'svg' || format === 'png') {
-        const svg = toSvg(layout, direction, readPalette(), spec.title)
+        const svg = sequence ? sequenceSvg(spec, readPalette(), spec.title) : toSvg(layout, direction, readPalette(), spec.title)
         if (format === 'svg') {
           post({ type: 'export', format, data: svg, name })
         } else {
@@ -442,10 +447,10 @@ function BoardView() {
           <div className="bd-group">
             {canRebuild && typeBoard && <button className="chip" data-act="entities" aria-pressed={includeEntities} onClick={() => rebuild({ includeEntities: !includeEntities })}>Entities</button>}
             {canRebuild && typeBoard && <button className="chip" data-act="enums" aria-pressed={includeEnums} onClick={() => rebuild({ includeEnums: !includeEnums })}>Enums</button>}
-            <button className="chip" data-act="members" aria-pressed={members} onClick={() => { setMembers(!members); fitNext.current = true }}>Members</button>
-            <button className="chip" data-act="direction" title="Layout direction" onClick={() => { directionChosen.current = true; setDirection(direction === 'LR' ? 'TB' : 'LR'); fitNext.current = true }}>{direction === 'LR' ? 'Left → right' : 'Top ↓ bottom'}</button>
+            {!sequence && <button className="chip" data-act="members" aria-pressed={members} onClick={() => { setMembers(!members); fitNext.current = true }}>Members</button>}
+            {!sequence && <button className="chip" data-act="direction" title="Layout direction" onClick={() => { directionChosen.current = true; setDirection(direction === 'LR' ? 'TB' : 'LR'); fitNext.current = true }}>{direction === 'LR' ? 'Left → right' : 'Top ↓ bottom'}</button>}
           </div>
-          {(spec.groups?.length ?? 0) > 0 && (
+          {!sequence && (spec.groups?.length ?? 0) > 0 && (
             <div className="bd-group" title="Packages">
               <span className="bd-status">Packages</span>
               <button className="chip" data-act="collapse-all" onClick={() => setLevel(0)}>Collapse</button>
@@ -465,8 +470,9 @@ function BoardView() {
       </div>
       <div className="bd-stage">
         <ActionsCtx.Provider value={actions}>
-          <EdgeLayer layout={layout} direction={direction} hot={hotId ?? undefined} active={active} />
-          <ReactFlow
+          {sequence && <SequenceView spec={spec} lit={seqLit} selected={selected} apiRef={seqApi} onSelect={n => { setSelected(n.id); if (n.file) post({ type: 'open', file: n.file, line: n.line ?? 1 }) }} />}
+          {!sequence && <EdgeLayer layout={layout} direction={direction} hot={hotId ?? undefined} active={active} />}
+          {!sequence && <ReactFlow
             nodes={nodes}
             edges={[]}
             nodeTypes={nodeTypes}
@@ -481,8 +487,8 @@ function BoardView() {
             onPaneClick={() => { setSelected(undefined); setActive(undefined) }}
           >
             {layout.nodes.length > 8 && <MiniMap pannable zoomable nodeStrokeWidth={0} nodeColor={n => ((n.data as CardData | undefined)?.v?.node ? KIND_COLOR[(n.data as CardData).v.node!.kind ?? 'class'] : 'var(--fl-line-strong)')} />}
-          </ReactFlow>
-          <CalloutLayer layout={layout} direction={direction} />
+          </ReactFlow>}
+          {!sequence && <CalloutLayer layout={layout} direction={direction} />}
         </ActionsCtx.Provider>
         {spec.nodes.length === 0 && (
           <div className="bd-empty">

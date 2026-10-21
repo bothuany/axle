@@ -188,3 +188,7 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .co-text { fill: var(--fl-text); font: 11px var(--fl-ui); }
 .co-tail { stroke: color-mix(in srgb, #e6c15a 70%, transparent); stroke-width: 1; fill: none; }
 .co-dot { fill: #e6c15a; }
+
+/* ---- sequence ------------------------------------------------------------------------------- */
+.sq { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; user-select: none; }
+.sq:active { cursor: grabbing; }

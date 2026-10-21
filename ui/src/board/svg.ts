@@ -3,6 +3,8 @@
 import { cardinalityAt, orderBadge, routeEdge, veeOf } from './route'
 import { CARD_PAD, DETAIL_H, detailOf, GROUP_HEAD, HEADER_H, MARK_SIZE, ROW_H, type Layout, type VNode } from './model'
 import { edgeText, KIND_COLOR, lineStyle, STEREOTYPE } from './protocol'
+import { buildSequence, sequenceShapes, type Shape, type Tone } from './sequence'
+import type { BoardSpec } from './spec'
 
 export interface Palette {
   canvas: string
@@ -114,5 +116,31 @@ function nodeSvg(v: VNode, p: Palette): string {
     })
     if (v.more) out.push(`<text x="${x + 24}" y="${top + CARD_PAD + v.rows.length * ROW_H + ROW_H / 2 + 4}" ${FONT} font-size="10.5" fill="${p.muted}">+${v.more} more</text>`)
   }
+  return out.join('\n')
+}
+
+/** A sequence board as a standalone SVG: the same shapes the canvas draws, with the palette's plain colours. */
+export function sequenceSvg(spec: BoardSpec, p: Palette, title?: string): string {
+  const layout = buildSequence(spec)
+  const { shapes } = sequenceShapes(layout, spec)
+  const margin = 24
+  const head = title ? 28 : 0
+  const w = layout.width + margin * 2
+  const h = layout.height + margin * 2 + head
+  const tone = (t: Tone | undefined) => (t === undefined ? 'none' : t === 'note' ? '#e6c15a' : p[t === 'canvas' ? 'canvas' : t === 'card' ? 'card' : t === 'line' ? 'line' : t])
+  const attrs = (sh: Shape, fillDefault: string) => `fill="${sh.fill ? tone(sh.fill) : fillDefault}"${sh.fillOpacity !== undefined ? ` fill-opacity="${sh.fillOpacity}"` : ''} stroke="${sh.stroke ? tone(sh.stroke) : 'none'}"${sh.sw ? ` stroke-width="${sh.sw}"` : ''}${sh.dash ? ` stroke-dasharray="${sh.dash}"` : ''}`
+  const out = [`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`, `<rect width="${w}" height="${h}" fill="${p.canvas}"/>`]
+  if (title) out.push(`<text x="${margin}" y="22" ${FONT} font-size="16" font-weight="600" fill="${p.text}">${xml(title)}</text>`)
+  out.push(`<g transform="translate(${margin} ${margin + head + layout.padTop})">`)
+  for (const sh of shapes) {
+    switch (sh.t) {
+      case 'rect': out.push(`<rect x="${sh.x}" y="${sh.y}" width="${sh.w}" height="${sh.h}" rx="${sh.r ?? 0}" ${attrs(sh, 'none')}/>`); break
+      case 'line': out.push(`<line x1="${sh.x}" y1="${sh.y}" x2="${sh.x2}" y2="${sh.y2}" ${attrs(sh, 'none')}/>`); break
+      case 'path': out.push(`<path d="${sh.d}" ${attrs(sh, 'none')}/>`); break
+      case 'circle': out.push(`<circle cx="${sh.x}" cy="${sh.y}" r="${sh.r}" ${attrs(sh, 'none')}/>`); break
+      case 'text': out.push(`<text x="${sh.x}" y="${sh.y}" text-anchor="${sh.anchor ?? 'start'}" ${FONT} font-size="${sh.size}"${sh.bold ? ' font-weight="600"' : ''} fill="${sh.fill ? tone(sh.fill) : p.text}">${xml(sh.text ?? '')}</text>`); break
+    }
+  }
+  out.push('</g></svg>')
   return out.join('\n')
 }
