@@ -1,0 +1,348 @@
+---
+format: 1920x1080
+duration: 80s
+message: "Your agent changed the code. Axle shows you where, on how it runs."
+arc: Problem (hook) → Turn (the canvas answers) → Proof ×3 (tour, agents, diagrams) → Credibility → One CTA
+audience: developers who run Claude Code or Codex on real codebases
+mode: collaborative
+version: v2
+---
+
+# Launch film: storyboard v2
+
+**Message.** Your agent changed the code. Axle shows you where, on how it runs.
+
+**Audience and arc.** Developers who already let an agent edit their repo. Pain → turn → proof → lockup:
+the hook asks a question every agent user has had, the canvas answers it, three features show the
+rest of the loop, one call to action.
+
+**Format.** 1920×1080, 80 s (target 60-90 s), 30 fps. English voiceover (local TTS), burned-in
+captions in the bottom band (y 82-94 %), so key content stays in the top ~80 %. Music enters at the
+turn, not before. A silent 15 s loop, a 1:1 and a 9:16 cut come from the same project.
+
+**The spine: the fourteen files.** The hook shows the agent asking to edit them (the dock's approval
+line), the diff lists them with nothing to say where they go, and at the turn the canvas's change set
+answers with its own root card: "14 changed files · 9 endpoints". Every later beat happens on that
+same canvas or beside it (one world), and the lockup lands over it.
+
+**Why these three features.** The film answers one question ("where did my agent go?"), so the three
+proofs are the three things you do next with an agent: understand a flow (the guided tour with the
+ghost cursor), supervise the agents themselves (the dock and the island), and see the design
+(diagrams from code). Skeleton-first, the harness map and in-app updates get a 6 s credibility
+montage. The change set on the canvas is not one of the three: it is the turn itself.
+
+**Truthfulness.** Every product frame is the app's own rendering, by its own code and CSS, captured
+headless at 2x: the canvas (`ui/`), its tour, the Agents dock page and the status island page, run on
+Harbor Goods (the playground's demo project: orders and shipping in Java, billing in Python) through
+the playground's host (`playground/canvas.html`, `scripts/playground-data.mjs`), and the workbench in
+web mode for the frames that need the whole window. The film adds only framing, camera moves, rings,
+captions and type. The agent's change is a real commit for the film (`demo/changed/`, 14 files,
++112 −16), so the count, the diff and the green/red lines are real. The tour's steps are scripted. Whether the agent terminals and the dock show real sessions or the playground's
+scripted one is open (see *Still open*); the island is Axle's own page fed a scripted session either
+way. The question in 05 is asked in Axle's own point-and-ask box (`ui/src/tour/PointAsk.tsx`).
+
+## Brand (from the product)
+
+Sampled from the captures (Axle Dark), so the film's ground is the app's own:
+
+| Role | Hex | Source |
+|---|---|---|
+| Ground (editor) | `#0f0f0f` | `--vscode-editor-background`, dock page |
+| Canvas | `#1a1a1b` | canvas capture |
+| Signal (the one accent) | `#6f86ff` | `--vscode-focusBorder`, the logo stroke |
+| Button | `#5b72ff` | `--vscode-button-background` |
+| Added / removed | `#5fe0a1` / `#ff6b7d` | change-set lines (only where code changed) |
+| Needs you | amber of the dock's "Needs you" | dock attention only |
+
+Two-color discipline: signal blue is Axle; green and red appear only where code changed; amber only
+where an agent needs you. Nothing else gets a color.
+
+Type: **Instrument Sans** 600/700 for statements (tight tracking, -0.03 em, 96-150 px), 500 for
+captions (44 px); **JetBrains Mono** only for real code, file names and the URL. Both OFL, embedded
+from `assets/fonts/`. Easing: `power3.out` for arrivals, `power2.inOut` for camera moves,
+`expo.out` for the chip flight; no bounce, no elastic.
+
+## Bans
+
+- No logo first. The logo appears once, at the end, over moving footage.
+- No mock UI, no 3D device frames, no gradient blobs, no glow, no gradient text.
+- No feature bullet lists on screen; one statement per beat at most.
+- No fade-and-slide-up on every element; camera moves carry the motion.
+- Slideshow failure: every beat a fresh card. Avoided by the one-world canvas.
+- Screensaver failure: drifting decoration that says nothing. Avoided: every move pushes into a
+  state change (a card lighting, the cursor arriving, a chip turning amber).
+- No stock ukulele; no music under the hook.
+
+**Held frame.** Beat 09: the canvas, all 14 marks on, nothing moves for 3 s while the line
+"See how your code runs." lands.
+
+## Product name
+
+The name may change. It lives in one place, `brand.json` (`productName`, `spokenName`, `tagline`,
+`repoUrl`, `download`); the root composition declares them as variables
+(`data-composition-variables` in `index.html`) and every title, caption and the CTA bind to them
+(`data-var-text`). The VO lines that say the name ("Axle. Free and open source.") are generated from
+`spokenName` and are re-generated once the name is decided. Nothing with the name is rendered until then.
+
+## Changes from v1
+
+Direction from the user: "uygulamamız zaten güzel gözüküyor, üretilen videoda uygulamadan doğrudan
+olan görseller, CSS'ler kullanılmalıydı", and the product name may change.
+
+- Every product frame is now a real capture (made by `capture/`, kept outside the repo), not a sketch. The film only adds
+  framing, camera, rings, captions and type. The chip flight of v1 is dropped (it was film-made UI);
+  the change set's own root card carries the count.
+- 01: the hook sits beside the dock's real approval row ("Wants to: Editing main.py and models.py and
+  service.py and…").
+- 02: the real `git diff --stat` of the commit.
+- 03-06: real canvas, change set, order flow, tour, dock and island.
+- 07: a real board shown as a reference; recaptured on Harbor Goods in the build. 08: captures
+  pending (the headless workbench comes up in the light default; being fixed).
+- Palette re-sampled from the captures; the name is a token.
+- The per-frame notes below keep their timing, VO and audio; where their visuals describe film-made UI
+  (the chip flight, a rebuilt terminal), `storyboard.html` v2 is the plan.
+
+## Script (voiceover, verbatim)
+
+| # | Time | Line |
+|---|---|---|
+| 01 | 0.6-3.6 | "Your agent just changed fourteen files." |
+| 01 | 4.4-5.2 | "Where?" |
+| 02 | 6.6-11.0 | "A diff tells you which lines. Not what they reach." |
+| 03 | 12.8-20.6 | "Axle draws the change on how your code runs: every endpoint it touches, cut down to the methods that changed." |
+| 04 | 22.4-28.8 | "Across services and languages. From the controller, over HTTP and Kafka, to the table it writes." |
+| 05 | 30.4-38.4 | "Ask how something works, and the agent walks you through it, on the real code, step by step." |
+| 06 | 40.4-52.4 | "Run Claude Code and Codex side by side. Axle ranks who needs you, and why. Even when the editor is in the background." |
+| 07 | 54.4-61.2 | "Sequence, ER and architecture diagrams, read straight from the code. Nothing invented." |
+| 08 | 62.4-67.6 | "Design the skeleton first. Keep your harness healthy. Update in place." |
+| 09 | 68.6-70.8 | "See how your code runs." |
+| 10 | 73.0-76.4 | "Axle. Free and open source." |
+
+About 125 words. Measured on this machine: Chatterbox speaks the hook line at ~3.2 words/s, Kokoro at
+~2.5 words/s; at either rate every line ends before its beat does, and the times are re-cut to the
+real VO after it is generated.
+
+## Music and sound
+
+- **Grid.** 120 BPM, one bar = 2 s; every beat boundary below sits on a bar line (0, 6, 12, 22, 30,
+  40, 54, 62, 68, 72, 80), so cuts land on downbeats.
+- **Bed.** Minimal electronic pulse: muted kick on 1 and 3, a soft synth bass, one bell-like
+  motif that returns at the lockup. Silent under the hook (0-12 s): only room tone and UI sounds.
+  The bed enters on the downbeat at 12.0 s, the moment Axle appears. It drops to the bass alone under
+  the held frame (68-72 s) and resolves on the logo at 74 s. Ducked about 8 dB under VO.
+- **Source: open.** Candidates, in order: (1) generate it locally with ACE-Step (Apache-2.0, runs on
+  the RTX 5080; needs approval to download, as it is a second model); (2) a CC0 track; (3) a track
+  the user supplies. Not decided; listed under *Still open*.
+- **Sound effects,** synthesized locally (no library licence), each tied to a real state change:
+  key ticks under the terminal text (01); a dry "tick" per file name in the diff (02); a soft
+  air-whoosh on the chip flight and a click per chip landing (03); a low pulse when a dashed
+  HTTP/Kafka edge draws (04); a cursor glide and a page-flip tick per tour step (05); a two-note
+  chime when a dock row turns amber "Needs approval", and the island's drop (06); a pencil scratch
+  per diagram edge (07); three hard cuts on the downbeat (08); silence (09); one low hit on the logo
+  (10).
+- **Loudness.** Mix to about -14 LUFS integrated, peaks under -1 dBTP.
+
+## Cutdowns
+
+- **15 s silent loop** (README, site hero): 03 turn (chips land, 5 s) → 05 tour (cursor walks two
+  cards, 5 s) → 06 dock row turns amber (3 s) → back to the canvas framing of the first frame (2 s),
+  so the last frame matches the first. On-screen words carry it: "See what your agent changed." →
+  "On how your code runs." → "Axle". No captions, no VO.
+- **1:1 and 9:16:** same compositions, re-framed per beat on the focal region named in each beat
+  below; captions move to the lower third inside title-safe.
+- **Per-feature clips** for the website (`docs/media/film/clips/`, silent, 16:9): `change-set.mp4`,
+  `across-services.mp4`, `tour.mp4`, `agents.mp4`, `diagrams.mp4`, `loop-15s.mp4`.
+
+## Still open
+
+- The music source (above).
+- The voice: three samples of the hook line (kept outside the repo, in the review folder), all generated on this machine.
+  Recommended: Chatterbox, the most natural read. Both venvs live in `%USERPROFILE%\axle-tts`,
+  outside the repo.
+  - `chatterbox_default.mp3`: Resemble AI Chatterbox, weights MIT
+    (https://huggingface.co/ResembleAI/chatterbox), run on the RTX 5080 through CUDA by
+    `tools/cb_say.py`. Every output carries Resemble's PerTh watermark (the model card says so):
+    inaudible, it marks the audio as AI-generated.
+  - `kokoro_am_michael.mp3`, `kokoro_bm_george.mp3`: Kokoro-82M, weights Apache-2.0
+    (https://huggingface.co/hexgrad/Kokoro-82M), through `hyperframes tts`. No watermark.
+  - F5-TTS is out: its pretrained weights are CC BY-NC 4.0 (https://huggingface.co/SWivid/F5-TTS),
+    non-commercial.
+  - Caption timing uses a local transcription model, NVIDIA Parakeet TDT 0.6B v3 (CC BY 4.0,
+    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3, about 640 MB, cached by HyperFrames in the
+    user profile), installed with `hyperframes models install parakeet`.
+- Real agent sessions or scripted ones (frames 01 and 06). (a) Run Claude Code and Codex once on
+  the demo repo in web mode's terminals: real terminals and a real dock, but it spends quota and
+  needs both CLIs logged in. (b) Use the playground's scripted session on Axle's own dock and island
+  pages, with the two terminals rebuilt from a real capture of each CLI. Recommended: (a) for the
+  terminals and the dock if the user agrees, (b) otherwise; the island is (b) either way.
+- The hook line. The brief's line is "Your agent changed 14 files. Where?"; v1 reads "Your agent
+  just changed 14 files." ("just" for the spoken rhythm). Keep or drop "just".
+- Whether the hook's number stays "fourteen" (it follows the real commit).
+
+## Frame 01 — Hook (0.0–6.0, 6 s)
+
+- scene: A Claude Code terminal finishes a turn; its last line reads "Updated 14 files". Big statement over it: "Your agent just changed 14 files." then "Where?"
+- duration: 6s
+- transition_in: cut
+- voiceover: "Your agent just changed fourteen files." … "Where?"
+- poster: 4.6
+- focal: center, the statement (crops 1:1 and 9:16 safely)
+- src: compositions/01-hook.html
+
+On screen: the tail of a real Claude Code session in a terminal, dim (35 % opacity), scrolling up;
+its last line "⏺ Updated 14 files" in the CLI's own styling. Over it, Instrument Sans 700, 120 px:
+"Your agent just changed 14 files." At 4.2 s the sentence slides up and out; "Where?" (150 px)
+holds alone for 1.4 s. **Motion:** the terminal types (first visible motion at 0.1 s); the
+statement enters word by word on the VO (`power3.out`, 0.35 s). **Audio:** key ticks, no music.
+**Seam out:** hard cut on "Where?"'s release. **No** logo, no music, no color but text and muted.
+**Why:** the question the whole film answers.
+
+## Frame 02 — The diff wall (6.0–12.0, 6 s)
+
+- scene: The `git diff --stat` of the agent's commit: 14 file paths with +/- counts fill the frame, and slowly blur into an unreadable wall. (The paths and counts in the sketch are placeholders; the real commit's stat replaces them.)
+- duration: 6s
+- transition_in: cut
+- voiceover: "A diff tells you which lines. Not what they reach."
+- poster: 3
+- focal: left column of paths
+- src: compositions/02-diff.html
+
+On screen: 14 paths in JetBrains Mono 34 px, `orders-service/src/main/java/…/OrderService.java | 12 ++++--`
+style, green pluses and red minuses only in the counts. The camera drifts down the list
+(`power2.inOut`, 6 s), and lines lose focus behind it. Each path becomes a chip outline at 11 s.
+**Audio:** one dry tick per path as it appears. **Seam out:** the 14 paths shrink into 14 chips
+(callback in 03). **No** red/green beyond the counts. **Why:** the honest status quo: a list of
+lines with no shape.
+
+## Frame 03 — The turn: the change on the flow (12.0–22.0, 10 s)
+
+- scene: Axle's canvas: POST /orders → OrderController.place → OrderService.place → BillingClient / OrderRepository / orders table. The 14 chips fly in and land on their cards; green and red lines light up inside the cards.
+- duration: 10s
+- transition_in: chips fly (continuous from 02)
+- voiceover: "Axle draws the change on how your code runs: every endpoint it touches, cut down to the methods that changed."
+- poster: 7
+- focal: OrderService.place card (center-left)
+- src: compositions/03-turn.html
+
+On screen: real capture of "Show Git Changes in Flow" on Harbor Goods: the Axle window (workbench
+chrome visible for the first 2 s, then the camera pushes into the canvas). The chips travel along
+`expo.out` arcs (0.6 s, staggered 60 ms) to the cards; each landing lights a card's border in
+signal blue and reveals its real diff lines (green added, red removed). At 18 s push in on
+`OrderService.place`, where `applyDiscount(order)` is green and readable. **Audio:** the music
+enters on the downbeat at 12.0; whoosh on the flight, a click per landing. **Seam out:** camera
+pans right along the flow into 04 (rightward is the film's one direction). **No** invented cards: the
+count and placement come from the capture. **Why:** the answer to "Where?".
+
+## Frame 04 — Across services (22.0–30.0, 8 s)
+
+- scene: The same canvas, panning right: a dashed animated "HTTP" edge from BillingClient.createInvoice into billing-service's FastAPI route (Python), a "topic" edge from order.placed into shipping's listener, and a database card for the orders table.
+- duration: 8s
+- transition_in: pan (continuous)
+- voiceover: "Across services and languages. From the controller, over HTTP and Kafka, to the table it writes."
+- poster: 5
+- focal: the HTTP edge label, then the DB card
+- src: compositions/04-across.html
+
+On screen: real canvas, edges labelled as Axle labels them ("HTTP", "topic"), the Python card's
+code readable. A thin signal-blue highlight ring follows the edge being named by the VO
+("HTTP" at 25.4 s, "Kafka" at 26.4 s, "table" at 28.2 s). **Audio:** a low pulse per edge. **Seam out:**
+the ghost cursor enters from the right edge (continuity into 05). **No** extra labels over the UI.
+**Why:** the flow is real across languages, which a diff never shows.
+
+## Frame 05 — Proof 1: the guided tour (30.0–40.0, 10 s)
+
+- scene: Axle's ghost cursor walks the flow card by card; the tour caption ("Step 2 of 5 — the discount is applied before the order is saved…") and the tour bar sit on the canvas.
+- duration: 10s
+- transition_in: cursor enters (continuous)
+- voiceover: "Ask how something works, and the agent walks you through it, on the real code, step by step."
+- poster: 6
+- focal: the cursor and its caption (move together; crop follows the cursor in 9:16)
+- src: compositions/05-tour.html
+
+On screen: the real tour player (`ui/src/tour`): ghost cursor, caption card, step counter, the line
+highlight in the card. Three steps in 10 s: OrderController.place → OrderService.applyDiscount →
+BillingClient.createInvoice. The camera follows the cursor with a slight lag (`power2.inOut`).
+The tour starts from Axle's point-and-ask box on the card ("how is a discount applied?"), the real
+box `ui/src/tour/PointAsk.tsx` draws.
+**Audio:** cursor glide, a tick per step. **Seam out:** the canvas slides left to make room for the
+Agents dock (the window splits). **No** fake captions: the caption text is the tour's own.
+**Why:** understanding a flow without reading ten files.
+
+## Frame 06 — Proof 2: agents side by side, and the island (40.0–54.0, 14 s)
+
+- scene: Axle's Agents dock with a Claude Code row and a Codex row (model, context bar, cost, branch); the Codex row turns amber "Needs approval" with its text; then the window dims and the status island drops from the top edge with both agents' avatars.
+- duration: 14s
+- transition_in: split (continuous)
+- voiceover: "Run Claude Code and Codex side by side. Axle ranks who needs you, and why. Even when the editor is in the background."
+- poster: 7
+- focal: the amber row (40-50 s), then the island at top center (50-54 s)
+- src: compositions/06-agents.html
+
+On screen, two shots. **A (40-50 s):** the Axle window with two terminals (Claude Code left, Codex
+right) and the Agents dock on the side; at 45.8 s the Codex row jumps to the top, amber, "Needs
+approval: run `npm test`?"; push in on that row. **B (50-54 s):** the window recedes to 60 % scale and
+darkens; the status island (Axle's own island page, captured headless) drops from the top edge,
+showing "Claude · working" and "Codex · needs you". **Audio:** a two-note chime on the amber flip;
+a soft drop on the island. **Seam out:** cut on the downbeat to 07. **No** OS chrome we cannot capture:
+the island floats over the dimmed window, not over a desktop. **Why:** supervising the agents is the
+other half of working with them.
+
+## Frame 07 — Proof 3: diagrams from code (54.0–62.0, 8 s)
+
+- scene: A board from code: a sequence diagram of POST /orders (Controller → Service → Billing → Kafka) assembling edge by edge; a quick cut to the ER diagram of orders/shipments.
+- duration: 8s
+- transition_in: cut
+- voiceover: "Sequence, ER and architecture diagrams, read straight from the code. Nothing invented."
+- poster: 4
+- focal: the diagram's center
+- src: compositions/07-diagrams.html
+
+On screen: Axle's board (real capture), recorded while it lays out. 54-58.5 s the sequence diagram;
+58.5-62 s the ER diagram. Caption under the board's title: "from the index" (Axle's own wording).
+**Audio:** pencil scratch per edge. **Seam out:** hard cut on the downbeat. **No** hand-drawn
+diagrams. **Why:** the design view, generated, so it cannot drift from the code.
+
+## Frame 08 — Credibility montage (62.0–68.0, 6 s)
+
+- scene: Three 2 s shots: a skeleton-first board with "Your turn: write these members"; the harness map with its health score; the gear's "Update available → Restart to Update".
+- duration: 6s
+- transition_in: cut
+- voiceover: "Design the skeleton first. Keep your harness healthy. Update in place."
+- poster: 1
+- focal: each shot's one control
+- src: compositions/08-montage.html
+
+On screen: real captures, each pushed in on one control. If the update notification cannot be
+captured headless, its shot becomes the harness map's lint list and the VO line changes to
+"Lint it without an LLM." **Audio:** a hard cut sound on each downbeat. **Seam out:** cut back to the
+canvas from 03 (callback). **No** feature list. **Why:** it is a whole editor, not a demo.
+
+## Frame 09 — Held frame (68.0–72.0, 4 s)
+
+- scene: The canvas from 03, wide, all 14 marks on. Nothing moves. "See how your code runs." in Instrument Sans 600 at lower left.
+- duration: 4s
+- transition_in: cut
+- voiceover: "See how your code runs."
+- poster: 2
+- focal: whole canvas; the line at lower left (centered in 9:16)
+- src: compositions/09-held.html
+
+Callback to 03: the same framing, now quiet. **Audio:** the bed drops to bass. **Seam out:** the
+canvas keeps its position; the logo lands over it in 10. **No** motion at all. **Why:** let the
+answer land.
+
+## Frame 10 — Lockup and CTA (72.0–80.0, 8 s)
+
+- scene: The canvas slowly pulls back and darkens; the Axle mark and "Axle" land; under it "A harness-first code editor"; then "Download for Windows · macOS · Linux" and "github.com/bothuany/axle".
+- duration: 8s
+- transition_in: continuous
+- voiceover: "Axle. Free and open source."
+- poster: 5
+- focal: center lockup
+- src: compositions/10-cta.html
+
+On screen: logo (from `editor/branding`) 180 px, the wordmark in Instrument Sans 700, tagline in 500
+muted; at 75 s the download line and the URL in JetBrains Mono. The canvas keeps drifting behind at
+20 % opacity (the logo lands in footage that is still moving). Last 1.5 s holds. **Audio:** one low
+hit on the logo at 74.0, the motif resolves. **No** "Subscribe", no second CTA, no badges.
+**Why:** one action.

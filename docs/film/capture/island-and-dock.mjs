@@ -1,0 +1,15 @@
+import { chromium } from 'playwright'
+import { join } from 'node:path'
+const [base, out] = process.argv.slice(2)
+const b = await chromium.launch({ headless: true })
+const p = await b.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 3, colorScheme: 'dark' })
+await p.goto(base)
+await p.locator('#agents-tile').scrollIntoViewIfNeeded()
+await p.waitForTimeout(2500)
+await p.click('#play')
+await p.waitForSelector('#allow', { timeout: 60000 })
+await p.waitForTimeout(1500)
+await p.locator('iframe.island').screenshot({ path: join(out, 'island.png') })
+await p.locator('iframe.dock').screenshot({ path: join(out, 'dock.png') })
+await p.locator('#agents-tile .log').screenshot({ path: join(out, 'agent-log.png') })
+await b.close()
