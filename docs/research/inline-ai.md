@@ -59,3 +59,9 @@ The review is the one that already exists, and it depends on the agent. Claude C
 - Canvas → host messages carry no text from the code: file (checked to be inside the workspace), whole line numbers, a kind from a fixed set and a short plain-text instruction. The host builds the prompt and quotes the instruction as the user's words.
 - Everything sent to a terminal goes through `oneLine`.
 - No new command id is taken from a webview; the new message types are not commands.
+
+## Probe (web mode, Claude Haiku 5.5 started per session through `ANTHROPIC_MODEL`)
+
+- Editor: select lines 17-18 of `server/orders.js`, right-click shows Edit / Ask / Explain / Mention under "Axle"; Edit asks for an instruction, the picker offers a new Claude Code session, the prompt (`server/orders.js:17-18 … edit only those lines`) is typed into it. The session added the 404 guard to `refundOrder` and touched nothing else (`git diff`: one line). It ran in auto-accept mode, so the review is after the fact (git / canvas Keep-Undo), as described above. Screenshots: `docs/media/inline-ai/editor-*.jpg`.
+- Card: the bar (Ask · Explain · Edit · @) shows by a selection inside a card; Edit opens the point-and-ask box ("lines 19-21", "How should it change?") and posts `{type:'pointAsk', kind:'edit', startLine:19, endLine:21, …}`. Checked in the playground canvas, where the selection was made with a script; dragging with the mouse in the web-mode pane moves the card instead of selecting (React Flow drag), so the card → real agent path was not run end to end. Screenshots: `docs/media/inline-ai/card-*.jpg`.
+- Not covered: a selection inside a card that is being edited (Monaco) gets no bar; Codex was not run.

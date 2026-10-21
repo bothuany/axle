@@ -135,6 +135,7 @@ const host = {
     const what: Record<string, string> = {
       ask: 'In the Axle app this hands the flow to the agent you picked (Claude Code, Codex, any CLI).',
       mention: 'In the Axle app this @-mentions the card in your agent’s terminal.',
+      pointAsk: 'In the Axle app the agent you picked gets the selected lines: it answers with a tour, or its edit comes back as a change to keep or undo.',
       answer: 'In the Axle app you accept or reject what an agent wants to edit here.',
     }
     if (what[m.type]) say({ source: 'axle-canvas', type: 'note', text: what[m.type] })
