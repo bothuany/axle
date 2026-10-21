@@ -152,6 +152,27 @@ function BoardView() {
   /** The user picked a direction: the host's default must not take it back. */
   const directionChosen = useRef(false)
   const centerNext = useRef<string | undefined>(undefined)
+  /** The board's `focus` (a node or a group) opens first: the groups around it open and the view goes to it. */
+  const focusFirst = (s: BoardSpec) => {
+    if (!s.focus || s.kind === 'sequence') return
+    const open = stepOpens(s, { title: '', caption: '', focus: s.focus })
+    if (open.length) {
+      setOverrides(prev => {
+        const next = new Map(prev)
+        open.forEach(g => next.set(g, false))
+        return next
+      })
+    }
+    centerNext.current = s.focus
+    if (s.nodes.some(n => n.id === s.focus)) setSelected(s.focus)
+  }
+  useEffect(() => {
+    if (boot.spec.focus && boot.spec.kind !== 'sequence') {
+      fitNext.current = false
+      focusFirst(boot.spec)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ---- messages from the host ------------------------------------------------------------------
   useEffect(() => {
@@ -177,6 +198,7 @@ function BoardView() {
           if (m.seq === undefined) setQ(m.opts.query ?? '')
         }
         if (m.spec.direction && !directionChosen.current) setDirection(m.spec.direction)
+        focusFirst(m.spec)
         // Not while a click on a field or Enter in the search is about to move the view to a card.
         if (!centerNext.current) fitNext.current = true
       } else if (m?.type === 'error') {
@@ -314,8 +336,10 @@ function BoardView() {
   const fit = useCallback(() => (seqApi.current ? seqApi.current.fit() : void rf.fitView({ padding: 0.12, duration: 0, maxZoom: 1.1 })), [rf])
   const centerOn = useCallback((id: string) => {
     const v = layout.nodes.find(n => n.id === (layout.rep.get(id) ?? id))
-    if (!v) return
-    void rf.setCenter(v.box.x + v.box.w / 2, v.box.y + Math.min(v.box.h / 2, 120), { zoom: Math.max(rf.getZoom(), 0.75), duration: 350 })
+    const g = v ? undefined : layout.groups.find(x => x.id === id)
+    const box = v?.box ?? g?.box
+    if (!box) return
+    void rf.setCenter(box.x + box.w / 2, box.y + Math.min(box.h / 2, 120), { zoom: Math.max(rf.getZoom(), 0.75), duration: 350 })
   }, [layout, rf])
   const viewport = useRef({ fit, centerOn })
   viewport.current = { fit, centerOn }
