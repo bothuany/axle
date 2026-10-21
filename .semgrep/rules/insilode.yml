@@ -1,7 +1,7 @@
-# Axle's own Semgrep rules. Run with the registry rulesets by `npm run semgrep`; tested by `npm run semgrep:test`
-# (each rule has a fixture in .semgrep/rules/axle.ts with `ruleid:` / `ok:` annotations).
+# Insilode's own Semgrep rules. Run with the registry rulesets by `npm run semgrep`; tested by `npm run semgrep:test`
+# (each rule has a fixture in .semgrep/rules/insilode.ts with `ruleid:` / `ok:` annotations).
 rules:
-  - id: axle-command-id-not-allowlisted
+  - id: insilode-command-id-not-allowlisted
     message: >-
       This runs a command whose id is computed (not a string literal or a constant such as Command.showEntry), and no
       allowlist check on that same value guards it. If the id comes from a webview message, the page (or anything that
@@ -36,12 +36,12 @@ rules:
       category: security
       cwe: 'CWE-749: Exposed Dangerous Method or Function'
 
-  - id: axle-shell-true
+  - id: insilode-shell-true
     message: >-
       This starts a process through a shell (`shell: true`, or exec/execSync, which always use one), so quoting and
       metacharacters anywhere in the command line are interpreted by cmd.exe / sh. Pass the program and an argument
       array to spawn/execFile instead; where a shell is the point (a user's own hook command), say so in a
-      `nosemgrep: axle-shell-true` comment.
+      `nosemgrep: insilode-shell-true` comment.
     severity: WARNING
     languages: [typescript, javascript]
     options:
@@ -84,15 +84,15 @@ rules:
       category: security
       cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command"
 
-  - id: axle-vscode-in-headless-module
+  - id: insilode-vscode-in-headless-module
     message: >-
-      This module runs in the polyglot worker or the axle MCP server, where there is no `vscode` module; importing it
+      This module runs in the polyglot worker or the insilode MCP server, where there is no `vscode` module; importing it
       crashes them at load. Move the host call into poly/client.ts or mcp/handlers.ts. (dependency-cruiser checks the
       transitive case: `npm run arch`.)
     severity: ERROR
     languages: [typescript]
     paths:
-      include: ['/editor/extensions/flow-view/src/poly/worker.ts', '/editor/extensions/flow-view/src/mcp/stdio.ts', '/editor/extensions/flow-view/mcp/*.ts', '/.semgrep/rules/axle.ts']
+      include: ['/editor/extensions/flow-view/src/poly/worker.ts', '/editor/extensions/flow-view/src/mcp/stdio.ts', '/editor/extensions/flow-view/mcp/*.ts', '/.semgrep/rules/insilode.ts']
     pattern-either:
       - pattern: import $X from 'vscode'
       - pattern: import * as $X from 'vscode'

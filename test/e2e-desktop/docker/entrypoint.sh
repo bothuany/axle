@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Runs inside the container (scripts/docker-e2e.mjs starts it).
 #   /src     the repository, read-only          /ctl/files  NUL-separated list of the files to take from it
-#   /work    a named volume: the copy of Axle, the VS Code checkout and its build (kept between runs)
+#   /work    a named volume: the copy of Insilode, the VS Code checkout and its build (kept between runs)
 #   /out     the results, screenshots and logs  /probe      a probe script, with `probe <file>`
-#   axle-e2e run [run.mjs options]     the desktop scenarios          axle-e2e probe <file> [args]   one Playwright script
+#   insilode-e2e run [run.mjs options]     the desktop scenarios          insilode-e2e probe <file> [args]   one Playwright script
 set -euo pipefail
 
 mode="${1:-run}"
 shift || true
-cd /work/axle
+cd /work/insilode
 
 echo "[docker-e2e] copying the repository into the volume"
-rsync -a --from0 --files-from=/ctl/files /src/ /work/axle/
+rsync -a --from0 --files-from=/ctl/files /src/ /work/insilode/
 # A Windows checkout has CRLF line ends; git apply needs the patches the way upstream has them.
 for p in editor/patches/*.patch; do tr -d '\r' < "$p" > "$p.lf" && mv "$p.lf" "$p"; done
 
@@ -29,9 +29,9 @@ echo "$stamp" > .docker-stamp
 (cd test/e2e-desktop && npm ci --no-audit --no-fund > /out/npm-ci.log 2>&1) || { tail -20 /out/npm-ci.log; exit 3; }
 
 # Only here, inside the container, is the machine one the tests may take over (test/e2e-desktop/lib/isolation.mjs).
-export AXLE_E2E_ISOLATED=1
-export AXLE_E2E_SOURCE=/work/axle/editor/vscode
-export AXLE_E2E_OUT=/out
+export INSILODE_E2E_ISOLATED=1
+export INSILODE_E2E_SOURCE=/work/insilode/editor/vscode
+export INSILODE_E2E_OUT=/out
 xvfb=(xvfb-run -a --server-args="-screen 0 1920x1080x24")
 
 case "$mode" in

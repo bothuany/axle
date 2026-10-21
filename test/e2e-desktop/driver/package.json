@@ -1,8 +1,8 @@
 {
-	"name": "axle-e2e-driver",
-	"displayName": "Axle e2e driver",
+	"name": "insilode-e2e-driver",
+	"displayName": "Insilode e2e driver",
 	"version": "0.0.0",
-	"publisher": "axle-e2e",
+	"publisher": "insilode-e2e",
 	"private": true,
 	"engines": { "vscode": "^1.100.0" },
 	"main": "./extension.js",

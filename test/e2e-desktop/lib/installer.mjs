@@ -1,22 +1,22 @@
 // The Windows installer scenarios: silent install, the in-app update against a local static server, uninstall.
-// The update server is the one packaging/README.md describes: a folder of `update-win32-x64-user-axle.json` plus the Setup
-// exe it points at, served from 127.0.0.1 and found through AXLE_UPDATE_URL.
+// The update server is the one packaging/README.md describes: a folder of `update-win32-x64-user-insilode.json` plus the Setup
+// exe it points at, served from 127.0.0.1 and found through INSILODE_UPDATE_URL.
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { launchAxle, sleep, until } from './app.mjs'
+import { launchInsilode, sleep, until } from './app.mjs'
 import { dismissWelcome, runCommand, shot } from './ui.mjs'
 
-/** Inno Setup's command line for a silent per-user install: no dialogs, no restart, no "launch Axle" at the end. */
+/** Inno Setup's command line for a silent per-user install: no dialogs, no restart, no "launch Insilode" at the end. */
 export function installArgs(dir, log) {
 	return ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', `/DIR=${dir}`, `/LOG=${log}`, '/MERGETASKS=!runcode']
 }
 
 /** The update file for the Windows per-user build: what scripts/update-manifests.mjs writes, pointing at a local server. */
 export function updateManifest({ url, file, version, sha256hash, timestamp = Date.now() }) {
-	return { url: `${url}/${file.split(/[\\/]/).pop()}`, name: `Axle ${version}`, version: 'e2e-update-commit', productVersion: version, sha256hash, timestamp }
+	return { url: `${url}/${file.split(/[\\/]/).pop()}`, name: `Insilode ${version}`, version: 'e2e-update-commit', productVersion: version, sha256hash, timestamp }
 }
 
 const sha256 = file => createHash('sha256').update(readFileSync(file)).digest('hex')
@@ -29,11 +29,11 @@ function run(exe, args, ms = 300000) {
 	return r
 }
 
-/** Installs silently into `dir`; returns the installed Axle.exe. Throws with the tail of Inno's log when it fails. */
+/** Installs silently into `dir`; returns the installed Insilode.exe. Throws with the tail of Inno's log when it fails. */
 export function install(setup, dir, log) {
 	mkdirSync(join(dir, '..'), { recursive: true })
 	const r = run(setup, installArgs(dir, log))
-	const exe = join(dir, 'Axle.exe')
+	const exe = join(dir, 'Insilode.exe')
 	if (r.status !== 0 || !existsSync(exe)) {
 		const tail = existsSync(log) ? readFileSync(log, 'utf8').split('\n').slice(-15).join('\n') : '(no log)'
 		throw new Error(`Setup exited with ${r.status} and ${existsSync(exe) ? 'left' : 'did not create'} ${exe}.\n${tail}`)
@@ -41,7 +41,7 @@ export function install(setup, dir, log) {
 	return exe
 }
 
-/** Silent uninstall; resolves when the install folder's Axle.exe is gone. */
+/** Silent uninstall; resolves when the install folder's Insilode.exe is gone. */
 export async function uninstall(dir) {
 	const unins = readdirSync(dir).find(n => /^unins\d+\.exe$/i.test(n))
 	if (!unins) {
@@ -49,7 +49,7 @@ export async function uninstall(dir) {
 	}
 	run(join(dir, unins), ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], 120000)
 	// Inno's uninstaller copies itself to %TEMP% and returns at once: wait for the files to go.
-	await until('the install folder to be emptied', () => !existsSync(join(dir, 'Axle.exe')), { ms: 120000, every: 1000 })
+	await until('the install folder to be emptied', () => !existsSync(join(dir, 'Insilode.exe')), { ms: 120000, every: 1000 })
 }
 
 const productJson = dir => join(dir, 'resources', 'app', 'product.json')
@@ -71,9 +71,9 @@ export function updateServer(folder) {
 	return new Promise(done => server.listen(0, '127.0.0.1', () => done({ port: server.address().port, log, close: () => server.close() })))
 }
 
-/** Processes named Axle.exe that run from `dir` (a leftover from a failed run must not satisfy "relaunched"). */
-function axlePids(dir) {
-	const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Get-Process Axle -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '${join(dir, '*').replace(/'/g, "''")}' } | ForEach-Object { $_.Id }`], { encoding: 'utf8' })
+/** Processes named Insilode.exe that run from `dir` (a leftover from a failed run must not satisfy "relaunched"). */
+function insilodePids(dir) {
+	const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Get-Process Insilode -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '${join(dir, '*').replace(/'/g, "''")}' } | ForEach-Object { $_.Id }`], { encoding: 'utf8' })
 	return r.stdout.split(/\s+/).filter(Boolean).map(Number)
 }
 
@@ -92,18 +92,18 @@ export async function updateFlow({ setup, dir, out, label, version, workdir }) {
 	}
 	const server = await updateServer(serve)
 	const base = `http://127.0.0.1:${server.port}`
-	writeFileSync(join(serve, 'update-win32-x64-user-axle.json'), JSON.stringify(updateManifest({ url: base, file: setup, version, sha256hash: sha256(setup) })))
+	writeFileSync(join(serve, 'update-win32-x64-user-insilode.json'), JSON.stringify(updateManifest({ url: base, file: setup, version, sha256hash: sha256(setup) })))
 	const product = JSON.parse(readFileSync(productJson(dir), 'utf8'))
-	const real = product.axleVersion
-	writeFileSync(productJson(dir), JSON.stringify({ ...product, axleVersion: '0.0.1' }))
+	const real = product.insilodeVersion
+	writeFileSync(productJson(dir), JSON.stringify({ ...product, insilodeVersion: '0.0.1' }))
 	const stages = []
-	const app = await launchAxle({ exe: join(dir, 'Axle.exe'), out, updates: true, env: { AXLE_UPDATE_URL: base }, settings: { 'update.mode': 'manual' } })
+	const app = await launchInsilode({ exe: join(dir, 'Insilode.exe'), out, updates: true, env: { INSILODE_UPDATE_URL: base }, settings: { 'update.mode': 'manual' } })
 	try {
 		const page = await app.workbench()
 		await dismissWelcome(page)
-		const before = axlePids(dir)
+		const before = insilodePids(dir)
 		await runCommand(page, 'Check for Updates')
-		await until('the update file to be requested', () => server.log.some(p => p.endsWith('update-win32-x64-user-axle.json')), { ms: 60000 })
+		await until('the update file to be requested', () => server.log.some(p => p.endsWith('update-win32-x64-user-insilode.json')), { ms: 60000 })
 		stages.push('detect')
 		// Whatever the update service offers next, in the order a person would click: download, install, restart.
 		const next = ['Download Update', 'Install Update', 'Restart to Update', 'Update Now']
@@ -125,13 +125,13 @@ export async function updateFlow({ setup, dir, out, label, version, workdir }) {
 		await shot(page, results, 'update-ready')
 		await tryCommand(page, 'Restart to Update')
 		stages.push('update')
-		await until('Axle to quit and start again from the same folder', () => {
-			const now = axlePids(dir)
+		await until('Insilode to quit and start again from the same folder', () => {
+			const now = insilodePids(dir)
 			return now.length > 0 && now.every(p => !before.includes(p))
 		}, { ms: 300000, every: 2000 })
 		stages.push('relaunch')
 		await sleep(8000)
-		const now = JSON.parse(readFileSync(productJson(dir), 'utf8')).axleVersion
+		const now = JSON.parse(readFileSync(productJson(dir), 'utf8')).insilodeVersion
 		if (now !== real) {
 			throw new Error(`After the update product.json says ${now}, not ${real} (stages seen: ${stages.join(' > ')})`)
 		}
@@ -142,8 +142,8 @@ export async function updateFlow({ setup, dir, out, label, version, workdir }) {
 	} finally {
 		server.close()
 		await app.close()
-		// The relaunched Axle is not ours to hold: stop it so the uninstall can remove its files.
-		for (const pid of axlePids(dir)) {
+		// The relaunched Insilode is not ours to hold: stop it so the uninstall can remove its files.
+		for (const pid of insilodePids(dir)) {
 			spawnSync('taskkill', ['/F', '/PID', String(pid)])
 		}
 	}

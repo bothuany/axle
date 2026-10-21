@@ -1,4 +1,4 @@
-// Axle never starts a window that takes focus and never steals focus (CLAUDE.md). The desktop status overlay is an
+// Insilode never starts a window that takes focus and never steals focus (CLAUDE.md). The desktop status overlay is an
 // always-on-top window in the main process, so its code is held to that here. That code exists in this repository only
 // as the added lines of editor/patches/flow-desktop.patch (editor/vscode is generated, and Semgrep does not scan it),
 // so this test reads the patch.
@@ -12,8 +12,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const PATCH = fileURLToPath(new URL('../../editor/patches/flow-desktop.patch', import.meta.url));
-const MAIN = /\/axleDesktop\/electron-main\//;
-const CONTRIBUTION = /\/axleDesktop\/electron-browser\//;
+const MAIN = /\/insilodeDesktop\/electron-main\//;
+const CONTRIBUTION = /\/insilodeDesktop\/electron-browser\//;
 
 /** The added lines of each file in a unified diff, comments left out (they may name what they forbid). */
 export function addedLines(patch) {
@@ -86,7 +86,7 @@ test('the desktop overlay code never takes focus on its own', () => {
 
 test('the scan catches what it forbids', () => {
 	const planted = [
-		'+++ b/src/vs/platform/axleDesktop/electron-main/x.ts',
+		'+++ b/src/vs/platform/insilodeDesktop/electron-main/x.ts',
 		'+\t\twin.focus();',
 		'+\t\twin.show();',
 		'+\t\tapp.focus({ steal: true });',
@@ -95,7 +95,7 @@ test('the scan catches what it forbids', () => {
 		'+\t\tconst w = new BrowserWindow({',
 		'+\t\t\tframe: false,',
 		'+\t\t});',
-		'+++ b/src/vs/workbench/contrib/axleDesktop/electron-browser/y.ts',
+		'+++ b/src/vs/workbench/contrib/insilodeDesktop/electron-browser/y.ts',
 		'+\t\tthis.nativeHostService.focusWindow();',
 		'+\t\tthis.nativeHostService.focusWindow();',
 	].join('\n');
@@ -103,5 +103,5 @@ test('the scan catches what it forbids', () => {
 	assert.equal(found.length, 7, found.join('\n'));
 	assert.ok(found.some(v => v.includes('without show: false')));
 	assert.ok(found.some(v => v.includes('2 focus calls')));
-	assert.deepEqual(violations('+++ b/src/vs/platform/axleDesktop/electron-main/x.ts\n+\t\twin.showInactive();\n+\t\tfocusable: false,'), []);
+	assert.deepEqual(violations('+++ b/src/vs/platform/insilodeDesktop/electron-main/x.ts\n+\t\twin.showInactive();\n+\t\tfocusable: false,'), []);
 });
