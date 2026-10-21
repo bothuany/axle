@@ -1,9 +1,9 @@
-# Builds the browser playground (playground/) and publishes it to GitHub Pages on every push to main, so it stays in step with
+# Builds the website (site/) and publishes it to GitHub Pages on every push to main, so it stays in step with
 # the canvas and the index. The owner enables Pages once: Settings, Pages, Source "GitHub Actions". Nothing here changes repo settings.
-#   canvas      ui/ type-checks and builds (the playground imports its source and would break with it)
-#   index       flow-view's worker is built and run on the demo project (scripts/playground-data.mjs) to make the demo data
-#   playground  type-checks against protocol/ (the fake host and the data's readers), builds the site and plays the demo in a browser
-name: playground
+#   canvas      ui/ type-checks and builds (the site imports its source and would break with it)
+#   index       flow-view's worker is built and run on the demo project (scripts/site-data.mjs) to make the demo data
+#   site        type-checks against protocol/ (the fake host and the data's readers), builds the site and plays the demo in a browser
+name: site
 
 on:
   push:
@@ -14,12 +14,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: playground-pages
+  group: site-pages
   cancel-in-progress: false
 
 jobs:
   build:
-    name: build the playground
+    name: build the site
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,7 +35,7 @@ jobs:
             ui/package-lock.json
             editor/extensions/flow-view/package-lock.json
             editor/extensions/flow-harness/package-lock.json
-            playground/package-lock.json
+            site/package-lock.json
 
       - name: Canvas
         working-directory: ui
@@ -56,10 +56,10 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Demo data from the real index
-        run: node scripts/playground-data.mjs
+        run: node scripts/site-data.mjs
 
-      - name: Playground (type-check, build, play the demo in Chrome)
-        working-directory: playground
+      - name: Site (type-check, build, play the demo in Chrome)
+        working-directory: site
         run: |
           npm ci --no-audit --no-fund
           npm run typecheck
@@ -70,7 +70,7 @@ jobs:
 
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
-          path: playground/dist
+          path: site/dist
 
   deploy:
     name: deploy to GitHub Pages

@@ -14,7 +14,7 @@ let html
 let tmp
 before(async () => {
 	tmp = mkdtempSync(join(tmpdir(), 'flow-dock-'))
-	// The page lives in dockPage.ts, which has no `vscode` (the browser playground renders it too): bundling it without a stub is the test that it stays so.
+	// The page lives in dockPage.ts, which has no `vscode` (the website renders it too): bundling it without a stub is the test that it stays so.
 	const outfile = join(tmp, 'dockPage.mjs')
 	await build({ entryPoints: [join(ROOT, 'src', 'dockPage.ts')], bundle: true, platform: 'node', format: 'esm', outfile, logLevel: 'silent' })
 	const { dockHtml } = await import(pathToFileURL(outfile).href)

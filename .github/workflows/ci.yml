@@ -89,10 +89,10 @@ jobs:
           npm ci --no-audit --no-fund
           npm run arch
 
-  # The browser playground (playground/), built but not deployed: a change to the canvas, the protocol types or the index that breaks
-  # it shows up on the pull request. The deploy to GitHub Pages is playground.yml, on pushes to main.
-  playground:
-    name: playground builds
+  # The website (site/), built but not deployed: a change to the canvas, the protocol types or the index that breaks
+  # it shows up on the pull request. The deploy to GitHub Pages is site.yml, on pushes to main.
+  site:
+    name: site builds
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -105,7 +105,7 @@ jobs:
             ui/package-lock.json
             editor/extensions/flow-view/package-lock.json
             editor/extensions/flow-harness/package-lock.json
-            playground/package-lock.json
+            site/package-lock.json
 
       - name: Canvas and index worker
         run: |
@@ -114,10 +114,10 @@ jobs:
           (cd editor/extensions/flow-harness && npm ci --no-audit --no-fund)
 
       - name: Demo data from the real index
-        run: node scripts/playground-data.mjs
+        run: node scripts/site-data.mjs
 
-      - name: Playground (type-check against protocol/, build, play the demo in Chrome)
-        working-directory: playground
+      - name: Site (type-check against protocol/, build, play the demo in Chrome)
+        working-directory: site
         run: |
           npm ci --no-audit --no-fund
           npm run typecheck

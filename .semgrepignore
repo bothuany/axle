@@ -19,5 +19,5 @@ editor/extensions/flow-view/test/types-expected/
 
 package-lock.json
 
-# The playground's demo project: fictional sample services the index reads, like the test fixtures
-playground/demo/
+# The website's demo project: fictional sample services the index reads, like the test fixtures
+site/demo/
