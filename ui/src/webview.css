@@ -323,3 +323,5 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .sel-bar { position: absolute; z-index: 16; display: flex; gap: 2px; padding: 3px; border: 1px solid var(--fl-line-strong); border-radius: 8px; background: var(--vscode-editorWidget-background, var(--fl-card)); box-shadow: var(--fl-lift); pointer-events: auto; }
 .sel-bar button { height: 22px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fl-text); font: 600 11.5px var(--fl-mono); cursor: pointer; }
 .sel-bar button:hover { background: var(--fl-line-strong); }
+/* React Flow makes every node unselectable; the code in a card is what the selection bar (tour/SelectionBar.tsx) works on. */
+.card .code { user-select: text; -webkit-user-select: text; }
