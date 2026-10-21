@@ -12,6 +12,7 @@ existing BillRepository (interface at src/main/java/com/acme/billing/repositorie
   extra (fine): findByPaidFalse(): List<Bill>, findByCustomerId(String customerId): List<Bill>
 existing CustomerClient (interface at src/main/java/com/acme/billing/clients/CustomerClient.java:6): in the code before the design; the plan adds no members to it
 MISSING BillReportDTO: no type called BillReportDTO in the code yet
+  path: src/main/java/com/acme/billing/dtos/BillReportDTO.java (next to BillResponseDTO and the other dtos, in com.acme.billing.dtos)
   MISSING billId: UUID
   MISSING contractId: UUID
   MISSING amount: BigDecimal

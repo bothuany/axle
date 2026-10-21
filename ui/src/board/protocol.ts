@@ -28,6 +28,8 @@ export interface Bootstrap {
 export type ToHost =
   | { type: 'ready' }
   | { type: 'open'; file: string; line: number }
+  /** Skeleton first: the developer clicked a new type that has a target file; the host works out the path itself and offers to create it. */
+  | { type: 'create'; node: string }
   | { type: 'rebuild'; seq: number; kind: string; opts: BoardOpts }
   | { type: 'export'; format: ExportFormat; data?: string; name?: string }
 

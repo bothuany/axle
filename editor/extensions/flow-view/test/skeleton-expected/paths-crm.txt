@@ -1,0 +1,19 @@
+Skeleton check of "Bill + User report (analytics-service)": 0 match · 4 missing · 0 differ · 1 existing.
+MISSING BillUserReportController: no type called BillUserReportController in the code yet
+  path: analytics-service/src/main/java/com/turkcell/analyticsservice/controller/BillUserReportController.java (next to BillBehaviorController, in com.turkcell.analyticsservice.controller)
+  MISSING getReport(): List<BillUserReportDto>
+  MISSING getReportByCustomerId(customerId: String): BillUserReportDto
+  MISSING relation uses → BillUserReportService
+MISSING BillUserReportService: no type called BillUserReportService in the code yet
+  path: analytics-service/src/main/java/com/turkcell/analyticsservice/service/BillUserReportService.java (next to BillBehaviorService, in com.turkcell.analyticsservice.service)
+  MISSING getReport(): List<BillUserReportDto>
+MISSING BillUserReportServiceImpl: no type called BillUserReportServiceImpl in the code yet
+  path: analytics-service/src/main/java/com/turkcell/analyticsservice/service/impl/BillUserReportServiceImpl.java (next to BillBehaviorServiceImpl, in com.turkcell.analyticsservice.service.impl)
+  MISSING getReport(): List<BillUserReportDto>
+  MISSING relation implements → BillUserReportService
+  MISSING relation uses → CustomerClient
+MISSING BillUserReportDto: no type called BillUserReportDto in the code yet
+  path: analytics-service/src/main/java/com/turkcell/analyticsservice/dto/BillUserReportDto.java (next to BillBehaviorDto, in com.turkcell.analyticsservice.dto)
+  MISSING customerId: String
+  MISSING amount: BigDecimal
+existing CustomerClient (interface at analytics-service/src/main/java/com/turkcell/analyticsservice/client/CustomerClient.java:3): in the code before the design; the plan adds no members to it; 2 types are called CustomerClient; checked the one in C:\development\harness-flow\.claude\worktrees\skeleton-paths-live-6953c4\editor\extensions\flow-view\test\types-fixtures\skeleton-crm\analytics-service\src\main\java\com\turkcell\analyticsservice\client\CustomerClient.java

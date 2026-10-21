@@ -246,6 +246,15 @@ export class PolyIndex implements vscode.Disposable {
 		await this.flush();
 	}
 
+	/** An editor buffer that is not saved yet, read by the index as the file's content until the next save: types appear while the developer types. */
+	async overlay(file: string, text: string) {
+		const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(file));
+		if (!folder || isExcludedPath(file, folder.uri.fsPath) || !WATCHED_FILE.test(path.basename(file))) {
+			return;
+		}
+		await this.request('overlay', file, text).catch(() => undefined);
+	}
+
 	methods(file: string) {
 		return this.request<{ id: string; name: string; line: number; startLine: number; endLine: number; isEntry: boolean }[]>('methods', file);
 	}

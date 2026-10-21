@@ -1136,7 +1136,8 @@ export class Project {
 
 	/** getName() { return name; }: plumbing, not flow. */
 	private isAccessor(fn: FuncFact) {
-		return /^(get|set|is|has)[A-Z]/.test(fn.name) && fn.calls.length === 0 && fn.endLine - fn.line <= 4;
+		// A declaration read from text that did not parse says so itself: its body was never read, so no call is missing from it.
+		return fn.isAccessor ?? (/^(get|set|is|has)[A-Z]/.test(fn.name) && fn.calls.length === 0 && fn.endLine - fn.line <= 4);
 	}
 
 	private targets(fn: FuncFact): Target[][] {
