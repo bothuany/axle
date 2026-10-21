@@ -7,7 +7,7 @@ export const SANDBOX_OUT = 'C:\\axle-e2e\\out'
 
 const xml = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-/** The command Windows Sandbox runs when the desktop is up: the same script CI runs, then shutdown. */
+/** The command Windows Sandbox runs when the desktop is up: the in-sandbox script, then shutdown. */
 export function logonCommand({ shutdown = true } = {}) {
 	const script = `${SANDBOX_IN}\\repo\\test\\e2e-desktop\\sandbox\\run-in-sandbox.ps1`
 	return `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${script}" -In "${SANDBOX_IN}" -Out "${SANDBOX_OUT}"${shutdown ? ' -Shutdown' : ''}`
@@ -63,7 +63,7 @@ export function missingSandboxMessage(exe) {
 		'  1. Open "Turn Windows features on or off" (optionalfeatures.exe), tick "Windows Sandbox", OK;',
 		'     or, in an administrator PowerShell: Enable-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM -All',
 		'  2. Restart Windows when it asks. Virtualization must be enabled in the BIOS/UEFI.',
-		'Then run this again. Until then the same scenarios run on GitHub Actions: .github/workflows/desktop-e2e.yml.',
+		'Then run this again. Until then the Linux scenarios run in Docker (npm run docker:e2e); desktop tests never run on your own desktop.',
 	].join('\n')
 }
 

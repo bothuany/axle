@@ -31,7 +31,7 @@ export function dockerRunArgs({ image, name, repo, ctl, out, probeDir, mode, mod
 export function dockerMissingMessage(detail) {
 	return [
 		`Docker is not available: ${detail}`,
-		'Install and start Docker Desktop (Linux containers), then run this again. Until then the same scenarios run on GitHub Actions:',
-		'.github/workflows/desktop-e2e.yml (Windows and Linux), or in Windows Sandbox (npm run sandbox:e2e).',
+		'Install and start Docker Desktop (Linux containers), then run this again. Desktop tests never run on your own desktop.',
+		'On Windows, the Windows-only scenarios can run in Windows Sandbox instead (npm run sandbox:e2e).',
 	].join('\n')
 }

@@ -15,7 +15,7 @@ rsync -a --from0 --files-from=/ctl/files /src/ /work/axle/
 # A Windows checkout has CRLF line ends; git apply needs the patches the way upstream has them.
 for p in editor/patches/*.patch; do tr -d '\r' < "$p" > "$p.lf" && mv "$p.lf" "$p"; done
 
-# The VS Code checkout is patched once; a changed patch or setup script means a new checkout (what the CI cache key does).
+# The VS Code checkout is patched once; a changed patch or setup script means a new checkout.
 stamp="$(cat editor/patches/* scripts/setup.mjs scripts/lib.mjs | tr -d '\r' | sha256sum | cut -c1-16)"
 if [ -d editor/vscode ] && [ "$(cat .docker-stamp 2>/dev/null || true)" != "$stamp" ]; then
 	echo "[docker-e2e] the patches or the setup script changed: building a new VS Code checkout"

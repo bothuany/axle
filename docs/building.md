@@ -123,7 +123,7 @@ scripts/            setup, start, build-extensions, install-shortcut and install
 
 ## Desktop end-to-end tests
 
-Some things can only be tested in the real desktop app: the installer, the in-app update, the status island, window focus and position. They are never tested on your own desktop (a test that opens windows takes over your screen and your pointer). UI checks that do not need a desktop window run headless in web mode (`npm run web`, the [probe skill](../.claude/skills/probe/SKILL.md)) and never bring a window to the front. Everything desktop-only goes to a disposable machine: a Docker container or GitHub Actions (Linux, from source) or Windows Sandbox (Windows, on demand; CI does not run Windows). They run the same code, `test/e2e-desktop` (Playwright's `_electron` API, with a remote-debugging fallback for a packaged build that has Electron's inspector off):
+Some things can only be tested in the real desktop app: the installer, the in-app update, the status island, window focus and position. They are never tested on your own desktop (a test that opens windows takes over your screen and your pointer). UI checks that do not need a desktop window run headless in web mode (`npm run web`, the [probe skill](../.claude/skills/probe/SKILL.md)) and never bring a window to the front. Everything desktop-only goes to a disposable machine you run locally: a Docker container (Linux, from source) or Windows Sandbox (Windows). Never GitHub Actions, and never your desktop. Both run the same code, `test/e2e-desktop` (Playwright's `_electron` API, with a remote-debugging fallback for a packaged build that has Electron's inspector off):
 
 | Scenario | What it checks |
 |---|---|
@@ -141,8 +141,6 @@ npm run docker:e2e -- --probe my-probe.mjs            # one Playwright script, s
 ```
 
 The container has its own virtual display, no published ports and no host network, display or input; `AXLE_E2E_ISOLATED=1` is set inside it only. The first run builds the image and the VS Code checkout (20 to 40 minutes); the checkout and its build live in the named volume `axle-e2e-work` (a changed patch or setup script rebuilds it by itself; `--reset-volume` forces that), so later runs take minutes. Screenshots, `results.json` and logs are written to the output folder the command prints (`--out <dir>` picks it). It tests the working tree, uncommitted files included.
-
-**GitHub Actions** (`.github/workflows/desktop-e2e.yml`, on every pull request and on demand): the Linux scenarios, from source under xvfb. The first run builds VS Code (30 to 60 minutes); the checkout is then cached and a run takes 10 to 20. Screenshots and logs are artifacts; one PR comment (updated on every push) has a pass/fail table and the screenshots. There is no Windows job: the installer, update and uninstall scenarios run in Windows Sandbox, when you ask for them.
 
 **Windows Sandbox** (Windows 10/11 Pro, Enterprise or Education), for a quick local run of the Windows scenarios on an installer you built:
 

@@ -1,16 +1,16 @@
 // The parts of the desktop e2e harness that need no window and no Playwright: the sandbox configuration, the safety guard,
 // the installer command lines and the result table. Runs anywhere (`npm run test:e2e-unit`); the windows themselves only run
-// on CI or in Windows Sandbox.
+// in Docker or in Windows Sandbox.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SANDBOX_IN, SANDBOX_OUT, buildWsb, logonCommand, missingSandboxMessage, sandboxExe, summarize } from '../../../scripts/sandbox-config.mjs'
 import { newestInstaller } from '../../../scripts/sandbox-e2e.mjs'
 import { refusal } from '../lib/isolation.mjs'
 import { pointerCommand } from '../lib/pointer.mjs'
-import { Results, table } from '../lib/results.mjs'
+import { Results } from '../lib/results.mjs'
 import { installArgs, updateManifest } from '../lib/installer.mjs'
 import { parseArgs, sourceElectron } from '../run.mjs'
 
@@ -36,7 +36,7 @@ test('the .wsb refuses a missing folder and a read-only input that is also the o
 	assert.throws(() => buildWsb({ inputDir: 'C:\\a', outputDir: 'C:\\a' }), /different/)
 })
 
-test('the logon command runs the same script CI runs, with the mapped folders', () => {
+test('the logon command runs the in-sandbox script with the mapped folders', () => {
 	const cmd = logonCommand()
 	assert.match(cmd, /^powershell\.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\axle-e2e\\in\\repo\\test\\e2e-desktop\\sandbox\\run-in-sandbox\.ps1"/)
 	assert.match(cmd, /-In "C:\\axle-e2e\\in" -Out "C:\\axle-e2e\\out" -Shutdown$/)
@@ -95,20 +95,15 @@ test('the update file is the one the app reads: a newer productVersion and a url
 	assert.deepEqual(m, { url: 'http://127.0.0.1:8123/Axle-Setup-0.4.3-x64.exe', name: 'Axle 0.4.3', version: 'e2e-update-commit', productVersion: '0.4.3', sha256hash: 'ab', timestamp: 1 })
 })
 
-test('the results table has one column per run and shows why something failed or was skipped', () => {
+test('results are recorded as they come and a failure is remembered', () => {
 	const dir = mkdtempSync(join(tmpdir(), 'axle-results-'))
 	try {
-		const win = new Results('windows', join(dir, 'w'))
-		win.add({ title: 'One', status: 'pass', detail: 'fine' })
-		win.add({ title: 'Two', status: 'fail', detail: 'a | b' })
-		const lin = new Results('linux', join(dir, 'l'))
-		lin.add({ title: 'One', status: 'skip', detail: 'no pointer' })
-		const t = table([win.toJSON(), lin.toJSON()])
-		assert.match(t, /\| Scenario \| windows \| linux \|/)
-		assert.match(t, /\| One \| pass \| skip \(no pointer\) \|/)
-		assert.match(t, /\| Two \| \*\*FAIL\*\* \(a \/ b\) \| - \|/)
-		assert.equal(win.failed, true)
-		assert.equal(lin.failed, false)
+		const r = new Results('docker', join(dir, 'o'))
+		r.add({ title: 'One', status: 'pass', detail: 'fine' })
+		assert.equal(r.failed, false)
+		r.add({ title: 'Two', status: 'fail', detail: 'boom' })
+		assert.equal(r.failed, true)
+		assert.deepEqual(JSON.parse(readFileSync(join(dir, 'o', 'results.json'), 'utf8')).scenarios.map(s => s.status), ['pass', 'fail'])
 	} finally {
 		rmSync(dir, { recursive: true, force: true })
 	}
@@ -128,19 +123,6 @@ test('run.mjs reads its options and finds the Electron binary of a source checko
 	} finally {
 		rmSync(dir, { recursive: true, force: true })
 	}
-})
-
-test('the PR comment has the table, links the screenshots when they are published and says so when they are not', async () => {
-	const { buildBody, MARKER } = await import('../comment.mjs')
-	const runs = [{ label: 'windows', scenarios: [{ title: 'Branding', status: 'pass', shots: ['shots/windows-branding.png'] }, { title: 'Island', status: 'fail', detail: 'did not move', shots: [] }] }]
-	const published = buildBody({ runs, runUrl: 'https://x/run/1', rawBase: 'https://raw/1', sha: 'abcdef123' })
-	assert.ok(published.startsWith(MARKER))
-	assert.match(published, /Desktop e2e failed.*windows: Island/)
-	assert.match(published, /<img src="https:\/\/raw\/1\/windows\/shots\/windows-branding\.png"/)
-	assert.match(published, /\[Run, logs and artifacts\]\(https:\/\/x\/run\/1\)/)
-	assert.doesNotMatch(buildBody({ runs, runUrl: 'u' }), /<img/)
-	assert.match(buildBody({ runs, runUrl: 'u' }), /1 screenshots are in the run's artifacts/)
-	assert.match(buildBody({ runs: [{ label: 'l', scenarios: [{ title: 'A', status: 'pass' }] }], runUrl: 'u' }), /Desktop e2e passed/)
 })
 
 test('the Docker run shares nothing of the host screen, network or input, and maps the repository read-only', async () => {

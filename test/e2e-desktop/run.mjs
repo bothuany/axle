@@ -3,7 +3,7 @@
 //   node run.mjs --label linux --out out --source ../../editor/vscode             a source checkout (Linux, under xvfb)
 //   node run.mjs --label windows --out out --installer ../../dist/Axle-Setup-x.y.z-x64.exe   install, scenarios, update, uninstall
 //   node run.mjs --label windows --out out --exe "C:\...\Axle.exe"                  an app that is already installed
-// Opens windows and moves the pointer, so it only runs where AXLE_E2E_ISOLATED=1 (CI, Windows Sandbox): lib/isolation.mjs.
+// Opens windows and moves the pointer, so it only runs where AXLE_E2E_ISOLATED=1 (Docker, Windows Sandbox): lib/isolation.mjs.
 // Writes <out>/results.json and <out>/shots/*.png; exits 1 when a scenario failed.
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
