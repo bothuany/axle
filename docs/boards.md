@@ -86,3 +86,9 @@ The `diagram_guide` MCP prompt (`src/mcp/prompts.ts`) holds the full advice an a
 ## Mermaid in
 
 `draw_board` takes `source: { mermaid }` instead of `board.nodes` and `board.edges`: a `sequenceDiagram` (participants, actors, messages with `->>`, `-->>`, `-)`, notes, `alt`/`else`/`opt`/`loop`), a `stateDiagram-v2` (`[*]`, transitions with `[guard]`, `state "x" as y`, `<<choice>>`, composite states, notes) or a `flowchart`/`graph` (shapes, `-->|text|`, `-- text -->`, `-.->`, `&` lists, chains, subgraphs). `board` may still carry `title`, `steps`, `callouts` and the like, but not nodes or edges. What cannot be read is said with line numbers (`src/board/mermaidImport.ts`, input capped at 60,000 characters and 800 lines); styling lines are ignored. `toMermaid` writes the same subset, so a board round-trips.
+
+## Symbol grounding
+
+A node's `symbol` is looked up in the methods of the node's own `file` (the code index, the C# analyzer or a language server, so it works while the workspace symbol search is still loading) and in the workspace symbol search (3 seconds, and not asked again once it fails to answer; at most 25 symbols per board and 10 seconds in all). A hit fills `file` and `line` when the node has none; a miss lists the closest symbols (`find_symbol` style) in the lint. If the search did not answer at all, the lint says symbols were checked against the named files only.
+
+Screenshots of each kind in the real editor (web mode, drawn through the MCP handler): `docs/media/boards/`.

@@ -36,6 +36,8 @@ export function SequenceView({ spec, lit, selected, onSelect, apiRef }: {
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 })
   const [hover, setHover] = useState<string>()
   const fitted = useRef(false)
+  /** The reader panned or zoomed: a resize of the panel no longer re-fits the diagram. */
+  const moved = useRef(false)
 
   const fit = useCallback(() => {
     const el = box.current
@@ -51,6 +53,7 @@ export function SequenceView({ spec, lit, selected, onSelect, apiRef }: {
   const shapeKey = `${layout.lifelines.length}|${layout.messages.length}|${layout.width}|${layout.height}`
   useEffect(() => {
     fitted.current = false
+    moved.current = false
   }, [shapeKey])
   useEffect(() => {
     if (!fitted.current) {
@@ -64,6 +67,7 @@ export function SequenceView({ spec, lit, selected, onSelect, apiRef }: {
     if (!el) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
+      moved.current = true
       const r = el.getBoundingClientRect()
       const px = e.clientX - r.left
       const py = e.clientY - r.top
@@ -75,6 +79,17 @@ export function SequenceView({ spec, lit, selected, onSelect, apiRef }: {
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
+
+  // The panel was resized (a side bar closed, the window made larger): the diagram follows until the reader takes over.
+  useEffect(() => {
+    const el = box.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      if (!moved.current) fit()
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [fit])
 
   const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean }>(undefined)
   const hoverLit = useMemo<Lit | undefined>(() => {
@@ -99,6 +114,7 @@ export function SequenceView({ spec, lit, selected, onSelect, apiRef }: {
         const d = drag.current
         if (!d) return
         d.moved = true
+        moved.current = true
         setView(v => ({ ...v, x: d.vx + e.clientX - d.x, y: d.vy + e.clientY - d.y }))
       }}
       onPointerUp={() => (drag.current = undefined)}

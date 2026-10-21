@@ -333,8 +333,8 @@ function BoardView() {
 
   // Each step takes the camera to what it lights (the graph view; a sequence fits on one screen).
   const stepLitKey = curStep && stepLit ? `${pl.index}|${[...stepLit.nodes].join(',')}` : ''
-  useEffect(() => {
-    if (!stepLitKey || sequence || !litView) return
+  const goStep = (duration: number) => {
+    if (!litView) return
     const boxes = layout.nodes.filter(v => litView.nodes.has(v.id)).map(v => v.box)
     if (!boxes.length) return
     const x1 = Math.min(...boxes.map(b => b.x))
@@ -345,10 +345,38 @@ function BoardView() {
     const ch = stage.current?.clientHeight ?? 600
     // Room around the nodes for the caption; never closer than 1.15x.
     const zoom = Math.max(0.1, Math.min(1.15, cw / ((x2 - x1) * 1.5 + 380), ch / ((y2 - y1) * 1.8 + 140)))
-    const t = setTimeout(() => void rf.setCenter((x1 + x2) / 2 + 80 / zoom, (y1 + y2) / 2, { zoom, duration: 400 }), 60)
+    void rf.setCenter((x1 + x2) / 2 + 80 / zoom, (y1 + y2) / 2, { zoom, duration })
+  }
+  const stepCamera = useRef({ key: '', go: goStep })
+  stepCamera.current = { key: stepLitKey, go: goStep }
+  /** The reader panned or zoomed by hand: a resize of the panel no longer moves the camera. */
+  const userMoved = useRef(false)
+  useEffect(() => {
+    userMoved.current = false
+    if (!stepLitKey || sequence || !litView) return
+    const t = setTimeout(() => goStep(400), 60)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepLitKey, layout])
+  // The panel was resized (a side bar closed, the window made larger): the view follows until the reader takes over.
+  useEffect(() => {
+    const el = stage.current
+    if (!el || sequence || typeof ResizeObserver === 'undefined') return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const ro = new ResizeObserver(() => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        if (userMoved.current) return
+        if (stepCamera.current.key) stepCamera.current.go(0)
+        else viewport.current.fit()
+      }, 120)
+    })
+    ro.observe(el)
+    return () => {
+      clearTimeout(timer)
+      ro.disconnect()
+    }
+  }, [sequence])
 
   // ---- actions ---------------------------------------------------------------------------------
   const nodeOf = useMemo(() => new Map(spec.nodes.map(n => [n.id, n])), [spec])
@@ -619,6 +647,7 @@ function BoardView() {
             elementsSelectable={false}
             zoomOnDoubleClick={false}
             proOptions={{ hideAttribution: true }}
+            onMoveStart={e => { if (e) userMoved.current = true }}
             onPaneClick={() => { setSelected(undefined); setActive(undefined) }}
           >
             {layout.nodes.length > 8 && <MiniMap pannable zoomable nodeStrokeWidth={0} nodeColor={n => ((n.data as CardData | undefined)?.v?.node ? KIND_COLOR[(n.data as CardData).v.node!.kind ?? 'class'] : 'var(--fl-line-strong)')} />}

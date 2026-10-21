@@ -1185,17 +1185,42 @@ export class AgentTools {
 			found.push('only the first 25 symbols were checked.');
 		}
 		const cache = new Map<string, Promise<SymbolCandidate[]>>();
-		const candidates = (symbol: string) => {
-			const query = symbolQuery(symbol);
+		// The workspace symbol search can hang while a language server loads: it gets 3 seconds, and once it has failed to answer it is not asked again.
+		let searchDown = false;
+		const byQuery = (query: string) => {
 			if (!cache.has(query)) {
-				cache.set(query, this.symbolCandidates(query));
+				cache.set(query, searchDown ? Promise.resolve([]) : within(this.symbolCandidates(query), 3_000, 'the symbol search').catch(() => {
+					searchDown = true;
+					return [] as SymbolCandidate[];
+				}));
 			}
 			return cache.get(query)!;
+		};
+		const candidates = (symbol: string) => byQuery(symbolQuery(symbol));
+		// The methods of the file a node names (the code index, the C# analyzer or a language server): they answer even when the
+		// workspace symbol search has nothing yet (a language server that has not opened a project).
+		const inFile = new Map<string, Promise<SymbolCandidate[]>>();
+		const fileCandidates = (file: string) => {
+			if (!inFile.has(file)) {
+				inFile.set(file, within(methodsOf(this.d, file), 3_000, 'the method list').then(ms => (ms ?? []).map((m): SymbolCandidate => {
+					const parts = m.name.split(/::|[.#/]/).filter(Boolean);
+					return { name: parts.pop() ?? m.name, container: parts.length ? parts.join('.') : undefined, kind: 'method', file, line: m.startLine };
+				}), () => []));
+			}
+			return inFile.get(file)!;
 		};
 		try {
 			await within((async () => {
 				for (const n of withSymbol) {
-					const { exact, near } = matchSymbols(n.symbol!, await candidates(n.symbol!));
+					const here = n.file ? await fileCandidates(n.file) : [];
+					let all = [...here, ...await candidates(n.symbol!)];
+					let { exact, near } = matchSymbols(n.symbol!, all);
+					const word = symbolQuery(n.symbol!);
+					if (!exact && !near.length && word.length > 5) {
+						// A typo has no exact hit in the index: look again with the start of the name, to suggest the real one.
+						all = [...all, ...await byQuery(word.slice(0, Math.ceil(word.length * 0.6)))];
+						({ exact, near } = matchSymbols(n.symbol!, all));
+					}
 					if (exact) {
 						// Fills what the agent left out; a `file` or `line` it gave stays (it may mean the call site).
 						if (!n.file) {
@@ -1211,6 +1236,9 @@ export class AgentTools {
 			})(), 10_000, 'the symbol check');
 		} catch (e) {
 			found.push(`symbols were not checked: ${(e as Error).message}.`);
+		}
+		if (searchDown) {
+			found.push('the workspace symbol search did not answer (a language server is still loading), so symbols were checked against the files named in `file` only; draw again in a moment to check the rest.');
 		}
 		return found;
 	}
