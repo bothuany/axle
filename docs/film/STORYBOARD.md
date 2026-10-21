@@ -106,17 +106,21 @@ olan görseller, CSS'ler kullanılmalıydı", and the product name may change.
 
 | # | Time | Line |
 |---|---|---|
-| 01 | 0.6-3.6 | "Your agent just changed fourteen files." |
-| 01 | 4.4-5.2 | "Where?" |
-| 02 | 6.6-11.0 | "A diff tells you which lines. Not what they reach." |
-| 03 | 12.8-20.6 | "Axle draws the change on how your code runs: every endpoint it touches, cut down to the methods that changed." |
-| 04 | 22.4-28.8 | "Across services and languages. From the controller, over HTTP and Kafka, to the table it writes." |
-| 05 | 30.4-38.4 | "Ask how something works, and the agent walks you through it, on the real code, step by step." |
-| 06 | 40.4-52.4 | "Run Claude Code and Codex side by side. Axle ranks who needs you, and why. Even when the editor is in the background." |
-| 07 | 54.4-61.2 | "Sequence, ER and architecture diagrams, read straight from the code. Nothing invented." |
-| 08 | 62.4-67.6 | "Design the skeleton first. Keep your harness healthy. Update in place." |
-| 09 | 68.6-70.8 | "See how your code runs." |
-| 10 | 73.0-76.4 | "Axle. Free and open source." |
+| 01 | 0.6-3.0 | "Your agent just changed fourteen files." |
+| 01 | 4.3-4.7 | "Where?" |
+| 02 | 6.6-9.2 | "A diff tells you which lines. Not what they reach." |
+| 03 | 12.6-18.2 | "Now see the change on how your code runs: every endpoint it touches, cut down to the methods that changed." |
+| 04 | 22.4-28.1 | "Across services and languages. From the controller, over HTTP and Kafka, to the table it writes." |
+| 05 | 30.6-35.0 | "Ask how something works, and the agent walks you through it, on the real code, step by step." |
+| 06 | 40.6-44.7 | "Run Claude Code and Codex side by side. See which one needs you, and why." |
+| 06 | 50.4-52.3 | "Even when the editor is in the background." |
+| 07 | 54.6-59.5 | "Sequence, ER and architecture diagrams, read straight from the code. Nothing invented." |
+| 08 | 62.3-66.8 | "Every endpoint, one click away. Your harness, scored. Your tables, drawn." |
+| 09 | 68.8-70.2 | "See how your code runs." |
+| 10 | 74.2-76.6 | "{spokenName}. Free and open source." |
+
+As built (final times from the generated lines; `vo/script.json` is the source). The name is said only in line 10.
+Montage (08) as built: the Home page's endpoint list, its harness score, the ER board of the four tables.
 
 About 125 words. Measured on this machine: Chatterbox speaks the hook line at ~3.2 words/s, Kokoro at
 ~2.5 words/s; at either rate every line ends before its beat does, and the times are re-cut to the
