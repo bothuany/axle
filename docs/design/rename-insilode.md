@@ -49,7 +49,7 @@ Legend: **rename** = plain rename now; **alias** = new name plus a compatibility
 `window.axleAvatar`. **Rename** all (`insilodeDesktop/`, `IInsilode*`, `insilodeUpdate.ts`, `insilodeVersion`, ...).
 Patches are regenerated from a checkout that has the others applied (docs/building.md, Regenerate); the arch tests that
 read these paths (`test/arch/avatars`, `desktop-focus`) move with them. No two patches may touch the same file: the
-migration code (3.2) goes into `flow-desktop.patch`, not a new hunk in another patch's file.
+migration code (3.2) goes into `flow-desktop.patch` as a new hunk in `src/main.ts` (no current patch touches that file or `userDataPath.ts`; checked), and the build's per-patch reverse check confirms it.
 
 ### 2.2 Installer, packages, update files
 
@@ -93,6 +93,15 @@ migration code (3.2) goes into `flow-desktop.patch`, not a new hunk in another p
   holds the id. **Migrate**: flow-theme rewrites `Axle Dark|Light` in the user setting once. Also the product's
   `configurationDefaults` (package.json of flow-theme) and `flow-dark.json` `name`.
 
+### 2.4a Persisted and wire names found in code (not just text)
+
+| Name | Where | Decision |
+|---|---|---|
+| `"axleTour": 1` | the format key of saved `.tour.json` files: validated in `flow-view/src/tour/validate.ts`, written by the tour code, in fixtures and `docs/design/guided-tours.md`, and in committed tours of users | **alias**: write `"insilodeTour": 1`; the validator accepts both keys (old files keep loading), an error message names the new one. Fixture `demo-shop-orders.tour.json` stays on the old key to prove it, a second fixture uses the new one. |
+| `window.axleAvatar`, `window.axleRender`, `axleFocused`, `IAxle*`, `AXLE_OVERLAY_CHANNEL` | host/webview and main/renderer globals inside one build, nothing persisted | rename |
+| `ui/src` (comments only: `board.css`, `board.tsx`, `spec.ts`, `webview.css`, `webview.tsx`) | text | rename; the wire types in `protocol/` carry no brand |
+| `analyzer/` (`FlowGraph.cs:464` comment; `Schema.cs` hits are `MaxLength` / `HasMaxLength`) | the analyzer's output has no branded key or tool name; the rest is `maxLength` noise | comment only |
+
 ### 2.5 Workspace and home folders
 
 | Folder | Content | Decision |
@@ -109,7 +118,7 @@ migration code (3.2) goes into `flow-desktop.patch`, not a new hunk in another p
 | Area | What | Decision |
 |---|---|---|
 | `site/` | one constant: `site/src/brand.ts` (`NAME`, `REPO`); plus `vite.config.ts` and `README.md` base URL / `SITE_URL`, canonical, sitemap, OG, JSON-LD, `scripts/site-data.mjs`, `site/demo`, `site/test` | rename; `REPO` changes only after the repo move; base path `/axle/` → `/insilode/` (or `/` with a custom domain) |
-| Launch film `docs/film/brand.json` | on branch `claude/fervent-nash-05b4b1` (session [axle-launch-film...](#local_785b1142-7771-4a5a-9179-00726a2c18f7)), not on main | **not edited here.** The film session changes `productName`, `spokenName` (IN-sih-lohd, not "Insilode" as a word to a TTS), `repoUrl`. Phase 2 sends it a message with the three values; capture folder `axle-film-shots` is outside the repo and stays. |
+| Launch film `docs/film/brand.json` | on branch `claude/fervent-nash-05b4b1` (the launch-film session), not on main | **not edited here.** The film session changes `productName`, `spokenName` (IN-sih-lohd, not "Insilode" as a word to a TTS), `repoUrl`. Phase 2 sends it a message with the three values; capture folder `axle-film-shots` is outside the repo and stays. |
 | README, docs (`building.md` 40 hits, `agent-tools.md`, `packaging/README.md` 27, `languages.md`, `docs/site`, `docs/design/*`), CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue templates | | rename (text). `docs/research` stays as written, with one line at the top of its index that Axle is the old name. |
 | LICENSE | holder is the author, no product name | no change |
 | CLA.md, TRADEMARKS.md | title and body | rename, wording per D5. TRADEMARKS also states the new name's status honestly: no registration, search pending. |
@@ -131,7 +140,7 @@ run clean and makes "Update available" point to it.
 ### 3.1 Windows (the one platform with an installer)
 
 - GUIDs kept (D2): `Insilode-Setup` over the existing per-user install is an upgrade: same `AppId`, `UsePreviousAppDir`
-  keeps `%LOCALAPPDATA%\Programs\Axle`. Fresh installs use `...\Programs\Insilode`. (The folder name stays `Axle` for
+  keeps `%LOCALAPPDATA%\Programs\Axle`. **Unverified**: `editor/vscode` is not checked out here, and upstream's `code.iss` `[Setup]` must be read for `UsePreviousAppDir`/`DefaultDirName` (VS Code leaves the former at Inno's default, yes). If it turns out to be `no`, a kept GUID would reuse the uninstall key but install into `Programs\Insilode` and orphan the old tree; phase 2 checks this first, in Windows Sandbox, before D2 is final. Fresh installs use `...\Programs\Insilode`. (The folder name stays `Axle` for
   upgraded users; cosmetic. Moving it would need the app closed and loses the Inno upgrade; not worth it.)
 - The installer script (`flow-core.patch`, `build/win32/code.iss` hunk) gets a **legacy cleanup** step, tested in Windows
   Sandbox only: delete `Axle.exe`, `bin\axle.cmd`, the Start menu / desktop `Axle.lnk`, the registry
