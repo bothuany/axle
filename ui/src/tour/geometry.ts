@@ -27,6 +27,9 @@ export function highlightedLines(highlights: readonly [number, number][] | undef
 
 export const CAPTION_W = 360
 export const CAPTION_H = 150
+/** The most the bubble grows to (it scrolls beyond that) and the room the tour bar takes at the bottom. */
+export const BUBBLE_MAX_H = 440
+export const BAR_RESERVE = 64
 const GAP = 14
 const EDGE = 8
 

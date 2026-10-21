@@ -19,7 +19,7 @@ Use a tour whenever the user asks how something works, to be walked through it o
 1. Get the places first. Use \`find_entry_points\`, then \`flow_text\` (or \`find_symbol\`) to learn the call order and the file:line of each method. Do not guess lines.
 2. Start at the entry point, or at the user's question, and follow the order the code runs. Do not jump around the file system.
 3. One step per idea. If a caption needs "and also", split the step. Aim for 3-12 steps; if it needs more, offer a second tour instead of a longer one.
-4. Captions say WHY and WHAT TO WATCH: invariants, side effects, what breaks, what is surprising. Do not restate the code, the user can read it. One or two sentences, at most 600 characters. Plain text; \`code\` in backticks is shown as code.
+4. Captions say WHY and WHAT TO WATCH: invariants, side effects, what breaks, what is surprising. Do not restate the code, the user can read it. One or two sentences, at most 600 characters. Short Markdown is fine (\`code\`, **bold**, a list); HTML is not shown.
 5. Write the captions in the language the user is writing to you in.
 6. Name code by \`file\` + \`method\` (e.g. "OrderService.Place") and add a \`line\` hint inside it. The method survives edits; the line does not. Highlight (\`lines\`) only the few lines the caption is about.
 7. For a change you made: say what changed, why, and what you did not test. Order the steps the way a request runs through them (entry first), include the tables a change touches (\`table\`), and end with a step (caption only) about the risks.

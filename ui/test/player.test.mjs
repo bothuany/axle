@@ -2,7 +2,7 @@
 // run under plain Node (`npm test` in ui/).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { captionParts, idle, MAX_NOTES, reduce, stepMark } from '../src/tour/player.ts'
+import { idle, MAX_NOTES, reduce, stepMark } from '../src/tour/player.ts'
 import { cardAt, cardOfTable, pathTo, resolveStep, samePath } from '../src/tour/cards.ts'
 import { captionPlace, firstLine, glidePath, highlightedLines, lineY } from '../src/tour/geometry.ts'
 import { rangesOf, reviewSignature, tourFromChanges } from '../src/tour/review.ts'
@@ -91,12 +91,6 @@ test('the step list marks each state', () => {
   assert.equal(stepMark(step('a', { state: 'missing' })).glyph, '⚠')
   assert.equal(stepMark(step('a', { state: 'offflow' })).glyph, '⧉')
   assert.equal(stepMark(step('a', { drift: true })).glyph, 'Δ', 'drift shows over ok')
-})
-
-test('a caption is text with `code` spans, never markup', () => {
-  assert.deepEqual(captionParts('Freezes `price` here'), [{ text: 'Freezes ', code: false }, { text: 'price', code: true }, { text: ' here', code: false }])
-  assert.deepEqual(captionParts('<img src=x onerror=1>'), [{ text: '<img src=x onerror=1>', code: false }])
-  assert.deepEqual(captionParts('unclosed `tick'), [{ text: 'unclosed ', code: false }, { text: 'tick', code: true }])
 })
 
 // ---- which card a step points at ---------------------------------------------------------------------------

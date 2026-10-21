@@ -12,7 +12,7 @@ import './webview.css'
 import { placeOf, type CardChips, type ChipsView, type Detail, type TypeTree } from './chips'
 import { HEADER_H, initialHidden, layout, layoutCallers, setEditMaxWidth, type EditTarget } from './layout'
 import { definitionInFile, notify, registerIde } from './ide'
-import { ActionsCtx, LANG_BY_EXT, nodeTypes, type CanvasActions, type Caret } from './nodes'
+import { ActionsCtx, LANG_BY_EXT, nodeTypes, recolor, type CanvasActions, type Caret } from './nodes'
 import { cardAt, samePath } from './tour/cards'
 import { PointAsk, selectedLines, type Pointing } from './tour/PointAsk'
 import { useTourPlayer } from './tour/TourPlayer'
@@ -30,6 +30,8 @@ declare global {
 
 self.MonacoEnvironment = { getWorker: () => new editorWorker() }
 monaco.editor.setTheme(window.__FLOW__.dark ? 'vs-dark' : 'vs')
+// VS Code tells a webview about a theme change through its body's class: the code on the cards takes the new colours.
+new MutationObserver(() => recolor(document.body.classList.contains('vscode-light') || document.body.classList.contains('vscode-high-contrast-light') ? 'vs' : 'vs-dark')).observe(document.body, { attributes: true, attributeFilter: ['class'] })
 const vscode = acquireVsCodeApi()
 
 // ---- request/response over postMessage ------------------------------------------------------
@@ -618,7 +620,9 @@ function Flow() {
   }, [proposed.map(n => n.key).join()]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // While one prompt is picked, cards show that prompt's change only; Keep/Undo act on everything, so they wait.
-  const cardActions = useMemo(() => ({ ...(turn === undefined ? actions : { ...actions, keep: undefined, undo: undefined }), editHooks }), [actions, turn, editHooks])
+  // Cards are read-only while a tour plays (their code is what the tour talks about); editing is back when it ends.
+  const touring = tour.state.tour !== null
+  const cardActions = useMemo(() => ({ ...(turn === undefined ? actions : { ...actions, keep: undefined, undo: undefined }), ...(touring ? { edit: undefined } : {}), editHooks }), [actions, turn, editHooks, touring])
   const locked = !!editing
   const { owner, member } = (() => {
     const clean = target.label.replace(/\s*▸\s*/g, '.')

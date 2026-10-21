@@ -85,9 +85,9 @@ test('highlights: three ranges, each at most 80 lines, bad ones dropped, a lone 
 	assert.deepEqual(s.highlights, [[1, 80], [9, 9], [10, 11]])
 })
 
-test('captions are plain text: control characters and runs of spaces go, backticks stay', () => {
-	const s = parse(file({ steps: [{ caption: 'a\tb\n\nc \u0007 `d`\u0000', title: 'T\u001b[31m' }] })).tour.steps[0]
-	assert.equal(s.caption, 'a b c `d`')
+test('captions are Markdown text: control characters go, line breaks and backticks stay', () => {
+	const s = parse(file({ steps: [{ caption: 'a\tb\n\n\n\n- c\u0007`d`\u0000\r\n  x  \n', title: 'T\u001b[31m' }] })).tour.steps[0]
+	assert.equal(s.caption, 'a b\n\n- c `d`\n  x')
 	assert.equal(s.title, 'T [31m')
 	assert.equal(parse(file({ steps: [{ caption: '<img src=x onerror=1>' }] })).tour.steps[0].caption, '<img src=x onerror=1>', 'markup is left as text: the canvas never renders it as HTML')
 })

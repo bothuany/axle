@@ -2,7 +2,7 @@
 // changes) and exit. The reader steps by hand; there is no autoplay timer.
 import { useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import type { Tour } from '../types'
-import { stepMark, type PlayerState } from './player'
+import { counterText, stepMark, type PlayerState } from './player'
 
 export interface TourApi {
   next(): void
@@ -28,7 +28,7 @@ export function TourBar({ tour, state, api, extras, ask }: { tour: Tour; state: 
     <div className={`tour${paused ? ' paused' : ''}`} role="toolbar" aria-label={tour.title} style={{ '--progress': `${((index + 1) / tour.steps.length) * 100}%` } as CSSProperties}>
       <button className="icon-btn" onClick={api.back} disabled={index === 0} title="Previous step (←)">‹</button>
       <span className="tour-steps">
-        <button className="tour-pos" onClick={() => setList(v => !v)} aria-expanded={list} title="All steps">{index + 1} / {tour.steps.length}</button>
+        <button className="tour-pos" onClick={() => setList(v => !v)} aria-expanded={list} title="All steps">{counterText(index, tour.steps.length)}</button>
         {list && (
           <ol className="tour-list" aria-label={`Steps of ${tour.title}`}>
             <li className="tour-list-head" title={tour.origin}>{tour.title}</li>
