@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: JavaScript and TypeScript (and TSX). Classes with decorators (Nest,
+ *  Insilode polyglot index: JavaScript and TypeScript (and TSX). Classes with decorators (Nest,
  *  TypeORM), constructor-injected fields, functions and arrow functions, imports and require,
  *  calls, and Express-style route registrations with their inline handlers.
  *--------------------------------------------------------------------------------------------*/

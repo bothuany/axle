@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle agent bridge: plans become boards. Looks up the files and `Class.method` names a plan
+ *  Insilode agent bridge: plans become boards. Looks up the files and `Class.method` names a plan
  *  mentions (workspace files, the entry-point index, the language servers' workspace symbols) within
  *  a short budget, so the pure parser can link steps to code. Never throws: a plan with no links is
  *  still a plan.

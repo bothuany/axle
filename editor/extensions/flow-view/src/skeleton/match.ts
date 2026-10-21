@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle skeleton first: the plan an agent drew (a class or ER board) against the types the developer wrote (the type graph).
+ *  Insilode skeleton first: the plan an agent drew (a class or ER board) against the types the developer wrote (the type graph).
  *  Every planned type and member comes out as matches, missing or differs, with what the code has instead. The plan is
  *  the design and the code is the truth: nothing here changes either. Tolerant on purpose (see docs/design/skeleton-first.md):
  *  parameter names, packages, collection and optional wrappers do not count, extra helpers are fine, and a rename is
@@ -621,7 +621,7 @@ export function designText(s: DesignSummary, rel: (file: string) => string = f =
 		lines.push(`New types the developer writes: ${s.added.join(', ')}.`);
 	}
 	if (s.modules && !s.paths.length && s.added.length) {
-		lines.push(`Axle cannot tell which module the new types belong in (${s.modules.join(', ')}): redraw with the same id and the module's name in the board title or description (e.g. "... (${s.modules[0]})"), and the board shows where each file goes.`);
+		lines.push(`Insilode cannot tell which module the new types belong in (${s.modules.join(', ')}): redraw with the same id and the module's name in the board title or description (e.g. "... (${s.modules[0]})"), and the board shows where each file goes.`);
 	}
 	if (s.paths.length) {
 		lines.push(`Where each new type goes (the board shows these paths and offers to create the file; list them to the developer):`, ...s.paths.map(p => `  ${p.name} → ${rel(p.file)} (${p.reason})`));

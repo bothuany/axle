@@ -46,7 +46,7 @@ test('hand-over: fill the bodies, report each numbered warning in the reply, kee
 	assert.match(h, /tell the developer in your reply/)
 	assert.match(h, /step "accept" and that warning number/)
 	assert.match(h, /put their declaration back exactly/)
-	assert.match(h, /Axle: Revert an Agent's Change to Your Declaration/)
+	assert.match(h, /Insilode: Revert an Agent's Change to Your Declaration/)
 	assert.match(h, /closing tour/)
 	assert.match(h, /step "finish"/)
 })

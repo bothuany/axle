@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: what a Claude Code transcript (a session's .jsonl) says about the harness. Hooks
- *  tell Axle what an agent does as it happens; the transcript adds what no hook reports: which
+ *  Insilode Harness: what a Claude Code transcript (a session's .jsonl) says about the harness. Hooks
+ *  tell Insilode what an agent does as it happens; the transcript adds what no hook reports: which
  *  memory files and path-scoped rules were loaded, the skill and subagent listings, MCP server
  *  instructions, hook failures, how long Stop hooks took, the API's own token usage, and the
  *  breakdown `/context` printed if the user ran it. Pure (no vscode), so it is tested on its own.
@@ -263,8 +263,8 @@ export function mcpToolPrefix(server: string): string {
 	return server.replace(/[^\w-]/g, '_');
 }
 
-/** Axle's own observer hook and the SDK's in-process callbacks: never counted as the user's hooks. */
-export function isAxleHook(command: string): boolean {
+/** Insilode's own observer hook and the SDK's in-process callbacks: never counted as the user's hooks. */
+export function isInsilodeHook(command: string): boolean {
 	return command === 'callback' || /flow-hook\.js|codex-hook\.js/.test(command);
 }
 

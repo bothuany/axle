@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: where a tour step points. An agent (or a tour file) names code by file, method and a line hint; the code moves, so the
+ *  Insilode: where a tour step points. An agent (or a tour file) names code by file, method and a line hint; the code moves, so the
  *  name is the anchor and the line only a hint. This turns one step into the current file lines the canvas needs, and says how
  *  it went: ok, moved, missing, or (once the drawn flow is known) offflow. A step that cannot be placed is never given a wrong
  *  place. Pure: no `vscode`; the host feeds it the file's methods and text, so it is tested under plain Node.

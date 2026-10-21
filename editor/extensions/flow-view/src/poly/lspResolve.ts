@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index + language server: the hybrid. The tree-sitter index finds entry points and
+ *  Insilode polyglot index + language server: the hybrid. The tree-sitter index finds entry points and
  *  most calls without building anything. What it cannot resolve (a call it left `pending`, or a link
  *  it only guessed by name) is asked to the language server of that file, if one is running:
  *  go-to-definition for the callee, go-to-implementation when the definition is only a declaration.

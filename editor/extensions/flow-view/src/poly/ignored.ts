@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: what git ignores. A real repository keeps build output, generated code and
- *  vendored checkouts out of git with .gitignore (Axle's own repo ignores a whole VS Code checkout);
+ *  Insilode polyglot index: what git ignores. A real repository keeps build output, generated code and
+ *  vendored checkouts out of git with .gitignore (Insilode's own repo ignores a whole VS Code checkout);
  *  indexing them makes the first index take minutes and fills the endpoint list with noise. Git
  *  itself is asked, so nested .gitignore files, .git/info/exclude and the global excludes all count
  *  exactly as `git status` counts them. Outside a git repository nothing is ignored.

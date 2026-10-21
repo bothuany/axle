@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle boards as a Markdown document: the mermaid diagram plus a table of the nodes with links to
+ *  Insilode boards as a Markdown document: the mermaid diagram plus a table of the nodes with links to
  *  their code and their status. This is what the stand-in viewer shows. Pure: no `vscode`.
  *--------------------------------------------------------------------------------------------*/
 
@@ -54,6 +54,6 @@ export function boardMarkdown(id: string, spec: BoardSpec, o: MarkdownOptions = 
 		}
 		out.push('');
 	}
-	out.push(`<sub>Board \`${id.replace(/`/g, '')}\` · drawn in Axle · ${spec.nodes.length} nodes, ${spec.edges.length} edges</sub>`, '');
+	out.push(`<sub>Board \`${id.replace(/`/g, '')}\` · drawn in Insilode · ${spec.nodes.length} nodes, ${spec.edges.length} edges</sub>`, '');
 	return out.join('\n');
 }

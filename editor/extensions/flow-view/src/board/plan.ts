@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle boards from a plan: the Markdown an agent proposes when it leaves plan mode becomes a
+ *  Insilode boards from a plan: the Markdown an agent proposes when it leaves plan mode becomes a
  *  `plan` board. Numbered steps (or, without them, section headings or bullets) become step nodes in
  *  order, joined by `next` edges; file paths and `Class.method` mentions become links to code when the
  *  index knows them; steps that talk about tests, the database or an API get a node kind. The same

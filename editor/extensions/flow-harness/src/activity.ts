@@ -1,12 +1,12 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: what fired and what never did. Counts per harness piece (a skill, a subagent,
+ *  Insilode Harness: what fired and what never did. Counts per harness piece (a skill, a subagent,
  *  an MCP server, a hook, a path-scoped rule), bucketed by day for the last 30 days, so the map
  *  can say "used 12× this week" or "never used in 30 days". Fed by flow-agent's hook events and
  *  by the transcripts of past sessions. The data is plain JSON kept in the workspace's extension
  *  storage and stays bounded (30 days, a fixed number of keys). Pure (no vscode).
  *--------------------------------------------------------------------------------------------*/
 
-import { isAxleHook, mcpServerOf, mcpToolPrefix, type TranscriptFacts } from './transcript';
+import { isInsilodeHook, mcpServerOf, mcpToolPrefix, type TranscriptFacts } from './transcript';
 
 export const WINDOW_DAYS = 30;
 export const MAX_KEYS = 400;
@@ -31,7 +31,7 @@ export interface ActivityData {
 	/** When counting began here: "never used" means nothing until the window is covered. */
 	since: number;
 	keys: Record<string, Counter>;
-	/** Transcripts read so far, with how far, and whether hook events cover their tool calls (sessions Axle started). */
+	/** Transcripts read so far, with how far, and whether hook events cover their tool calls (sessions Insilode started). */
 	transcripts: Record<string, { offset: number; live: boolean; at: number; from?: number }>;
 }
 
@@ -260,7 +260,7 @@ export function countEvent(data: ActivityData, ev: AgentEvent, hooks: readonly H
 		countTool(data, tool, ev.input ?? {}, ev.at, failed);
 		// A tool that ran had its PreToolUse hooks run first; PostToolUse hooks run after a success, PostToolUseFailure ones after a failure.
 		for (const h of hooks) {
-			if ((h.event === 'PreToolUse' || h.event === (failed ? 'PostToolUseFailure' : 'PostToolUse')) && hookMatches(h.matcher, tool) && !isAxleHook(h.command)) {
+			if ((h.event === 'PreToolUse' || h.event === (failed ? 'PostToolUseFailure' : 'PostToolUse')) && hookMatches(h.matcher, tool) && !isInsilodeHook(h.command)) {
 				bump(data, hookKey(h), ev.at, { inferred: true });
 			}
 		}
@@ -269,7 +269,7 @@ export function countEvent(data: ActivityData, ev: AgentEvent, hooks: readonly H
 	// Stop hooks are counted from the transcript, which reports each one with its duration.
 	if (ev.event === 'UserPromptSubmit' || ev.event === 'SessionStart' || ev.event === 'SubagentStop' || ev.event === 'SessionEnd') {
 		for (const h of hooks) {
-			if (h.event === ev.event && (ev.event !== 'SubagentStop' || hookMatches(h.matcher, ev.agentType ?? '')) && !isAxleHook(h.command)) {
+			if (h.event === ev.event && (ev.event !== 'SubagentStop' || hookMatches(h.matcher, ev.agentType ?? '')) && !isInsilodeHook(h.command)) {
 				bump(data, hookKey(h), ev.at, { inferred: true });
 			}
 		}
@@ -307,7 +307,7 @@ export function countTranscript(data: ActivityData, facts: TranscriptFacts, hook
 		bump(data, ruleKey(n.path), time(n.at, fallbackAt));
 	}
 	for (const s of facts.stopHooks) {
-		if (isAxleHook(s.command)) {
+		if (isInsilodeHook(s.command)) {
 			continue;
 		}
 		for (const h of hooks.filter(x => (x.event === 'Stop' || x.event === 'SubagentStop') && x.command.trim() === s.command.trim())) {
@@ -317,7 +317,7 @@ export function countTranscript(data: ActivityData, facts: TranscriptFacts, hook
 	for (const e of facts.hookErrors) {
 		// "PreToolUse:Write": the event and the tool it ran for. Every hook of that event whose matcher takes the tool may be the one that failed.
 		const [event, tool = ''] = e.hookName.split(':');
-		const candidates = hooks.filter(h => h.event === (e.event ?? event) && hookMatches(h.matcher, tool) && !isAxleHook(h.command));
+		const candidates = hooks.filter(h => h.event === (e.event ?? event) && hookMatches(h.matcher, tool) && !isInsilodeHook(h.command));
 		const named = candidates.filter(h => e.message.includes(h.command.split(/\s+/).pop()?.replace(/^.*[\\/]/, '').replace(/["']/g, '') ?? '\0'));
 		for (const h of named.length ? named : candidates) {
 			const c = data.keys[hookKey(h)] ??= { days: {}, last: 0, inferred: true };
@@ -331,13 +331,13 @@ export function countTranscript(data: ActivityData, facts: TranscriptFacts, hook
 		const at = time(u.at, fallbackAt);
 		countTool(data, u.name, u.input, at, false);
 		for (const h of hooks) {
-			if ((h.event === 'PreToolUse' || h.event === 'PostToolUse') && hookMatches(h.matcher, u.name) && !isAxleHook(h.command)) {
+			if ((h.event === 'PreToolUse' || h.event === 'PostToolUse') && hookMatches(h.matcher, u.name) && !isInsilodeHook(h.command)) {
 				bump(data, hookKey(h), at, { inferred: true });
 			}
 		}
 	}
 	for (const p of facts.prompts) {
-		for (const h of hooks.filter(x => x.event === 'UserPromptSubmit' && !isAxleHook(x.command))) {
+		for (const h of hooks.filter(x => x.event === 'UserPromptSubmit' && !isInsilodeHook(x.command))) {
 			bump(data, hookKey(h), time(p.at, fallbackAt), { inferred: true });
 		}
 	}

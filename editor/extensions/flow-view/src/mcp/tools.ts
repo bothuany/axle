@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle agent bridge: the tools the `axle` MCP server offers a model (they show up as mcp__axle__*).
+ *  Insilode agent bridge: the tools the `insilode` MCP server offers a model (they show up as mcp__insilode__*).
  *  The descriptions are written for the model: they say when to reach for each tool. All tools only
  *  read, open or display; none writes a file or runs a command. Keep draw_board's schema in sync with
  *  ../board/spec.ts (a test compares the enums).
@@ -99,10 +99,10 @@ export const BOARD_SCHEMA = {
 					line: int('1-based line in `file`.'),
 					status: { type: 'string', enum: [...NODE_STATUSES], description: 'Progress of any node: a plan step, a stage of the work. Update later with update_board.' },
 					note: str('Longer free text on any kind of board, e.g. what a plan step changes or why a box exists. For a note on one edge use `callouts`.'),
-					symbol: str('The real code symbol this node stands for ("OrderService.Place"), taken from find_symbol or flow_text. Axle checks it against the index and fills `file` and `line`; leave it out for something that does not exist yet (a proposed class).'),
+					symbol: str('The real code symbol this node stands for ("OrderService.Place"), taken from find_symbol or flow_text. Insilode checks it against the index and fills `file` and `line`; leave it out for something that does not exist yet (a proposed class).'),
 					tech: str('C4: the technology under the label, e.g. "Spring Boot", "PostgreSQL".'),
 					shape: { type: 'string', enum: [...NODE_SHAPES], description: 'Overrides the shape the kind gives: initial/final/choice for state boards, cylinder for a database, actor for a person, cloud for an outside service.' },
-					change: { type: 'string', enum: [...CHANGE_MARKS], description: 'For a proposed design: added, removed or changed. With a `base` board Axle fills this itself.' },
+					change: { type: 'string', enum: [...CHANGE_MARKS], description: 'For a proposed design: added, removed or changed. With a `base` board Insilode fills this itself.' },
 					lane: str('Swimlane: id of a group with kind "lane" this node sits in.'),
 					zoom: str('C4: id of the board that shows this box one level down; a click on the box opens it.'),
 					members: {
@@ -139,7 +139,7 @@ export const BOARD_SCHEMA = {
 					style: { type: 'string', enum: [...EDGE_LINES], description: 'dashed is a return or reply, dotted a weak or optional link.' },
 					async: { type: 'boolean', description: 'An asynchronous message (open arrow head): events, queues, fire-and-forget.' },
 					guard: str('State transition condition, shown as [guard], e.g. "amount > 0".'),
-					change: { type: 'string', enum: [...CHANGE_MARKS], description: 'For a proposed design: added, removed or changed. With a `base` board Axle fills this itself.' },
+					change: { type: 'string', enum: [...CHANGE_MARKS], description: 'For a proposed design: added, removed or changed. With a `base` board Insilode fills this itself.' },
 					fragment: str('Sequence: id of the alt, loop or opt group this message sits in.'),
 				},
 				required: ['from', 'to'],
@@ -168,7 +168,7 @@ export const BOARD_SCHEMA = {
 export const TOOLS: ToolDef[] = [
 	{
 		name: 'open',
-		description: "Open a file in the user's Axle editor, scrolled to a line and optionally with a line range selected. Use this when the user asks you to open, show or go to a file or place in the IDE/editor. It does not take keyboard focus from the terminal. To show how a feature runs (an endpoint, a job) use show_flow instead.",
+		description: "Open a file in the user's Insilode editor, scrolled to a line and optionally with a line range selected. Use this when the user asks you to open, show or go to a file or place in the IDE/editor. It does not take keyboard focus from the terminal. To show how a feature runs (an endpoint, a job) use show_flow instead.",
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -180,17 +180,17 @@ export const TOOLS: ToolDef[] = [
 			required: ['file'],
 			additionalProperties: false,
 		},
-		annotations: ro('Open file in Axle'),
+		annotations: ro('Open file in Insilode'),
 	},
 	{
 		name: 'open_diff',
-		description: "Show git changes in Axle's diff view (a multi-file diff editor), so the user can REVIEW them. Use this when the user asks to open, show or review the diff or the changes in the IDE, including after you finished a piece of work (\"show what you did\"). By default the uncommitted changes against HEAD; `base` \"branch\" shows everything since the branch left main (committed or not), \"last_commit\" the last commit plus anything on top. It covers modified, staged, deleted and brand-new untracked files (no `git add -N` needed) and finds nested git repositories inside the workspace. Pass `files` (files or folders) to narrow it; without it every changed file of every repository is shown. Returns the list of files it opened.",
-		inputSchema: { type: 'object', properties: { files: { type: 'array', items: { type: 'string' }, description: 'Files or folders to show (absolute, or relative to the workspace folder). Omit for all changes.' }, base: { type: 'string', enum: ['uncommitted', 'branch', 'last_commit'], description: 'What to compare with: uncommitted (HEAD, default), branch (where this branch left main/master; on main itself, its upstream: the unpushed commits) or last_commit (HEAD~1). Use branch or last_commit when your work is already committed.' }, title: str('Title of the diff tab.'), flow: { type: 'boolean', description: "Also show the changes on Axle's flow canvas, all on one canvas: every endpoint flow they reach, cut down to the changed methods, plus changed methods no endpoint reaches; each changed card shows added lines in green and removed lines in red. Use it when the user wants the diff or the work \"in flow\"." } }, additionalProperties: false },
-		annotations: ro('Open diff in Axle'),
+		description: "Show git changes in Insilode's diff view (a multi-file diff editor), so the user can REVIEW them. Use this when the user asks to open, show or review the diff or the changes in the IDE, including after you finished a piece of work (\"show what you did\"). By default the uncommitted changes against HEAD; `base` \"branch\" shows everything since the branch left main (committed or not), \"last_commit\" the last commit plus anything on top. It covers modified, staged, deleted and brand-new untracked files (no `git add -N` needed) and finds nested git repositories inside the workspace. Pass `files` (files or folders) to narrow it; without it every changed file of every repository is shown. Returns the list of files it opened.",
+		inputSchema: { type: 'object', properties: { files: { type: 'array', items: { type: 'string' }, description: 'Files or folders to show (absolute, or relative to the workspace folder). Omit for all changes.' }, base: { type: 'string', enum: ['uncommitted', 'branch', 'last_commit'], description: 'What to compare with: uncommitted (HEAD, default), branch (where this branch left main/master; on main itself, its upstream: the unpushed commits) or last_commit (HEAD~1). Use branch or last_commit when your work is already committed.' }, title: str('Title of the diff tab.'), flow: { type: 'boolean', description: "Also show the changes on Insilode's flow canvas, all on one canvas: every endpoint flow they reach, cut down to the changed methods, plus changed methods no endpoint reaches; each changed card shows added lines in green and removed lines in red. Use it when the user wants the diff or the work \"in flow\"." } }, additionalProperties: false },
+		annotations: ro('Open diff in Insilode'),
 	},
 	{
 		name: 'get_diagnostics',
-		description: "The errors and warnings Axle's language servers report right now (the Problems panel), for one file or the whole workspace, as `file:line:col severity [source] message`. Use it after editing to check your change compiles and lints, instead of running a build.",
+		description: "The errors and warnings Insilode's language servers report right now (the Problems panel), for one file or the whole workspace, as `file:line:col severity [source] message`. Use it after editing to check your change compiles and lints, instead of running a build.",
 		inputSchema: { type: 'object', properties: { file: str('File to check (absolute, or relative to the workspace folder). Omit for the whole workspace.'), severity: { type: 'string', enum: ['error', 'warning', 'all'], description: 'Lowest-priority severity to include: error (only errors), warning (errors and warnings, default) or all (also info and hints).' }, limit: int('Maximum lines (default 100, at most 500).') }, additionalProperties: false },
 		annotations: ro('Get diagnostics'),
 	},
@@ -214,15 +214,15 @@ export const TOOLS: ToolDef[] = [
 	},
 	{
 		name: 'find_entry_points',
-		description: "Find the entry points (HTTP endpoints, jobs, listeners) of the open project by a free-text query such as \"delete user\" or \"POST orders\", using Axle's code index. Returns each match with its HTTP verb and route, controller.method, file:line and an `id`. Use it first when the user names a feature (\"the delete-users flow\"), then pass the id to show_flow or flow_text. An empty query lists the entry points.",
+		description: "Find the entry points (HTTP endpoints, jobs, listeners) of the open project by a free-text query such as \"delete user\" or \"POST orders\", using Insilode's code index. Returns each match with its HTTP verb and route, controller.method, file:line and an `id`. Use it first when the user names a feature (\"the delete-users flow\"), then pass the id to show_flow or flow_text. An empty query lists the entry points.",
 		inputSchema: { type: 'object', properties: { query: str('Free text: verbs (delete, create, update, list), nouns (user, order), a route or a class name.'), limit: int('Maximum matches (default 10, at most 50).') }, additionalProperties: false },
 		annotations: ro('Find entry points'),
 	},
 	{
 		name: 'show_flow',
-		description: 'Open the Axle flow canvas for an entry point or method, so the user SEES the runtime call chain (callers on the left, the method, everything it calls on the right, with the database tables it touches), and return the same call chain as text. Use this when the user asks to open a flow in the IDE ("open the delete-users flow"). To explain how it works, walk the user through it with `tour`. Pass an `id` from find_entry_points, or `file` plus `method` or `line`.',
+		description: 'Open the Insilode flow canvas for an entry point or method, so the user SEES the runtime call chain (callers on the left, the method, everything it calls on the right, with the database tables it touches), and return the same call chain as text. Use this when the user asks to open a flow in the IDE ("open the delete-users flow"). To explain how it works, walk the user through it with `tour`. Pass an `id` from find_entry_points, or `file` plus `method` or `line`.',
 		inputSchema: { type: 'object', properties: { ...TARGET, depth: int('How many call levels to include in the returned text (default 6).') }, additionalProperties: false },
-		annotations: ro('Show flow in Axle'),
+		annotations: ro('Show flow in Insilode'),
 	},
 	{
 		name: 'flow_text',
@@ -238,20 +238,20 @@ export const TOOLS: ToolDef[] = [
 	},
 	{
 		name: 'get_context',
-		description: 'What the user is looking at in Axle right now: the active file with cursor and selected text, the flow shown on the canvas, open editor tabs, files changed in git, and a summary of editor errors and warnings. Use it when the user says "this", "here" or "the selected code", or to see which files are in play.',
+		description: 'What the user is looking at in Insilode right now: the active file with cursor and selected text, the flow shown on the canvas, open editor tabs, files changed in git, and a summary of editor errors and warnings. Use it when the user says "this", "here" or "the selected code", or to see which files are in play.',
 		inputSchema: { type: 'object', properties: {}, additionalProperties: false },
 		annotations: ro('Editor context'),
 	},
 	{
 		name: 'draw_board',
-		description: 'Draw a diagram that Axle shows to the user next to the editor, like an artifact. Use it in plan mode to show the flow or architecture you designed, when explaining a design, or to lay out a multi-step plan the user can follow. The answer carries a LINT list (dropped items, unknown ids, orphans, too many nodes, crossings): fix what it names by calling again with the same `id`. Rules: one question per board, said in `title`, about 15-20 visible nodes at most (split, or collapse `groups`) · pick the kind by the question: how does it run -> sequence (order matters) or flow, what is it made of -> architecture or class, how is data stored -> er, what states can it be in -> state, what will we do -> plan, what changed -> `base` · ground nodes: take names from find_symbol or flow_text and give `symbol` (and `file`) for real code, leave it off for proposed things · label edges with verbs or payloads, not "calls" · group by layer or service, 2 levels at most · edge `kind` carries meaning (reads vs writes, extends vs uses) · number messages with `order` · then EXPLAIN it with `steps` (3-10, each lights some nodes and edges with a caption) instead of a paragraph in chat. Kinds: flow, plan (ordered steps with status), class, er (tables), sequence, architecture (with `level` context/container/component for C4), state. Give every node a unique id and a short label; link nodes to code with symbol or file (+ line); connect them with edges; no coordinates, layout is automatic. Passing the same `id` again replaces that board (the previous version is kept for "what changed"), so redraw instead of drawing a second copy. The `diagram_guide` prompt has the full advice. Example: {"id":"order-flow","board":{"kind":"flow","title":"Place order","nodes":[{"id":"api","label":"POST /orders","kind":"entry","file":"src/OrdersController.cs","line":24},{"id":"svc","label":"OrderService.Place","kind":"service"},{"id":"db","label":"orders","kind":"entity"}],"edges":[{"from":"api","to":"svc"},{"from":"svc","to":"db","kind":"writes","label":"insert"}]}}. For a plan use kind "plan" with step nodes in order joined by "next" edges, then tick them off with update_board while you work.',
+		description: 'Draw a diagram that Insilode shows to the user next to the editor, like an artifact. Use it in plan mode to show the flow or architecture you designed, when explaining a design, or to lay out a multi-step plan the user can follow. The answer carries a LINT list (dropped items, unknown ids, orphans, too many nodes, crossings): fix what it names by calling again with the same `id`. Rules: one question per board, said in `title`, about 15-20 visible nodes at most (split, or collapse `groups`) · pick the kind by the question: how does it run -> sequence (order matters) or flow, what is it made of -> architecture or class, how is data stored -> er, what states can it be in -> state, what will we do -> plan, what changed -> `base` · ground nodes: take names from find_symbol or flow_text and give `symbol` (and `file`) for real code, leave it off for proposed things · label edges with verbs or payloads, not "calls" · group by layer or service, 2 levels at most · edge `kind` carries meaning (reads vs writes, extends vs uses) · number messages with `order` · then EXPLAIN it with `steps` (3-10, each lights some nodes and edges with a caption) instead of a paragraph in chat. Kinds: flow, plan (ordered steps with status), class, er (tables), sequence, architecture (with `level` context/container/component for C4), state. Give every node a unique id and a short label; link nodes to code with symbol or file (+ line); connect them with edges; no coordinates, layout is automatic. Passing the same `id` again replaces that board (the previous version is kept for "what changed"), so redraw instead of drawing a second copy. The `diagram_guide` prompt has the full advice. Example: {"id":"order-flow","board":{"kind":"flow","title":"Place order","nodes":[{"id":"api","label":"POST /orders","kind":"entry","file":"src/OrdersController.cs","line":24},{"id":"svc","label":"OrderService.Place","kind":"service"},{"id":"db","label":"orders","kind":"entity"}],"edges":[{"from":"api","to":"svc"},{"from":"svc","to":"db","kind":"writes","label":"insert"}]}}. For a plan use kind "plan" with step nodes in order joined by "next" edges, then tick them off with update_board while you work.',
 		inputSchema: {
 			type: 'object',
 			properties: {
 				board: BOARD_SCHEMA,
 				source: {
 					type: 'object',
-					description: 'Optional. A Mermaid diagram you already have (sequenceDiagram, stateDiagram-v2, flowchart or graph) instead of `board.nodes` and `board.edges`: Axle turns it into a board, and `board` may still add title, steps, callouts and the like. The answer lists the lines it could not read. Draw JSON when you have no Mermaid yet: it can say more (symbol, file, status, kinds).',
+					description: 'Optional. A Mermaid diagram you already have (sequenceDiagram, stateDiagram-v2, flowchart or graph) instead of `board.nodes` and `board.edges`: Insilode turns it into a board, and `board` may still add title, steps, callouts and the like. The answer lists the lines it could not read. Draw JSON when you have no Mermaid yet: it can say more (symbol, file, status, kinds).',
 					properties: { mermaid: str('The diagram text, at most 60,000 characters.') },
 					required: ['mermaid'],
 				},
@@ -329,7 +329,7 @@ export const TOOLS: ToolDef[] = [
 	},
 	{
 		name: 'tour',
-		description: "The way to EXPLAIN code to the user in Axle: a narrated walkthrough on the flow canvas, where a cursor moves from card to card, dims the rest, highlights lines and shows your caption. Use it INSTEAD of a long text answer whenever the user asks how something works or to be walked through it (\"walk me through how an order is placed\", \"how does X work\", \"explain this flow\", \"show me\", \"anlat\", \"bana göster\", \"nasıl çalışıyor\"), after finishing work (\"explain what you changed\"), or to answer a question about code by SHOWING it; then keep your own message to one line. Get file:line from flow_text or find_symbol first. 3-12 steps, one idea each, in the order the code runs; captions say WHY and what to watch, not what the code says, in the user's language. Name each step's code by `file` + `method` (preferred: it survives edits) with a `line` hint, and `lines` for the few lines the caption talks about; a step with only a caption is an intro or an outro; `table` points at a database card. The tool returns at once with each step marked ok / moved / missing / offflow: fix a missing step by calling tour again with the same id. The user steps through it; questions they ask come back to you as a new message. Run the `tour_guide` prompt for the full advice.",
+		description: "The way to EXPLAIN code to the user in Insilode: a narrated walkthrough on the flow canvas, where a cursor moves from card to card, dims the rest, highlights lines and shows your caption. Use it INSTEAD of a long text answer whenever the user asks how something works or to be walked through it (\"walk me through how an order is placed\", \"how does X work\", \"explain this flow\", \"show me\", \"anlat\", \"bana göster\", \"nasıl çalışıyor\"), after finishing work (\"explain what you changed\"), or to answer a question about code by SHOWING it; then keep your own message to one line. Get file:line from flow_text or find_symbol first. 3-12 steps, one idea each, in the order the code runs; captions say WHY and what to watch, not what the code says, in the user's language. Name each step's code by `file` + `method` (preferred: it survives edits) with a `line` hint, and `lines` for the few lines the caption talks about; a step with only a caption is an intro or an outro; `table` points at a database card. The tool returns at once with each step marked ok / moved / missing / offflow: fix a missing step by calling tour again with the same id. The user steps through it; questions they ask come back to you as a new message. Run the `tour_guide` prompt for the full advice.",
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -337,7 +337,7 @@ export const TOOLS: ToolDef[] = [
 				title: { type: 'string', maxLength: 120, description: 'What the tour is about.' },
 				flow: {
 					type: 'object',
-					description: 'The canvas to play on. Omit to stay on the canvas the user has open, or to let Axle open the flow of the first step. Use {"changes": true} for the current git changes.',
+					description: 'The canvas to play on. Omit to stay on the canvas the user has open, or to let Insilode open the flow of the first step. Use {"changes": true} for the current git changes.',
 					properties: {
 						id: str('Entry point id from find_entry_points.'),
 						file: str('Source file of the method whose flow to show. Use with `method` or `line`.'),
@@ -370,11 +370,11 @@ export const TOOLS: ToolDef[] = [
 			required: ['title', 'steps'],
 			additionalProperties: false,
 		},
-		annotations: ro('Play a tour in Axle'),
+		annotations: ro('Play a tour in Insilode'),
 	},
 	{
 		name: 'check_skeleton',
-		description: "Skeleton first, the developer's choice in Axle (a switch per agent) to write the structure of a change themselves. Call it ONCE before your first edit for a request or an approved plan that adds or changes types, entities or interfaces (plan mode or not); it answers at once. A bug fix, a small edit or a question does not need it. If Axle says skeleton first is off, implement as usual. If it is on, it tells you to draw the design with draw_board and stop. The developer then drives the rest by talking to you: call it with no step to check their skeleton against your design (a structured diff, each type and member matches, MISSING or DIFFERS, with what the code has) and explain it without fixing their code; pass step \"handover\" when they hand the skeleton over, \"just\" when they say just do it, \"accept\" with a warning number when they keep a signature you changed, \"finish\" when they are done. It never writes a file.",
+		description: "Skeleton first, the developer's choice in Insilode (a switch per agent) to write the structure of a change themselves. Call it ONCE before your first edit for a request or an approved plan that adds or changes types, entities or interfaces (plan mode or not); it answers at once. A bug fix, a small edit or a question does not need it. If Insilode says skeleton first is off, implement as usual. If it is on, it tells you to draw the design with draw_board and stop. The developer then drives the rest by talking to you: call it with no step to check their skeleton against your design (a structured diff, each type and member matches, MISSING or DIFFERS, with what the code has) and explain it without fixing their code; pass step \"handover\" when they hand the skeleton over, \"just\" when they say just do it, \"accept\" with a warning number when they keep a signature you changed, \"finish\" when they are done. It never writes a file.",
 		inputSchema: {
 			type: 'object',
 			properties: {

@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: how much of the context window the harness itself takes before you type, and the
+ *  Insilode Harness: how much of the context window the harness itself takes before you type, and the
  *  plan's usage limits of each harness in use (the only part in the status bar). How full each
  *  agent's window is shows in the Agents dock, next to the agent. Every limit comes from the CLI's
  *  own report.
@@ -36,7 +36,7 @@ export class ContextBudget {
 
 /**
  * One status bar item per harness with the share of its plan's 5-hour and weekly limits in use, as the CLI
- * last reported them. Hidden until a harness reports any: no guessing, no account calls of Axle's own.
+ * last reported them. Hidden until a harness reports any: no guessing, no account calls of Insilode's own.
  */
 export class UsageLimits implements vscode.Disposable {
 	private readonly items = new Map<string, vscode.StatusBarItem>();

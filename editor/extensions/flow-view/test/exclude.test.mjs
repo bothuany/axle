@@ -80,8 +80,8 @@ test('only the path below the workspace folder counts, not the folders above it'
 	assert.equal(isExcludedPath(join(tmp, 'elsewhere', 'node_modules', 'y.js'), root), false, 'a file outside the folder is not this filter\'s business')
 })
 
-test("Axle's agent worktrees are never indexed: each is a second copy of the project", () => {
-	const root = project('wt', '.axle/worktrees/claude-aae3/web/src/api.js', 'web/src/api.js')
-	assert.equal(isExcludedPath(join(root, '.axle', 'worktrees', 'claude-aae3', 'web', 'src', 'api.js'), root), true)
+test("Insilode's agent worktrees are never indexed: each is a second copy of the project", () => {
+	const root = project('wt', '.insilode/worktrees/claude-aae3/web/src/api.js', 'web/src/api.js')
+	assert.equal(isExcludedPath(join(root, '.insilode', 'worktrees', 'claude-aae3', 'web', 'src', 'api.js'), root), true)
 	assert.equal(isExcludedPath(join(root, 'web', 'src', 'api.js'), root), false)
 })

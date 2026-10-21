@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: what the desktop surfaces outside the window show (desktop.ts sends it to core). The app
+ *  Insilode: what the desktop surfaces outside the window show (desktop.ts sends it to core). The app
  *  badge is the number of agents that need you, the same number as the Agents dock badge. The
  *  status overlay gets one small item per live agent. Nothing here touches vscode, so it is tested
  *  on its own.
@@ -11,7 +11,7 @@
 import { attentionKind, rank, type AttentionKind, type Rankable } from './attention';
 
 export type OverlayPosition = 'top-center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
-export type OverlayDisplay = 'axle' | 'primary' | 'secondary';
+export type OverlayDisplay = 'insilode' | 'primary' | 'secondary';
 export type OverlayStyle = 'pill' | 'dots' | 'list';
 export type OverlaySize = 'small' | 'medium' | 'large';
 export type OverlayTheme = 'black' | 'editor' | 'dark' | 'light';
@@ -48,7 +48,7 @@ export interface DesktopSettings {
 	opacity: number;
 	theme: OverlayTheme;
 	show: OverlayShow;
-	autoHide: { noAgents: boolean; axleFocused: boolean };
+	autoHide: { noAgents: boolean; insilodeFocused: boolean };
 	/** Commands, file names and questions in the activity line, for screens nobody else sees. */
 	details: boolean;
 }
@@ -84,14 +84,14 @@ export function readSettings(get: (key: string) => unknown): DesktopSettings {
 		// `overlay.enabled`, not `overlay`: a setting cannot also be the parent of `overlay.position` and the rest.
 		overlay: bool('overlay.enabled', false),
 		position: oneOf('overlay.position', ['top-center', 'top-left', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'], 'top-center'),
-		display: oneOf('overlay.display', ['axle', 'primary', 'secondary'], 'axle'),
+		display: oneOf('overlay.display', ['insilode', 'primary', 'secondary'], 'insilode'),
 		style: oneOf('overlay.style', ['pill', 'dots', 'list'], 'pill'),
 		size: oneOf('overlay.size', ['small', 'medium', 'large'], 'medium'),
 		// Below 0.3 the overlay is there but cannot be read, which is worse than turning it off.
 		opacity: typeof opacity === 'number' && Number.isFinite(opacity) ? Math.min(1, Math.max(0.3, opacity)) : 0.95,
 		theme: oneOf('overlay.theme', ['black', 'editor', 'dark', 'light'], 'black'),
 		show: flags('overlay.show', DEFAULT_SHOW),
-		autoHide: flags('overlay.autoHide', { noAgents: true, axleFocused: true }),
+		autoHide: flags('overlay.autoHide', { noAgents: true, insilodeFocused: true }),
 		details: bool('overlay.details', false),
 	};
 }

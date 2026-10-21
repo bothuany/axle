@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: the project. Resolves every call to what it reaches (a method through the
+ *  Insilode polyglot index: the project. Resolves every call to what it reaches (a method through the
  *  declared type of its receiver, an interface through its implementations, a table through the
  *  ORM or the SQL it runs), finds the entry points of each framework, and answers the canvas:
  *  the flow from a function, its callers, and the entry points a change would touch.

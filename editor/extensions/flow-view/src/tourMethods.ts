@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the methods of a file as the flow canvas knows them, for placing the steps of a tour by name.
+ *  Insilode: the methods of a file as the flow canvas knows them, for placing the steps of a tour by name.
  *---------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';

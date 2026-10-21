@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle boards, stand-in viewer: each board is a Markdown file (mermaid diagram + node table) shown
+ *  Insilode boards, stand-in viewer: each board is a Markdown file (mermaid diagram + node table) shown
  *  in VS Code's Markdown preview editor beside the code, opened without taking focus. Rewriting the
  *  file refreshes an open preview. This is a BoardHost: a canvas renderer can replace it later
  *  without touching the store or the tools.
@@ -85,10 +85,10 @@ export class MarkdownBoardViewer implements BoardHost, vscode.Disposable {
 		if (!board) {
 			const boards = this.store.list();
 			if (!boards.length) {
-				void vscode.window.showInformationMessage('Axle: no board yet. Open a flow and run "Pin Flow as Board", or an agent draws one (draw_board, or a plan it proposes).');
+				void vscode.window.showInformationMessage('Insilode: no board yet. Open a flow and run "Pin Flow as Board", or an agent draws one (draw_board, or a plan it proposes).');
 				return;
 			}
-			const chosen = await vscode.window.showQuickPick(boards.map(b => ({ label: b.spec.title, description: `${b.spec.kind} · ${b.spec.nodes.length} nodes`, detail: b.id, b })), { title: 'Axle: show a board' });
+			const chosen = await vscode.window.showQuickPick(boards.map(b => ({ label: b.spec.title, description: `${b.spec.kind} · ${b.spec.nodes.length} nodes`, detail: b.id, b })), { title: 'Insilode: show a board' });
 			board = chosen?.b;
 		}
 		if (board) {

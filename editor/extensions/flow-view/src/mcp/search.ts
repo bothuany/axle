@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle agent bridge: free-text search over the entry points ("delete user" finds
+ *  Insilode agent bridge: free-text search over the entry points ("delete user" finds
  *  `DELETE /users/{id}`). A verb word (delete, create, list ...) counts for the HTTP verb as well as
  *  for names; plural and singular match; camelCase names are split. Pure: no `vscode`.
  *--------------------------------------------------------------------------------------------*/

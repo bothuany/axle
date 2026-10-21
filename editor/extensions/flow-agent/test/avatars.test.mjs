@@ -21,7 +21,7 @@ before(async () => {
 	// The script is meant for a page: run it against a bare window, as the dock's webview and the overlay do.
 	const window = {}
 	vm.runInNewContext(m.AVATAR_SCRIPT, { window, Math, Object, isFinite })
-	avatar = window.axleAvatar
+	avatar = window.insilodeAvatar
 })
 after(() => rmSync(tmp, { recursive: true, force: true }))
 

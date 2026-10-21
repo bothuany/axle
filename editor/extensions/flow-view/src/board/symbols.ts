@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle board symbols: matching the `symbol` of a node ("OrderService.Place") against what the index knows.
+ *  Insilode board symbols: matching the `symbol` of a node ("OrderService.Place") against what the index knows.
  *  The handler asks the language servers for candidates; this decides which one is the symbol and which
  *  are close enough to suggest. Pure: no `vscode`.
  *--------------------------------------------------------------------------------------------*/

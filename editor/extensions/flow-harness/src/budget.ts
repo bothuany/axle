@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the plans' usage limits behind the status bar items, and how they read. Reports
+ *  Insilode Harness: the plans' usage limits behind the status bar items, and how they read. Reports
  *  arrive from flow-agent through a registered command, so every field is checked here rather
  *  than trusted.
  *

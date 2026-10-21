@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle type model: a board as Mermaid or PlantUML text, for a README or a wiki. Mermaid comes
+ *  Insilode type model: a board as Mermaid or PlantUML text, for a README or a wiki. Mermaid comes
  *  from board/mermaid.ts (ER boards as erDiagram, architecture boards as classDiagram, with the
  *  roles and modules as a flowchart when asked); PlantUML is written here. Node ids become n0,
  *  n1, ... and every text is cleaned, so nothing in a type name can break the diagram. Pure.

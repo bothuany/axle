@@ -1,4 +1,4 @@
-// How an MCP server finds the Axle window of a folder: bridge files, stale cleanup, window matching, path checks.
+// How an MCP server finds the Insilode window of a folder: bridge files, stale cleanup, window matching, path checks.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -11,9 +11,9 @@ after(cleanup)
 
 const info = (pid, folders, createdAt = 1) => ({ pid, port: 4000 + pid, token: 't'.repeat(8), workspaceFolders: folders, createdAt })
 
-test('mcp-registry: the bridge dir can be redirected, so tests never see the real ~/.axle', () => {
-	assert.equal(r.bridgeDir({ AXLE_BRIDGE_DIR: '/tmp/x' }), '/tmp/x')
-	assert.match(r.bridgeDir({}), /\.axle[\\/]bridge$/)
+test('mcp-registry: the bridge dir can be redirected, so tests never see the real ~/.insilode', () => {
+	assert.equal(r.bridgeDir({ INSILODE_BRIDGE_DIR: '/tmp/x' }), '/tmp/x')
+	assert.match(r.bridgeDir({}), /\.insilode[\\/]bridge$/)
 })
 
 test('mcp-registry: paths compare by whole segments, case-insensitively on Windows', () => {
@@ -46,7 +46,7 @@ test('mcp-registry: a window with several folders matches through any of them', 
 })
 
 test('mcp-registry: bridge files round-trip, damaged files are ignored', async () => {
-	const dir = temp('axle-bridge-')
+	const dir = temp('insilode-bridge-')
 	await r.writeBridgeFile(info(11, ['/x']), dir)
 	writeFileSync(join(dir, '12.json'), '{not json')
 	writeFileSync(join(dir, '13.json'), JSON.stringify({ pid: 99, port: 1, token: 'x', workspaceFolders: [] })) // pid does not match the name
@@ -58,7 +58,7 @@ test('mcp-registry: bridge files round-trip, damaged files are ignored', async (
 })
 
 test('mcp-registry: stale files of dead windows are removed, live ones and our own stay', async () => {
-	const dir = temp('axle-bridge-')
+	const dir = temp('insilode-bridge-')
 	for (const pid of [21, 22, 23]) {
 		await r.writeBridgeFile(info(pid, ['/x']), dir)
 	}

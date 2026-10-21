@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the card being edited, shown to the language servers. They only know the real document, so
+ *  Insilode: the card being edited, shown to the language servers. They only know the real document, so
  *  while a card is edited in the canvas its current text is put into the document (never on disk by
  *  us), on exactly the card's lines. Cancelling puts the original text back; saving makes it final.
  *
@@ -187,7 +187,7 @@ export class CardOverlays implements vscode.Disposable {
 				range = found && toRange(found);
 			}
 			if (!range) {
-				void vscode.window.showWarningMessage(`Axle could not restore ${vscode.workspace.asRelativePath(ov.uri)} after editing a card; the editor may hold the card's unsaved text. Undo (Ctrl+Z) in that file to go back.`);
+				void vscode.window.showWarningMessage(`Insilode could not restore ${vscode.workspace.asRelativePath(ov.uri)} after editing a card; the editor may hold the card's unsaved text. Undo (Ctrl+Z) in that file to go back.`);
 				return;
 			}
 			const edit = new vscode.WorkspaceEdit();
@@ -201,7 +201,7 @@ export class CardOverlays implements vscode.Disposable {
 				await doc.save();
 			}
 		} catch (e) {
-			void vscode.window.showWarningMessage(`Axle could not restore the file after editing a card: ${(e as Error).message ?? e}`);
+			void vscode.window.showWarningMessage(`Insilode could not restore the file after editing a card: ${(e as Error).message ?? e}`);
 		}
 	}
 

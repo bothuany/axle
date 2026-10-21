@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the text edits behind the MCP server manager. Each function turns a config file's
+ *  Insilode Harness: the text edits behind the MCP server manager. Each function turns a config file's
  *  current text into the new text and touches only the server it is about: JSON through jsonc-parser's
  *  edits (comments, key order and indentation elsewhere stay as they are), TOML through the line
  *  edits in mcptoml.ts. Also the command lines for the agents' own CLIs, which the manager prefers

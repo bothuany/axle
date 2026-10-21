@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: harness engineering inside the editor. A merged map with a health score,
+ *  Insilode Harness: harness engineering inside the editor. A merged map with a health score,
  *  the context budget, the plans' usage limits, a hook studio and a permission inbox that turns
  *  answers into rules.
  *--------------------------------------------------------------------------------------------*/
@@ -192,7 +192,7 @@ export function activate(context: vscode.ExtensionContext) {
 					for (const issue of i.issues.filter(x => x.line !== undefined)) {
 						const d = new vscode.Diagnostic(new vscode.Range(issue.line!, 0, issue.line!, 999), issue.fix ? `${issue.message}. Fix: ${issue.fix}` : issue.message,
 							issue.severity === 'error' ? vscode.DiagnosticSeverity.Error : issue.severity === 'warning' ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Information);
-						d.source = 'Axle harness';
+						d.source = 'Insilode harness';
 						byFile.set(i.file, [...(byFile.get(i.file) ?? []), d]);
 					}
 				}
@@ -227,7 +227,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// One watcher per pattern, with no brace group nested in another: the single nested pattern missed a new
 	// .claude/settings.json and its later edits.
 	const watchers = WATCHED.map(g => vscode.workspace.createFileSystemWatcher(g));
-	const ignored = /[\\/](?:\.claude[\\/]worktrees|\.axle[\\/]worktrees|node_modules|\.git)[\\/]/;
+	const ignored = /[\\/](?:\.claude[\\/]worktrees|\.insilode[\\/]worktrees|node_modules|\.git)[\\/]/;
 	let timer: NodeJS.Timeout | undefined;
 	const soon = (uri?: vscode.Uri) => {
 		if (uri && ignored.test(uri.fsPath)) {
@@ -284,7 +284,7 @@ export function activate(context: vscode.ExtensionContext) {
 				live.clearFriction();
 			}
 		}),
-		// For Axle Home: the health summary in one call.
+		// For Insilode Home: the health summary in one call.
 		vscode.commands.registerCommand('flowHarness.health', async () => {
 			if (!harness) {
 				await refresh();

@@ -1,15 +1,15 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: what a freshly started agent must not inherit from the environment Axle itself runs in.
+ *  Insilode: what a freshly started agent must not inherit from the environment Insilode itself runs in.
  *--------------------------------------------------------------------------------------------*/
 
-/** Settings the user chose on purpose: never stripped, even when Axle runs inside a Claude Code session. */
+/** Settings the user chose on purpose: never stripped, even when Insilode runs inside a Claude Code session. */
 const USER_CONFIG = /^CLAUDE_CODE_(GIT_BASH_PATH|USE_(BEDROCK|VERTEX|FOUNDRY)|SKIP_(BEDROCK|VERTEX|FOUNDRY)_AUTH|OAUTH_TOKEN|MAX_OUTPUT_TOKENS|API_KEY_HELPER_TTL_MS)$/;
 
 /** Variables a Claude Code session sets for its own children (child-session flags, host proxy, disabled transcripts). */
 const SESSION_SCOPED = /^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDE_PID$|CLAUDE_EFFORT$|CLAUDE_PREVIEW_)/;
 
 /**
- * When Axle itself was started from inside a Claude Code session, its environment carries that
+ * When Insilode itself was started from inside a Claude Code session, its environment carries that
  * session's variables. A fresh agent must not inherit them: null removes a variable from a terminal.
  * Outside such a session nothing is stripped, so the user's own CLAUDE_CODE_* settings (Bedrock,
  * Vertex, a Git Bash path, …) reach the agent.
@@ -28,7 +28,7 @@ export function inheritedAgentEnv(env: NodeJS.ProcessEnv = process.env) {
 	return out;
 }
 
-/** The same environment as a plain object, for a process Axle spawns itself. */
+/** The same environment as a plain object, for a process Insilode spawns itself. */
 export function agentProcessEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
 	const env: NodeJS.ProcessEnv = { ...process.env };
 	for (const k of Object.keys(inheritedAgentEnv())) {

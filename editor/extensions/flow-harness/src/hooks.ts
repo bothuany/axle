@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: hook studio. Run a hook with the exact JSON Claude Code would send, see its exit
+ *  Insilode Harness: hook studio. Run a hook with the exact JSON Claude Code would send, see its exit
  *  code, output and time; add a new hook from a short form instead of hand-editing JSON.
  *--------------------------------------------------------------------------------------------*/
 
@@ -89,7 +89,7 @@ function killTree(child: ChildProcess) {
 }
 
 export class HookStudio implements vscode.Disposable {
-	private readonly out = vscode.window.createOutputChannel('Axle Hooks');
+	private readonly out = vscode.window.createOutputChannel('Insilode Hooks');
 
 	constructor(private readonly root: () => string | undefined) { }
 
@@ -101,7 +101,7 @@ export class HookStudio implements vscode.Disposable {
 		}
 		// A hook is a command from the repository's settings: it only runs where the user trusts the folder.
 		if (!vscode.workspace.isTrusted) {
-			void vscode.window.showWarningMessage('This folder is not trusted, so Axle will not run its hooks. Trust the folder first if you want to test them.');
+			void vscode.window.showWarningMessage('This folder is not trusted, so Insilode will not run its hooks. Trust the folder first if you want to test them.');
 			return;
 		}
 		const payload = samplePayload(item.hook.event, root, item.hook.matcher);
@@ -109,7 +109,7 @@ export class HookStudio implements vscode.Disposable {
 		const bash = await findBash();
 		if (!bash && looksLikeBash(item.hook.command)) {
 			const anyway = await vscode.window.showWarningMessage(
-				'Axle could not find Git Bash, and this hook looks like it needs bash. In the Windows shell it would most likely fail in a way that says nothing about the hook itself.',
+				'Insilode could not find Git Bash, and this hook looks like it needs bash. In the Windows shell it would most likely fail in a way that says nothing about the hook itself.',
 				{ detail: 'Install Git for Windows or set CLAUDE_CODE_GIT_BASH_PATH to its bash.exe (Claude Code needs the same).' },
 				'Run Anyway',
 			);
@@ -133,7 +133,7 @@ export class HookStudio implements vscode.Disposable {
 			const child = bash
 				? spawn(bash, ['-c', item.hook!.command], { cwd: root, env, windowsHide: true })
 				// A hook is a shell command line by definition (Claude Code runs it the same way), and only on the user's click.
-				: spawn(item.hook!.command, { cwd: root, env, shell: true, windowsHide: true }); // nosemgrep: axle-shell-true
+				: spawn(item.hook!.command, { cwd: root, env, shell: true, windowsHide: true }); // nosemgrep: insilode-shell-true
 			let stdout = '';
 			let stderr = '';
 			let done = false;

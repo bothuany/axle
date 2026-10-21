@@ -1,4 +1,4 @@
-/* Axle canvas inside VS Code. Neutral surfaces follow the active theme; colour is reserved for meaning:
+/* Insilode canvas inside VS Code. Neutral surfaces follow the active theme; colour is reserved for meaning:
    the kind of a method (glyph, wire, port), agent changes, and the one card or wire you are looking at. */
 :root {
   --fl-canvas: var(--vscode-editor-background, #181818);

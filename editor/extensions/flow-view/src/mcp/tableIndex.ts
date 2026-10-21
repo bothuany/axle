@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: from a table to the endpoints that read or write it. The polyglot index (worker) and the C# analyzer each
+ *  Insilode: from a table to the endpoints that read or write it. The polyglot index (worker) and the C# analyzer each
  *  walk the flow of every entry point and note the database cards it reaches; this joins their answers with the entry
  *  list, and answers "which endpoints use this table" for a table name, an entity class, or the entity an edit changed.
  *

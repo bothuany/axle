@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle harness: which found files git ignores. A CLAUDE.md inside build output, a generated
+ *  Insilode harness: which found files git ignores. A CLAUDE.md inside build output, a generated
  *  composition or a vendored checkout is not part of the project's harness, and checking it
  *  turned real repositories' health red with problems nobody can or should fix. Git itself is
  *  asked (`git check-ignore`), so every .gitignore, .git/info/exclude and the global excludes count

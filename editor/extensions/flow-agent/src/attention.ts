@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: why an agent needs you, and how urgently. The hooks say what happened (a permission
+ *  Insilode: why an agent needs you, and how urgently. The hooks say what happened (a permission
  *  question, an AskUserQuestion, an MCP elicitation, a failed turn); this module turns that into one
  *  "need" per session and ranks the sessions, so the Agents dock puts the one you must answer first
  *  on top: approval > question > error > done-and-unread > working > idle.

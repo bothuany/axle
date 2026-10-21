@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: Python. Classes (with class attributes, for SQLAlchemy and Django models),
+ *  Insilode polyglot index: Python. Classes (with class attributes, for SQLAlchemy and Django models),
  *  functions with their decorators (FastAPI, Flask, Celery), typed parameters, `self.x` fields,
  *  calls, module-level routers and Django url patterns.
  *--------------------------------------------------------------------------------------------*/

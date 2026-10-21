@@ -84,12 +84,12 @@ test('/context output becomes numbers, categories and per-item lines', () => {
 	assert.equal(t.tokenCount('1.2m'), 1200000)
 })
 
-test('helpers: MCP server names and Axle\'s own hooks', () => {
+test('helpers: MCP server names and Insilode\'s own hooks', () => {
 	assert.equal(t.mcpServerOf('mcp__github__create_issue'), 'github')
 	assert.equal(t.mcpServerOf('mcp__plugin_x_db__query'), 'plugin_x_db')
 	assert.equal(t.mcpServerOf('Bash'), undefined)
 	assert.equal(t.mcpToolPrefix('my.server'), 'my_server')
-	assert.ok(t.isAxleHook('callback') && t.isAxleHook('"node" "C:/x/flow-hook.js"') && !t.isAxleHook('node arch.mjs'))
+	assert.ok(t.isInsilodeHook('callback') && t.isInsilodeHook('"node" "C:/x/flow-hook.js"') && !t.isInsilodeHook('node arch.mjs'))
 })
 
 test('hook matchers follow the documented rules', () => {
@@ -139,7 +139,7 @@ test('a transcript adds measured Stop hook durations, hook failures, loaded file
 	assert.equal(stop.month, 1)
 	assert.equal(stop.avgMs, 1500)
 	assert.equal(stop.inferred, false)
-	assert.equal(Object.keys(d.keys).filter(k => /flow-hook|callback/.test(k)).length, 0, "Axle's observer is never counted")
+	assert.equal(Object.keys(d.keys).filter(k => /flow-hook|callback/.test(k)).length, 0, "Insilode's observer is never counted")
 	assert.equal(d.keys[a.hookKey(HOOKS[5])].failures, 1, 'the failure is put on the hook its stderr names')
 	assert.equal(d.keys[a.hookKey(HOOKS[0])]?.failures, undefined)
 	assert.ok(d.keys[a.ruleKey('/w/api/CLAUDE.md')])
@@ -230,7 +230,7 @@ test('the same failure three times becomes a guard hook for commands, a line for
 	assert.equal(f.commandHead('NODE_ENV=x npx ./bin/run.js'), 'npx')
 	assert.equal(f.commandHead('git push --force'), 'git push')
 	assert.equal(f.commandHead('for n in 1 2 3; do echo $n; done'), '', 'a loop is not a command to guard')
-	assert.equal(f.guardFileName('npm run build'), 'axle-guard-npm-run-build.mjs')
+	assert.equal(f.guardFileName('npm run build'), 'insilode-guard-npm-run-build.mjs')
 })
 
 test('the guard script stops the command and tells the agent why', async () => {
@@ -362,7 +362,7 @@ test('usage counts read the sessions of agent worktrees too', async () => {
 	const root = String.raw`c:\development\harness-flow`
 	assert.ok(d.isProjectTranscriptDir('C--development-harness-flow', root, 'win32'), 'the drive letter in either case')
 	assert.ok(d.isProjectTranscriptDir('C--development-harness-flow--claude-worktrees-happy-vaughan-1a2b', root, 'win32'))
-	assert.ok(d.isProjectTranscriptDir('C--development-harness-flow--axle-worktrees-claude-aae3', root, 'win32'))
+	assert.ok(d.isProjectTranscriptDir('C--development-harness-flow--insilode-worktrees-claude-aae3', root, 'win32'))
 	assert.ok(!d.isProjectTranscriptDir('C--development-harness-flow-other', root, 'win32'), 'another project with the same start')
 	assert.ok(!d.isProjectTranscriptDir('C--development-harness-flow-src', root, 'win32'))
 	assert.ok(!d.isProjectTranscriptDir('-Home-me-app', '/home/me/app', 'linux'), 'POSIX keeps case')

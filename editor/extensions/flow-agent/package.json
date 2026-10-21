@@ -1,6 +1,6 @@
 {
   "name": "flow-agent",
-  "displayName": "Axle Agents",
+  "displayName": "Insilode Agents",
   "description": "Agents in terminals (Claude Code, Codex or any agent CLI) with the Agents dock, using each repo's own harness; the chat panel over ACP behind a setting.",
   "version": "0.1.0",
   "publisher": "flow",
@@ -82,7 +82,7 @@
     "languageModelChatProviders": [
       {
         "vendor": "flow",
-        "displayName": "Axle Agents"
+        "displayName": "Insilode Agents"
       }
     ],
     "colors": [
@@ -150,61 +150,61 @@
       {
         "command": "flow.agents.newClaude",
         "title": "New Claude Agent",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(sparkle)"
       },
       {
         "command": "flow.agents.newCodex",
         "title": "New Codex Agent",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(terminal)"
       },
       {
         "command": "flow.agents.new",
         "title": "Start an Agent…",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(add)"
       },
       {
         "command": "flow.agents.newClaudeWorktree",
         "title": "New Claude Agent in a Worktree",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(git-branch)"
       },
       {
         "command": "flow.agents.newCodexWorktree",
         "title": "New Codex Agent in a Worktree",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(git-branch)"
       },
       {
         "command": "flow.agents.keptWorktrees",
         "title": "Kept Agent Worktrees…",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(git-branch)"
       },
       {
         "command": "flow.agents.resume",
         "title": "Resume a Claude Session…",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(history)"
       },
       {
         "command": "flow.agents.chooseAskTarget",
         "title": "Change Agent for Questions…",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "flow.agents.desktop.showOverlay",
         "title": "Show the Agent Status Island",
-        "category": "Axle",
+        "category": "Insilode",
         "enablement": "flow.agents.desktop.available"
       },
       {
         "command": "flow.agents.desktop.hideOverlay",
         "title": "Hide the Agent Status Island",
-        "category": "Axle",
+        "category": "Insilode",
         "enablement": "flow.agents.desktop.available"
       }
     ],
@@ -216,7 +216,7 @@
       }
     ],
     "configuration": {
-      "title": "Axle Agents",
+      "title": "Insilode Agents",
       "properties": {
         "flow.agents.showChat": {
           "type": "boolean",
@@ -246,7 +246,7 @@
               "acceptsInput": {
                 "type": "boolean",
                 "default": false,
-                "description": "Questions from Home and \"Ask about this flow\" may be typed into its prompt. Off by default: Axle cannot see whether a custom agent is waiting at its prompt or at an approval question."
+                "description": "Questions from Home and \"Ask about this flow\" may be typed into its prompt. Off by default: Insilode cannot see whether a custom agent is waiting at its prompt or at an approval question."
               }
             }
           }
@@ -255,7 +255,7 @@
           "type": "string",
           "default": "remember",
           "pattern": "^(ask|remember|claude|codex|chat|clipboard|custom:.+)$",
-          "markdownDescription": "Where questions for the agent go (Home's prompt, **Ask about this flow**): `remember` (default) asks once per workspace and then uses that choice (change it with **Axle: Change Agent for Questions…** or the note in the status bar after sending); `ask` asks every time; `claude`, `codex` or `custom:<name>` always use that CLI (a session waiting at its prompt, else a new one); `chat` the chat panel; `clipboard` copies the question.",
+          "markdownDescription": "Where questions for the agent go (Home's prompt, **Ask about this flow**): `remember` (default) asks once per workspace and then uses that choice (change it with **Insilode: Change Agent for Questions…** or the note in the status bar after sending); `ask` asks every time; `claude`, `codex` or `custom:<name>` always use that CLI (a session waiting at its prompt, else a new one); `chat` the chat panel; `clipboard` copies the question.",
           "examples": [
             "remember",
             "ask",
@@ -269,19 +269,19 @@
         "flow.agents.mcp": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Give agents started from Axle the `axle` tools (open files, the git diff and flows in the editor, find entry points, symbols, definitions and references, read diagnostics and flows as text, draw diagrams and plans). They are added to the agent with `--mcp-config`, next to your own MCP servers; they cannot write files or run commands. Takes effect for agents started afterwards."
+          "markdownDescription": "Give agents started from Insilode the `insilode` tools (open files, the git diff and flows in the editor, find entry points, symbols, definitions and references, read diagnostics and flows as text, draw diagrams and plans). They are added to the agent with `--mcp-config`, next to your own MCP servers; they cannot write files or run commands. Takes effect for agents started afterwards."
         },
         "flow.agents.shim": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Also give a `claude` you type by hand in an Axle terminal the `axle` tools (open the diff, show flows, find symbols, diagnostics). Axle puts a small `claude` script first on the PATH of its own terminals; it runs the real `claude` with `--mcp-config` added, and passes subcommands such as `claude mcp` through untouched. Requires `#flow.agents.mcp#`. Takes effect after reloading the window."
+          "markdownDescription": "Also give a `claude` you type by hand in an Insilode terminal the `insilode` tools (open the diff, show flows, find symbols, diagnostics). Insilode puts a small `claude` script first on the PATH of its own terminals; it runs the real `claude` with `--mcp-config` added, and passes subcommands such as `claude mcp` through untouched. Requires `#flow.agents.mcp#`. Takes effect after reloading the window."
         },
         "flow.agents.gaze": {
           "type": "boolean",
           "default": true,
-          "description": "Show where agents started in Axle are reading and editing on a flow canvas that is open: a dot on the card they read and a fading trail of the cards they visited. Only files and lines are passed on, never file content or search text, and only in memory. Turn off to send nothing."
+          "description": "Show where agents started in Insilode are reading and editing on a flow canvas that is open: a dot on the card they read and a fading trail of the cards they visited. Only files and lines are passed on, never file content or search text, and only in memory. Turn off to send nothing."
         },
-        "axle.skeletonFirst.enabled": {
+        "insilode.skeletonFirst.enabled": {
           "type": "boolean",
           "default": false,
           "description": "Skeleton first for agents you have not switched yourself (each agent has its own switch in the Agents dock, next to Explain this). When it is on for an agent and a change adds or changes types, entities or interfaces, the agent draws its design and you write the skeleton before it fills the bodies. Just do it is always one click."
@@ -289,7 +289,7 @@
         "flow.agents.planBoard": {
           "type": "boolean",
           "default": true,
-          "description": "When an agent proposes a plan (leaves plan mode), draw it as a board in Axle and tick its steps as the agent edits the files they point at."
+          "description": "When an agent proposes a plan (leaves plan mode), draw it as a board in Insilode and tick its steps as the agent edits the files they point at."
         },
         "flow.agents.turnImpact": {
           "type": "boolean",
@@ -342,7 +342,7 @@
         "flow.agents.desktop.overlay.enabled": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "A small status overlay that stays on top of other apps and shows each live agent with its state: working, needs you (approval, question, error) or done. It never takes focus; clicking an agent shows its terminal in Axle. Drag it to move it (double-click puts it back), minimize it to a dot, or close it with its x, which turns this setting off: bring it back from this setting, the status bar, the Agents view menu or the command \"Show the Agent Status Island\". It hides itself while an Axle window has focus (`#flow.agents.desktop.overlay.autoHide#`). On a Mac with a notch, `top-center` sits over the notch. Desktop app only. Independent of `#flow.agents.desktop.badge#`."
+          "markdownDescription": "A small status overlay that stays on top of other apps and shows each live agent with its state: working, needs you (approval, question, error) or done. It never takes focus; clicking an agent shows its terminal in Insilode. Drag it to move it (double-click puts it back), minimize it to a dot, or close it with its x, which turns this setting off: bring it back from this setting, the status bar, the Agents view menu or the command \"Show the Agent Status Island\". It hides itself while an Insilode window has focus (`#flow.agents.desktop.overlay.autoHide#`). On a Mac with a notch, `top-center` sits over the notch. Desktop app only. Independent of `#flow.agents.desktop.badge#`."
         },
         "flow.agents.desktop.overlay.position": {
           "type": "string",
@@ -368,16 +368,16 @@
         "flow.agents.desktop.overlay.display": {
           "type": "string",
           "enum": [
-            "axle",
+            "insilode",
             "primary",
             "secondary"
           ],
           "enumDescriptions": [
-            "The screen the Axle window is on (it follows the window)",
+            "The screen the Insilode window is on (it follows the window)",
             "The primary screen",
             "The first screen that is not the primary one (the primary one when there is only one)"
           ],
-          "default": "axle",
+          "default": "insilode",
           "description": "Which screen the status overlay is on."
         },
         "flow.agents.desktop.overlay.style": {
@@ -422,7 +422,7 @@
           ],
           "enumDescriptions": [
             "Pure black with hairline edges: the island look",
-            "The colours of Axle's colour theme",
+            "The colours of Insilode's colour theme",
             "Dark",
             "Light"
           ],
@@ -500,16 +500,16 @@
               "default": true,
               "description": "Hide when no agent is shown"
             },
-            "axleFocused": {
+            "insilodeFocused": {
               "type": "boolean",
               "default": true,
-              "description": "Hide while an Axle window has focus"
+              "description": "Hide while an Insilode window has focus"
             }
           },
           "additionalProperties": false,
           "default": {
             "noAgents": true,
-            "axleFocused": true
+            "insilodeFocused": true
           },
           "description": "When the status overlay hides itself."
         },
@@ -521,12 +521,12 @@
         "flow.agents.worktree": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Start each new Claude Code and Codex agent in a git worktree of its own: a checkout under `.axle/worktrees/<name>` on a new branch `axle/<name>`, cut from the branch you are on. Agents working in parallel then never write over each other's files; the agent's row shows the branch, how far it is ahead of and behind its base, and buttons to open it, show its changes in flow, merge it back and remove it. Axle git-ignores `.axle/` in the repository's `.git/info/exclude`. Off: agents work in this checkout (\"Other…\" in the Agents dock still offers a worktree)."
+          "markdownDescription": "Start each new Claude Code and Codex agent in a git worktree of its own: a checkout under `.insilode/worktrees/<name>` on a new branch `insilode/<name>`, cut from the branch you are on. Agents working in parallel then never write over each other's files; the agent's row shows the branch, how far it is ahead of and behind its base, and buttons to open it, show its changes in flow, merge it back and remove it. Insilode git-ignores `.insilode/` in the repository's `.git/info/exclude`. Off: agents work in this checkout (\"Other…\" in the Agents dock still offers a worktree)."
         },
         "flow.agents.codexHooks": {
           "type": "boolean",
           "default": true,
-          "description": "Show Codex's status (working, needs you, done) and its edits on the canvas. Axle writes read-only hooks to its own Codex profile ($CODEX_HOME/axle.config.toml) and starts Codex with `-p axle`; your config.toml is not changed. Codex asks you once to trust these hooks (/hooks)."
+          "description": "Show Codex's status (working, needs you, done) and its edits on the canvas. Insilode writes read-only hooks to its own Codex profile ($CODEX_HOME/insilode.config.toml) and starts Codex with `-p insilode`; your config.toml is not changed. Codex asks you once to trust these hooks (/hooks)."
         }
       }
     },

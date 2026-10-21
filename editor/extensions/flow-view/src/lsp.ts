@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: any language with a language server, through VS Code's call hierarchy API
+ *  Insilode: any language with a language server, through VS Code's call hierarchy API
  *  (TypeScript/JavaScript built in; Java, Python, Go, … once their language extension is installed).
  *--------------------------------------------------------------------------------------------*/
 

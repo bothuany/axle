@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: where a question for the agent goes. Home's prompt and "Ask about this flow" hand it to
+ *  Insilode: where a question for the agent goes. Home's prompt and "Ask about this flow" hand it to
  *  flow-agent's `flow.agents.ask`, which sends it to the agent the user chose (a running session of
  *  any CLI, a new one, the chat panel or the clipboard) and remembers that choice. The chat panel is
  *  used directly only when flow-agent is not there to ask.

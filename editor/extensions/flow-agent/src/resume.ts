@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: starting an agent, new or from the past. Claude keeps every conversation of a folder as a
+ *  Insilode: starting an agent, new or from the past. Claude keeps every conversation of a folder as a
  *  transcript in ~/.claude/projects/<folder>/<id>.jsonl, Codex in ~/.codex/sessions/<date>/rollout-*.jsonl;
  *  this lists them (newest first, with the name from /rename or the first thing you asked) next to
  *  "New session", and starts `claude --resume <id>` / `codex resume <id>` for the pick.
@@ -164,7 +164,7 @@ const NAME = { claude: 'Claude', codex: 'Codex' } as const;
  */
 export async function startOrResume(agents: Agents, cli: 'claude' | 'codex', withNew = true) {
 	const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-	const all = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: `Axle: reading ${NAME[cli]} sessions` }, () => cli === 'claude' ? pastSessions(cwd) : codexSessions(cwd));
+	const all = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: `Insilode: reading ${NAME[cli]} sessions` }, () => cli === 'claude' ? pastSessions(cwd) : codexSessions(cwd));
 	// A conversation that is running in a terminal now is shown by clicking its row; resuming it a second time would fork it.
 	const live = new Set([...agents.sessions.values()].filter(s => s.state !== 'ended').flatMap(s => [s.id, path.basename(s.transcript ?? '', '.jsonl')]));
 	const list = all.filter(s => !live.has(s.id));

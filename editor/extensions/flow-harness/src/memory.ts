@@ -1,8 +1,8 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the agents' own memory, read only. Claude Code keeps an auto memory per project
+ *  Insilode Harness: the agents' own memory, read only. Claude Code keeps an auto memory per project
  *  in ~/.claude/projects/<project key>/memory: MEMORY.md, an index loaded into every session, and
  *  one topic file per memory with name / description / metadata.type in its frontmatter. This
- *  reads them and lists the file paths and code names a memory mentions, so they can be checked against the code as it is now. Axle keeps no
+ *  reads them and lists the file paths and code names a memory mentions, so they can be checked against the code as it is now. Insilode keeps no
  *  memory of its own. Pure (no vscode).
  *--------------------------------------------------------------------------------------------*/
 

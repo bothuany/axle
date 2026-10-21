@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle skeleton first: the developer's declarations, kept when they hand the skeleton over, and what an agent did to them.
+ *  Insilode skeleton first: the developer's declarations, kept when they hand the skeleton over, and what an agent did to them.
  *  A declaration is kept as its header text (the lines up to the body). After an agent edits a file, a kept header that is no longer
  *  in that file is a warning: changed, renamed or removed, with the text before and after. Nothing is locked: the developer
  *  accepts or reverts. Pure: no vscode, no fs.

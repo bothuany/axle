@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: ids of the commands that more than one file runs or registers.
+ *  Insilode: ids of the commands that more than one file runs or registers.
  *--------------------------------------------------------------------------------------------*/
 
 export const Command = {

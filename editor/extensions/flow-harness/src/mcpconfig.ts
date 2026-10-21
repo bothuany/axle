@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: every MCP server Claude Code and Codex would load for this folder, read from the
+ *  Insilode Harness: every MCP server Claude Code and Codex would load for this folder, read from the
  *  files they read, with where each one comes from, whether it is on, and what would win when two
  *  places define the same name.
  *
@@ -27,7 +27,7 @@
  *  ($CODEX_HOME/<name>.config.toml, read with `codex -p <name>`) and `[profiles.<name>]` tables are
  *  listed too, read only: they apply only to runs started with that profile.
  *
- *  Values of `env`, `headers` and `http_headers` are secrets as far as Axle is concerned: they are kept
+ *  Values of `env`, `headers` and `http_headers` are secrets as far as Insilode is concerned: they are kept
  *  here for the status check and for edits, and `publicView` is the only shape that leaves this module
  *  for the page: names, and for each value only whether it is set and which variable it reads.
  *
@@ -62,14 +62,14 @@ export interface McpServer {
 	/** Values stay in the extension host: see publicView. */
 	env: Record<string, string>;
 	headers: Record<string, string>;
-	/** Codex: variables passed through from Axle's own environment, and headers read from variables. */
+	/** Codex: variables passed through from Insilode's own environment, and headers read from variables. */
 	envVars: string[];
 	envHeaders: Record<string, string>;
 	bearerEnv?: string;
 	state: McpState;
 	/** Why it is on, off or waiting, in a sentence. */
 	stateWhy: string;
-	/** Set when Axle must not change it here (a plugin's, the organization's, Axle's own profile), with why. */
+	/** Set when Insilode must not change it here (a plugin's, the organization's, Insilode's own profile), with why. */
 	readOnly?: string;
 	/** The id of the definition that wins over this one. */
 	shadowedBy?: string;
@@ -77,7 +77,7 @@ export interface McpServer {
 	toolPrefix: string;
 	/** Problems a reader of the file should know about. */
 	issues: { severity: 'error' | 'warning' | 'info'; message: string }[];
-	/** The entry as written, for edits that must keep the keys Axle does not show. */
+	/** The entry as written, for edits that must keep the keys Insilode does not show. */
 	raw: Record<string, unknown>;
 	profile?: string;
 	plugin?: string;
@@ -338,8 +338,8 @@ export async function readMcp(input: McpReadInput): Promise<McpConfig> {
 	await toml(files.codexUser, 'user');
 	for (const n of (await input.list(input.codexDir)).filter(n => /^[\w.-]+\.config\.toml$/.test(n)).sort()) {
 		const p = n.replace(/\.config\.toml$/, '');
-		// Axle's own profile must stay byte-for-byte the same (Codex trusts its hooks by hash): never edited here.
-		await toml(path.join(input.codexDir, n), 'profile', p === 'axle' ? "Axle's own Codex profile: Axle writes it" : `Only with \`codex -p ${p}\`: edit it in the file`, p);
+		// Insilode's own profile must stay byte-for-byte the same (Codex trusts its hooks by hash): never edited here.
+		await toml(path.join(input.codexDir, n), 'profile', p === 'insilode' ? "Insilode's own Codex profile: Insilode writes it" : `Only with \`codex -p ${p}\`: edit it in the file`, p);
 	}
 	for (const s of codex) {
 		if (s.raw.enabled === false) {

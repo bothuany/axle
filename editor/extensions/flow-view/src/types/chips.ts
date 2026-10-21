@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle type model: what the cards of the flow canvas show about types. A card is found by the
+ *  Insilode type model: what the cards of the flow canvas show about types. A card is found by the
  *  file and line its method starts at; its parameter and return types become chips when they
  *  are types of the workspace (collections, optionals and response wrappers unwrapped, see
  *  typeref.ts), and a chip opens into the type's fields, each of which can open again.

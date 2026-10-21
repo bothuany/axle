@@ -1,4 +1,4 @@
-// The hook script Claude Code runs for an agent Axle started (src/hookScript.ts), run for real against a stand-in for the Axle
+// The hook script Claude Code runs for an agent Insilode started (src/hookScript.ts), run for real against a stand-in for the Insilode
 // window: it posts the event, and prints back only the exact skeleton-first reminder for its own event, never anything else.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'

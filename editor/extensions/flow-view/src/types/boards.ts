@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle type model: the two boards drawn from the type graph (the DTO relations as an ER
+ *  Insilode type model: the two boards drawn from the type graph (the DTO relations as an ER
  *  diagram, the architecture as modules and roles) and the type tree behind a card's chips.
  *  Pure: no vscode.
  *--------------------------------------------------------------------------------------------*/

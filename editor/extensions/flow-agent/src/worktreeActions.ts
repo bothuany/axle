@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the worktree part of an agent's row in the dock. Keeps each worktree's ahead/behind
+ *  Insilode: the worktree part of an agent's row in the dock. Keeps each worktree's ahead/behind
  *  count against its base branch (git runs in the background, never on a repaint), and does what
  *  the row's buttons ask: open the folder, show the branch's changes in flow, merge back, remove.
  *  Merging and removing change the user's repository, so each waits behind a modal confirm.
@@ -100,7 +100,7 @@ export class WorktreeRows implements vscode.Disposable {
 		}
 		switch (action) {
 			case 'open': return this.open(wt);
-			case 'diff': return void Promise.resolve(vscode.commands.executeCommand('flow.diff.showWorktree', wt.path, wt.base)).catch(e => vscode.window.showErrorMessage(`Axle: ${(e as Error).message}`));
+			case 'diff': return void Promise.resolve(vscode.commands.executeCommand('flow.diff.showWorktree', wt.path, wt.base)).catch(e => vscode.window.showErrorMessage(`Insilode: ${(e as Error).message}`));
 			case 'merge': return this.once(() => this.merge(s, wt));
 			case 'remove': return this.once(() => this.remove(s, wt));
 		}
@@ -108,7 +108,7 @@ export class WorktreeRows implements vscode.Disposable {
 
 	private async once(work: () => Promise<void>) {
 		if (this.busy) {
-			void vscode.window.showInformationMessage('Axle: a worktree merge or removal is still running.');
+			void vscode.window.showInformationMessage('Insilode: a worktree merge or removal is still running.');
 			return;
 		}
 		this.busy = true;
@@ -177,11 +177,11 @@ export class WorktreeRows implements vscode.Disposable {
 			if (await GIT.exists(k.path)) {
 				kept.push(k);
 			} else {
-				this.agents.keepWorktree(k, false); // removed outside Axle
+				this.agents.keepWorktree(k, false); // removed outside Insilode
 			}
 		}
 		if (!kept.length) {
-			void vscode.window.showInformationMessage('Axle: no kept agent worktrees. A worktree is kept when you take its ended agent off the list and choose Keep Worktree.');
+			void vscode.window.showInformationMessage('Insilode: no kept agent worktrees. A worktree is kept when you take its ended agent off the list and choose Keep Worktree.');
 			return;
 		}
 		const wt = (await vscode.window.showQuickPick(kept.map(k => ({ label: `$(git-branch) ${k.branch}`, description: k.agent, detail: k.path, k })), { title: 'Kept agent worktrees' }))?.k;
@@ -198,7 +198,7 @@ export class WorktreeRows implements vscode.Disposable {
 		if (action === 'open') {
 			await this.open(wt);
 		} else if (action === 'diff') {
-			await Promise.resolve(vscode.commands.executeCommand('flow.diff.showWorktree', wt.path, wt.base)).catch(e => vscode.window.showErrorMessage(`Axle: ${(e as Error).message}`));
+			await Promise.resolve(vscode.commands.executeCommand('flow.diff.showWorktree', wt.path, wt.base)).catch(e => vscode.window.showErrorMessage(`Insilode: ${(e as Error).message}`));
 		} else if (action === 'merge') {
 			await this.once(async () => {
 				await mergeFlow(a, wt, UI, GIT);

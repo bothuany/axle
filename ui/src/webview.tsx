@@ -1,4 +1,4 @@
-// Axle canvas as a VS Code webview: callers on the left, the method in the middle, callees on the right.
+// Insilode canvas as a VS Code webview: callers on the left, the method in the middle, callees on the right.
 // All data comes through the extension host (which picks Roslyn, LSP, … per language); edits are applied
 // by the host to the real document, so undo and the agent's Keep/Undo stay consistent.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'

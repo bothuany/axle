@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle agent bridge: the pieces of the `claude mcp add` command line, kept pure so they can be
+ *  Insilode agent bridge: the pieces of the `claude mcp add` command line, kept pure so they can be
  *  tested and shown to the user word for word before anything runs.
  *--------------------------------------------------------------------------------------------*/
 
@@ -33,13 +33,13 @@ export interface McpCommand {
 }
 
 /**
- * `claude mcp add axle --scope user [-e ELECTRON_RUN_AS_NODE=1] -- <node> <script>`. The name comes first: `-e` takes
+ * `claude mcp add insilode --scope user [-e ELECTRON_RUN_AS_NODE=1] -- <node> <script>`. The name comes first: `-e` takes
  * any number of values, and would swallow it otherwise.
  */
 export function mcpAddCommand(script: string, o: { pathNode?: string; execPath: string }): McpCommand {
 	const electron = !o.pathNode;
 	const node = o.pathNode ?? o.execPath;
-	return { node, electron, args: ['mcp', 'add', 'axle', '--scope', 'user', ...(electron ? ['-e', 'ELECTRON_RUN_AS_NODE=1'] : []), '--', node, script] };
+	return { node, electron, args: ['mcp', 'add', 'insilode', '--scope', 'user', ...(electron ? ['-e', 'ELECTRON_RUN_AS_NODE=1'] : []), '--', node, script] };
 }
 
 /** One argument for a shell line (cmd, PowerShell-free): quoted when it has anything but safe characters. */
@@ -52,14 +52,14 @@ export function shellQuote(arg: string, platform: NodeJS.Platform = process.plat
 
 export const commandLine = (args: string[], platform: NodeJS.Platform = process.platform) => ['claude', ...args.map(a => shellQuote(a, platform))].join(' ');
 
-/** The Claude Code MCP config the Axle agents get with --mcp-config: the `axle` server for one workspace folder. */
+/** The Claude Code MCP config the Insilode agents get with --mcp-config: the `insilode` server for one workspace folder. */
 export function mcpConfig(script: string, o: { execPath: string; electron: boolean; workspace?: string }) {
 	return {
 		mcpServers: {
-			axle: {
+			insilode: {
 				command: o.execPath,
 				args: [script],
-				env: { ...(o.electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}), ...(o.workspace ? { AXLE_WORKSPACE: o.workspace } : {}) },
+				env: { ...(o.electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}), ...(o.workspace ? { INSILODE_WORKSPACE: o.workspace } : {}) },
 			},
 		},
 	};

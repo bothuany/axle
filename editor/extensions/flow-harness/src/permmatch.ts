@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the permission simulator. Given the rules from every settings file and a tool
+ *  Insilode Harness: the permission simulator. Given the rules from every settings file and a tool
  *  call such as `Bash(git push --force)` or `Edit(src/x.ts)`, say what Claude Code would do
  *  (allow, ask or deny) and which rule decided it, following Claude Code's documented matching:
  *  deny, then ask across all scopes; then the checks no allow rule passes (protected paths,

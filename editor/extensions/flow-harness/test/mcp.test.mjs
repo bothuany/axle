@@ -134,7 +134,7 @@ test('plugin servers are read only, named plugin:<plugin>:<server>, and skipped 
 	assert.equal(hex.toolPrefix, 'plugin_data_hex', 'the name its tool calls carry, for the usage counts')
 })
 
-test('Codex: user and project config.toml, profiles read only, enabled = false, Axle profile never editable', async () => {
+test('Codex: user and project config.toml, profiles read only, enabled = false, Insilode profile never editable', async () => {
 	const user = [
 		'model = "o3"',
 		'',
@@ -155,7 +155,7 @@ test('Codex: user and project config.toml, profiles read only, enabled = false, 
 	].join('\n')
 	const c = await cfg.readMcp(windowsInput({
 		'C:/Users/me/.codex/config.toml': user,
-		'C:/Users/me/.codex/axle.config.toml': '[mcp_servers.axle]\ncommand = "node"\n',
+		'C:/Users/me/.codex/insilode.config.toml': '[mcp_servers.insilode]\ncommand = "node"\n',
 		'c:/work/app/.codex/config.toml': '[mcp_servers.docs]\ncommand = "local-docs"\n',
 	}))
 	const codex = c.servers.filter(s => s.harness === 'Codex')
@@ -168,7 +168,7 @@ test('Codex: user and project config.toml, profiles read only, enabled = false, 
 	assert.equal(web.toolPrefix, 'web_search')
 	assert.equal(web.bearerEnv, 'S_TOKEN')
 	assert.ok(codex.find(s => s.name === 'quick').readOnly)
-	assert.match(codex.find(s => s.name === 'axle').readOnly, /Axle/)
+	assert.match(codex.find(s => s.name === 'insilode').readOnly, /Insilode/)
 })
 
 test('the page sees names and variable references, never values', async () => {

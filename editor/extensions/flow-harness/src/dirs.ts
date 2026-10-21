@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: where the agents keep their own files. Claude Code reads CLAUDE_CONFIG_DIR in
+ *  Insilode Harness: where the agents keep their own files. Claude Code reads CLAUDE_CONFIG_DIR in
  *  place of ~/.claude (as flow-agent does), and Codex CODEX_HOME in place of ~/.codex, so the
  *  map, the X-ray and the usage counts look where the agents themselves write.
  *--------------------------------------------------------------------------------------------*/
@@ -19,14 +19,14 @@ export const projectTranscriptDir = (root: string) => path.join(claudeDir(), 'pr
 
 /**
  * Whether a folder of Claude Code's projects/ holds sessions of this project: its own, or those of the agent worktrees
- * inside it (.claude/worktrees/<name> and Axle's .axle/worktrees/<name>, each a project folder of its own to Claude).
+ * inside it (.claude/worktrees/<name> and Insilode's .insilode/worktrees/<name>, each a project folder of its own to Claude).
  */
 export function isProjectTranscriptDir(name: string, root: string, platform: NodeJS.Platform = process.platform): boolean {
 	// Windows paths ignore case, and the drive letter comes either way (VS Code says c:, Claude Code's folder C--).
 	const fold = (s: string) => platform === 'win32' ? s.toLowerCase() : s;
 	const key = fold(root.replace(/[^A-Za-z0-9]/g, '-'));
 	const n = fold(name);
-	return n === key || n.startsWith(`${key}--claude-worktrees-`) || n.startsWith(`${key}--axle-worktrees-`);
+	return n === key || n.startsWith(`${key}--claude-worktrees-`) || n.startsWith(`${key}--insilode-worktrees-`);
 }
 
 /** The transcripts of this project and of its agent worktrees. */

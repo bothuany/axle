@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: messages that cross a process boundary. A producer names its destination only
+ *  Insilode polyglot index: messages that cross a process boundary. A producer names its destination only
  *  as a string (`kafkaTemplate.send("orders", …)`); when a listener of the same index consumes that
  *  topic or queue, the flow can go on into it. Like the HTTP links (links.ts) this is always a guess:
  *  brokers route by configuration the code does not show (exchanges, bindings, consumer groups).

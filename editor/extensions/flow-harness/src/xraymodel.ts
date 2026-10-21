@@ -1,7 +1,7 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the context X-ray's numbers. What fills a session's context window, each part
+ *  Insilode Harness: the context X-ray's numbers. What fills a session's context window, each part
  *  labelled by how it is known: measured (the API's own token usage), Claude Code's estimate (the
- *  categories `/context` printed), Axle's estimate (about four characters per token), or derived
+ *  categories `/context` printed), Insilode's estimate (about four characters per token), or derived
  *  (a measured total minus estimated parts). Then what looks like waste: MCP servers and skills
  *  that cost tokens in every session and were not used, and oversized memory files. Pure (no vscode).
  *--------------------------------------------------------------------------------------------*/
@@ -46,7 +46,7 @@ export interface XrayModel {
 	partial: boolean;
 }
 
-/** About four characters per token: Axle's estimate wherever no tokenizer count exists. */
+/** About four characters per token: Insilode's estimate wherever no tokenizer count exists. */
 export const estimate = (chars: number) => Math.round(chars / 4);
 
 export interface HarnessPiece {

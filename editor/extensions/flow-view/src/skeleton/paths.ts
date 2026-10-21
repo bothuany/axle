@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle skeleton first: where each planned new type goes. Derived from the layout the project already has, never invented: the module
+ *  Insilode skeleton first: where each planned new type goes. Derived from the layout the project already has, never invented: the module
  *  the plan's existing types live in, the package its siblings of the same kind (controller, service, impl, dto, client) sit in, and
  *  the way that module spells its folders. The developer writes the members; this only says which file to put the type in.
  *  Pure: no vscode, no fs.

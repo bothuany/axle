@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: every settings change is shown as a diff first and written only after a yes.
+ *  Insilode Harness: every settings change is shown as a diff first and written only after a yes.
  *--------------------------------------------------------------------------------------------*/
 
 import { promises as fs } from 'fs';

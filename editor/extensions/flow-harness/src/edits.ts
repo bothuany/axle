@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: changes to instruction files are shown as a diff and written only after a yes in
+ *  Insilode Harness: changes to instruction files are shown as a diff and written only after a yes in
  *  one dialog, like settings changes. (The refactor preview listed them unticked, so its Apply
  *  silently did nothing unless the person ticked each change first.)
  *--------------------------------------------------------------------------------------------*/

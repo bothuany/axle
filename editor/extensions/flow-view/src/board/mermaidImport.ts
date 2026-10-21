@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle boards from Mermaid text: draw_board accepts `source: { mermaid }` for text an agent already has (a README, a design doc) and
+ *  Insilode boards from Mermaid text: draw_board accepts `source: { mermaid }` for text an agent already has (a README, a design doc) and
  *  turns a sequence diagram, a state diagram or a flowchart into a board. JSON stays the wire format and the board the model: this
  *  only reads a small, common part of each Mermaid syntax, line by line, and says in line-numbered messages what it could not read or
  *  had to leave out. It never renders anything and runs no Mermaid code. Input is capped (size and lines) and every pattern is

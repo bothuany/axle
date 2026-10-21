@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the gaze's one way out of flow-agent. Terminal agents (agents.ts) and ACP sessions
+ *  Insilode: the gaze's one way out of flow-agent. Terminal agents (agents.ts) and ACP sessions
  *  (sessionType.ts) hand their looks here; one queue throttles them and sends the batches to
  *  flow-view's `flow.agent.gaze`. The setting flow.agents.gaze turns it off at the source:
  *  then nothing is sent at all.
@@ -41,7 +41,7 @@ export function gazeTurn(session: string) {
 	turns.set(session, (turns.get(session) ?? 0) + 1);
 }
 
-/** A terminal agent's PostToolUse. `root`: the checkout it works in (its worktree, under the workspace's .axle/worktrees). */
+/** A terminal agent's PostToolUse. `root`: the checkout it works in (its worktree, under the workspace's .insilode/worktrees). */
 export function gazeHook(session: string, agent: string, cli: string, tool: string, input: Record<string, unknown> | undefined, response: Record<string, unknown> | undefined, cwd: string | undefined, root: string | undefined) {
 	if (!on()) {
 		return;

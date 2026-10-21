@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: every source of flows behind one list. C# solutions come from the Roslyn analyzer, every
+ *  Insilode: every source of flows behind one list. C# solutions come from the Roslyn analyzer, every
  *  other language from the polyglot (tree-sitter) index. A workspace can hold both.
  *--------------------------------------------------------------------------------------------*/
 

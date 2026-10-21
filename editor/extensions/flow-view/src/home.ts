@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Home: the first thing a window shows. One question in the middle — what should we do —
+ *  Insilode Home: the first thing a window shows. One question in the middle — what should we do —
  *  and around it only what helps answer it: where you were, the flows you opened, the endpoints,
  *  and whether the agent's harness is in good shape.
  *--------------------------------------------------------------------------------------------*/
@@ -72,7 +72,7 @@ export class FlowHome implements vscode.Disposable {
 		const panel = this.panel = vscode.window.createWebviewPanel('flow.home', 'Home', vscode.ViewColumn.Active, { enableScripts: true, retainContextWhenHidden: false });
 		panel.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'flow.svg');
 		panel.onDidDispose(() => this.panel = undefined);
-		panel.webview.onDidReceiveMessage(m => this.onMessage(m).catch(e => vscode.window.showErrorMessage(`Axle: ${(e as Error).message ?? e}`)));
+		panel.webview.onDidReceiveMessage(m => this.onMessage(m).catch(e => vscode.window.showErrorMessage(`Insilode: ${(e as Error).message ?? e}`)));
 		panel.webview.html = this.html();
 		panel.onDidChangeViewState(e => e.webviewPanel.visible && void this.post());
 	}
