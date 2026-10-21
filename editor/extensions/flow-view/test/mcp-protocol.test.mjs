@@ -195,10 +195,12 @@ test('mcp-protocol: the window refuses requests with an Origin header, a wrong t
 	await server.close()
 })
 
-test('mcp-protocol: the draw_board schema is valid JSON Schema-shaped and requires board', () => {
+test('mcp-protocol: the draw_board schema is valid JSON Schema-shaped; a board or a Mermaid source', () => {
 	const draw = tools.TOOLS.find(t => t.name === 'draw_board')
-	assert.deepEqual(draw.inputSchema.required, ['board'])
-	assert.deepEqual(draw.inputSchema.properties.board.required, ['title', 'nodes'])
+	assert.equal(draw.inputSchema.required, undefined, 'board or source: the handler asks for one of them')
+	assert.deepEqual(draw.inputSchema.properties.board.required, ['title'])
+	assert.deepEqual(draw.inputSchema.properties.source.required, ['mermaid'])
+	assert.equal(draw.inputSchema.additionalProperties, false)
 	JSON.parse(JSON.stringify(tools.TOOLS)) // serializable as is
 })
 

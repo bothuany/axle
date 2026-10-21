@@ -13,8 +13,8 @@ An agent draws a board with the `draw_board` tool of the `axle` MCP server (`edi
 | `level` | `architecture` only (C4): `context`, `container`, `component`. |
 | `legend` | `[{ key, text }]`: what an agent's own colours or edge kinds mean. |
 | `focus` | Node or group id opened first. |
-| `base` | Id of another board to compare with: the host marks what is added, removed or changed (phase 4). |
-| `steps` | `[{ title, caption, nodes?, edges?: [from, to][], focus? }]`: played like a tour (phase 3). |
+| `base` | Id of another board to compare with: the host marks what is added, removed or changed. Its own id compares the board with its previous draw. |
+| `steps` | `[{ title, caption, nodes?, edges?: [from, to][], focus? }]`: played like a tour. |
 | `highlight` | `[{ path: [id, ...], label? }]`: a route drawn bold, the rest dimmed. |
 | `callouts` | `[{ node | edge: [from, to], text }]`: a note drawn as a bubble on a node or an edge. |
 
@@ -70,3 +70,19 @@ Draw again with the same `id` to fix it. The previous version of a board is kept
 `update_board` changes a node's `status`, `note` or `change`, takes several nodes in `updates`, and sets the `highlight` routes, without a redraw.
 
 The `diagram_guide` MCP prompt (`src/mcp/prompts.ts`) holds the full advice an agent gets.
+
+## Kinds and how they are drawn
+
+- **sequence** (`ui/src/board/sequence.ts`): lifelines in node order, messages top to bottom by `order` (those without come last), a dashed `style` is a reply, `async` an open head, a call opens an activation bar its reply closes, groups of kind `alt`/`loop`/`opt` box the messages whose `fragment` names them (a same-kind child of an `alt` is its else), callouts become notes. At most 8 lifelines read well; the lint says so.
+- **state**: rounded states, `shape` `initial`/`final`/`choice` marks, transitions labelled `[guard] event`, self transitions.
+- **architecture** with `level`: boundary groups are dashed frames with their `tech`, `tech` shows under the label, `zoom` makes a double click (or the badge) open the board with that id, and a board that other boards zoom into shows an up chip. Draw one board per level.
+- **flow, class, er, plan**: as before, plus edge order badges, `style`, `async`, callouts, `shape`.
+
+## Steps, routes and compare
+
+- `steps` play through the shared tour player (`ui/src/tour`: reducer, bar and caption are the flow canvas's own): each step lights its `nodes` and `edges`, fades the rest, opens the groups around them and moves the camera; arrow keys, space and Esc work as on the flow canvas. A board without `steps` but with at least two `order`ed edges offers a "Walk through" in message order (never started by itself). `highlight` routes stay bold until a walk starts; the chip next to the title switches them off.
+- A board with a `base` is drawn compared with that board (`src/board/compare.ts`): nodes and edges that are new or different get `change` `added` or `changed`, and what the base had and this board lacks is drawn again as `removed` (struck through). The same colours as skeleton first: green, amber, red. When a board is redrawn with its id, the toolbar offers **Changes**: the board against its previous draw (kept in memory). The toolbar counts `+added −removed ~changed`.
+
+## Mermaid in
+
+`draw_board` takes `source: { mermaid }` instead of `board.nodes` and `board.edges`: a `sequenceDiagram` (participants, actors, messages with `->>`, `-->>`, `-)`, notes, `alt`/`else`/`opt`/`loop`), a `stateDiagram-v2` (`[*]`, transitions with `[guard]`, `state "x" as y`, `<<choice>>`, composite states, notes) or a `flowchart`/`graph` (shapes, `-->|text|`, `-- text -->`, `-.->`, `&` lists, chains, subgraphs). `board` may still carry `title`, `steps`, `callouts` and the like, but not nodes or edges. What cannot be read is said with line numbers (`src/board/mermaidImport.ts`, input capped at 60,000 characters and 800 lines); styling lines are ignored. `toMermaid` writes the same subset, so a board round-trips.

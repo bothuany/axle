@@ -86,7 +86,7 @@ export const BOARD_SCHEMA = {
 		},
 		nodes: {
 			type: 'array',
-			description: 'At most 400. Each node needs a unique id.',
+			description: 'At most 400. Each node needs a unique id. Required unless `source` (Mermaid) gives the nodes.',
 			items: {
 				type: 'object',
 				properties: {
@@ -162,7 +162,7 @@ export const BOARD_SCHEMA = {
 			},
 		},
 	},
-	required: ['title', 'nodes'],
+	required: ['title'],
 } as const;
 
 export const TOOLS: ToolDef[] = [
@@ -245,7 +245,20 @@ export const TOOLS: ToolDef[] = [
 	{
 		name: 'draw_board',
 		description: 'Draw a diagram that Axle shows to the user next to the editor, like an artifact. Use it in plan mode to show the flow or architecture you designed, when explaining a design, or to lay out a multi-step plan the user can follow. The answer carries a LINT list (dropped items, unknown ids, orphans, too many nodes, crossings): fix what it names by calling again with the same `id`. Rules: one question per board, said in `title`, about 15-20 visible nodes at most (split, or collapse `groups`) · pick the kind by the question: how does it run -> sequence (order matters) or flow, what is it made of -> architecture or class, how is data stored -> er, what states can it be in -> state, what will we do -> plan, what changed -> `base` · ground nodes: take names from find_symbol or flow_text and give `symbol` (and `file`) for real code, leave it off for proposed things · label edges with verbs or payloads, not "calls" · group by layer or service, 2 levels at most · edge `kind` carries meaning (reads vs writes, extends vs uses) · number messages with `order` · then EXPLAIN it with `steps` (3-10, each lights some nodes and edges with a caption) instead of a paragraph in chat. Kinds: flow, plan (ordered steps with status), class, er (tables), sequence, architecture (with `level` context/container/component for C4), state. Give every node a unique id and a short label; link nodes to code with symbol or file (+ line); connect them with edges; no coordinates, layout is automatic. Passing the same `id` again replaces that board (the previous version is kept for "what changed"), so redraw instead of drawing a second copy. The `diagram_guide` prompt has the full advice. Example: {"id":"order-flow","board":{"kind":"flow","title":"Place order","nodes":[{"id":"api","label":"POST /orders","kind":"entry","file":"src/OrdersController.cs","line":24},{"id":"svc","label":"OrderService.Place","kind":"service"},{"id":"db","label":"orders","kind":"entity"}],"edges":[{"from":"api","to":"svc"},{"from":"svc","to":"db","kind":"writes","label":"insert"}]}}. For a plan use kind "plan" with step nodes in order joined by "next" edges, then tick them off with update_board while you work.',
-		inputSchema: { type: 'object', properties: { board: BOARD_SCHEMA, id: str('Stable name for the board (letters, digits, - _ . :). Reuse it to replace the board; omit for a new one.') }, required: ['board'], additionalProperties: false },
+		inputSchema: {
+			type: 'object',
+			properties: {
+				board: BOARD_SCHEMA,
+				source: {
+					type: 'object',
+					description: 'Optional. A Mermaid diagram you already have (sequenceDiagram, stateDiagram-v2, flowchart or graph) instead of `board.nodes` and `board.edges`: Axle turns it into a board, and `board` may still add title, steps, callouts and the like. The answer lists the lines it could not read. Draw JSON when you have no Mermaid yet: it can say more (symbol, file, status, kinds).',
+					properties: { mermaid: str('The diagram text, at most 60,000 characters.') },
+					required: ['mermaid'],
+				},
+				id: str('Stable name for the board (letters, digits, - _ . :). Reuse it to replace the board; omit for a new one.'),
+			},
+			additionalProperties: false,
+		},
 		annotations: ro('Draw a board', true),
 	},
 	{

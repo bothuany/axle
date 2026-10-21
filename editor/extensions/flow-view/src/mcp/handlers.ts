@@ -14,6 +14,7 @@ import * as vscode from 'vscode';
 import { innermost, type Analyzer } from '../analyzer';
 import { entryName, type Endpoints, type Entry, type Source } from '../backends';
 import { formatLint, lintBoard } from '../board/lint';
+import { importMermaid } from '../board/mermaidImport';
 import { parseBoardWithNotes, type BoardHighlight, type BoardSpec } from '../board/spec';
 import { describeCandidate, matchSymbols, symbolQuery, type SymbolCandidate } from '../board/symbols';
 import { cleanBoardId, type BoardStore } from '../board/store';
@@ -1077,10 +1078,27 @@ export class AgentTools {
 		if (JSON.stringify(raw ?? null).length > 1_500_000) {
 			throw new Error('The board is too large; draw fewer nodes or split it into several boards.');
 		}
+		// Mermaid text the agent already has becomes the nodes and edges; `board` then only adds what Mermaid cannot say (title, steps, callouts...).
+		const imported: string[] = [];
+		if (a.source !== undefined) {
+			const text = typeof a.source === 'object' && a.source !== null ? (a.source as { mermaid?: unknown }).mermaid : undefined;
+			if (typeof text !== 'string') {
+				throw new Error('`source` must be {"mermaid": "<the diagram text>"}.');
+			}
+			const own = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+			if (own.nodes !== undefined || own.edges !== undefined) {
+				throw new Error('Give the nodes and edges either in `board` or in `source`, not both. With `source`, `board` may still carry title, description, steps, callouts, legend, focus, base, level and direction.');
+			}
+			const result = importMermaid(text);
+			imported.push(...result.notes);
+			raw = { ...result.board, ...own, callouts: [...(result.board.callouts ?? []), ...(Array.isArray(own.callouts) ? own.callouts : [])] };
+		} else if (raw === undefined || raw === null) {
+			throw new Error('Pass `board` (the diagram as JSON), or `source: {"mermaid": "..."}`.');
+		}
 		const { spec, notes } = parseBoardWithNotes(raw);
 		const sent = raw as { id?: unknown };
 		// What parseBoard changed is said first; the checks that need the workspace (files, symbols) follow.
-		const found = await this.groundBoard(spec);
+		const found = [...imported.map(n => `mermaid: ${n}`), ...await this.groundBoard(spec)];
 		// The id belongs next to `board`, but agents also put it inside the board: either way it names the board.
 		let wanted = cleanBoardId(a.id) ?? cleanBoardId(sent.id);
 		let claimed: string | undefined;
