@@ -380,7 +380,8 @@ if (PLATFORM === 'linux') {
 		fields.push({ key: line.slice(0, line.indexOf(':')), lines: [line] })
 	}
 	const control = fields.filter(f => !DROP.has(f.key)).map(f => f.key === 'Version' ? [`Version: ${version}`] : f.lines).flat()
-	control.push('Maintainer: Insilode <bothuany@users.noreply.github.com>', 'Homepage: https://github.com/bothuany/axle', ...description)
+	// The package was called axle until 0.4.x: installing this one takes the old one off (its files are not shared, the name is).
+	control.push('Replaces: axle', 'Conflicts: axle', 'Provides: axle', 'Maintainer: Insilode <bothuany@users.noreply.github.com>', 'Homepage: https://github.com/bothuany/axle', ...description)
 	writeFileSync(controlFile, `${control.join('\n')}\n`)
 	console.log(`  DEBIAN/control:\n${control.filter(l => !l.startsWith(' ')).map(l => `    ${l.length > 160 ? `${l.slice(0, 157)}...` : l}`).join('\n')}`)
 	rmSync(join(debRoot, 'DEBIAN', 'templates'), { force: true })
@@ -412,7 +413,7 @@ if (PLATFORM === 'linux') {
 		if (ok) {
 			const text = readFileSync(spec, 'utf8')
 				.replace(/^Version:.*$/m, `Version:  ${version}`)
-				.replace(/^Release:.*$/m, 'Release:  1')
+				.replace(/^Release:.*$/m, 'Release:  1\nObsoletes: axle\nProvides:  axle')
 				.replace(/^Summary:.*$/m, `Summary:  ${description[0].replace('Description: ', '')}`)
 				.replace(/^Vendor:.*$/m, 'Vendor:   Insilode')
 				.replace(/^Packager:.*$/m, 'Packager: Insilode <bothuany@users.noreply.github.com>')
