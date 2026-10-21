@@ -354,7 +354,7 @@ if (PLATFORM === 'linux') {
 	const description = [
 		`Description: ${pkg.description.split('. ')[0].replace(/^Insilode: a/, 'A')}`,
 		...pkg.description.split('. ').slice(1).map(s => ` ${s.replace(/\.$/, '')}.`),
-		' Built on Code - OSS. See https://github.com/bothuany/axle',
+		` Built on Code - OSS. See ${pkg.repository}`,
 	]
 
 	step('Preparing the Debian package (gulp vscode-linux-x64-prepare-deb)')
@@ -381,7 +381,7 @@ if (PLATFORM === 'linux') {
 	}
 	const control = fields.filter(f => !DROP.has(f.key)).map(f => f.key === 'Version' ? [`Version: ${version}`] : f.lines).flat()
 	// The package was called axle until 0.4.x: installing this one takes the old one off (its files are not shared, the name is).
-	control.push('Replaces: axle', 'Conflicts: axle', 'Provides: axle', 'Maintainer: Insilode <bothuany@users.noreply.github.com>', 'Homepage: https://github.com/bothuany/axle', ...description)
+	control.push('Replaces: axle', 'Conflicts: axle', 'Provides: axle', 'Maintainer: Insilode <bothuany@users.noreply.github.com>', `Homepage: ${pkg.repository}`, ...description)
 	writeFileSync(controlFile, `${control.join('\n')}\n`)
 	console.log(`  DEBIAN/control:\n${control.filter(l => !l.startsWith(' ')).map(l => `    ${l.length > 160 ? `${l.slice(0, 157)}...` : l}`).join('\n')}`)
 	rmSync(join(debRoot, 'DEBIAN', 'templates'), { force: true })
@@ -417,7 +417,7 @@ if (PLATFORM === 'linux') {
 				.replace(/^Summary:.*$/m, `Summary:  ${description[0].replace('Description: ', '')}`)
 				.replace(/^Vendor:.*$/m, 'Vendor:   Insilode')
 				.replace(/^Packager:.*$/m, 'Packager: Insilode <bothuany@users.noreply.github.com>')
-				.replace(/^URL:.*$/m, 'URL:      https://github.com/bothuany/axle')
+				.replace(/^URL:.*$/m, `URL:      ${pkg.repository}`)
 				.replace(/(%description\n)[^\n]*/, `$1${pkg.description} Built on Code - OSS.`)
 			writeFileSync(spec, text)
 			ok = gulp(`vscode-linux-${ARCH}-build-rpm`, { optional: true })
