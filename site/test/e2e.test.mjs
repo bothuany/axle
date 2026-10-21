@@ -47,7 +47,10 @@ after(async () => {
  * or fails when `github` is false (then its failures are expected, not problems).
  */
 async function open(path = '', { viewport = { width: 1440, height: 900 }, agent = WINDOWS, github = true } = {}) {
-	const page = await browser.newPage()
+	// A context of its own: the page keeps GitHub's answers in localStorage, which must not carry over from one test to the next.
+	const context = await browser.createBrowserContext()
+	const page = await context.newPage()
+	page.once('close', () => context.close())
 	const problems = []
 	await page.setUserAgent(agent)
 	await page.setRequestInterception(true)
@@ -188,6 +191,10 @@ test('try: the order tour, the agent\'s change with its review and Keep, and the
 		await drawn(c)
 		return c
 	}
+	// Without a story in the address the canvas waits on the order flow; the button plays its tour.
+	await canvas()
+	assert.equal(await caption(await canvas()), null, 'no tour plays by itself')
+	await page.click('[data-play-story]')
 	await walk(await canvas(), tours.find(t => t.id === 'order'))
 
 	await page.click('[data-story="changes"]')
@@ -204,6 +211,14 @@ test('try: the order tour, the agent\'s change with its review and Keep, and the
 	await page.click('[data-story="invoice"]')
 	await until(async () => (await caption(await inside(page, '.stage-frame')))?.title === 'A Java endpoint', 'the invoice tour')
 	await walk(await canvas(), tours.find(t => t.id === 'invoice'))
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('try: a link to a story plays it at once', { skip }, async () => {
+	const { page, problems } = await open('try/#invoice')
+	await until(async () => (await caption(await inside(page, '.stage-frame')))?.title === 'A Java endpoint', 'the invoice tour')
+	assert.equal(await page.$eval('[data-story="invoice"]', b => b.getAttribute('aria-pressed')), 'true')
 	assert.deepEqual(problems, [])
 	await page.close()
 })

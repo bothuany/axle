@@ -22,6 +22,8 @@ root.querySelector('[data-play]')?.addEventListener('click', async e => {
   button.disabled = true
   const tour = (await demo()).tours.find(t => t.id === button.dataset.play)
   if (tour) {
+    // The tour bar takes the bottom of the canvas: the button steps aside while the tour plays.
+    root.classList.add('is-touring')
     await stage.play(tour, 'OrderController.place')
     stage.setTabbable(true)
     // The tour bar has the keys (next, back, close): give it the focus, so a keyboard can drive the tour.

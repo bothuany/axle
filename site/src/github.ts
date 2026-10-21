@@ -17,10 +17,32 @@ export interface Release {
   assets: Asset[]
 }
 
+/** How long an answer is reused in this browser: GitHub allows a visitor 60 unauthenticated requests an hour. */
+const FRESH_MS = 30 * 60_000
+
+function cached<T>(key: string): T | null {
+  try {
+    const hit = JSON.parse(localStorage.getItem(key) ?? 'null') as { at: number; body: T } | null
+    return hit && Date.now() - hit.at < FRESH_MS ? hit.body : null
+  } catch {
+    return null
+  }
+}
+
 const api = async <T>(path: string): Promise<T | null> => {
+  const key = `gh:${REPO}${path}`
+  const hit = cached<T>(key)
+  if (hit) return hit
   try {
     const r = await fetch(`https://api.github.com/repos/${REPO}${path}`, { headers: { Accept: 'application/vnd.github+json' } })
-    return r.ok ? ((await r.json()) as T) : null
+    if (!r.ok) return null
+    const body = (await r.json()) as T
+    try {
+      localStorage.setItem(key, JSON.stringify({ at: Date.now(), body }))
+    } catch {
+      // No storage (a private window, blocked site data): the next page asks again.
+    }
+    return body
   } catch {
     return null
   }

@@ -57,6 +57,8 @@ export class Stage {
       f.addEventListener('load', async () => {
         const doc = f.contentDocument
         await until(() => doc?.querySelector('.react-flow__node'))
+        // The canvas fits its cards to the view in an animation of its own (250 ms) after the first draw.
+        await wait(400)
         this.root.classList.add('is-live')
         resolve(f.contentWindow!)
       })

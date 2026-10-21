@@ -27,6 +27,7 @@ let mode: 'plain' | 'changed' | undefined
 
 async function play(story: Story) {
   current = story
+  stage.root.classList.add('is-touring')
   buttons.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.story === story)))
   if (story === 'changes') {
     decision.textContent = 'The review steps through each changed card. Keep or Undo is on every card.'
@@ -46,8 +47,21 @@ async function play(story: Story) {
 }
 
 buttons.forEach(b => b.addEventListener('click', () => play(b.dataset.story as Story)))
+// A link to a story (#changes from the home page) plays it once the page has loaded; otherwise the canvas loads when the page is
+// idle and waits on the order flow, so its code editor never competes with the page's own first paint.
 const fromHash = location.hash.slice(1)
-play(fromHash === 'changes' || fromHash === 'invoice' ? fromHash : 'order')
+const linked = fromHash === 'changes' || fromHash === 'invoice' || fromHash === 'order' ? fromHash : undefined
+if (linked) {
+  if (document.readyState === 'complete') play(linked)
+  else window.addEventListener('load', () => play(linked), { once: true })
+} else {
+  mode = 'plain'
+  stage.loadWhenIdle()
+}
+document.querySelector('[data-play-story]')?.addEventListener('click', () => {
+  const pressed = buttons.find(b => b.getAttribute('aria-pressed') === 'true')?.dataset.story as Story | undefined
+  play(pressed ?? 'order')
+})
 
 const dock = document.querySelector<HTMLIFrameElement>('iframe.dock')!
 const island = document.querySelector<HTMLIFrameElement>('iframe.island')!

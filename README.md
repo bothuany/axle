@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20any%20CLI-6f86ff" alt="Agents: Claude Code, Codex and any CLI">
 </p>
 
-<p align="center"><b><a href="https://bothuany.github.io/axle/">Try it in your browser</a></b>: open an endpoint, watch an agent change it, and see exactly what it touched. Nothing to install.</p>
+<p align="center"><b><a href="https://bothuany.github.io/axle/try/">Try it in your browser</a></b>: follow a request across services, review what an agent changed, and answer an agent waiting for you. Nothing to install.</p>
 
 https://github.com/user-attachments/assets/2659c972-8d4a-40d3-bbe0-6f4442d24aa5
 

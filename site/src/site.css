@@ -398,6 +398,12 @@ h3 {
 
 .stage-frame {
   background: var(--window);
+  /* Hidden until the canvas has drawn and fitted its cards: the shifts of its first layout are not the visitor's to see. */
+  visibility: hidden;
+}
+
+.stage.is-live .stage-frame {
+  visibility: visible;
 }
 
 .stage-actions {
@@ -807,6 +813,10 @@ figcaption {
   aspect-ratio: auto;
   height: min(78vh, 820px);
   min-height: 520px;
+}
+
+.stage.is-touring .stage-actions {
+  display: none;
 }
 
 .decision {

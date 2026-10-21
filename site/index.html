@@ -20,8 +20,8 @@
     <script type="application/ld+json">
       {"@context":"https://schema.org","@type":"SoftwareApplication","name":"{{name}}","applicationCategory":"DeveloperApplication","operatingSystem":"Windows, macOS, Linux","url":"{{site}}/","downloadUrl":"https://github.com/{{repo}}/releases/latest","license":"https://opensource.org/licenses/MIT","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
     </script>
-    <link rel="preload" as="image" href="./media/hero.jpg" media="(min-width: 761px)" fetchpriority="high" />
-    <link rel="preload" as="image" href="./media/hero-narrow.jpg" media="(max-width: 760px)" fetchpriority="high" />
+    <link rel="preload" as="image" href="./media/hero.webp" media="(min-width: 761px)" fetchpriority="high" />
+    <link rel="preload" as="image" href="./media/hero-narrow.webp" media="(max-width: 760px)" fetchpriority="high" />
   </head>
   <body>
     <a class="skip" href="#main">Skip to the content</a>
@@ -54,7 +54,7 @@
 
         <div class="stage-wrap">
           <div class="stage" data-stage>
-            <picture><source media="(max-width: 760px)" srcset="./media/hero-narrow.jpg" width="840" height="1120" /><img class="stage-poster" src="./media/hero.jpg" width="1600" height="940" fetchpriority="high" alt="The {{name}} canvas on POST /orders: the controller calls the order service, which saves to the orders table, asks billing for an invoice over HTTP and announces the order on Kafka." /></picture>
+            <picture><source media="(max-width: 760px)" srcset="./media/hero-narrow.webp" width="840" height="1120" /><img class="stage-poster" src="./media/hero.webp" width="1600" height="940" fetchpriority="high" alt="The {{name}} canvas on POST /orders: the controller calls the order service, which saves to the orders table, asks billing for an invoice over HTTP and announces the order on Kafka." /></picture>
             <p class="stage-note" role="status" hidden></p>
             <div class="stage-actions">
               <button class="btn btn-light stage-play" type="button" data-play="order"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0l9 5-9 5z" /></svg>Play the tour</button>

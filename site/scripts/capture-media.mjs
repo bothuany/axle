@@ -15,7 +15,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms))
 const browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: ['--no-first-run', '--disable-gpu', '--no-sandbox'] })
 
 /** A still of canvas.html on one flow, at the size the page shows it. `open`: the folded calls to show first, by the name on their port; `from`: the card the still starts at. */
-async function canvas(name, query, width, height, scale = 1, open = [], from = '') {
+async function canvas(name, query, width, height, scale = 1, open = [], from = '', jpeg = false) {
 	const page = await browser.newPage()
 	await page.setViewport({ width, height, deviceScaleFactor: scale })
 	await page.goto(`${base}canvas.html${query}`, { waitUntil: 'networkidle0' })
@@ -43,14 +43,16 @@ async function canvas(name, query, width, height, scale = 1, open = [], from = '
 				return { x: Math.max(0, left), y: Math.max(0, top - (height - (Math.max(...boxes.map(b => b.bottom)) + 24 - top)) / 2), width, height }
 			}, from)
 		: undefined
-	await page.screenshot({ path: `${out}${name}.jpg`, type: 'jpeg', quality: 78, clip })
+	await page.screenshot({ path: `${out}${name}.webp`, type: 'webp', quality: 78, clip })
+	// The social cards want a JPEG.
+	if (jpeg) await page.screenshot({ path: `${out}${name}.jpg`, type: 'jpeg', quality: 78, clip })
 	await page.close()
 }
 
 const data = await (await fetch(`${base}data/demo.json`)).json()
 const invoice = data.before.entries.find(e => e.http === 'GET /orders/{id}/invoice')
 
-await canvas('hero', '', 1600, 940)
+await canvas('hero', '', 1600, 940, 1, [], '', true)
 await canvas('hero-narrow', '', 420, 560, 2)
 await canvas('changes', '?t=changes&mode=changed', 1600, 1000)
 await canvas('services', `?t=${encodeURIComponent(invoice.id)}`, 2600, 1300, 1.25, ['get_invoice', 'InvoiceService.find', 'invoices'], 'BillingClient.findInvoice')
@@ -64,5 +66,5 @@ await stage.scrollIntoView()
 const dock = await (await page.$('iframe.dock')).contentFrame()
 await dock.waitForSelector('.agent')
 await wait(1500)
-await stage.screenshot({ path: `${out}agents.jpg`, type: 'jpeg', quality: 78 })
+await stage.screenshot({ path: `${out}agents.webp`, type: 'webp', quality: 78 })
 await browser.close()

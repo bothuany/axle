@@ -1,41 +1,37 @@
-# Axle playground
+# The website
 
-Axle in the browser, with nothing to install: https://bothuany.github.io/axle/
+https://bothuany.github.io/axle/: the home page and the Try page, with the real canvas on a fictional demo project (`demo/`: orders and shipping in Java, billing in Python). A static site: no backend, and the only third-party request is GitHub's public API (the star count and the latest release). The design and its reasoning are in [docs/site/direction](../docs/site/direction/README.md) (direction A, "Light table").
 
-One page that presents Axle with three live tiles, each a small piece of the real thing on a fictional project (`demo/`: orders and shipping in Java, billing in Python): the flow canvas on an endpoint (the first thing on the page), a scripted Claude that the Agents dock and the status overlay follow (it asks, you allow), and the canvas again with that agent's change on its cards, with Keep and Undo. Between them: the harness scan of the project. The tiles sit in chapters with a floating menu, in the style of a product tour. A static site: no backend, no third-party scripts, nothing leaves the browser.
+## The pages
+
+- **Home** (`index.html`, `src/home.ts`): the canvas as the hero, over a poster of itself, with a button that plays a guided tour; one section per problem, each with a still in a clip slot; how it works with Claude Code, Codex and MCP; what a visitor can check (licence, releases, CI, this folder); the downloads.
+- **Try** (`try/index.html`, `src/try.ts`): the canvas large with three stories (two guided tours and the canvas's own review of an agent's change, with Keep and Undo), and the Agents dock with the status island. `#order`, `#changes` and `#invoice` in the address play that story at once.
+- **canvas.html**: the iframe page both use. It imports `ui/` after `src/host.ts` has set the globals the webview reads.
 
 ## What is Axle's own, and what is not
 
 | Part | Where it comes from |
 | --- | --- |
-| Flow canvas | `ui/src/webview.tsx`, unchanged, on a fake host (`src/host.ts`); only its overview map is hidden (`canvas.html`) |
+| Canvas | `ui/src/webview.tsx`, unchanged, on a fake host (`src/host.ts`); only its overview map is hidden (`canvas.html`) |
 | Flows, callers, impact, tables, the change set | flow-view's code index (the polyglot worker) run on `demo/`, and its own `changeSet.ts` / `turnImpact.ts` |
-| Agents dock page | `editor/extensions/flow-agent/src/dockPage.ts`: the page the app draws, driven by flow-agent's `attention.ts` ranking |
-| Status overlay (the island) | the page inside `editor/patches/flow-desktop.patch`, cut out of the patch at build time, driven by flow-agent's `desktopModel.ts`; it floats on the agents tile here, in the app it hangs from the notch |
-| Harness map | flow-harness's own `scan.ts` on the demo project, with an empty home folder; the page lays out its rows (`src/Harness.tsx`) |
-| Theme | the variables of a running Axle (`src/theme/vscode-theme.css`) |
-| **The agent** | **a scripted replay** (`src/story.ts`): its steps and timing are fixed |
-
-The page says so itself: each tile names what it is in its corner ("live canvas", "scripted replay") and the notes at the bottom spell it out.
+| Guided tours | written by hand in `demo/tours.json` by card label and line text; `scripts/site-data.mjs` resolves them against the index (it fails when a card or a line is gone), and the canvas's own tour player plays them |
+| Agents dock and status island | the app's own pages (flow-agent's `dockPage.ts`, the island page inside `editor/patches/flow-desktop.patch`), ranked and mapped by flow-agent's `attention.ts` and `desktopModel.ts` |
+| **The three agents** | **written for the page** (`src/agents.ts`): a fixed moment, not a live session; "Allow the test run" moves the waiting one on |
+| Harness section | flow-harness's own scan of the demo project, drawn by the page (`src/clips.ts`) |
+| Stills | headless captures of this site's own canvas and Try page (`scripts/capture-media.mjs`), committed in `public/media/` |
 
 ## How it fits together
 
-- `index.html` is the page: menu, hero, chapters and their text. `src/main.tsx` loads `public/data/demo.json` and mounts the live parts into it: the harness map on every screen, the tiles only on a screen at least 900px wide (below that the page shows the demo video and loads no canvas or dock).
-- `src/Tiles.tsx` has the tiles (a tile with the change starts the canvas's own “Review N changes” tour and zooms in once, so the changed code is readable; every tile has a skip link past its iframes). `FlowTile` is the canvas in an iframe with an endpoint select (`mode="changed"` starts with the agent's change in); `AgentsTile` is the step list, the dock and the overlay. Iframes load when a tile is scrolled near.
-- `src/story.ts` plays the session and `src/sessions.ts` turns the sessions into what the dock and the overlay are told, with flow-agent's ranking. `src/pages.tsx` hosts those two pages and answers what they ask; a flow chip in the dock opens that flow on the change tile (`src/store.ts`).
-- `canvas.html` is the iframe page. It imports `ui/` after `src/host.ts` has set the globals the webview reads; the host answers the canvas from the data, keeps its own Keep and Undo state, and tells the page around it (`decided`).
-- `scripts/playground-data.mjs` builds the data: it runs the worker on two copies of the project (before the agent's change and with it), builds the change set and the turn's impact with flow-view's own code, scans the harness, and writes the dock and overlay pages into `public/pages/`. `public/data/`, `public/pages/` and `src/generated/` are generated and not committed.
-- `playground/` may import only `ui/`, `protocol/` and these vscode-free files of flow-agent: `attention.ts`, `desktopModel.ts`, `avatars.ts`, `dockPage.ts`; and nothing it reaches may import `vscode` (`npm run arch`). The generated `src/generated/demo-check.ts` makes `npm run typecheck` fail when the data and the types of `protocol/flow.ts` disagree.
+- **The name** of the product is in `src/brand.ts` only: the pages get it through `{{name}}` (and `{{repo}}`, `{{site}}`), filled by `vite.config.ts`; the scripts import it. The download buttons match release files by their platform suffix, not by name.
+- **The hero canvas** (`src/stage.ts`) is an iframe made when the page is idle (on a phone, only when the visitor taps "Explore the flow", then full screen). The poster gives way once the canvas has drawn its cards. A plain wheel over it scrolls the page and Ctrl or a pinch zooms: the page marks the iframe `data-wheel="page"` and `src/canvas.ts` passes the wheel up. It is out of the tab order until the visitor plays the tour or opens it.
+- **Downloads and stars** (`src/download.ts`, `src/github.ts`): the page ships with links to the releases page; once GitHub answers, the primary button points at the visitor's file (a Mac gets the Apple silicon image, a phone the list), and answers are kept in `localStorage` for 30 minutes. No answer: no count, and the links stay on the releases page.
+- **Clip slots** (`src/clips.ts`): each problem section names a slot (`data-clip`). A slot is a still until it gets `video` (a silent loop under `public/media/`); loops play only on screen and never under reduced motion.
+- `scripts/site-data.mjs` builds the data: it runs the worker on two copies of the project (before the agent's change and with it), builds the change set and the turn's impact with flow-view's own code, resolves the tours, scans the harness, and writes the dock and island pages into `public/pages/`. `public/data/`, `public/pages/` and `src/generated/` are generated and not committed.
+- `site/` may import only `ui/`, `protocol/` and these vscode-free files of flow-agent: `attention.ts`, `desktopModel.ts`, `avatars.ts`, `dockPage.ts`; nothing it reaches may import `vscode` (`npm run arch`). The generated `src/generated/demo-check.ts` makes `npm run typecheck` fail when the data and `protocol/flow.ts` disagree.
 
 ## Being found
 
-The page is one URL, so search and sharing are set in `index.html` and `vite.config.ts`:
-
-- **Title and description:** "Axle: harness-first code editor for Claude Code and Codex" (57 characters) and a 158-character description. The test keeps both inside what a search result shows.
-- **Canonical address, social cards and structured data:** `og:` and `twitter:` tags (the poster of the README video is the card image) and a `SoftwareApplication` block in JSON-LD. The address is the `{{site}}` placeholder, which the `site` plugin of `vite.config.ts` fills from `SITE_URL` (default `https://bothuany.github.io/axle`): set it if the site moves, for instance to a custom domain.
-- **`sitemap.xml`:** emitted by the same plugin next to the page, listing the one URL with the build date as `lastmod`. Submit `https://bothuany.github.io/axle/sitemap.xml` in Search Console for the URL-prefix property `https://bothuany.github.io/axle/`; the `google-site-verification` tag in the page proves ownership of it.
-- **No `robots.txt`:** on a project site it would have to sit at `https://bothuany.github.io/robots.txt`, which this repository does not serve. The pages that only exist to be framed (`canvas.html`, `pages/dock.html`, `pages/island.html`) carry `<meta name="robots" content="noindex">` instead.
-- **`test/e2e.test.mjs`** checks all of it against the built site.
+Each page sets its title, description, canonical address, Open Graph tags and a Content-Security-Policy; the home page adds `SoftwareApplication` JSON-LD and the `google-site-verification` tag. `{{site}}` comes from `SITE_URL` (default `https://bothuany.github.io/axle`). The build emits `sitemap.xml` with both pages. The framed pages (`canvas.html`, `pages/dock.html`, `pages/island.html`) carry `noindex`. There is no `robots.txt`: on a project site it would have to sit at the domain's root.
 
 ## Run it
 
@@ -43,18 +39,19 @@ The page is one URL, so search and sharing are set in `index.html` and `vite.con
 (cd ui && npm ci)
 (cd editor/extensions/flow-view && npm ci && node esbuild.mjs)
 (cd editor/extensions/flow-harness && npm ci)
-node scripts/playground-data.mjs        # public/data and public/pages
-cd playground && npm ci
+node scripts/site-data.mjs              # public/data and public/pages
+cd site && npm ci
 npm run typecheck && npm run build
-npm run test:e2e                        # plays the story in headless Chrome (CHROME_PATH if it is not found)
+npm run test:e2e                        # headless Chrome (CHROME_PATH if it is not found)
 npm run preview                         # http://127.0.0.1:4173/axle/
+node scripts/capture-media.mjs          # with the preview running: the stills in public/media/
 ```
 
-`npm run dev` serves it with hot reload (at `/`, not `/axle/`). In Git Bash on Windows `/axle/` in the preview script is rewritten to a path: run it from PowerShell.
+`npm run dev` serves it with hot reload (at `/`, not `/axle/`). In Git Bash on Windows `/axle/` in the preview script is rewritten to a path: run it from PowerShell or set `MSYS_NO_PATHCONV=1`.
 
 ## Capturing the theme again
 
-`src/theme/vscode-theme.css` was captured from Axle 0.3.1. To refresh it after a theme change, run `npm run web`, open the workbench and run this in the browser console, then keep the `--vscode-*` entries the file already has (the icon glyph tables and the parts the playground does not draw are left out):
+`src/theme/vscode-theme.css` was captured from Axle 0.3.1. To refresh it after a theme change, run `npm run web`, open the workbench and run this in the browser console, then keep the `--vscode-*` entries the file already has:
 
 ```js
 const cs = getComputedStyle(document.querySelector('.monaco-workbench'))
@@ -63,12 +60,4 @@ copy(Object.fromEntries([...cs].filter(n => n.startsWith('--vscode-') && !n.star
 
 ## Deploys
 
-`.github/workflows/playground.yml` builds, tests and deploys to GitHub Pages on every push to `main`. The repository owner enables it once: Settings, Pages, Source "GitHub Actions". `ci.yml` builds and tests it on pull requests too.
-
-## Later
-
-- **A real recording** of a Claude Code session on the demo folder, to replace the scripted steps with what the CLI really did.
-- **A second scenario** that ends on a question (the dock's "Question" chip) or an error, and a second agent in a worktree.
-- **Context X-ray and the hooks studio**, the web pages of flow-harness, as pages of the demo.
-- **More demo projects** in other languages, picked from the page.
-- **Card editing** with saves kept in memory, so Keep and Undo work on edits the visitor makes.
+`.github/workflows/site.yml` builds, tests and deploys to GitHub Pages on every push to `main`. The repository owner enables it once: Settings, Pages, Source "GitHub Actions". `ci.yml` builds and tests it on pull requests too.

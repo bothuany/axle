@@ -14,19 +14,19 @@ export interface Clip {
 
 export const CLIPS: Record<string, Clip> = {
   changes: {
-    poster: 'media/changes.jpg',
+    poster: 'media/changes.webp',
     width: 1600,
     height: 1000,
     alt: `The ${NAME} canvas after Claude Code added discount codes to orders: the change set fans out to the four endpoints it reaches, each cut down to the changed methods.`,
   },
   services: {
-    poster: 'media/services.jpg',
+    poster: 'media/services.webp',
     width: 1600,
     height: 640,
     alt: 'The flow of GET /orders/{id}/invoice: a Java controller and client, a dashed HTTP edge into a Python route, its service and the invoices table.',
   },
   agents: {
-    poster: 'media/agents.jpg',
+    poster: 'media/agents.webp',
     width: 1344,
     height: 1264,
     alt: `The Agents dock of ${NAME} with three agents: one waits for approval to run a command, one is working through its todo list, one has finished.`,

@@ -105,7 +105,7 @@ editor/extensions/
   flow-harness/     harness map, hook studio, permission inbox, context budget
   flow-theme/       Axle's colour theme and defaults
 ui/                 the canvas (React Flow + Monaco), built into one script the extension inlines
-playground/         the browser playground: the canvas, the dock and a scripted agent on demo data from the real index (GitHub Pages)
+site/               the website (GitHub Pages): the real canvas on demo data from the real index, guided tours, downloads
 analyzer/           C# analyzer (.NET 10, Roslyn MSBuildWorkspace) serving flows over HTTP
 scripts/            setup, start, build-extensions, install-shortcut and installer (Windows .exe), the same on every OS (lib.mjs starts programs without a shell)
 ```
@@ -153,19 +153,19 @@ Turn the feature on once: "Turn Windows features on or off", tick **Windows Sand
 
 `npm run test:e2e-unit` tests the harness itself (the `.wsb`, the command lines, the result table) with no window. `run.mjs` refuses to start Axle unless `AXLE_E2E_ISOLATED=1`, which the workflow and the sandbox script set; do not set it on a machine you use.
 
-## The browser playground
+## The website
 
-`playground/` is the site at https://bothuany.github.io/axle/: a page that presents Axle with live tiles on a fictional demo project: the real flow canvas on an endpoint, a scripted Claude that the Agents dock and the status overlay follow, the agent's change on the canvas (green and red, Keep and Undo), and the harness scan of the project. The canvas, the dock page, the overlay page and the harness map are Axle's own, built from the demo project by the real code (what each part is, and what is scripted, in [playground/README.md](../playground/README.md)). From the repository root:
+`site/` is the site at https://bothuany.github.io/axle/: a home page whose hero is the real flow canvas on a fictional demo project, with a guided tour, one section per problem Axle solves and the downloads; and a Try page with guided stories on the canvas and the Agents dock. The canvas, the dock page, the island page and the harness scan are Axle's own, built from the demo project by the real code (what each part is, and what is written for the page, in [site/README.md](../site/README.md)). From the repository root:
 
 ```bash
 (cd ui && npm ci)
 (cd editor/extensions/flow-view && npm ci && node esbuild.mjs)
 (cd editor/extensions/flow-harness && npm ci)
-node scripts/playground-data.mjs        # writes playground/public/data and playground/public/pages (not committed)
-cd playground && npm ci
-npm run typecheck && npm run build      # the site is in playground/dist
-npm run test:e2e                        # plays the demo in headless Chrome
+node scripts/site-data.mjs              # writes site/public/data and site/public/pages (not committed)
+cd site && npm ci
+npm run typecheck && npm run build      # the site is in site/dist
+npm run test:e2e                        # plays the tours and the stories in headless Chrome
 npm run preview                         # http://127.0.0.1:4173/axle/ (the path GitHub Pages serves it under)
 ```
 
-`npm run dev` in `playground/` serves it with hot reload. In Git Bash on Windows, `/axle/` in the preview script is rewritten to a Windows path: run `npm run preview` from PowerShell or set `MSYS_NO_PATHCONV=1`. `npm run arch` keeps `playground/` to imports from `ui/`, `protocol/` and four vscode-free files of flow-agent. `.github/workflows/playground.yml` deploys it on every push to `main` (and `ci.yml` builds and tests it on pull requests); Pages must be enabled once with the source "GitHub Actions".
+`npm run dev` in `site/` serves it with hot reload. In Git Bash on Windows, `/axle/` in the preview script is rewritten to a Windows path: run `npm run preview` from PowerShell or set `MSYS_NO_PATHCONV=1`. `npm run arch` keeps `site/` to imports from `ui/`, `protocol/` and four vscode-free files of flow-agent. `.github/workflows/site.yml` deploys it on every push to `main` (and `ci.yml` builds and tests it on pull requests); Pages must be enabled once with the source "GitHub Actions".
