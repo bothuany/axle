@@ -20,7 +20,7 @@ function site(): Plugin {
   const sitemap = (lastmod?: string) =>
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${PAGES.map(p => `  <url><loc>${SITE}/${p}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}</url>`).join('\n')}\n</urlset>\n`
   return {
-    name: 'axle-site',
+    name: 'insilode-site',
     transformIndexHtml: html => html.replaceAll('{{site}}', SITE).replaceAll('{{name}}', NAME).replaceAll('{{repo}}', REPO),
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemap(new Date().toISOString().slice(0, 10)) })
@@ -35,7 +35,7 @@ function site(): Plugin {
   }
 }
 
-// Served from https://<owner>.github.io/axle/: every URL is relative. The canvas page imports ui/ (a webview that expects the editor's
+// Served from https://<owner>.github.io/insilode/: every URL is relative. The canvas page imports ui/ (a webview that expects the editor's
 // globals, which src/host.ts supplies), so the dev server may read the repository root.
 export default defineConfig({
   base: './',

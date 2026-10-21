@@ -9,7 +9,7 @@ https://bothuany.github.io/axle/: the home page and the Try page, with the real 
 - **Docs** (`docs/`, `src/docs.ts`): the repository's own Markdown as pages of the site: `README.md` (from its first section) and `docs/building.md`, `languages.md`, `agent-tools.md` and `boards.md`. `scripts/docs-pages.mjs` writes them before every build and dev start (generated, not committed); links between these documents stay on the site, links to any other file go to it on GitHub.
 - **canvas.html**: the iframe page both use. It imports `ui/` after `src/host.ts` has set the globals the webview reads.
 
-## What is Axle's own, and what is not
+## What is Insilode's own, and what is not
 
 | Part | Where it comes from |
 | --- | --- |
@@ -44,15 +44,15 @@ node scripts/site-data.mjs              # public/data and public/pages
 cd site && npm ci
 npm run typecheck && npm run build
 npm run test:e2e                        # headless Chrome (CHROME_PATH if it is not found)
-npm run preview                         # http://127.0.0.1:4173/axle/
+npm run preview                         # http://127.0.0.1:4173/insilode/
 node scripts/capture-media.mjs          # with the preview running: the stills in public/media/
 ```
 
-`npm run dev` serves it with hot reload (at `/`, not `/axle/`). In Git Bash on Windows `/axle/` in the preview script is rewritten to a path: run it from PowerShell or set `MSYS_NO_PATHCONV=1`.
+`npm run dev` serves it with hot reload (at `/`, not `/insilode/`). In Git Bash on Windows `/insilode/` in the preview script is rewritten to a path: run it from PowerShell or set `MSYS_NO_PATHCONV=1`.
 
 ## Capturing the theme again
 
-`src/theme/vscode-theme.css` was captured from Axle 0.3.1. To refresh it after a theme change, run `npm run web`, open the workbench and run this in the browser console, then keep the `--vscode-*` entries the file already has:
+`src/theme/vscode-theme.css` was captured from Insilode 0.3.1. To refresh it after a theme change, run `npm run web`, open the workbench and run this in the browser console, then keep the `--vscode-*` entries the file already has:
 
 ```js
 const cs = getComputedStyle(document.querySelector('.monaco-workbench'))

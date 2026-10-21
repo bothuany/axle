@@ -75,7 +75,7 @@ export function mountAgents(dock: HTMLIFrameElement, island: HTMLIFrameElement, 
   let dockReady = false
   const sendDock = () => dockReady && dock.contentWindow?.postMessage({ type: 'data', list: dockList(allSessions()), now: Date.now(), avatar }, location.origin)
   const drawIsland = () => {
-    const render = (island.contentWindow as (Window & { axleRender?: (m: unknown) => void }) | null)?.axleRender
+    const render = (island.contentWindow as (Window & { insilodeRender?: (m: unknown) => void }) | null)?.insilodeRender
     render?.(islandModel(allSessions(), data.islandColors, avatar))
   }
   subscribeSessions(() => {
@@ -90,12 +90,12 @@ export function mountAgents(dock: HTMLIFrameElement, island: HTMLIFrameElement, 
   window.addEventListener('message', e => {
     if (e.origin !== location.origin) return
     const m = e.data as { source?: string; message?: { type: string; id?: string; width?: number; height?: number } }
-    if (e.source === island.contentWindow && m?.source === 'axle-island' && m.message?.type === 'size' && m.message.width && m.message.height) {
+    if (e.source === island.contentWindow && m?.source === 'insilode-island' && m.message?.type === 'size' && m.message.width && m.message.height) {
       island.style.width = `${m.message.width}px`
       island.style.height = `${m.message.height}px`
       return
     }
-    if (e.source !== dock.contentWindow || m?.source !== 'axle-dock' || !m.message) return
+    if (e.source !== dock.contentWindow || m?.source !== 'insilode-dock' || !m.message) return
     if (m.message.type === 'ready') {
       dockReady = true
       sendDock()

@@ -1,5 +1,5 @@
 {
-  "name": "axle-site",
+  "name": "insilode-site",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit",
     "docs": "node scripts/docs-pages.mjs",
     "build": "node scripts/docs-pages.mjs && vite build",
-    "preview": "vite preview --base /axle/ --port 4173",
+    "preview": "vite preview --base /insilode/ --port 4173",
     "dev": "node scripts/docs-pages.mjs && vite --port 5173",
     "test:e2e": "node --test \"test/*.test.mjs\""
   },

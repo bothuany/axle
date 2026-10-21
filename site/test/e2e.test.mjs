@@ -1,6 +1,6 @@
 // The site in a real browser (headless Chrome): the home page with its live canvas, tour and downloads, the Try page's stories and
 // agents, and what search engines read. Run after `npm run build` (and `node scripts/site-data.mjs` before that): `npm run test:e2e`.
-// It serves dist/ the way GitHub Pages does, under /axle/, and fails on any console error, 4xx/5xx response or page error. GitHub's
+// It serves dist/ the way GitHub Pages does, under /insilode/, and fails on any console error, 4xx/5xx response or page error. GitHub's
 // API is answered from fixtures here (a rate-limited CI runner would otherwise get 403s), and one test makes it fail on purpose.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
@@ -23,7 +23,7 @@ const RELEASE = {
 	tag_name: 'v9.9.9',
 	published_at: '2026-10-20T10:00:00Z',
 	html_url: 'https://github.com/bothuany/axle/releases/tag/v9.9.9',
-	assets: [asset('Axle-Setup-9.9.9-x64.exe', 140_000_000), asset('Axle-9.9.9-darwin-arm64.dmg', 160_000_000), asset('Axle-9.9.9-darwin-x64.dmg', 165_000_000), asset('axle_9.9.9_amd64.deb', 120_000_000), asset('axle-9.9.9-1.x86_64.rpm', 121_000_000), asset('Axle-9.9.9-linux-x64.tar.gz', 150_000_000), asset('SHA256SUMS.txt', 1000)],
+	assets: [asset('Insilode-Setup-9.9.9-x64.exe', 140_000_000), asset('Insilode-9.9.9-darwin-arm64.dmg', 160_000_000), asset('Insilode-9.9.9-darwin-x64.dmg', 165_000_000), asset('insilode_9.9.9_amd64.deb', 120_000_000), asset('insilode-9.9.9-1.x86_64.rpm', 121_000_000), asset('Insilode-9.9.9-linux-x64.tar.gz', 150_000_000), asset('SHA256SUMS.txt', 1000)],
 }
 
 let server
@@ -33,7 +33,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms))
 
 before(async () => {
 	if (skip) return
-	server = await preview({ base: '/axle/', preview: { port: 0, host: '127.0.0.1', strictPort: false } })
+	server = await preview({ base: '/insilode/', preview: { port: 0, host: '127.0.0.1', strictPort: false } })
 	url = `${server.resolvedUrls.local[0].replace(/\/$/, '')}/`
 	browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: ['--no-first-run', '--disable-gpu', '--no-sandbox'] })
 })
@@ -135,7 +135,7 @@ test('home: the download button names the visitor\'s system and points at its fi
 	assert.match(await page.$eval('.hero [data-platforms]', p => p.textContent), /^Version 9\.9\.9, free and open source\. Also for macOS and Linux\.$/)
 	assert.equal(await page.$eval('.nav [data-stars]', s => (s.hidden ? '' : s.textContent)), '1,234')
 	const list = await page.$$eval('[data-download-list] li a', as => as.map(a => a.href.split('/').pop()))
-	assert.deepEqual(list, ['Axle-Setup-9.9.9-x64.exe', 'Axle-9.9.9-darwin-arm64.dmg', 'Axle-9.9.9-darwin-x64.dmg', 'axle_9.9.9_amd64.deb', 'axle-9.9.9-1.x86_64.rpm', 'Axle-9.9.9-linux-x64.tar.gz'])
+	assert.deepEqual(list, ['Insilode-Setup-9.9.9-x64.exe', 'Insilode-9.9.9-darwin-arm64.dmg', 'Insilode-9.9.9-darwin-x64.dmg', 'insilode_9.9.9_amd64.deb', 'insilode-9.9.9-1.x86_64.rpm', 'Insilode-9.9.9-linux-x64.tar.gz'])
 	assert.match(await page.$eval('[data-release]', p => p.textContent), /^Version 9\.9\.9, released October 20, 2026\.$/)
 	await page.close()
 
@@ -244,7 +244,7 @@ test('docs: the documents of the repository are pages of the site, linked to eac
 	assert.deepEqual(await page.$$eval('.doc-nav a', as => as.map(a => a.textContent)), ['Overview', 'Install and build', 'Languages', 'Agent tools', 'Boards'])
 	// A link between documents stays on the site; a link to another file of the repository goes to GitHub.
 	const links = await page.$$eval('.doc-body a', as => as.map(a => a.href))
-	assert.ok(links.some(h => h.endsWith('/axle/docs/languages/')), 'the support table link opens the Languages page')
+	assert.ok(links.some(h => h.endsWith('/insilode/docs/languages/')), 'the support table link opens the Languages page')
 	assert.ok(links.some(h => h === 'https://github.com/bothuany/axle/blob/main/CONTRIBUTING.md'))
 	await page.click('.doc-nav a[href$="docs/languages/"]')
 	await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'Languages')

@@ -137,7 +137,7 @@ export class Stage {
   private onMessage = (e: MessageEvent) => {
     if (!this.frame || e.source !== this.frame.contentWindow || e.origin !== location.origin) return
     const m = e.data as { source?: string; type?: string; text?: string; what?: 'keep' | 'undo'; file?: string }
-    if (m?.source !== 'axle-canvas') return
+    if (m?.source !== 'insilode-canvas') return
     if (m.type === 'note' && m.text) this.note(m.text)
     else if (m.type === 'open' || m.type === 'reveal') this.note(`Opening ${m.file?.split('/').pop() ?? 'a file'} in the editor works in the ${NAME} app, on your own code.`)
     else if (m.type === 'decided' && m.what) this.options.onDecided?.(m.what)

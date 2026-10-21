@@ -113,5 +113,5 @@ export const entryLabel = (e: EntryPoint) => `${e.controller}.${e.action}`
 export const serviceOf = (e: EntryPoint) => e.file.split('/')[2] ?? 'demo'
 
 /** Messages the canvas page sends its parent, and the other way round (`show`, `cursor`). */
-export type ToShell = { source: 'axle-canvas'; type: 'note'; text: string } | { source: 'axle-canvas'; type: 'ready' } | { source: 'axle-canvas'; type: 'decided'; what: 'keep' | 'undo' } | { source: 'axle-canvas'; type: 'open' | 'reveal'; file: string; line: number }
+export type ToShell = { source: 'insilode-canvas'; type: 'note'; text: string } | { source: 'insilode-canvas'; type: 'ready' } | { source: 'insilode-canvas'; type: 'decided'; what: 'keep' | 'undo' } | { source: 'insilode-canvas'; type: 'open' | 'reveal'; file: string; line: number }
 export type ToCanvas = { type: 'show'; target: Target; label: string } | { type: 'cursor'; file: string; line: number }
