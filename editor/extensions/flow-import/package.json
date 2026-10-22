@@ -4,7 +4,7 @@
   "description": "Switch from VS Code (or Cursor) in one step: settings, keyboard shortcuts, snippets, theme and extensions, merged into Insilode's own.",
   "version": "0.1.0",
   "publisher": "flow",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "private": true,
   "engines": {
     "vscode": "^1.100.0"
