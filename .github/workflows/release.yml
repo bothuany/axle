@@ -172,22 +172,26 @@ jobs:
       - name: Set up Insilode
         run: npm run setup
 
-      # VS Code's deb step fetches Chromium's dpkg-shlibdeps.pl from raw.githubusercontent.com with a plain `curl`, and
-      # anonymous requests from runners get "429: Too Many Requests", saved as the script. A curl earlier on PATH sends this
-      # job's token to that host only, retries, and fails on an error page instead of saving it; every other URL is untouched.
+      # VS Code's deb step fetches Chromium's dpkg-shlibdeps.pl from raw.githubusercontent.com with a plain `curl`, and that
+      # host answers runners "429: Too Many Requests" (with or without a token), saved as the script. A curl earlier on PATH
+      # fetches raw.githubusercontent.com/<owner>/<repo>/<ref>/<path> through the API's contents endpoint with this job's
+      # token instead, retries, and fails on an error page instead of saving it; every other URL is untouched.
       - name: Authenticated downloads from raw.githubusercontent.com
         if: runner.os == 'Linux'
         run: |
           mkdir -p "$RUNNER_TEMP/curl-shim"
           cat > "$RUNNER_TEMP/curl-shim/curl" <<'SHIM'
           #!/usr/bin/env bash
+          args=()
           for arg in "$@"; do
           	case "$arg" in
           	https://raw.githubusercontent.com/*)
-          		exec /usr/bin/curl --fail --location --retry 5 --retry-delay 15 --retry-all-errors -H "Authorization: Bearer $GITHUB_TOKEN" "$@" ;;
+          		IFS=/ read -r owner repo ref path <<< "${arg#https://raw.githubusercontent.com/}"
+          		args+=("https://api.github.com/repos/$owner/$repo/contents/$path?ref=$ref" --fail --location --retry 5 --retry-delay 15 --retry-all-errors -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github.raw") ;;
+          	*) args+=("$arg") ;;
           	esac
           done
-          exec /usr/bin/curl "$@"
+          exec /usr/bin/curl "${args[@]}"
           SHIM
           chmod +x "$RUNNER_TEMP/curl-shim/curl"
           echo "$RUNNER_TEMP/curl-shim" >> "$GITHUB_PATH"
