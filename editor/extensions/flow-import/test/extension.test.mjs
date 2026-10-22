@@ -197,7 +197,7 @@ test('forced onto the remote machine by remote.extensionKind, it refuses instead
 	await run()
 	assert.match(messages('warning')[0], /remote\.extensionKind/)
 	assert.equal(existsSync(mine('settings.json')), false)
-	// Running on this computer (the UI side, as extensionKind ["ui"] asks for) in the same remote window imports as usual.
+	// Running on this computer (the UI side, which extensionKind ["ui", "workspace"] prefers) in the same remote window imports as usual.
 	context.extension.extensionKind = vscode.ExtensionKind.UI
 	await run()
 	assert.deepEqual(JSON.parse(read('settings.json')), { 'editor.tabSize': 2 })

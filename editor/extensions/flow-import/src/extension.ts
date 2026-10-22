@@ -51,9 +51,11 @@ function sourceEnv(): Env {
  * this extension's global storage; in a browser (web mode) user data lives in the browser under `vscode-userdata:/User`,
  * not on the server, so it is addressed there. Settings, keybindings and snippets of the default profile live in it.
  *
- * The extension is a UI extension (`extensionKind: ["ui"]`), so in a window connected to a remote machine it still runs
- * on this computer and the global storage, and with it the User folder, is this computer's. A user can force it onto
- * the remote side with `remote.extensionKind`; `runsRemotely` refuses then, since the folder would be the server's.
+ * The extension prefers the UI side (`extensionKind: ["ui", "workspace"]`), so in a desktop window connected to a
+ * remote machine it runs on this computer and the global storage, and with it the User folder, is this computer's.
+ * "workspace" is there for web mode only: a browser has no Node extension host, and an extension that is "ui" alone is
+ * disabled there (DisabledByExtensionKind). A user can still force it onto the remote side of a desktop window with
+ * `remote.extensionKind`; `runsRemotely` refuses then, since the folder would be the server's.
  */
 function userDir(context: vscode.ExtensionContext): vscode.Uri {
 	return vscode.env.uiKind === vscode.UIKind.Web
