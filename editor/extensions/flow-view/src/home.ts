@@ -38,7 +38,7 @@ interface Health {
 
 /** How a path is compared with the ones the page was given: resolved, and without case where the file system has none. */
 export const pathKey = (file: string, platform: NodeJS.Platform = process.platform) => {
-	const abs = path.resolve(file);
+	const abs = (platform === 'win32' ? path.win32 : path.posix).resolve(file);
 	return platform === 'win32' || platform === 'darwin' ? abs.toLowerCase() : abs;
 };
 
