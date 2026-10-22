@@ -74,8 +74,8 @@ test('theme: kept apart from settings, and applied only for themes the editor ha
 	assert.deepEqual(plan.theme.map(t => t.key), ['workbench.colorTheme', 'workbench.iconTheme', 'workbench.colorCustomizations'])
 	assert.equal(plan.add.some(a => a.path[0] === 'workbench.colorTheme'), false)
 	// VS Code still writes "Default Dark Modern"; the built-in theme is now called "Dark Modern" (migrateThemeSettingsId).
-	const installed = { color: new Set(['dark modern']), icon: new Set(), product: new Set() }
-	const { apply, missing } = m.applicableTheme(plan.theme, (kind, id) => installed[kind].has(id.toLowerCase()))
+	const installed = { color: ['Dark Modern'], icon: [], product: [] }
+	const { apply, missing } = m.applicableTheme(plan.theme, installed)
 	assert.deepEqual(apply.map(t => t.key), ['workbench.colorTheme', 'workbench.colorCustomizations'])
 	assert.equal(apply[0].value, 'Dark Modern')
 	assert.deepEqual(missing.map(t => t.value), ['material-icon-theme'])
@@ -118,10 +118,56 @@ test('snippets: a new file is copied as it is, an existing one gains the snippet
 	assert.equal(m.mergeSnippets(mine, mine).text, undefined)
 })
 
-test('the install command\'s "not found" error is recognised', () => {
-	// The text VS Code's workbench.extensions.installExtension throws (extensions.contribution.ts, localize('notFound')).
-	assert.equal(m.isNotFound("Extension 'ms-vscode-remote.remote-ssh' not found."), true)
-	assert.equal(m.isNotFound('Network error: ECONNRESET'), false)
+test('theme: every old built-in name VS Code migrates is written under the name the theme has now', () => {
+	const installed = { color: ['Dark Modern', 'Light Modern', 'Dark+', 'Light+', 'Dark 2026', 'Light 2026'], icon: [], product: [] }
+	const names = { 'Default Dark Modern': 'Dark Modern', 'Default Light Modern': 'Light Modern', 'Default Dark+': 'Dark+', 'Default Light+': 'Light+', 'VS Code Dark': 'Dark 2026', 'Experimental Dark': 'Dark 2026', 'VS Code Light': 'Light 2026', 'Experimental Light': 'Light 2026' }
+	for (const [old, now] of Object.entries(names)) {
+		const { apply, missing } = m.applicableTheme([{ key: 'workbench.colorTheme', value: old }], installed)
+		assert.deepEqual(apply, [{ key: 'workbench.colorTheme', value: now }], old)
+		assert.deepEqual(missing, [])
+	}
+})
+
+test('theme: matched exactly as VS Code does, a name in another case rewritten to the one installed id', () => {
+	assert.equal(m.resolveTheme(['One Dark Pro'], 'One Dark Pro'), 'One Dark Pro')
+	assert.equal(m.resolveTheme(['One Dark Pro'], 'one dark pro'), 'One Dark Pro')
+	assert.equal(m.resolveTheme(['One Dark Pro'], 'One Dark'), undefined)
+	// Two installed themes that differ only in case: which one was meant is unknown, so neither is written.
+	assert.equal(m.resolveTheme(['Nord', 'NORD'], 'nord'), undefined)
+	assert.equal(m.resolveTheme(['Nord', 'NORD'], 'NORD'), 'NORD')
+	const { apply, missing } = m.applicableTheme([{ key: 'workbench.colorTheme', value: 'one dark pro' }, { key: 'workbench.iconTheme', value: 'Material-Icon-Theme' }, { key: 'workbench.productIconTheme', value: 'fluent' }], { color: ['One Dark Pro'], icon: ['material-icon-theme'], product: [] })
+	assert.deepEqual(apply.map(t => t.value), ['One Dark Pro', 'material-icon-theme'])
+	assert.deepEqual(missing.map(t => t.value), ['fluent'])
+})
+
+test('theme: the id a setting names a theme by is its id, a colour theme\'s label only when it has none', () => {
+	assert.equal(m.themeSettingsId('color', { id: 'One Dark Pro', label: 'One Dark Pro (Flat)' }), 'One Dark Pro')
+	assert.equal(m.themeSettingsId('color', { label: 'Monokai Classic' }), 'Monokai Classic')
+	assert.equal(m.themeSettingsId('color', { label: '%themeLabel%' }), undefined)
+	assert.equal(m.themeSettingsId('icon', { label: 'Seti' }), undefined)
+	assert.equal(m.themeSettingsId('icon', { id: 'vs-seti', label: 'Seti' }), 'vs-seti')
+})
+
+test('a missing file is told apart from one that is there but cannot be read', () => {
+	assert.equal(m.isFileNotFound({ code: 'FileNotFound', name: 'EntryNotFound (FileSystemError)' }), true)
+	assert.equal(m.isFileNotFound(Object.assign(new Error('nope'), { code: 'ENOENT' })), true)
+	// A file OneDrive or a virus scanner holds (EBUSY maps to Unknown), or one without permission.
+	assert.equal(m.isFileNotFound({ code: 'Unknown', message: 'EBUSY: resource busy or locked' }), false)
+	assert.equal(m.isFileNotFound({ code: 'NoPermissions', message: 'EPERM: operation not permitted' }), false)
+	assert.equal(m.isFileNotFound(new Error('File not found')), false, 'the message is not looked at')
+	assert.equal(m.isFileNotFound(undefined), false)
+})
+
+test('the install command\'s "not found" error is recognised by its name, not its (translated) text', () => {
+	// ExtensionManagementError names itself after its code (extensionManagement.ts); name and code survive the command's
+	// round trip to the extension host (errors.ts, transformErrorForSerialization).
+	const notFound = (message, extra) => Object.assign(new Error(message), extra)
+	assert.equal(m.isNotFound(notFound("The extension 'ms-vscode-remote.remote-ssh' cannot be installed because it was not found.", { name: 'NotFound' })), true)
+	assert.equal(m.isNotFound(notFound("Die Erweiterung 'ms-vscode-remote.remote-ssh' wurde nicht gefunden.", { name: 'NotFound' })), true)
+	assert.equal(m.isNotFound(notFound("'ms-vscode-remote.remote-ssh' uzantısı bulunamadı.", { code: 'NotFound' })), true)
+	assert.equal(m.isNotFound(new Error('Download failed: 404 not found')), false)
+	assert.equal(m.isNotFound(new Error('Network error: ECONNRESET')), false)
+	assert.equal(m.isNotFound(undefined), false)
 	// What it throws when the editor has no gallery at all (extensionGalleryService.ts), as `npm run web` has none.
 	assert.equal(m.isNoGallery('No extension gallery service configured.'), true)
 	assert.equal(m.isNoGallery("Extension 'a.b' not found."), false)

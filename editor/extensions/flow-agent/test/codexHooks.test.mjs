@@ -67,3 +67,51 @@ test('the hook script names no workspace: it is the same file for every window',
 	assert.ok(c.CODEX_HOOK_SCRIPT.includes('process.env.FLOW_HOOK_DIR'))
 	assert.ok(!/[A-Z]:\\|\/home\/|\/Users\//.test(c.CODEX_HOOK_SCRIPT))
 })
+
+// npm's cmd-shim, as `npm install -g @openai/codex` writes it on Windows.
+const NPM_SHIM = `@ECHO off
+GOTO start
+:find_dp0
+SET dp0=%~dp0
+EXIT /b
+:start
+SETLOCAL
+CALL :find_dp0
+
+IF EXIST "%dp0%\\node.exe" (
+  SET "_prog=%dp0%\\node.exe"
+) ELSE (
+  SET "_prog=node"
+  SET PATHEXT=%PATHEXT:;.JS;=;%
+)
+
+endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*
+`
+const fakeFs = files => ({ exists: f => f in files, read: f => files[f] })
+
+test('codex launch, Windows: an npm codex.cmd runs its script under Node, never through a shell', () => {
+	const npm = 'C:\\Users\\a\\AppData\\Roaming\\npm'
+	const script = `${npm}\\node_modules\\@openai\\codex\\bin\\codex.js`
+	const files = { [`${npm}\\codex.cmd`]: NPM_SHIM, [`${npm}\\codex`]: '#!/bin/sh', [script]: '' }
+	assert.deepEqual(c.codexLaunch('win32', `C:\\Windows;"${npm}"`, '.COM;.EXE;.BAT;.CMD', fakeFs(files)), { script })
+	// The shim prefers a node.exe in its own folder, and so does the launch.
+	assert.deepEqual(c.codexLaunch('win32', npm, undefined, fakeFs({ ...files, [`${npm}\\node.exe`]: '' })), { script, node: `${npm}\\node.exe` })
+	// A shim whose script is gone, or a .cmd that is not npm's shim, is not started at all.
+	assert.equal(c.codexLaunch('win32', npm, undefined, fakeFs({ [`${npm}\\codex.cmd`]: NPM_SHIM })), undefined)
+	assert.equal(c.codexLaunch('win32', npm, undefined, fakeFs({ [`${npm}\\codex.cmd`]: '@echo off\r\nrd /s /q %1' })), undefined)
+})
+
+test('codex launch, Windows: an earlier PATH folder wins, and an .exe runs as it is', () => {
+	const own = 'C:\\Tools\\codex'
+	const npm = 'C:\\npm'
+	const files = { [`${own}\\codex.exe`]: '', [`${npm}\\codex.cmd`]: NPM_SHIM, [`${npm}\\node_modules\\@openai\\codex\\bin\\codex.js`]: '' }
+	assert.deepEqual(c.codexLaunch('win32', `${own};${npm}`, '.EXE;.CMD', fakeFs(files)), { file: `${own}\\codex.exe` })
+	assert.equal(c.codexLaunch('win32', `${npm}`, '.EXE;.CMD', fakeFs(files)).script, `${npm}\\node_modules\\@openai\\codex\\bin\\codex.js`)
+	assert.equal(c.codexLaunch('win32', 'C:\\Windows', undefined, fakeFs(files)), undefined)
+})
+
+test('codex launch, macOS and Linux: the first codex on PATH', () => {
+	const files = { '/usr/local/bin/codex': '', '/opt/codex/codex': '' }
+	assert.deepEqual(c.codexLaunch('linux', '/usr/bin:/usr/local/bin:/opt/codex', undefined, fakeFs(files)), { file: '/usr/local/bin/codex' })
+	assert.equal(c.codexLaunch('darwin', '/usr/bin', undefined, fakeFs(files)), undefined)
+})

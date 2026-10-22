@@ -82,4 +82,34 @@ test('readSource: settings and keybindings as text, snippet files sorted, extens
 	assert.equal(cursor.keybindings, undefined)
 	assert.deepEqual(cursor.snippets, [])
 	assert.deepEqual(cursor.extensions, [])
+	assert.deepEqual(c.unreadable, [])
+})
+
+test('readSource: a locked (EBUSY) or forbidden (EPERM) file is skipped and named, the rest is still read', async () => {
+	const { readFileSync } = await import('node:fs')
+	const [code] = s.findSources({ platform: 'win32', home: join(FIX, 'win') })
+	const fail = (code, name) => file => {
+		if (file.endsWith(name)) {
+			throw Object.assign(new Error(`${code}: resource busy or locked, open '${file}'`), { code })
+		}
+		return readFileSync(file, 'utf8')
+	}
+	const busy = s.readSource(code, fail('EBUSY', 'react.code-snippets'))
+	assert.deepEqual(busy.snippets.map(x => x.name), ['typescript.json'])
+	assert.match(busy.settings, /"editor.fontSize": 15/)
+	assert.deepEqual(busy.unreadable, [{ file: join(code.userDir, 'snippets', 'react.code-snippets'), reason: 'EBUSY' }])
+	const denied = s.readSource(code, fail('EPERM', 'settings.json'))
+	assert.equal(denied.settings, undefined)
+	assert.equal(denied.snippets.length, 2)
+	assert.deepEqual(denied.unreadable.map(u => u.reason), ['EPERM'])
+	// A file that is simply not there is not "unreadable".
+	const cursor = s.readSource(s.findSources({ platform: 'win32', home: join(FIX, 'win') })[1], fail('EBUSY', 'nothing'))
+	assert.deepEqual(cursor.unreadable, [])
+})
+
+test('Insilode\'s own extensions folder: $VSCODE_EXTENSIONS, a portable install, or ~/<dataFolderName>/extensions', () => {
+	const home = join('/', 'home', 'me')
+	assert.deepEqual(s.ownExtensionDirs(home, '.insilode', {}), [join(home, '.insilode', 'extensions')])
+	assert.deepEqual(s.ownExtensionDirs(home, '.insilode', { VSCODE_EXTENSIONS: '/x/ext', VSCODE_PORTABLE: '/p' }), ['/x/ext', join('/p', 'extensions'), join(home, '.insilode', 'extensions')])
+	assert.deepEqual(s.ownExtensionDirs(home, undefined, {}), [])
 })

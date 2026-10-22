@@ -17,7 +17,7 @@ import * as vscode from 'vscode';
 import { crashNeed, nextAttention, startupNeed, type Attention, type Need } from './attention';
 import { needsYouCount } from './desktopModel';
 import { findConflicts, key, type Conflict, type SessionEdits } from './conflicts';
-import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexProfile, codexProfileFile } from './codexHooks';
+import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexLaunch, codexProfile, codexProfileFile } from './codexHooks';
 import { agentCwd, agentProcessEnv, inheritedAgentEnv } from './env';
 import { CostTracker, statusUsd, type SessionCost } from './cost';
 import { disposeGaze, gazeHook, gazeTurn } from './gazeHost';
@@ -477,10 +477,38 @@ export class Agents implements vscode.Disposable {
 			return Promise.resolve(false);
 		}
 		return this.codexHooks ??= this.writeCodexProfile().then(() => new Promise<boolean>(resolve => {
-			// A shell finds `codex` the way the terminal will: npm installs it on Windows as codex.cmd, which execFile cannot
-			// start alone. The command line is fixed text, nothing from a user or a file reaches it.
-			// nosemgrep: insilode-shell-true
-			execFile('codex', ['-p', CODEX_PROFILE, 'mcp', 'list'], { shell: true, timeout: 8000, windowsHide: true, env: agentProcessEnv() }, (err, _out, stderr) => {
+			// No shell: `codex` is looked up on PATH here. npm installs it on Windows as codex.cmd, which execFile cannot
+			// start without cmd.exe, so the shim's script runs under Node instead (the node.exe beside it, a `node` on
+			// PATH, or this editor in Node mode).
+			const launch = codexLaunch(process.platform, process.env.PATH ?? '', process.env.PATHEXT, {
+				exists: existsSync,
+				read: file => {
+					try {
+						return readFileSync(file, 'utf8');
+					} catch {
+						return undefined;
+					}
+				},
+			});
+			if (!launch) {
+				this.log.warn('Agents: Codex runs without status: no `codex` program found on PATH');
+				resolve(false);
+				return;
+			}
+			const args = ['-p', CODEX_PROFILE, 'mcp', 'list'];
+			let file: string;
+			let argv = args;
+			let extra: Record<string, string> = {};
+			if ('file' in launch) {
+				file = launch.file;
+			} else {
+				file = launch.node ?? findOnPath('node') ?? process.execPath;
+				argv = [launch.script, ...args];
+				if (file === process.execPath && process.versions.electron) {
+					extra = { ELECTRON_RUN_AS_NODE: '1' };
+				}
+			}
+			execFile(file, argv, { timeout: 8000, windowsHide: true, env: agentProcessEnv(extra) }, (err, _out, stderr) => {
 				if (err) {
 					this.log.warn(`Agents: Codex runs without status: \`codex -p ${CODEX_PROFILE}\` failed (${String(stderr || err.message).trim().split('\n')[0]})`);
 				}

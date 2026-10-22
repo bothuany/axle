@@ -14,7 +14,7 @@
     "onStartupFinished"
   ],
   "extensionKind": [
-    "workspace"
+    "ui"
   ],
   "enabledApiProposals": [
     "extensionsAny"

@@ -78,6 +78,54 @@ export function codexProfile(command: string, timeout = 5): string {
 	return lines.join('\n') + '\n';
 }
 
+/** How to start `codex` without a shell: a program to run directly, or a JavaScript entry for Node. */
+export type CodexLaunch = { file: string } | { script: string; node?: string };
+
+/** The file system calls `codexLaunch` needs, passed in so tests lay out a PATH of their own. */
+export interface LaunchFs {
+	exists(file: string): boolean;
+	read(file: string): string | undefined;
+}
+
+/**
+ * Where `codex` is, found the way a shell would find it, so it can be started with an argument array and no shell.
+ * Elsewhere than Windows that is the first `codex` on PATH. On Windows each PATH folder is tried with each PATHEXT
+ * ending, in order: an `.exe` (Codex's standalone install) runs as it is; npm's `codex.cmd` shim, which Node cannot
+ * start without cmd.exe, is read for the script it hands to Node (`"%dp0%\node_modules\@openai\codex\bin\codex.js"`)
+ * and the node.exe beside it, if there is one. Undefined when there is no codex, or a .cmd that is not such a shim.
+ */
+export function codexLaunch(platform: NodeJS.Platform, envPath: string, pathext: string | undefined, fs: LaunchFs): CodexLaunch | undefined {
+	const win = platform === 'win32';
+	const join = win ? path.win32.join : path.posix.join;
+	const dirs = envPath.split(win ? ';' : ':').map(d => d.replace(/^"|"$/g, '')).filter(Boolean);
+	if (!win) {
+		const dir = dirs.find(d => fs.exists(join(d, 'codex')));
+		return dir ? { file: join(dir, 'codex') } : undefined;
+	}
+	const exts = (pathext || '.COM;.EXE;.BAT;.CMD').split(';').map(e => e.trim().toLowerCase()).filter(Boolean);
+	for (const dir of dirs) {
+		for (const ext of exts) {
+			const file = join(dir, `codex${ext}`);
+			if (!fs.exists(file)) {
+				continue;
+			}
+			if (ext === '.exe' || ext === '.com') {
+				return { file };
+			}
+			if (ext === '.cmd' || ext === '.bat') {
+				const shim = /"%~?dp0%?\\([^"%]+?\.[cm]?js)"/i.exec(fs.read(file) ?? '');
+				if (!shim) {
+					return undefined;
+				}
+				const script = join(dir, shim[1]);
+				const node = join(dir, 'node.exe');
+				return fs.exists(script) ? { script, ...(fs.exists(node) ? { node } : {}) } : undefined;
+			}
+		}
+	}
+	return undefined;
+}
+
 /**
  * The shared hook script: posts the event to the Insilode window named by the terminal's FLOW_HOOK_DIR,
  * and prints nothing (Codex then takes no decision from it; Stop treats empty output as success).
