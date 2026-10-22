@@ -114,6 +114,26 @@ test('typescript: interfaces, object aliases and enums of fields; promises and a
 	assert.equal(create.params[0].body, true)
 })
 
+test('typescript: an ESM import with the emitted extension (./user.dto.js) resolves to the .ts source', async () => {
+	const g = await graphOf('ts-esm')
+	assert.equal(edge(g, 'ProfileService', 'UserDto', 'method').length, 1)
+	const sig = byName(g, 'ProfileService').methods.find(m => m.name === 'current')
+	assert.ok(sig, 'ProfileService.current is listed')
+	// A module function: its parameter and return type resolve through the same import.
+	const fn = g.funcs.find(f => f.name === 'onlyActive')
+	assert.ok(fn, 'onlyActive has a signature of workspace types')
+	assert.deepEqual(fn.params.map(p => [p.name, p.refs.map(short), p.collection]), [['users', ['UserDto'], 'many']])
+	assert.deepEqual([fn.returns.type, fn.returns.refs.map(short), fn.returns.collection], ['UserDto[]', ['UserDto'], 'many'])
+})
+
+test('module functions keep their return type whole: an "s" in it is not whitespace', async () => {
+	const g = await graphOf('py-app')
+	const get = g.funcs.find(f => f.name === 'get_user')
+	assert.deepEqual([get.returns.type, get.returns.refs.map(short)], ['UserOut', ['UserOut']])
+	const add = g.funcs.find(f => f.name === 'add_address')
+	assert.deepEqual([add.returns.type, add.returns.refs.map(short)], ['Address', ['Address']])
+})
+
 test('python: pydantic, dataclass, enum and entity; forward references; endpoint types', async () => {
 	const g = await graphOf('py-app')
 	for (const n of ['UserOut', 'ItemOut', 'Address']) {

@@ -1,0 +1,8 @@
+GET /buyers       main.buyers
+  (guess) db: users [db]
+GET /yearly       main.yearly
+  (guess) db: orders [db]
+POST /claim       main.claim
+  (guess) db: jobs [db]
+PUT /carts        main.upsert
+  (guess) db: carts [db]

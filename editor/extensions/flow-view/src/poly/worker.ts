@@ -192,6 +192,8 @@ function pageRefs(file: string) {
 	try {
 		text = fs.readFileSync(file, 'utf8');
 	} catch {
+		// A page that is gone (deleted, or not readable any more) triggers nothing: what it named must leave the entry points too.
+		project.pageRefs.delete(file);
 		return;
 	}
 	const refs: [string, string][] = [];
@@ -433,7 +435,7 @@ parentPort!.on('message', async (m: { id: number; op: string; args: unknown[] })
 				// A folder was deleted (a removed worktree, say): the watcher reports the folder, not each file in it.
 				const fold = (s: string) => process.platform === 'win32' ? s.toLowerCase() : s;
 				const dir = fold(path.join(m.args[0] as string, path.sep));
-				const gone = [...project.files.keys()].filter(f => fold(f).startsWith(dir) && !fs.existsSync(f));
+				const gone = [...project.files.keys(), ...project.pageRefs.keys()].filter(f => fold(f).startsWith(dir) && !fs.existsSync(f));
 				gone.forEach(f => project.delete(f));
 				if (gone.length) {
 					saveSoon();

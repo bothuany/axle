@@ -68,7 +68,7 @@ const PACKAGE_LANGS = new Set(['go', 'php', 'ruby', 'rust']);
 // What a JS/TS import specifier may leave off. The index file is joined with the platform separator because the
 // file map is keyed by native paths: `C:\app\lib` + '/index.ts' never matched on Windows, so a directory import
 // (`from '../lib'`) resolved on Linux but fell back to a name-only guess on Windows.
-const JS_SUFFIXES = ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', ...['index.ts', 'index.tsx', 'index.js'].map(f => path.sep + f)];
+const JS_SUFFIXES = ['', '.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', ...['index.ts', 'index.tsx', 'index.js'].map(f => path.sep + f)];
 
 /** A record lookup that ignores Object.prototype (an import named `toString` is not a function). */
 function own<T>(rec: Record<string, T> | undefined, key: string): T | undefined {
@@ -127,6 +127,7 @@ export class Project {
 
 	delete(file: string) {
 		this.files.delete(file);
+		this.pageRefs.delete(file);
 		this.dirty = true;
 		this.sources.delete(file);
 	}
@@ -189,8 +190,9 @@ export class Project {
 				}
 			}
 			for (const t of f.types) {
-				if (!this.canon.has(t)) {
-					this.push(this.typesByName, t.name, t);
+				// A stub merged into its real type is listed through that type's merged copy.
+				if (!t.stub || !this.canon.has(t)) {
+					this.push(this.typesByName, t.name, this.canon.get(t) ?? t);
 				}
 			}
 			for (const fn of f.funcs) {
@@ -226,7 +228,11 @@ export class Project {
 		this.buildEntries();
 	}
 
-	/** `func (h *Handler) List()` in routes.go and `type Handler struct{…}` in handler.go are one type. */
+	/**
+	 * `func (h *Handler) List()` in routes.go and `type Handler struct{…}` in handler.go are one type. The merged type is a copy that both
+	 * map to in `canon`: the facts of each file stay as parsed, so a method or impl deleted from routes.go leaves Handler with the next
+	 * rebuild, and the merge never reaches the on-disk cache.
+	 */
 	private mergeStubTypes() {
 		const declared = new Map<string, TypeFact>();
 		const scope = (f: FileFacts, name: string) => `${f.lang}|${path.dirname(f.file)}|${name}`;
@@ -240,9 +246,14 @@ export class Project {
 			for (const t of f.types.filter(x => x.stub)) {
 				const real = declared.get(scope(f, t.name));
 				if (real) {
-					this.canon.set(t, real);
-					real.methods.push(...t.methods.filter(m => !real.methods.includes(m)));
-					real.supers.push(...t.supers.filter(x => !real.supers.includes(x)));
+					let merged = this.canon.get(real);
+					if (!merged) {
+						merged = { ...real, methods: [...real.methods], supers: [...real.supers], superArgs: { ...real.superArgs } };
+						this.canon.set(real, merged);
+					}
+					this.canon.set(t, merged);
+					merged.methods.push(...t.methods.filter(m => !merged.methods.includes(m)));
+					merged.supers.push(...t.supers.filter(x => !merged.supers.includes(x)));
 				}
 			}
 		}
@@ -370,10 +381,15 @@ export class Project {
 			return this.fileByModule.get(mod) ?? this.fileByModule.get(`${mod}.__init__`);
 		}
 		if (mod.startsWith('.') || mod.startsWith('@/') || mod.startsWith('~/')) {
-			const base = mod.startsWith('.') ? path.resolve(path.dirname(facts.file), mod) : this.aliasPath(mod, facts.file);
-			for (const ext of JS_SUFFIXES) {
-				if (this.files.has(base + ext)) {
-					return base + ext;
+			// ESM and NodeNext import a TypeScript file by its emitted name (`./user.service.js` for user.service.ts): a file of that very
+			// name wins, else the name without the extension is read like any other specifier.
+			const stripped = mod.replace(/\.[mc]?jsx?$/, '');
+			for (const spec of stripped === mod ? [mod] : [mod, stripped]) {
+				const base = spec.startsWith('.') ? path.resolve(path.dirname(facts.file), spec) : this.aliasPath(spec, facts.file);
+				for (const ext of JS_SUFFIXES) {
+					if (this.files.has(base + ext)) {
+						return base + ext;
+					}
 				}
 			}
 		}
@@ -846,7 +862,11 @@ export class Project {
 			for (const t of f.types) {
 				const anns = new Set(t.annotations.map(a => a.name));
 				const methods = f.funcs.filter(fn => fn.owner === t.name);
-				const classRoute = t.annotations.find(a => a.name === 'RequestMapping' || a.name === 'Path' || a.name === 'Controller' || a.name === 'Route')?.value;
+				// The class's route prefix. In Java `@Controller("x")` names a bean, never a path, so only the mapping annotations count and
+				// whichever of them carries a value wins over a bare one above it; in NestJS `@Controller('users')` is the prefix.
+				const classRoute = f.lang === 'java'
+					? ['RequestMapping', 'Path', 'Route'].map(n => t.annotations.find(a => a.name === n && a.value !== undefined)?.value).find(v => v !== undefined)
+					: t.annotations.find(a => a.name === 'Controller' || a.name === 'Route' || a.name === 'RequestMapping' || a.name === 'Path')?.value;
 				if (f.lang === 'java') {
 					const spring = anns.has('RestController') || anns.has('Controller');
 					const jaxrs = anns.has('Path');
@@ -1777,7 +1797,8 @@ export class Project {
 			params: e.fn.paramInfo?.length ? e.fn.paramInfo.map(p => ({ name: p.name, typeText: p.typeText, anns: p.anns })) : Object.entries(e.fn.params).map(([name, typeText]) => ({ name, typeText, anns: [] })),
 			returns: e.fn.returns,
 		}));
-		return { files: [...this.files.values()].map(f => ({ ...f, funcs: f.funcs.map(slim) })), calls: [...counts.values()], entries };
+		// A Go or Rust type is sent merged with the methods and impls other files of its package add to it (see `mergeStubTypes`).
+		return { files: [...this.files.values()].map(f => ({ ...f, types: f.types.map(t => t.stub ? t : this.canon.get(t) ?? t), funcs: f.funcs.map(slim) })), calls: [...counts.values()], entries };
 	}
 
 	/** Every schema the readers found, columns and relations included: what a generated ER board is drawn from. Sorted by table. */

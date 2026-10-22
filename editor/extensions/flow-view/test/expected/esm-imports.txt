@@ -1,0 +1,3 @@
+GET /cats/:id     CatsController.findOne
+  call: CatsService.find [method]
+    call: audit [method]

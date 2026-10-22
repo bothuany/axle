@@ -167,7 +167,7 @@ function sequence(rest: Line[]): ImportResult {
 		}
 	};
 	// Open boxes, innermost last: the group id of an alt/opt/loop, or undefined for a block that is read through (`rect`, `par`).
-	const open: { id?: string; kind: string }[] = [];
+	const open: { id?: string; kind: string; alt?: string }[] = [];
 	const current = () => [...open].reverse().find(f => f.id)?.id;
 	let order = 0;
 	let frames = 0;
@@ -189,14 +189,16 @@ function sequence(rest: Line[]): ImportResult {
 			open.push({ id, kind: m[1] });
 		} else if ((m = /^else\b\s*(.*)$/.exec(text))) {
 			const top = open[open.length - 1];
-			if (!top?.id || top.kind !== 'alt') {
+			if (!top?.id || (top.kind !== 'alt' && top.kind !== 'alt-else')) {
 				problems.add(no, '`else` outside an `alt` block.');
 				continue;
 			}
-			// The else branch is a group of the same kind whose parent is the alt, and it replaces the alt as the current box.
+			// The else branch is a group of the same kind whose parent is the alt, and it replaces the alt (or the branch before it) as the
+			// current box. Every branch hangs off the alt itself, so a third branch is a sibling of the second, not nested in it.
+			const alt = top.alt ?? top.id;
 			const id = `f${++frames}`;
-			groups.push({ id, label: m[1] || 'else', kind: 'alt', parent: top.id });
-			open[open.length - 1] = { id, kind: 'alt-else' };
+			groups.push({ id, label: m[1] || 'else', kind: 'alt', parent: alt });
+			open[open.length - 1] = { id, kind: 'alt-else', alt };
 		} else if ((m = /^(par|and|critical|option|break|rect)\b/.exec(text))) {
 			if (m[1] === 'and' || m[1] === 'option') {
 				continue;

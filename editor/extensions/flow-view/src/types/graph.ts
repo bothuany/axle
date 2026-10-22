@@ -103,6 +103,8 @@ const PY_SKIP_SUPERS = new Set(['object', 'ABC', 'Protocol', 'Generic', 'Excepti
 const norm = (p: string) => p.replace(/\\/g, '/');
 const stripExt = (p: string) => p.replace(/\.(d\.)?[mc]?[jt]sx?$/, '');
 const dirOf = (p: string) => path.posix.dirname(norm(p));
+/** A return type as written, without the `->` (Python) or `:` (TypeScript) before it and with its whitespace folded. */
+const returnText = (returns: string | undefined) => returns?.replace(/^\s*(->|:)\s*/, '').replace(/\s+/g, ' ').trim() || undefined;
 
 function visibilityOf(v: string | undefined): Visibility {
 	switch (v) {
@@ -207,7 +209,7 @@ function polyRaw(f: FileFacts, t: TypeFact, lang: TypeLang, mod: { name: string;
 			? fn.paramInfo.map(p => ({ name: p.name, type: p.typeText, anns: p.anns }))
 			: Object.entries(fn.params).map(([name, type]) => ({ name, type, anns: [] }));
 		raw.methods.push({
-			name: isCtor ? t.name : fn.name, params, returns: fn.returns?.replace(/^\s*(->|:)\s*/, '').replace(/\s+/g, ' ').trim() || undefined,
+			name: isCtor ? t.name : fn.name, params, returns: returnText(fn.returns),
 			visibility: fn.visibility ?? (fn.isPublic ? '+' : '-'), isStatic: fn.isStatic, isAbstract: !!fn.isAbstract, isCtor,
 			isAccessor: fn.isAccessor ?? (isAccessorName(fn.name) && fn.calls.length === 0 && fn.endLine - fn.line <= 4),
 			line: fn.line, endLine: fn.endLine, anns: fn.annotations.map(a => a.name),
@@ -290,13 +292,14 @@ function makeResolver(raws: Raw[]): Resolver {
 		}
 		if (from.lang === 'js') {
 			if (mod.startsWith('.')) {
-				const target = path.posix.normalize(`${dirOf(from.file)}/${mod}`);
+				// ESM and NodeNext import a TypeScript file by its emitted name (`./user.service.js`): the extension says nothing about the source file.
+				const target = stripExt(path.posix.normalize(`${dirOf(from.file)}/${mod}`));
 				const cf = stripExt(norm(cand.file));
 				return cf === target || cf === `${target}/index` ? 90 : -1;
 			}
 			// An alias path (`@/users/dto`) points into the workspace; a package name does not.
 			if (/^(@\/|~\/|src\/|\$lib\/|#)/.test(mod)) {
-				return stripExt(norm(cand.file)).endsWith(mod.replace(/^(@\/|~\/|src\/|\$lib\/|#)/, '/')) ? 90 : 0;
+				return stripExt(norm(cand.file)).endsWith(stripExt(mod.replace(/^(@\/|~\/|src\/|\$lib\/|#)/, '/'))) ? 90 : 0;
 			}
 			return -1;
 		}
@@ -528,7 +531,7 @@ export function buildTypeGraph(src: TypeSources): TypeGraph {
 			const owner = fn.owner ? ownerOf.get(`${f.file}|${fn.owner}`) : undefined;
 			const from = owner ?? ctx!;
 			const ps = fn.paramInfo?.length ? fn.paramInfo.map(p => ({ name: p.name, type: p.typeText })) : Object.entries(fn.params).map(([name, type]) => ({ name, type }));
-			const returns = fn.returns?.replace(/^s*(->|:)s*/, '').replace(/s+/g, ' ').trim();
+			const returns = returnText(fn.returns);
 			pushSig(funcs, f.file, fn.line, fn.endLine, fn.name, fn.owner, ps.map(p => ({ ...p, rs: resolveText(resolve, from, p.type) })), returns ? { type: returns, rs: resolveText(resolve, from, returns) } : undefined);
 		}
 	}
