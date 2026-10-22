@@ -1,8 +1,10 @@
-// Writes the film's HyperFrames projects from one scene spec: the 16:9 launch film, its 1:1 and 9:16 cuts and
-// the silent 15 s loop. Every picture is a capture of the app (capture/film.mjs, workbench-driver.mjs); this
-// file only frames them (the camera), rings what the voice names, sets type and captions, and places the mix.
-//   node build.mjs <shots dir>      reads <shots>/capture, <shots>/wb, <shots>/vo, <shots>/audio/mix.wav
-// and writes <shots>/build/<variant>/ (index.html + assets), ready for `hyperframes render`.
+// Writes the film's HyperFrames projects from one scene spec: the 16:9 launch film, its 1:1 and 9:16 cuts and the
+// silent 15 s loop. Every picture is a capture of the editor in web mode (capture/workbench-film.mjs) or the dock page
+// (capture/agents-live.mjs); this file only frames them (the camera), rings what the voice names, sets type and
+// captions, and places the mix.
+//   node build.mjs <shots dir> [variants]
+// reads <shots>/wb (the 3840x2160 window stills), <shots>/capture/dock-live.mp4, <shots>/vo, <shots>/audio/mix.wav and
+// writes <shots>/build/<variant>/ (index.html + assets), ready for `hyperframes render`.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,160 +14,115 @@ const film = join(dirname(fileURLToPath(import.meta.url)), '..')
 const shots = process.argv[2]
 const brand = JSON.parse(readFileSync(join(film, 'brand.json'), 'utf8'))
 const script = JSON.parse(readFileSync(join(film, 'vo', 'script.json'), 'utf8'))
-const line = id => script.lines.find(l => l.id === id).text.replace('{spokenName}', brand.spokenName)
-const { words, at, voEnd } = timing(shots)
+const line = id => script.lines.find(l => l.id === id).text.replace('{productName}', brand.productName)
+const { at, voEnd } = timing(shots)
 
-// Image sources and their pixel sizes.
-const IMG = {
-	changes: ['capture/changes-tall.png', 3840, 4800],
-	order: ['capture/order-after.png', 3840, 2400],
-	seq: ['wb/board-seq-clean.png', 3840, 2160],
-	er: ['wb/board-er.png', 3840, 2160],
-	home: ['wb/home.png', 3840, 2160],
-	dockWorking: ['capture/agents/dock-1-working-2.png', 1017, 1203],
-	dockNeeds: ['capture/agents/dock-2-needs-you.png', 1017, 1203],
-	islandWorking: ['capture/agents/island-1-working-2.png', 996, 165],
-	islandNeeds: ['capture/agents/island-2-needs-you.png', 996, 165],
-	tour: ['capture/tour.mp4', 1920, 1080],
-	// The dock and island pages recorded live on the site's Try page (agents-live.mjs): three agents, the avatars animate;
-	// the page's own switch goes to pixel pets at 9.47 s and its "Allow" answers Codex at 13.42 s.
-	dockLive: ['capture/dock-live.mp4', 760, 1072],
-	// The top of the same take (Codex waiting, Claude done) for the hook; a separate file, since two clips of one file in
-	// a film get their seeks mixed up when rendered.
-	dockLiveHook: ['capture/dock-live-hook.mp4', 760, 560],
-	islandLive: ['capture/island-live.mp4', 720, 80],
-	// The same take at 7x zoom on the dock's first row, so the pixel pet is drawn large, not upscaled.
-	petsClose: ['capture/pets-close.mp4', 1920, 1080],
-	skeleton: ['wb/skeleton.png', 3840, 2160],
-	skeletonMatched: ['wb/skeleton-2.png', 3840, 2160],
-	logo: ['icon.png', 1024, 1024],
-}
+// Every still is the same window at 2x: 3840x2160 image px = 1920x1080 CSS px.
+const IW = 3840, IH = 2160
+const STILLS = ['A1-editor', 'A2-extensions', 'A3-themes', 'A4-keys', 'B1-endpoints', 'B2-flow', 'B3-flow-across', 'C1-commit', 'C2-pick', 'C3-changes', 'C4-place', 'D-base', 'E-harness']
+// The dock page recorded live with its scripted session (capture/agents-live.mjs): 760x1072 px at 2x, so 380 CSS px
+// wide, the width of the dock in the window's right side bar. It is laid exactly over that dock (image px below).
+const DOCK = { src: 'capture/dock-live.mp4', x: 3084, y: 200, w: 760, h: 1072, bg: '#111111', pane: [3082, 140, 838, 1972] }
 
 const FORMATS = {
-	film: { w: 1920, h: 1080, duration: 80 },
-	square: { w: 1080, h: 1080, duration: 80 },
-	vertical: { w: 1080, h: 1920, duration: 80 },
+	film: { w: 1920, h: 1080, duration: 62 },
+	square: { w: 1080, h: 1080, duration: 62 },
+	vertical: { w: 1080, h: 1920, duration: 62 },
 	loop: { w: 1920, h: 1080, duration: 15, silent: true },
 }
 
-// A camera key: the image region (fractions x0, y0, x1, y1) that must fill the frame's picture area.
-// Per-format overrides (`square`, `vertical`) frame the same moment for a narrower frame.
+// A camera key: the region of the window (fractions x0, y0, x1, y1; may reach past the window to show the stage)
+// that must fit the frame's picture area. `focus` is the point the narrow cuts (1:1, 9:16) centre on, and `zoom` how
+// much tighter they frame than the wide one (a full-window rect would leave the text unreadable in 9:16).
 const key = (t, rect, more = {}) => ({ t, rect, ...more })
+// The whole window on the stage at `k` of the picture width. The film's picture area is 1920 x 907 (the band below
+// holds the captions), which is 0.84 of the window's height per unit of width.
+const whole = (k = 0.84) => { const w = 1 / k, h = 0.84 / k; return [0.5 - w / 2, 0.5 - h / 2, 0.5 + w / 2, 0.5 + h / 2] }
 
-function shots16(f) {
+function shotList() {
 	const s = []
-	// 01 Hook: the dock's real row turns amber while the statement lands.
-	// The live dock: Codex waits for an approval, Claude Code is done.
-	s.push({ id: 's01', video: 'dockLiveHook', start: 0, dur: 4.2, mediaStart: 2, place: dockPlace(f) })
-	// 03 The turn: the change set, from its root down through the changed cards.
-	s.push({ id: 's03', img: 'changes', start: 12, dur: 10, fadeIn: 0.5, keys: [
-		key(0, [0, 0, 0.56, 0.14], { square: [0, 0, 0.34, 0.12], vertical: [0, 0, 0.3, 0.16] }),
-		key(3.4, [0, 0, 0.56, 0.14], { square: [0, 0, 0.34, 0.12], vertical: [0, 0, 0.3, 0.16] }),
-		key(6.2, [0.16, 0.25, 0.64, 0.355], { square: [0.16, 0.25, 0.47, 0.355], vertical: [0.16, 0.25, 0.42, 0.37] }),
-		key(10, [0.36, 0.835, 0.9, 0.935], { square: [0.36, 0.84, 0.69, 0.93], vertical: [0.36, 0.84, 0.62, 0.93] }),
+	// 01 The editor: the whole window, a slow push.
+	s.push({ id: 's01', img: 'A1-editor', start: 0, dur: 5, keys: [key(0, whole(0.8), { focus: [0.3, 0.4] }), key(5, whole(0.86), { focus: [0.3, 0.4] })] })
+	// 02 What carries over: the side bar switches to Extensions (Open VSX), themes, then the Keyboard Shortcuts editor.
+	const side = [0, 0.02, 0.5, 0.58]
+	s.push({ id: 's02a', img: 'A2-extensions', start: 5, dur: 2.6, keys: [key(0, whole(0.86), { focus: [0.15, 0.4] }), key(1.4, side, { focus: [0.08, 0.3], zoom: 2 }), key(2.6, side, { focus: [0.08, 0.32], zoom: 2 })],
+		label: { text: 'Extensions from Open VSX', x: 330, y: 150, at: 5.9, dur: 3.3 } })
+	s.push({ id: 's02b', img: 'A3-themes', start: 7.6, dur: 1.8, keys: [key(0, side, { focus: [0.08, 0.32], zoom: 2 }), key(1.8, [0, 0.03, 0.48, 0.57], { focus: [0.08, 0.34], zoom: 2 })] })
+	s.push({ id: 's02c', img: 'A4-keys', start: 9.4, dur: 1.6, keys: [key(0, [0.15, 0.02, 0.85, 0.62], { focus: [0.45, 0.2] }), key(1.6, [0.16, 0.03, 0.82, 0.6], { focus: [0.45, 0.22] })] })
+	// 03 Open an endpoint: the picker on POST /orders, then the flow tab opens beside the code tab.
+	s.push({ id: 's03a', img: 'B1-endpoints', start: 11, dur: 1.4, keys: [key(0, [0.24, 0, 0.76, 0.48], { focus: [0.5, 0.2] }), key(1.4, [0.26, 0.01, 0.74, 0.46], { focus: [0.48, 0.21] })] })
+	s.push({ id: 's03b', img: 'B2-flow', start: 12.4, dur: 4.6, keys: [key(0, whole(0.86), { focus: [0.25, 0.4] }), key(1.2, whole(0.86), { focus: [0.25, 0.4] }), key(4.6, [0.17, 0.06, 0.8, 0.78], { focus: [0.33, 0.38], zoom: 1.5 })] })
+	// 04 Across services: the hops into billing (HTTP) and shipping (Kafka) expanded; rings on the labels as the voice names them.
+	const s4 = 17
+	const http = at('04', 'HTTP') - s4, kafka = at('04', 'Kafka') - s4
+	s.push({ id: 's04', img: 'B3-flow-across', start: s4, dur: 5, keys: [
+		key(0, [0.17, 0.28, 0.8, 0.78], { focus: [0.45, 0.45], zoom: 1.5 }),
+		key(Math.max(0.6, http - 0.5), [0.42, 0.44, 0.8, 0.66], { focus: [0.66, 0.57], zoom: 1.6 }),
+		key(Math.max(1.6, kafka - 0.3), [0.42, 0.55, 0.8, 0.77], { focus: [0.61, 0.68], zoom: 1.6 }),
+		key(5, [0.43, 0.55, 0.79, 0.76], { focus: [0.62, 0.68], zoom: 1.6 }),
 	], rings: [
-		{ t: 1.4, dur: 2.2, rect: [0.014, 0.028, 0.133, 0.047] },
-		{ t: 3.0, dur: 1.6, rect: [0.18, 0.003, 0.252, 0.013] },
+		{ t: http, dur: 1.4, rect: [0.651, 0.563, 0.664, 0.581] },
+		{ t: kafka, dur: 1.6, rect: [0.599, 0.674, 0.613, 0.692] },
 	] })
-	// 04 Across services: the order flow after the change; rings on what the voice names.
-	const s4 = 22
-	s.push({ id: 's04', img: 'order', start: s4, dur: 8, keys: [
-		key(0, [0.31, 0.17, 0.92, 0.46], { square: [0.55, 0.22, 0.91, 0.45], vertical: [0.55, 0.2, 0.84, 0.46] }),
-		key(at('04', 'HTTP') - s4 - 0.9, [0.53, 0.6, 0.95, 0.82], { square: [0.6, 0.62, 0.94, 0.8], vertical: [0.62, 0.62, 0.94, 0.8] }),
-		key(at('04', 'Kafka') - s4 - 0.3, [0.53, 0.76, 0.95, 0.92], { square: [0.55, 0.79, 0.82, 0.9], vertical: [0.55, 0.79, 0.82, 0.9] }),
-		key(at('04', 'table') - s4 - 0.2, [0.53, 0.44, 0.8, 0.64], { square: [0.54, 0.45, 0.76, 0.63], vertical: [0.54, 0.45, 0.76, 0.63] }),
-		key(8, [0.53, 0.44, 0.8, 0.64], { square: [0.54, 0.45, 0.76, 0.63], vertical: [0.54, 0.45, 0.76, 0.63] }),
-	], rings: [
-		{ t: at('04', 'HTTP') - s4, dur: 1.3, rect: [0.873, 0.725, 0.932, 0.743] },
-		{ t: at('04', 'Kafka') - s4 + 0.3, dur: 1.2, rect: [0.743, 0.863, 0.797, 0.879] },
-		{ t: at('04', 'table') - s4 + 0.1, dur: 1.4, rect: [0.556, 0.455, 0.746, 0.62] },
-	] })
-	// 05 The tour: the canvas's own tour, recorded (the cursor and the camera are the app's).
-	s.push({ id: 's05', video: 'tour', start: 30, dur: 10, keys: [
-		key(0, [0.1, 0.08, 0.9, 0.92], { square: [0.22, 0.12, 0.78, 0.9], vertical: [0.27, 0.08, 0.6, 0.92] }),
-		key(10, [0.16, 0.14, 0.84, 0.86], { square: [0.25, 0.15, 0.75, 0.87], vertical: [0.29, 0.1, 0.58, 0.9] }),
-	] })
-	// 06 Agents: the dock beside a darkened canvas, the row turning amber on "needs you"; then the island drops.
-	const flip = at('06a', 'needs')
-	s.push({ id: 's06bg', img: 'changes', start: 40, dur: 14, dim: 0.72, keys: [key(0, [0, 0.24, 0.7, 0.38]), key(14, [0.02, 0.25, 0.66, 0.37])] })
-	// One live take: three agents; the camera pushes to the waiting one on "needs", the page switches to pixel pets at
-	// 47.9 s (9.47 s in the take), and Codex is allowed at 51.85 s and starts working.
-	const take = 9.47 - 7.9
-	s.push({ id: 's06a', video: 'dockLive', start: 40, dur: 14, mediaStart: take, place: agentsPlace(f), pushTo: 1.12, pushAt: flip - 40, origin: '50% 8%' })
-	// Close on the first row: the gyro, then the pixel bunny with its "needs you" mark (switch at 9.487 s in the close take).
-	s.push({ id: 's06p', video: 'petsClose', start: 47, dur: 3.2, mediaStart: 9.487 - 0.9, place: closePlace(f), pushTo: 1.06, pushAt: 0.8 })
-	s.push({ id: 's06c', video: 'islandLive', start: 50.2, dur: 3.8, mediaStart: take + 10.2, place: islandPlace(f), drop: true })
-	// 07 Diagrams: the sequence board of POST /orders, read from the index.
-	s.push({ id: 's07', img: 'seq', start: 54, dur: 8, keys: [
-		key(0, [0.02, 0.07, 0.98, 0.86], { square: [0.08, 0.15, 0.55, 0.65], vertical: [0.08, 0.15, 0.45, 0.85] }),
-		key(3.6, [0.08, 0.14, 0.6, 0.56], { square: [0.1, 0.17, 0.5, 0.6], vertical: [0.1, 0.17, 0.42, 0.8] }),
-		key(8, [0.4, 0.4, 0.96, 0.8], { square: [0.55, 0.45, 0.95, 0.8], vertical: [0.6, 0.45, 0.93, 0.85] }),
-	] })
-	// 08 Montage: three real views, a push-in each, cut on the downbeat.
-	// Skeleton first: the agent's design with the types still MISSING, then the developer's save turns one MATCHES.
-	const sk = [0.12, 0.4, 0.74, 0.7]
-	const skV = { square: [0.13, 0.43, 0.55, 0.68], vertical: [0.13, 0.43, 0.42, 0.68] }
-	s.push({ id: 's08a', img: 'skeleton', start: 62, dur: 2.4, keys: [key(0, sk, skV), key(2.4, [0.13, 0.41, 0.72, 0.69], skV)] })
-	s.push({ id: 's08b', img: 'skeletonMatched', start: 64.4, dur: 1.6, keys: [key(0, [0.13, 0.41, 0.72, 0.69], skV), key(1.6, [0.15, 0.42, 0.7, 0.68], skV)] })
-	s.push({ id: 's08c', img: 'home', start: 66, dur: 2, crop: [0.585, 0.44, 0.75, 0.535], keys: [key(0, [0.58, 0.435, 0.755, 0.54]), key(2, [0.585, 0.445, 0.72, 0.53])] })
-	// 09 Held frame, 10 lockup: the change set again, quiet, then darkened behind the mark.
-	s.push({ id: 's09', img: 'changes', start: 68, dur: 4, dim: 0.25, keys: [key(0, [0, 0, 0.62, 0.36], { square: [0, 0, 0.4, 0.36], vertical: [0, 0, 0.36, 0.42] })] })
-	s.push({ id: 's10', img: 'changes', start: 72, dur: 8, dim: 0.25, dimTo: [0.86, 72.6, 1.4], keys: [key(0, [0, 0, 0.62, 0.36], { square: [0, 0, 0.4, 0.36], vertical: [0, 0, 0.36, 0.42] }), key(8, [0.03, 0.04, 0.6, 0.36], { square: [0.02, 0.03, 0.38, 0.35], vertical: [0.02, 0.03, 0.34, 0.41] })] })
+	// 05 An agent changes the code: the commit in the terminal, "Show Changes in Flow", the change set, then POST /orders.
+	s.push({ id: 's05a', img: 'C1-commit', start: 22, dur: 3.4, keys: [key(0, [0.15, 0.36, 0.8, 0.9], { focus: [0.3, 0.8], zoom: 1.6 }), key(3.4, [0.16, 0.5, 0.62, 0.88], { focus: [0.3, 0.8], zoom: 1.6 })] })
+	s.push({ id: 's05b', img: 'C2-pick', start: 25.4, dur: 1, keys: [key(0, [0.3, 0, 0.7, 0.36], { focus: [0.48, 0.1] }), key(1, [0.31, 0, 0.69, 0.34], { focus: [0.48, 0.1] })] })
+	s.push({ id: 's05c', img: 'C3-changes', start: 26.4, dur: 3.2, keys: [key(0, [0.16, 0.02, 0.84, 0.5], { focus: [0.28, 0.12], zoom: 1.4 }), key(3.2, [0.16, 0.03, 0.68, 0.38], { focus: [0.28, 0.14], zoom: 1.4 })] })
+	s.push({ id: 's05d', img: 'C4-place', start: 29.6, dur: 4.4, keys: [key(0, [0.2, 0.12, 0.84, 0.6], { focus: [0.55, 0.36], zoom: 1.4 }), key(4.4, [0.42, 0.22, 0.8, 0.5], { focus: [0.56, 0.35], zoom: 1.4 })] })
+	// 06 Agents side by side: the dock in the right side bar comes alive (the dock page's take, laid over it); push in.
+	s.push({ id: 's06', img: 'D-base', start: 34, dur: 8, dock: { mediaStart: 3.0 }, keys: [key(0, whole(0.86), { focus: [0.88, 0.3] }), key(1.4, whole(0.86), { focus: [0.88, 0.3] }), key(4.4, [0.55, 0.02, 1.0, 0.62], { focus: [0.9, 0.3], zoom: 1.5 }), key(8, [0.6, 0.03, 1.0, 0.6], { focus: [0.9, 0.3], zoom: 1.5 })] })
+	// 07 The harness map in the side bar, next to CLAUDE.md.
+	s.push({ id: 's07', img: 'E-harness', start: 42, dur: 6, keys: [key(0, whole(0.86), { focus: [0.1, 0.35] }), key(1.0, [0, 0.03, 0.55, 0.5], { focus: [0.09, 0.3], zoom: 1.8 }), key(6, [0, 0.04, 0.5, 0.46], { focus: [0.09, 0.3], zoom: 1.8 })] })
+	// 08 The headline: the window again, quiet, pulling back. 09 End card: the window dims behind the lockup and drifts.
+	s.push({ id: 's08', img: 'B3-flow-across', start: 48, dur: 6, keys: [key(0, whole(0.82), { focus: [0.5, 0.45] }), key(6, whole(0.76), { focus: [0.5, 0.45] })] })
+	s.push({ id: 's09', img: 'A1-editor', start: 54, dur: 8, dim: 0, dimTo: [0.82, 54.2, 1.2], keys: [key(0, whole(0.76), { focus: [0.4, 0.4] }), key(8, whole(0.7), { focus: [0.4, 0.4] })] })
 	return s
 }
 
 function shotsLoop() {
-	const A = [0, 0, 0.56, 0.14]
 	return [
-		{ id: 'l1', img: 'changes', start: 0, dur: 5, keys: [key(0, A), key(1, A), key(5, [0.16, 0.25, 0.64, 0.355])] },
-		{ id: 'l2', video: 'tour', start: 5, dur: 5, mediaStart: 0.4, keys: [key(0, [0, 0, 1, 1]), key(5, [0.05, 0.05, 0.95, 0.95])] },
-		{ id: 'l3bg', img: 'changes', start: 10, dur: 3, dim: 0.72, keys: [key(0, [0, 0.24, 0.7, 0.38])] },
-		{ id: 'l3', video: 'dockLive', start: 10, dur: 3, mediaStart: 10.2, place: agentsPlace(FORMATS.loop) },
-		{ id: 'l4', img: 'changes', start: 13, dur: 2, keys: [key(0, [0.1, 0.12, 0.6, 0.25]), key(2, A)] },
+		{ id: 'l1', img: 'A1-editor', start: 0, dur: 3, keys: [key(0, whole(0.84)), key(3, whole(0.88))] },
+		{ id: 'l2', img: 'B3-flow-across', start: 3, dur: 4, keys: [key(0, whole(0.88)), key(4, [0.2, 0.3, 0.8, 0.78])] },
+		{ id: 'l3', img: 'C4-place', start: 7, dur: 4, keys: [key(0, [0.2, 0.12, 0.84, 0.6]), key(4, [0.4, 0.2, 0.82, 0.52])] },
+		{ id: 'l4', img: 'D-base', start: 11, dur: 2.5, dock: { mediaStart: 6.5 }, keys: [key(0, [0.5, 0.02, 1.0, 0.64]), key(2.5, [0.55, 0.02, 1.0, 0.62])] },
+		{ id: 'l5', img: 'A1-editor', start: 13.5, dur: 1.5, keys: [key(0, whole(0.86)), key(1.5, whole(0.84))] },
 	]
 }
 
-// Where a fixed (not camera-driven) image sits, per format, in frame pixels: x, y, width.
-function dockPlace(f) { return f.h > f.w ? { x: 140, y: 200, w: 800 } : f.w === f.h ? { x: 520, y: 90, w: 500 } : { x: 1160, y: 150, w: 640 } }
-function agentsPlace(f) { return f.h > f.w ? { x: 140, y: 300, w: 800 } : f.w === f.h ? { x: 290, y: 150, w: 500 } : { x: 1180, y: 150, w: 560 } }
-function closePlace(f) { return f.h > f.w ? { x: 0, y: 656, w: 1080 } : f.w === f.h ? { x: 0, y: 236, w: 1080 } : { x: 0, y: 0, w: 1920 } }
-function islandPlace(f) { return f.h > f.w ? { x: 90, y: 60, w: 900 } : f.w === f.h ? { x: 140, y: 30, w: 800 } : { x: 300, y: 34, w: 820 } }
+// The narrow cuts frame `focus` with a rect `zoom` times tighter (in width) than the wide rect, at the frame's aspect.
+function rectFor(k, f, variant) {
+	if (variant === 'film' || variant === 'loop') return k.rect
+	const [x0, y0, x1, y1] = k.rect
+	const area = { w: f.w, h: f.h * 0.84 }
+	const [cx, cy] = k.focus ?? [(x0 + x1) / 2, (y0 + y1) / 2]
+	// Width in window fractions: the wide rect's width over the zoom, but never wider than the window plus margin.
+	// A shot inside the window keeps the window filling the narrow frame top to bottom (no stage below it).
+	const inside = x0 >= 0 && y0 >= 0 && x1 <= 1 && y1 <= 1
+	const tall = (IW / IH) * (area.h / area.w)
+	const w = Math.min((x1 - x0) / (k.zoom ?? 1.3), inside ? 1 / tall : 1.08)
+	const h = w * tall
+	const nx = Math.min(Math.max(cx - w / 2, -0.04), 1.04 - w), ny = Math.min(Math.max(cy - h / 2, -0.04), Math.max(-0.04, 1.04 - h))
+	return [nx, ny, nx + w, ny + h]
+}
 
-// The camera transform that fits `rect` of an image (iw x ih) into the picture area of the frame.
-function fit(rect, iw, ih, f) {
-	const top = 0, bottom = f.silent ? f.h : f.h * 0.84
+// The camera transform that fits `rect` of the window into the picture area of the frame (top 84%, the captions below).
+function fit(rect, f) {
+	const bottom = f.silent ? f.h : f.h * 0.84
 	const [x0, y0, x1, y1] = rect
-	const rw = (x1 - x0) * iw, rh = (y1 - y0) * ih
-	const s = Math.min(f.w / rw, (bottom - top) / rh)
-	const cx = ((x0 + x1) / 2) * iw, cy = ((y0 + y1) / 2) * ih
-	// Never show past the capture's edge: clamp so the image always covers the frame.
+	const rw = (x1 - x0) * IW, rh = (y1 - y0) * IH
+	const s = Math.min(f.w / rw, bottom / rh)
+	const cx = ((x0 + x1) / 2) * IW, cy = ((y0 + y1) / 2) * IH
+	// Inside the window the image always covers the frame; a rect past the window's edge shows the stage around it.
+	const inside = x0 >= 0 && y0 >= 0 && x1 <= 1 && y1 <= 1
 	const clamp = (v, lo, hi) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)))
-	const x = clamp(f.w / 2 - s * cx, f.w - s * iw, 0)
-	const y = clamp((top + bottom) / 2 - s * cy, f.h - s * ih, 0)
+	let x = f.w / 2 - s * cx, y = bottom / 2 - s * cy
+	if (inside) { x = clamp(x, f.w - s * IW, 0); y = clamp(y, f.h - s * IH, 0) }
 	return { scale: +s.toFixed(5), x: +x.toFixed(2), y: +y.toFixed(2) }
 }
 
-const pick = (k, variant) => (variant === 'square' && k.square) || (variant === 'vertical' && k.vertical) || k.rect
-
-function text(variant, f) {
-	const t = []
-	const big = f.h > f.w ? 96 : f.w === f.h ? 84 : 110
-	// 01: the statement word by word, then "Where?" alone.
-	const hook = words('01a')
-	t.push({ id: 't01', start: 0.4, dur: 3.9, cls: 'stmt', style: hookStyle(f, big), words: line('01a').replace('fourteen', '14').split(' ').map((w, i) => [w, VO['01a'] + hook[Math.min(i, hook.length - 1)].start]) })
-	t.push({ id: 't01b', start: 4.3, dur: 1.7, cls: 'stmt', style: `${hookStyle(f, big)};color:var(--muted)`, text: 'Where?' })
-	// 02: the commit's real diff stat, line by line.
-	t.push({ id: 't02', start: 6, dur: 6, cls: 'diff', style: diffStyle(f), lines: readFileSync(join(shots, 'capture', 'diffstat.txt'), 'utf8').trimEnd().split('\n') })
-	// 09 and 10.
-	t.push({ id: 't09', start: 68.6, dur: 3.4, cls: 'stmt', style: heldStyle(f), text: 'See how your code runs.' })
-	return t
-}
-function hookStyle(f, big) { return f.h > f.w ? `left:90px;top:1180px;width:900px;font-size:${big}px` : f.w === f.h ? `left:70px;top:560px;width:900px;font-size:${big}px` : `left:120px;top:330px;width:960px;font-size:${big}px` }
-function diffStyle(f) { return f.h > f.w ? 'left:40px;top:300px;font-size:21px' : f.w === f.h ? 'left:40px;top:120px;font-size:21px' : 'left:150px;top:110px;font-size:31px' }
-function heldStyle(f) { return f.h > f.w ? 'left:90px;top:1300px;width:900px;font-size:92px' : f.w === f.h ? 'left:70px;top:740px;width:940px;font-size:72px' : 'left:120px;top:700px;font-size:84px' }
-
-function captions(f) {
-	return Object.keys(VO).filter(id => !['01a', '01b', '09', '10'].includes(id)).map(id => ({ id: `c${id}`, start: VO[id], dur: +(voEnd(id) - VO[id] + 0.35).toFixed(2), text: line(id) }))
+function captions() {
+	// Lines 08 and 09 are the headline and the end card, set as type, not as captions.
+	return Object.keys(VO).filter(id => !['08', '09'].includes(id)).map(id => ({ id: `c${id}`, start: VO[id], dur: +(voEnd(id) - VO[id] + 0.4).toFixed(2), text: line(id) }))
 }
 
 function build(variant) {
@@ -173,118 +130,98 @@ function build(variant) {
 	const out = join(shots, 'build', variant)
 	mkdirSync(join(out, 'assets', 'fonts'), { recursive: true })
 	const used = new Set()
-	const asset = name => { const [src] = IMG[name]; const file = src.split('/').pop(); used.add([src, file]); return `assets/${file}` }
-	const shotList = variant === 'loop' ? shotsLoop() : shots16(f)
+	const asset = name => { used.add(name); return `assets/${name}.jpg` }
 	const tl = []
 	let html = ''
-	for (const s of shotList) {
-		const [, iw, ih] = IMG[s.img ?? s.video]
-		if (s.video && s.place) {
-			// A live page recording placed in the frame (the dock, the island): sized by place, pushed or dropped in.
-			const p = s.place, h = Math.round(p.w * ih / iw)
-			html += `<video id="${s.id}" class="clip media placed" src="${asset(s.video)}" muted playsinline data-start="${s.start}" data-duration="${s.dur}" data-media-start="${s.mediaStart ?? 0}" data-track-index="2" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${h}px${s.origin ? `;transform-origin:${s.origin}` : ''}"></video>
-`
-			if (s.drop) tl.push(`tl.fromTo('#${s.id}', { y: -${h + p.y + 20} }, { y: 0, duration: 0.55, ease: 'power3.out' }, ${s.start})`)
-			if (s.pushTo) tl.push(`tl.fromTo('#${s.id}', { scale: 1 }, { scale: ${s.pushTo}, duration: ${(s.dur - s.pushAt).toFixed(2)}, ease: 'power2.inOut' }, ${s.start + s.pushAt})`)
-			continue
+	let dockUsed = false
+	for (const s of variant === 'loop' ? shotsLoop() : shotList()) {
+		const k0 = fit(rectFor(s.keys[0], f, variant), f)
+		const rings = (s.rings ?? []).map((r, i) => `<div class="ring" id="${s.id}-r${i}" style="left:${r.rect[0] * IW}px;top:${r.rect[1] * IH}px;width:${(r.rect[2] - r.rect[0]) * IW}px;height:${(r.rect[3] - r.rect[1]) * IH}px"></div>`).join('')
+		// The narrow cuts frame only the side bar, so the label sits over its header there.
+		const lp = s.label && (variant === "square" || variant === "vertical") ? { x: 150, y: 96 } : s.label
+		const label = s.label ? `<div class="label" id="${s.id}-label" style="left:${lp.x * 2}px;top:${lp.y * 2}px">${s.label.text}</div>` : ""
+		let dock = ''
+		if (s.dock) {
+			dockUsed = true
+			const [px, py, pw, ph] = DOCK.pane
+			dock = `<div class="pane" style="left:${px}px;top:${py}px;width:${pw}px;height:${ph}px;background:${DOCK.bg}"></div><video id="${s.id}-dock" class="clip" src="assets/dock-live.mp4" muted playsinline data-start="${s.start}" data-duration="${s.dur}" data-media-start="${s.dock.mediaStart}" data-track-index="2" style="position:absolute;left:${DOCK.x}px;top:${DOCK.y}px;width:${DOCK.w}px;height:${DOCK.h}px"></video>`
 		}
-		if (s.video) {
-			const k0 = fit(pick(s.keys[0], variant), iw, ih, f)
-			html += `<video id="${s.id}" class="clip media" src="${asset(s.video)}" muted playsinline data-start="${s.start}" data-duration="${s.dur}"${s.mediaStart ? ` data-media-start="${s.mediaStart}"` : ''} data-track-index="1" style="width:${iw}px;height:${ih}px"></video>\n`
-			tl.push(`tl.fromTo('#${s.id}', ${JSON.stringify(k0)}, { ...${JSON.stringify(fit(pick(s.keys.at(-1), variant), iw, ih, f))}, duration: ${s.dur}, ease: 'none' }, ${s.start})`)
-			continue
-		}
-		const crop = s.crop ? `clip-path:inset(${(s.crop[1] * 100).toFixed(2)}% ${((1 - s.crop[2]) * 100).toFixed(2)}% ${((1 - s.crop[3]) * 100).toFixed(2)}% ${(s.crop[0] * 100).toFixed(2)}%);` : ''
-		const rings = (s.rings ?? []).map((r, i) => `<div class="ring" id="${s.id}-r${i}" style="left:${r.rect[0] * iw}px;top:${r.rect[1] * ih}px;width:${(r.rect[2] - r.rect[0]) * iw}px;height:${(r.rect[3] - r.rect[1]) * ih}px"></div>`).join('')
-		if (s.place) {
-			const p = s.place, sc = p.w / iw
-			html += `<div id="${s.id}" class="clip" data-start="${s.start}" data-duration="${s.dur}" data-track-index="2"><div class="cam" id="${s.id}-cam" style="left:${p.x}px;top:${p.y}px;width:${iw}px;height:${ih}px;transform-origin:0 0"><img src="${asset(s.img)}" style="width:${iw}px;height:${ih}px;${crop}" alt=""></div></div>\n`
-			if (s.drop) tl.push(`tl.fromTo('#${s.id}-cam', { scale: ${sc}, y: -${ih * sc + 40} }, { scale: ${sc}, y: 0, duration: 0.55, ease: 'power3.out' }, ${s.start})`)
-			else if (s.pushTo) tl.push(`tl.fromTo('#${s.id}-cam', { scale: ${sc} }, { scale: ${(sc * s.pushTo).toFixed(5)}, duration: ${(s.dur - s.pushAt).toFixed(2)}, ease: 'power2.inOut' }, ${s.start + s.pushAt})`)
-			else tl.push(`tl.set('#${s.id}-cam', { scale: ${sc} }, ${s.start})`)
-			continue
-		}
-		html += `<div id="${s.id}" class="clip" data-start="${s.start}" data-duration="${s.dur}" data-track-index="1"><div class="cam" id="${s.id}-cam" style="width:${iw}px;height:${ih}px"><img src="${asset(s.img)}" style="width:${iw}px;height:${ih}px;${crop}" alt="">${rings}</div>${s.dim ? `<div class="dim" id="${s.id}-dim" style="opacity:${s.dim}"></div>` : ''}${s.fadeIn ? `<div class="dim" id="${s.id}-fade"></div>` : ''}</div>\n`
-		const ks = s.keys
-		tl.push(`tl.set('#${s.id}-cam', ${JSON.stringify(fit(pick(ks[0], variant), iw, ih, f))}, ${s.start})`)
-		for (let i = 1; i < ks.length; i++) {
-			const d = ks[i].t - ks[i - 1].t
-			tl.push(`tl.to('#${s.id}-cam', { ...${JSON.stringify(fit(pick(ks[i], variant), iw, ih, f))}, duration: ${d.toFixed(3)}, ease: 'power2.inOut' }, ${(s.start + ks[i - 1].t).toFixed(3)})`)
+		html += `<div id="${s.id}" class="clip" data-start="${s.start}" data-duration="${s.dur}" data-track-index="1"><div class="cam" id="${s.id}-cam" style="width:${IW}px;height:${IH}px"><img src="${asset(s.img)}" alt="">${dock}${rings}${label}</div>${s.dim !== undefined ? `<div class="dim" id="${s.id}-dim" style="opacity:${s.dim}"></div>` : ''}</div>\n`
+		tl.push(`tl.set('#${s.id}-cam', ${JSON.stringify(k0)}, ${s.start})`)
+		for (let i = 1; i < s.keys.length; i++) {
+			const d = s.keys[i].t - s.keys[i - 1].t
+			if (d <= 0) continue
+			tl.push(`tl.to('#${s.id}-cam', { ...${JSON.stringify(fit(rectFor(s.keys[i], f, variant), f))}, duration: ${d.toFixed(3)}, ease: 'power2.inOut' }, ${(s.start + s.keys[i - 1].t).toFixed(3)})`)
 		}
 		if (s.dimTo) tl.push(`tl.to('#${s.id}-dim', { opacity: ${s.dimTo[0]}, duration: ${s.dimTo[2]}, ease: 'power2.inOut' }, ${s.dimTo[1]})`)
-		if (s.fadeIn) tl.push(`tl.fromTo('#${s.id}-fade', { opacity: 1 }, { opacity: 0, duration: ${s.fadeIn}, ease: 'power1.out' }, ${s.start})`)
 		for (const [i, r] of (s.rings ?? []).entries()) {
 			tl.push(`tl.fromTo('#${s.id}-r${i}', { opacity: 0 }, { opacity: 1, duration: 0.25, ease: 'power2.out' }, ${(s.start + r.t).toFixed(3)})`)
 			tl.push(`tl.to('#${s.id}-r${i}', { opacity: 0, duration: 0.3, ease: 'power2.in' }, ${(s.start + r.t + r.dur).toFixed(3)})`)
 		}
-	}
-	// The type: statements, the diff, and (film variants) the lockup and the captions.
-	if (variant !== 'loop') {
-		for (const t of text(variant, f)) {
-			if (t.words) {
-				html += `<div id="${t.id}" class="clip" data-start="${t.start}" data-duration="${t.dur}" data-track-index="3"><div class="${t.cls}" style="${t.style}">${t.words.map(([w], i) => `<span class="w" id="${t.id}-w${i}">${w}</span>`).join(' ')}</div></div>\n`
-				t.words.forEach(([, time], i) => tl.push(`tl.fromTo('#${t.id}-w${i}', { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power3.out' }, ${(time - 0.05).toFixed(3)})`))
-				tl.push(`tl.to('#${t.id} .${t.cls}', { y: -60, opacity: 0, duration: 0.35, ease: 'power2.in' }, ${(t.start + t.dur - 0.35).toFixed(3)})`)
-			} else if (t.lines) {
-				html += `<div id="${t.id}" class="clip" data-start="${t.start}" data-duration="${t.dur}" data-track-index="3"><div class="${t.cls}" id="${t.id}-list" style="${t.style}">${t.lines.map((l, i) => `<div class="dl" id="${t.id}-l${i}">${diffLine(l)}</div>`).join('')}</div></div>\n`
-				t.lines.forEach((_, i) => tl.push(`tl.fromTo('#${t.id}-l${i}', { opacity: 0 }, { opacity: 1, duration: 0.12, ease: 'none' }, ${(t.start + 0.15 + i * 0.22).toFixed(3)})`))
-				tl.push(`tl.fromTo('#${t.id}-list', { y: 0, filter: 'blur(0px)' }, { y: -40, filter: 'blur(0px)', duration: ${t.dur - 1.6}, ease: 'none' }, ${t.start})`)
-				tl.push(`tl.to('#${t.id}-list', { y: -70, filter: 'blur(10px)', opacity: 0.25, duration: 1.4, ease: 'power2.in' }, ${(t.start + t.dur - 1.6).toFixed(3)})`)
-			} else {
-				html += `<div id="${t.id}" class="clip" data-start="${t.start}" data-duration="${t.dur}" data-track-index="3"><div class="${t.cls}" id="${t.id}-in" style="${t.style}">${t.text}</div></div>\n`
-				tl.push(`tl.fromTo('#${t.id}-in', { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, ${t.start})`)
-			}
+		if (s.label) {
+			tl.push(`tl.fromTo('#${s.id}-label', { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' }, ${s.label.at})`)
 		}
+	}
+	if (variant !== 'loop') {
+		html += headline(f, tl)
 		html += lockup(f, tl)
-		html += `<div id="captions" class="clip" data-start="0" data-duration="${f.duration}" data-track-index="8" data-track-kind="captions">${captions(f).map(c => `<div class="cap clip" id="${c.id}" data-start="${c.start}" data-duration="${c.dur}" data-track-index="9"><span>${c.text}</span></div>`).join('')}</div>\n`
+		html += `<div id="captions" class="clip" data-start="0" data-duration="${f.duration}" data-track-index="8" data-track-kind="captions">${captions().map(c => `<div class="cap clip" id="${c.id}" data-start="${c.start}" data-duration="${c.dur}" data-track-index="9"><span>${c.text}</span></div>`).join('')}</div>\n`
 		html += `<audio id="mix" src="assets/mix.wav" data-start="0" data-duration="${f.duration}" data-track-index="10"></audio>\n`
 	} else {
-		const L = [['See what your agent changed.', 0.5, 4.2], ['On how your code runs.', 5.4, 4.2], [brand.productName, 10.3, 2.4]]
-		L.forEach(([words_, start, dur], i) => {
-			html += `<div id="lt${i}" class="clip" data-start="${start}" data-duration="${dur}" data-track-index="3"><div class="stmt loopt" id="lt${i}-in">${i === 2 ? `<span data-var-text="productName">${words_}</span>` : words_}</div></div>\n`
-			tl.push(`tl.fromTo('#lt${i}-in', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power3.out' }, ${start})`)
-			tl.push(`tl.to('#lt${i}-in', { opacity: 0, duration: 0.35, ease: 'power2.in' }, ${(start + dur - 0.4).toFixed(3)})`)
+		const L = [['A code editor, built on VS Code.', 0.3, 2.6], ['That shows how your code runs.', 3.3, 3.5], ["And where your agent's change lands.", 7.3, 3.5], [brand.productName, 13.6, 1.3]]
+		L.forEach(([words, start, dur], i) => {
+			html += `<div id="lt${i}" class="clip" data-start="${start}" data-duration="${dur}" data-track-index="3"><div class="loopt" id="lt${i}-in">${i === 3 ? `<span data-var-text="productName">${words}</span>` : words}</div></div>\n`
+			tl.push(`tl.fromTo('#lt${i}-in', { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' }, ${start})`)
+			if (i < 3) tl.push(`tl.to('#lt${i}-in', { opacity: 0, duration: 0.3, ease: 'power2.in' }, ${(start + dur - 0.35).toFixed(3)})`)
 		})
 	}
-	for (const [src, file] of used) copyFileSync(join(shots, src), join(out, 'assets', file))
+	for (const name of used) copyFileSync(join(shots, 'wb', `${name}.jpg`), join(out, 'assets', `${name}.jpg`))
+	if (dockUsed) copyFileSync(join(shots, DOCK.src), join(out, 'assets', 'dock-live.mp4'))
 	copyFileSync(join(film, '..', '..', 'editor', 'branding', 'icon.png'), join(out, 'assets', 'icon.png'))
-	for (const font of ['instrument-sans-latin-500-normal', 'instrument-sans-latin-600-normal', 'instrument-sans-latin-700-normal', 'jetbrains-mono-latin-400-normal']) copyFileSync(join(film, 'assets', 'fonts', `${font}.woff2`), join(out, 'assets', 'fonts', `${font}.woff2`))
+	for (const font of ['archivo-latin-standard-normal', 'jetbrains-mono-latin-400-normal']) copyFileSync(join(film, 'assets', 'fonts', `${font}.woff2`), join(out, 'assets', 'fonts', `${font}.woff2`))
 	if (!f.silent && existsSync(join(shots, 'audio', 'mix.wav'))) copyFileSync(join(shots, 'audio', 'mix.wav'), join(out, 'assets', 'mix.wav'))
 	writeFileSync(join(out, 'index.html'), page(f, html, tl))
 	writeFileSync(join(out, 'hyperframes.json'), JSON.stringify({ paths: { assets: 'assets' }, media: { autoProxy: true } }, null, 2))
 	console.log('wrote', out)
 }
 
-function diffLine(l) {
-	const esc = l.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-	return esc.replace(/(\++)(-*)\s*$/, (_, p, m) => `<b class="add">${p}</b><b class="del">${m}</b>`)
+function headline(f, tl) {
+	const v = f.h > f.w, sq = f.w === f.h
+	const size = v ? 74 : sq ? 62 : 64
+	tl.push(`tl.fromTo('#hl-in', { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out' }, 48.6)`)
+	tl.push(`tl.to('#hl-in', { opacity: 0, duration: 0.4, ease: 'power2.in' }, 53.7)`)
+	return `<div id="hl" class="clip" data-start="48.4" data-duration="5.7" data-track-index="3"><div class="stmt" id="hl-in" style="bottom:${Math.round(f.h * (v ? 0.06 : 0.04))}px;font-size:${size}px;padding:0 ${v ? 70 : 40}px" data-var-text="headline">${brand.headline}</div></div>\n`
 }
 
 function lockup(f, tl) {
 	const v = f.h > f.w, sq = f.w === f.h
-	const logo = v ? 260 : sq ? 200 : 180
-	const y0 = v ? 620 : sq ? 250 : 230
-	const name = v ? 140 : sq ? 112 : 104
-	tl.push(`tl.fromTo('#lk-logo', { opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1, duration: 0.6, ease: 'power3.out' }, 74.0)`)
-	tl.push(`tl.fromTo('#lk-name', { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 74.25)`)
-	tl.push(`tl.fromTo('#lk-tag', { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.out' }, 74.7)`)
-	tl.push(`tl.fromTo('#lk-cta', { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 75.4)`)
-	return `<div id="lockup" class="clip" data-start="73.6" data-duration="6.4" data-track-index="4"><div class="lk" style="top:${y0}px">
+	const logo = v ? 220 : sq ? 170 : 150
+	const top = v ? 560 : sq ? 220 : 190
+	const name = v ? 132 : sq ? 108 : 100
+	tl.push(`tl.fromTo('#lk-logo', { opacity: 0, scale: 0.94 }, { opacity: 1, scale: 1, duration: 0.6, ease: 'power3.out' }, 54.2)`)
+	tl.push(`tl.fromTo('#lk-name', { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 54.45)`)
+	tl.push(`tl.fromTo('#lk-tag', { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.out' }, 54.9)`)
+	tl.push(`tl.fromTo('#lk-cta', { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 55.6)`)
+	tl.push(`tl.fromTo('#lk-free', { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.out' }, ${VO['09']})`)
+	return `<div id="lockup" class="clip" data-start="54" data-duration="8" data-track-index="4"><div class="lk" style="top:${top}px;padding:0 60px">
 <img id="lk-logo" src="assets/icon.png" style="width:${logo}px;height:${logo}px" alt="">
-<div id="lk-name" class="stmt" style="font-size:${name}px;position:static" data-var-text="productName">${brand.productName}</div>
-<div id="lk-tag" class="tag" data-var-text="tagline">${brand.tagline} Free and open source.</div>
-<div id="lk-cta"><div class="dl-line" data-var-text="download">${brand.download}</div><div class="url" data-var-text="repoUrl">${brand.repoUrl}</div></div>
+<div id="lk-name" class="name" style="font-size:${name}px" data-var-text="productName">${brand.productName}</div>
+<div id="lk-tag" class="tag" data-var-text="headline">${brand.headline}</div>
+<div id="lk-cta"><div class="dl-line" data-var-text="download">${brand.download}</div><div class="url" data-var-text="urls">${brand.siteUrl} · ${brand.repoUrl}</div></div>
+<div id="lk-free" class="free" data-var-text="freeLine">${brand.freeLine}</div>
 </div></div>\n`
 }
 
 function page(f, body, tl) {
 	const vars = [
 		{ id: 'productName', type: 'string', label: 'Product name', default: brand.productName },
-		{ id: 'tagline', type: 'string', label: 'Tagline', default: `${brand.tagline} Free and open source.` },
+		{ id: 'headline', type: 'string', label: 'Headline', default: brand.headline },
 		{ id: 'download', type: 'string', label: 'Download line', default: brand.download },
-		{ id: 'repoUrl', type: 'string', label: 'Repository URL', default: brand.repoUrl },
+		{ id: 'urls', type: 'string', label: 'Site and repository', default: `${brand.siteUrl} · ${brand.repoUrl}` },
+		{ id: 'freeLine', type: 'string', label: 'Licence line', default: brand.freeLine },
 	]
-	const capSize = f.h > f.w ? 46 : f.w === f.h ? 40 : 44
+	const v = f.h > f.w
+	const capSize = v ? 46 : f.w === f.h ? 40 : 42
 	return `<!doctype html>
 <html lang="en" data-composition-variables='${JSON.stringify(vars).replace(/'/g, '&#39;')}'>
 <head>
@@ -292,34 +229,31 @@ function page(f, body, tl) {
 <meta name="viewport" content="width=${f.w}, height=${f.h}">
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
 <style>
-@font-face { font-family: "Instrument Sans"; font-weight: 500; src: url(assets/fonts/instrument-sans-latin-500-normal.woff2) format("woff2"); }
-@font-face { font-family: "Instrument Sans"; font-weight: 600; src: url(assets/fonts/instrument-sans-latin-600-normal.woff2) format("woff2"); }
-@font-face { font-family: "Instrument Sans"; font-weight: 700; src: url(assets/fonts/instrument-sans-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: Archivo; font-weight: 100 900; src: url(assets/fonts/archivo-latin-standard-normal.woff2) format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url(assets/fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2"); }
-/* The app's own colours (sampled from Insilode Dark): editor ground, text, the signal blue, change-set green and red. */
-:root { --ground: #0f0f0f; --text: #f2f2f4; --muted: #8a8a90; --signal: #6f86ff; --add: #5fe0a1; --del: #ff6b7d; }
+/* The site's dark stage (site/src/site.css): --film, --ink, --ink-2, --link, the window edge and radius. */
+:root { --film: #0c1020; --ink: #e9ecf5; --ink-2: #a9b1c9; --link: #9aa8ff; --signal: #3f52c9; --edge: rgba(255, 255, 255, .09); }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { width: ${f.w}px; height: ${f.h}px; overflow: hidden; background: var(--ground); }
-#root { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--ground); font-family: "Instrument Sans", sans-serif; color: var(--text); }
+html, body { width: ${f.w}px; height: ${f.h}px; overflow: hidden; background: var(--film); }
+#root { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--film); font-family: Archivo, sans-serif; color: var(--ink); }
 #root > .clip { position: absolute; inset: 0; overflow: hidden; }
-.cam { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-.cam img { display: block; }
-.media { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
-.media.placed { transform-origin: 50% 50%; border-radius: 10px; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
-.dim { position: absolute; inset: 0; background: var(--ground); }
-.ring { position: absolute; border: 6px solid var(--signal); border-radius: 14px; opacity: 0; box-shadow: 0 0 0 4px rgba(15,15,15,.6); }
-.stmt { position: absolute; font-weight: 700; letter-spacing: -0.03em; line-height: 1.04; color: var(--text); }
-.stmt .w { display: inline-block; }
-.loopt { left: 0; right: 0; bottom: 80px; text-align: center; font-size: 76px; text-shadow: 0 4px 30px rgba(0,0,0,.85); }
-.diff { position: absolute; font-family: "JetBrains Mono", monospace; line-height: 1.62; color: #cfcfd4; white-space: pre; }
-.diff .add { color: var(--add); font-weight: 400; } .diff .del { color: var(--del); font-weight: 400; }
-.lk { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; }
-.lk .tag { font-size: ${f.h > f.w ? 40 : 34}px; font-weight: 500; color: var(--muted); }
-.lk .dl-line { margin-top: 26px; font-size: ${f.h > f.w ? 38 : 32}px; font-weight: 600; }
-.lk .url { margin-top: 8px; font-family: "JetBrains Mono", monospace; font-size: ${f.h > f.w ? 34 : 30}px; color: var(--signal); }
+.cam { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 20px; overflow: hidden; box-shadow: 0 0 0 2px var(--edge), 0 60px 160px rgba(0, 0, 0, .65); }
+.cam img { display: block; width: 100%; height: 100%; }
+.pane { position: absolute; }
+.dim { position: absolute; inset: 0; background: var(--film); }
+.ring { position: absolute; border: 6px solid var(--link); border-radius: 12px; opacity: 0; box-shadow: 0 0 0 4px rgba(12, 16, 32, .6); }
+.label { position: absolute; opacity: 0; font-size: 46px; font-weight: 600; padding: 10px 28px; border-radius: 40px; background: var(--signal); color: #fff; white-space: nowrap; }
+.stmt { position: absolute; left: 0; right: 0; text-align: center; font-weight: 650; letter-spacing: -0.025em; line-height: 1.06; color: var(--ink); }
+.loopt { position: absolute; left: 0; right: 0; bottom: 44px; text-align: center; font-size: 60px; font-weight: 650; letter-spacing: -0.02em; text-shadow: 0 4px 30px rgba(0, 0, 0, .85); }
+.lk { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+.lk .name { font-weight: 650; letter-spacing: -0.03em; line-height: 1; }
+.lk .tag { font-size: ${v ? 44 : 36}px; font-weight: 500; color: var(--ink-2); }
+.lk .dl-line { margin-top: 30px; font-size: ${v ? 40 : 34}px; font-weight: 600; }
+.lk .url { margin-top: 10px; font-family: "JetBrains Mono", monospace; font-size: ${v ? 32 : 30}px; color: var(--link); }
+.lk .free { margin-top: 18px; font-size: ${v ? 34 : 30}px; color: var(--ink-2); }
 #captions { pointer-events: none; }
-.cap { position: absolute; left: 0; right: 0; top: auto; bottom: ${f.h > f.w ? 300 : Math.round(f.h * 0.055)}px; display: flex; justify-content: center; }
-.cap span { max-width: ${Math.round(f.w * 0.8)}px; text-align: center; font-size: ${capSize}px; font-weight: 500; line-height: 1.25; padding: 10px 22px; border-radius: 12px; background: rgba(15,15,15,.82); color: var(--text); }
+.cap { position: absolute; left: 0; right: 0; top: auto; bottom: ${v ? 260 : Math.round(f.h * 0.045)}px; display: flex; justify-content: center; }
+.cap span { max-width: ${Math.round(f.w * 0.86)}px; text-align: center; font-size: ${capSize}px; font-weight: 500; line-height: 1.25; padding: 8px 22px; border-radius: 12px; background: rgba(12, 16, 32, .84); color: var(--ink); }
 </style>
 </head>
 <body>

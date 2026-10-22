@@ -31,11 +31,11 @@ h264(master('square'), join(media, 'launch-film-1x1.mp4'), 23)
 h264(master('vertical'), join(media, 'launch-film-9x16.mp4'), 23)
 h264(master('loop'), join(media, 'loop-15s.mp4'), 28, false)
 ff('-i', master('loop'), '-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '40', '-row-mt', '1', '-an', join(media, 'loop-15s.webm'))
-// The poster: the change set at the turn, with its count in view (frame at 14.2 s).
-ff('-ss', '14.2', '-i', master('film'), '-frames:v', '1', '-q:v', '3', join(media, 'launch-film-poster.jpg'))
+// The poster: the whole editor window under the headline (frame at 51 s).
+ff('-ss', '51', '-i', master('film'), '-frames:v', '1', '-q:v', '3', join(media, 'launch-film-poster.jpg'))
 
 // Per-feature clips, silent, from the film's picture (captions are part of the picture, so they stay).
-const CLIPS = { 'change-set': [12, 10], 'across-services': [22, 8], tour: [30, 10], agents: [40, 14], diagrams: [54, 8] }
+const CLIPS = { editor: [0, 11], endpoint: [11, 11], 'change-set': [22, 12], agents: [34, 8], harness: [42, 6] }
 for (const [name, [start, dur]] of Object.entries(CLIPS)) h264(master('film'), join(clips, `${name}.mp4`), 26, false, ['-ss', String(start), '-t', String(dur)])
 h264(master('loop'), join(clips, 'loop-15s.mp4'), 28, false)
 

@@ -5,7 +5,7 @@ message: "Insilode is a code editor, built on VS Code, that shows how your code 
 arc: Category first (the editor, 0-11 s) → what it adds, in the editor (canvas, change set, dock, harness map) → headline → one CTA
 audience: developers who use VS Code (or a fork) and run Claude Code or Codex on real codebases
 mode: collaborative
-version: v3 (planned; v2, the canvas-only film, is in git history)
+version: v3 (built; v2, the canvas-only film, is in git history)
 ---
 
 # Launch film: storyboard v3
@@ -58,9 +58,12 @@ Easing: `power2.inOut` for the camera, `power3.out` for type. No bounce, no glow
 
 ## Script (voiceover and captions)
 
-Written for speech: short sentences, contractions. The delivery is a calm developer talking to a colleague, not an
-announcer. The picture is cut to fixed bar-line times (120 BPM, 2 s bars), not to a take, so the voice (whichever the
-user picks from the audition) or the no-voice version (captions and music only) drops in without re-cutting.
+Written for speech: short sentences, contractions. The delivery is calm and conversational, not an announcer. The
+picture is cut to fixed bar-line times (120 BPM, 2 s bars), not to a take. Voice (the user's pick after an audition of
+Kokoro, Chatterbox, Chatterbox Turbo and Dia): Chatterbox (MIT), cloned from Karen Savage's public-domain LibriVox
+reading, one seeded take per line (`vo/script.json`), every line transcript-checked, at 2.3-3.0 words/s and a median
+pitch of about 195-230 Hz. "Insilode" is spelled "Insihlode" for the model; the transcriber hears it as "Insilode" in
+line 08 and "Ensilode" in line 01.
 
 | # | Time | Line |
 |---|---|---|
@@ -73,7 +76,7 @@ user picks from the audition) or the no-voice version (captions and music only) 
 | 06 | 34.3 | "Run Claude Code and Codex side by side. The dock shows who's working, and who needs you." |
 | 07 | 42.3 | "And the harness map shows what your agents load, and what to fix." |
 | 08 | 48.5 | "Insilode. The code editor that shows how your code runs." |
-| 09 | 54.5 | "It's free, and it's open source." |
+| 09 | 55.2 | "It's free, and it's open source." (alternative take: "It's free, and the source is open.") |
 
 About 105 words in 62 s. The name is in 01 and 08 only.
 
@@ -144,10 +147,10 @@ Loudness about -14 LUFS, peaks under -1 dBTP.
   frame matches the first.
 - **1:1 and 9:16:** the same timeline; the camera frames each beat's focal region; captions in the lower third.
 - **Clips** (`docs/media/film/clips/`, silent 16:9, cut from the film): `editor.mp4` (01-02), `endpoint.mp4` (03-04),
-  `change-set.mp4` (05), `agents.mp4` (06), `harness.mp4` (07), `loop-15s.mp4`. `tour.mp4` and `diagrams.mp4` (v2 beats
-  that v3 does not have) are removed; nothing in the repo or the site links them.
+  `change-set.mp4` (05), `agents.mp4` (06), `harness.mp4` (07), `loop-15s.mp4`. `tour.mp4`, `diagrams.mp4` and
+  `across-services.mp4` (v2 beats) are removed; nothing in the repo or the site links them.
 
-## Open questions
+## Decided
 
-- **Voice:** the audition (Kokoro, Chatterbox, Chatterbox Turbo, Dia) or no voice (captions and music only). No model says
-  "Insilode" reliably unaided; the name line is fixed by ear whichever voice wins.
+- **Voice:** Chatterbox, Karen Savage reference (see Script). Kokoro (the v2 voice) and Dia were rejected by ear.
+- **The Microsoft footnote** stays on the site, not in the film.
