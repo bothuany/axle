@@ -8,15 +8,24 @@ Insilode is a **code editor built on VS Code** that shows how your code runs. A 
 
 ## Headline and subhead
 
-- **Headline:** The code editor that shows how your code runs.
-- **Subhead:** Built on VS Code, so your extensions, themes and keybindings work. Plus a live canvas of every request, a review of what your agents changed, and a dock that runs Claude Code and Codex side by side.
-- **Page title:** Insilode: the code editor that shows how your code runs
+- **Headline (slogan):** Every code editor shows how code is stored. Insilode shows how it runs.
+  - On the site, "Insilode" is in the light accent blue (`#9aa8ff`, 8.5:1 on the page). In plain text, such as the README, it is bold instead.
+  - Each sentence starts a new line. The lines wrap evenly, with no word left alone on a line, and "Insilode" never splits.
+- **Subhead, always right under it:** Built on VS Code, so your extensions, themes and keybindings work. Plus a live canvas of every request, a review of what your agents changed, and a dock that runs Claude Code and Codex side by side. With the subhead, "code editor" and "VS Code" are both in the first screen.
+- **Page title:** Insilode, the code editor that shows how code runs. It must stay under 60 characters for search results; `og:title` carries the full slogan.
+- **Earlier headline (until 2026-10-22):** The code editor that shows how your code runs. It still works as a one-line description.
 
 Show the real editor window (explorer, a code tab, a canvas tab, the terminal with an agent, the Agents dock) right under the headline. Pictures are captures of the real app, never mock-ups.
 
 ## Visual rule
 
 Every marketing visual is dark: the website (dark by default, and the only theme), screenshots of the editor (a dark VS Code theme, Default Dark Modern), the README images and the film. Flow cards in a picture are zoomed so their code can be read.
+
+## Type
+
+- **Instrument Sans** sets headings and text, and **JetBrains Mono** sets code-ish accents (command names, numbers, chips, terminal lines). Both are OFL-1.1 and self-hosted from Fontsource (`@fontsource-variable/instrument-sans`, `@fontsource-variable/jetbrains-mono`). There is no font CDN.
+- Headings are weight 650 at normal width, with slightly tight tracking.
+- Use the same pair in any new marketing visual. The film keeps its own type (`docs/film`).
 
 ## What carries over from VS Code
 

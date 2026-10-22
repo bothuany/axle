@@ -4,21 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'self' https://api.github.com; frame-src 'self'; base-uri 'none'; form-action 'none'" />
-    <title>{{name}}: the code editor that shows how your code runs</title>
-    <meta name="description" content="{{name}} is an open-source code editor built on VS Code: your extensions work, plus a live canvas of how your code runs and what your agents changed." />
+    <title>{{name}}, the code editor that shows how code runs</title>
+    <meta name="description" content="Every code editor shows how code is stored. {{name}} shows how it runs: a code editor built on VS Code, with a live canvas of every request." />
     <link rel="canonical" href="{{site}}/" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#0c1020" />
     <meta name="google-site-verification" content="XrNonl685EqpBR0y6wrhLbWKfsVRcuFygn4sOPC6Ajw" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="{{name}}" />
-    <meta property="og:title" content="{{name}}: the code editor that shows how your code runs" />
+    <meta property="og:title" content="Every code editor shows how code is stored. {{name}} shows how it runs." />
     <meta property="og:description" content="A code editor built on VS Code that shows how your code runs, and what your agents changed in it." />
     <meta property="og:url" content="{{site}}/" />
     <meta property="og:image" content="{{site}}/media/editor.jpg" />
     <meta name="twitter:card" content="summary_large_image" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareApplication","name":"{{name}}","description":"The code editor that shows how your code runs. Built on VS Code.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Code editor","operatingSystem":"Windows, macOS, Linux","url":"{{site}}/","downloadUrl":"https://github.com/{{repo}}/releases/latest","license":"https://www.gnu.org/licenses/agpl-3.0.html","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+      {"@context":"https://schema.org","@type":"SoftwareApplication","name":"{{name}}","description":"Every code editor shows how code is stored. {{name}} shows how it runs. Built on VS Code.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Code editor","operatingSystem":"Windows, macOS, Linux","url":"{{site}}/","downloadUrl":"https://github.com/{{repo}}/releases/latest","license":"https://www.gnu.org/licenses/agpl-3.0.html","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
     </script>
     <link rel="preload" as="image" href="./media/editor.webp" media="(min-width: 761px)" fetchpriority="high" />
     <link rel="preload" as="image" href="./media/editor-narrow.webp" media="(max-width: 760px)" fetchpriority="high" />
@@ -44,7 +44,7 @@
       <div class="trace" aria-hidden="true"></div>
 
       <section class="hero" aria-labelledby="hero-title">
-        <h1 id="hero-title">The code editor that shows how your code runs.</h1>
+        <h1 id="hero-title"><span>Every code editor shows how code is&nbsp;stored.</span> <span><b class="accent">{{name}}</b> shows how it&nbsp;runs.</span></h1>
         <p class="lede">Built on VS Code, so your extensions, themes and keybindings work. Plus a live canvas of every request, a review of what your agents changed, and a dock that runs Claude Code and Codex side by side.</p>
         <div class="ctas">
           <a class="btn btn-primary" data-download href="https://github.com/{{repo}}/releases/latest">Download {{name}}</a>

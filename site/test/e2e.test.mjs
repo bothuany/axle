@@ -135,7 +135,10 @@ test('home: the hero canvas loads on its own, a plain wheel scrolls the page pas
 
 test('home: the first screen says it is a code editor built on VS Code, and the editor window leads to the demo', { skip }, async () => {
 	const { page, problems } = await open()
-	assert.match(await page.$eval('h1', h => h.textContent), /code editor/)
+	assert.equal(await page.$eval('h1', h => h.textContent.replace(/\s+/g, ' ')), 'Every code editor shows how code is stored. Insilode shows how it runs.')
+	assert.equal(await page.$eval('h1 .accent', b => b.textContent), 'Insilode', 'the name stands out in the headline')
+	// Both faces are self-hosted: loading them must find a face from the site itself.
+	assert.deepEqual(await page.evaluate(async () => [(await document.fonts.load('650 40px "Instrument Sans"')).length > 0, (await document.fonts.load('14px "JetBrains Mono"')).length > 0]), [true, true], 'the self-hosted fonts load')
 	assert.match(await page.$eval('.hero .lede', p => p.textContent), /Built on VS Code/)
 	assert.equal(await page.$eval('.shot-window', a => new URL(a.href).pathname), '/try/')
 	assert.equal(await page.$eval('.shot img', i => i.complete && i.naturalWidth > 0), true, 'the editor capture loads')
