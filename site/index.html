@@ -20,7 +20,8 @@
     <script type="application/ld+json">
       {"@context":"https://schema.org","@type":"SoftwareApplication","name":"{{name}}","description":"Every code editor shows your files. {{name}} shows how your code runs. Built on VS Code.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Code editor","operatingSystem":"Windows, macOS, Linux","url":"{{site}}/","downloadUrl":"https://github.com/{{repo}}/releases/latest","license":"https://www.gnu.org/licenses/agpl-3.0.html","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
     </script>
-    <link rel="preload" as="image" href="./media/hero-loop-poster.jpg" fetchpriority="high" />
+    <link rel="preload" as="image" href="./media/hero-loop-poster.jpg" media="(min-width: 761px)" fetchpriority="high" />
+    <link rel="preload" as="image" href="./media/hero-loop-narrow-poster.jpg" media="(max-width: 760px)" fetchpriority="high" />
   </head>
   <body>
     <a class="skip" href="#main">Skip to the content</a>
@@ -54,7 +55,9 @@
 
         <figure class="shot">
           <a class="shot-window" href="./try/" aria-label="Try the live demo of {{name}} in your browser">
-            <video class="shot-video" data-loop muted playsinline loop preload="none" poster="./media/hero-loop-poster.jpg" width="1920" height="1200" aria-label="The {{name}} editor on a demo shop: OrderController.java opens from the explorer, its Flow link opens the canvas on POST /orders, and the view moves from the controller to the order service, its discount, the orders table and the billing call. Claude Code runs in the terminal below, the Agents dock is on the right.">
+            <video class="shot-video" data-loop muted playsinline loop preload="none" poster="./media/hero-loop-poster.jpg" width="1920" height="1200" aria-label="The {{name}} editor on a demo shop: OrderController.java is open; POST /orders is picked in the Insilode Endpoints view, the canvas opens on its flow and moves from the controller to the order service, its discount and the orders table, then the editor is back where it started. Claude Code runs in the terminal below, the Agents dock is on the right.">
+              <source src="./media/hero-loop-narrow.webm" type="video/webm" media="(max-width: 760px)" />
+              <source src="./media/hero-loop-narrow.mp4" type="video/mp4" media="(max-width: 760px)" />
               <source src="./media/hero-loop.webm" type="video/webm" />
               <source src="./media/hero-loop.mp4" type="video/mp4" />
             </video>

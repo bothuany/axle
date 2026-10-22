@@ -232,6 +232,7 @@ test('home on a phone: no canvas until asked, then full screen; the page has no 
 	const { page, problems } = await open('', { viewport: { width: 375, height: 812, isMobile: true, hasTouch: true }, agent: PHONE })
 	assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 375)
 	assert.ok(await page.$eval('.shot', s => s.getBoundingClientRect().top < innerHeight - 120), 'the hero loop shows in the first screen of a phone')
+	assert.equal(await page.$eval('.shot video', v => v.poster.split('/').pop()), 'hero-loop-narrow-poster.jpg', 'a phone gets the crop of the window')
 	await wait(1500)
 	assert.equal(await page.$('.stage-frame'), null, 'the phone loads no canvas by itself')
 	assert.equal(await page.$eval('.hero [data-download]', a => a.getAttribute('href')), '#download', 'a phone is sent to the list of files')
