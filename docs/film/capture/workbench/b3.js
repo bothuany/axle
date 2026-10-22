@@ -9,5 +9,5 @@ for (const label of ['create_invoice', 'onOrderPlaced']) {
 await fr.locator('.react-flow__controls-fitview').click().catch(e => res.push('nofit'))
 await sleep(1500)
 await p.mouse.move(1750, 800)
-await shot('B3-flow-across')
+await shot('B3-sidebar')
 return res

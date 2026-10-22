@@ -21,7 +21,7 @@ const slogan = brand.headline.replace(/\. /, '.<br>').replace('{productName}', `
 
 // Every still is the same window at 2x: 3840x2160 image px = 1920x1080 CSS px.
 const IW = 3840, IH = 2160
-const STILLS = ['A1-editor', 'A2-extensions', 'A3-themes', 'A4-keys', 'B1-endpoints', 'B2-flow', 'B3-flow-across', 'C1-commit', 'C2-pick', 'C3-changes', 'C4-place', 'D-base', 'E-harness']
+const STILLS = ['A1-editor', 'A2-extensions', 'A3-themes', 'A4-keys', 'B1-sidebar', 'B2-sidebar', 'B3-sidebar', 'C1-commit', 'C2-pick', 'C3-changes', 'C4-place', 'D-base', 'E-harness']
 // The dock page recorded live with its scripted session (capture/agents-live.mjs): 760x1072 px at 2x, so 380 CSS px
 // wide, the width of the dock in the window's right side bar. It is laid exactly over that dock (image px below).
 const DOCK = { src: 'capture/dock-live.mp4', x: 3084, y: 200, w: 760, h: 1072, bg: '#111111', pane: [3082, 140, 838, 1972] }
@@ -51,13 +51,15 @@ function shotList() {
 		label: { text: 'Extensions from Open VSX', x: 330, y: 150, at: 5.9, dur: 3.3 } })
 	s.push({ id: 's02b', img: 'A3-themes', start: 7.6, dur: 1.8, keys: [key(0, side, { focus: [0.08, 0.32], zoom: 2 }), key(1.8, [0, 0.03, 0.48, 0.57], { focus: [0.08, 0.34], zoom: 2 })] })
 	s.push({ id: 's02c', img: 'A4-keys', start: 9.4, dur: 1.6, keys: [key(0, [0.15, 0.02, 0.85, 0.62], { focus: [0.45, 0.2] }), key(1.6, [0.16, 0.03, 0.82, 0.6], { focus: [0.45, 0.22] })] })
-	// 03 Open an endpoint: the picker on POST /orders, then the flow tab opens beside the code tab.
-	s.push({ id: 's03a', img: 'B1-endpoints', start: 11, dur: 1.4, keys: [key(0, [0.24, 0, 0.76, 0.48], { focus: [0.5, 0.2] }), key(1.4, [0.26, 0.01, 0.74, 0.46], { focus: [0.48, 0.21] })] })
-	s.push({ id: 's03b', img: 'B2-flow', start: 12.4, dur: 4.6, keys: [key(0, whole(0.86), { focus: [0.25, 0.4] }), key(1.2, whole(0.86), { focus: [0.25, 0.4] }), key(4.6, [0.17, 0.06, 0.8, 0.78], { focus: [0.33, 0.38], zoom: 1.5 })] })
+	// 03 Open an endpoint: Insilode's Endpoints view in the side bar, POST /orders (OrderController.place) under the pointer,
+	// then the click opens the flow tab beside the code tab.
+	s.push({ id: 's03a', img: 'B1-sidebar', start: 11, dur: 1.6, keys: [key(0, [0, 0.03, 0.5, 0.5], { focus: [0.08, 0.2], zoom: 2 }), key(1.6, [0, 0.06, 0.4, 0.44], { focus: [0.08, 0.24], zoom: 2.2 })] })
+	// The click: the same framing on the still taken after it, then the camera follows the flow tab that opened.
+	s.push({ id: 's03b', img: 'B2-sidebar', start: 12.6, dur: 4.4, keys: [key(0, [0, 0.06, 0.4, 0.44], { focus: [0.08, 0.24], zoom: 2.2 }), key(0.6, [0, 0.06, 0.4, 0.44], { focus: [0.08, 0.24], zoom: 2.2 }), key(4.4, [0.17, 0.06, 0.8, 0.78], { focus: [0.33, 0.38], zoom: 1.5 })] })
 	// 04 Across services: the hops into billing (HTTP) and shipping (Kafka) expanded; rings on the labels as the voice names them.
 	const s4 = 17
 	const http = at('04', 'HTTP') - s4, kafka = at('04', 'Kafka') - s4
-	s.push({ id: 's04', img: 'B3-flow-across', start: s4, dur: 5, keys: [
+	s.push({ id: 's04', img: 'B3-sidebar', start: s4, dur: 5, keys: [
 		key(0, [0.17, 0.28, 0.8, 0.78], { focus: [0.45, 0.45], zoom: 1.5 }),
 		key(Math.max(0.6, http - 0.5), [0.42, 0.44, 0.8, 0.66], { focus: [0.66, 0.57], zoom: 1.6 }),
 		key(Math.max(1.6, kafka - 0.3), [0.42, 0.55, 0.8, 0.77], { focus: [0.61, 0.68], zoom: 1.6 }),
@@ -76,7 +78,7 @@ function shotList() {
 	// 07 The harness map in the side bar, next to CLAUDE.md.
 	s.push({ id: 's07', img: 'E-harness', start: 42, dur: 6, keys: [key(0, whole(0.86), { focus: [0.1, 0.35] }), key(1.0, [0, 0.03, 0.55, 0.5], { focus: [0.09, 0.3], zoom: 1.8 }), key(6, [0, 0.04, 0.5, 0.46], { focus: [0.09, 0.3], zoom: 1.8 })] })
 	// 08 The headline: the window again, quiet, pulling back. 09 End card: the window dims behind the lockup and drifts.
-	s.push({ id: 's08', img: 'B3-flow-across', start: 48, dur: 6, keys: [key(0, whole(0.78), { focus: [0.5, 0.45] }), key(6, whole(0.73), { focus: [0.5, 0.45] })] })
+	s.push({ id: 's08', img: 'B3-sidebar', start: 48, dur: 6, keys: [key(0, whole(0.78), { focus: [0.5, 0.45] }), key(6, whole(0.73), { focus: [0.5, 0.45] })] })
 	s.push({ id: 's09', img: 'A1-editor', start: 54, dur: 8, dim: 0, dimTo: [0.82, 54.2, 1.2], keys: [key(0, whole(0.76), { focus: [0.4, 0.4] }), key(8, whole(0.7), { focus: [0.4, 0.4] })] })
 	return s
 }
@@ -84,7 +86,7 @@ function shotList() {
 function shotsLoop() {
 	return [
 		{ id: 'l1', img: 'A1-editor', start: 0, dur: 3, keys: [key(0, whole(0.84)), key(3, whole(0.88))] },
-		{ id: 'l2', img: 'B3-flow-across', start: 3, dur: 4, keys: [key(0, whole(0.88)), key(4, [0.2, 0.3, 0.8, 0.78])] },
+		{ id: 'l2', img: 'B3-sidebar', start: 3, dur: 4, keys: [key(0, whole(0.88)), key(4, [0.2, 0.3, 0.8, 0.78])] },
 		{ id: 'l3', img: 'C4-place', start: 7, dur: 4, keys: [key(0, [0.2, 0.12, 0.84, 0.6]), key(4, [0.4, 0.2, 0.82, 0.52])] },
 		{ id: 'l4', img: 'D-base', start: 11, dur: 2.5, dock: { mediaStart: 6.5 }, keys: [key(0, [0.5, 0.02, 1.0, 0.64]), key(2.5, [0.55, 0.02, 1.0, 0.62])] },
 		{ id: 'l5', img: 'A1-editor', start: 13.5, dur: 1.5, keys: [key(0, whole(0.86)), key(1.5, whole(0.84))] },
@@ -101,7 +103,7 @@ function rectFor(k, f, variant) {
 	// A shot inside the window keeps the window filling the narrow frame top to bottom (no stage below it).
 	const inside = x0 >= 0 && y0 >= 0 && x1 <= 1 && y1 <= 1
 	const tall = (IW / IH) * (area.h / area.w)
-	const w = Math.min((x1 - x0) / (k.zoom ?? 1.3), inside ? 1 / tall : 1.08)
+	const w = inside ? Math.min((x1 - x0) / (k.zoom ?? 1.3), 1 / tall) : 1.1
 	const h = w * tall
 	const nx = Math.min(Math.max(cx - w / 2, -0.04), 1.04 - w), ny = Math.min(Math.max(cy - h / 2, -0.04), Math.max(-0.04, 1.04 - h))
 	return [nx, ny, nx + w, ny + h]

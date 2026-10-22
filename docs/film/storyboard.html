@@ -87,14 +87,14 @@ figure { display: flex; flex-direction: column; gap: 8px; }
 
 <figure>
   <div class="label"><b>03 · Open an endpoint</b><span>11.0-17.0</span></div>
-  <div class="f" id="frame-03"><div class="cam" data-img="B2-flow" data-rect=".14,.02,.82,.8"></div><div class="cap">Open an endpoint, and a tab shows how the request runs.</div></div>
-  <p class="note">The endpoint picker (POST /orders), then the Flow: Order.place tab next to the code tab.</p>
-  <p class="src">B1 · B2</p>
+  <div class="f" id="frame-03"><div class="cam" data-img="B1-sidebar" data-rect="0,.03,.5,.5"></div><div class="cap">Open an endpoint, and a tab shows how the request runs.</div></div>
+  <p class="note">The Endpoints view in the side bar, POST /orders under the pointer; the click opens the Flow: Order.place tab.</p>
+  <p class="src">B1-sidebar · B2-sidebar</p>
 </figure>
 
 <figure>
   <div class="label"><b>04 · Across services</b><span>17.0-22.0</span></div>
-  <div class="f" id="frame-04"><div class="cam" data-img="B3-flow-across" data-rect=".42,.47,.8,.76"><div class="ring" style="left:65.3%;top:56.4%;width:1.2%;height:1.4%"></div><div class="ring" style="left:60.3%;top:67.6%;width:1.2%;height:1.4%"></div></div><div class="cap">Over HTTP into billing. Over Kafka into shipping.</div></div>
+  <div class="f" id="frame-04"><div class="cam" data-img="B3-sidebar" data-rect=".42,.47,.8,.76"><div class="ring" style="left:65.3%;top:56.4%;width:1.2%;height:1.4%"></div><div class="ring" style="left:60.3%;top:67.6%;width:1.2%;height:1.4%"></div></div><div class="cap">Over HTTP into billing. Over Kafka into shipping.</div></div>
   <p class="note">The same tab, the HTTP edge into billing's FastAPI route and the topic into shipping expanded. Rings on the labels.</p>
   <p class="src">B3 · focal: the HTTP edge, the topic edge</p>
 </figure>
@@ -138,7 +138,7 @@ figure { display: flex; flex-direction: column; gap: 8px; }
 
 <figure>
   <div class="label"><b>08 · The headline</b><span>48.0-54.0</span></div>
-  <div class="f" id="frame-08"><div class="cam window" data-img="B3-flow-across" data-rect="0,0,1,1" data-scale=".86"></div><div class="stmt" style="bottom:1.8cqw;font-size:3.4cqw">Every code editor shows your files.<br><span style="color:var(--link)">Insilode</span> shows how your code runs.</div></div>
+  <div class="f" id="frame-08"><div class="cam window" data-img="B3-sidebar" data-rect="0,0,1,1" data-scale=".86"></div><div class="stmt" style="bottom:1.8cqw;font-size:3.4cqw">Every code editor shows your files.<br><span style="color:var(--link)">Insilode</span> shows how your code runs.</div></div>
   <p class="note">The window again, quiet, a little smaller; the site's headline under it. Line 08.</p>
   <p class="src">B3</p>
 </figure>
