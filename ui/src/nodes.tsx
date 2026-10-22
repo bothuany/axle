@@ -484,7 +484,8 @@ export const CardNode = memo(({ data }: NodeProps<Node<CardData>>) => {
   const callByLine = new Map<number, typeof calls>()
   for (const c of calls) callByLine.set(c.edge.callLine, [...(callByLine.get(c.edge.callLine) ?? []), c])
   const hiddenCount = calls.filter(c => c.hidden).length
-  const file = node.file?.split('/').pop()
+  // A Windows host sends backslash paths: the card names the file either way, not the whole path.
+  const file = node.file?.split(/[\\/]/).pop()
   const schema = node.schema
   // A database card is named after its table; the entity and context go underneath.
   const { owner, member } = schema ? { owner: schema.dbSchemaName ?? '', member: schema.table } : splitLabel(node.label)
