@@ -3,17 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Launch film · storyboard v2</title>
+<title>Launch film · storyboard v3</title>
 <style>
-@font-face { font-family: "Instrument Sans"; font-weight: 500; src: url(assets/fonts/instrument-sans-latin-500-normal.woff2) format("woff2"); }
-@font-face { font-family: "Instrument Sans"; font-weight: 600; src: url(assets/fonts/instrument-sans-latin-600-normal.woff2) format("woff2"); }
-@font-face { font-family: "Instrument Sans"; font-weight: 700; src: url(assets/fonts/instrument-sans-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: Archivo; font-weight: 100 900; src: url(assets/fonts/archivo-latin-standard-normal.woff2) format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url(assets/fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2"); }
-/* Colours sampled from Insilode's own rendering (Insilode Dark): editor #0f0f0f, canvas #1a1a1b, signal #6f86ff, button #5b72ff. */
+/* The site's dark stage (site/src/site.css on the positioning branch): --film, --ink, --ink-2, --link, the window edge. */
 :root {
-  --ground: #0f0f0f; --canvas: #1a1a1b; --text: #e8e8ea; --muted: #8a8a90; --signal: #6f86ff; --add: #5fe0a1; --del: #ff6b7d; --warn: #f0a33a;
+  --film: #0c1020; --ink: #e9ecf5; --ink-2: #a9b1c9; --link: #9aa8ff; --signal: #3f52c9; --edge: rgba(255,255,255,.09); --warn: #f2b65c;
   --sheet: #e9e7e2; --sheet-ink: #1c1f26; --sheet-muted: #6a6f7a;
-  --sans: "Instrument Sans", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+  --sans: Archivo, system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--sheet); color: var(--sheet-ink); font-family: var(--sans); padding: 48px 40px 80px; }
@@ -30,202 +28,155 @@ figure { display: flex; flex-direction: column; gap: 8px; }
 .label b { color: var(--sheet-ink); font-weight: 600; }
 .note { font-size: 14px; line-height: 1.45; }
 .src { font-size: 12px; color: var(--sheet-muted); }
-.chip-seam { align-self: flex-start; font-size: 12px; border-radius: 20px; padding: 2px 10px; background: #d9d6cf; }
 
-/* A frame: 1cqw = 19.2 px of the 1920 px film frame. Captures are placed and scaled (the camera); only type, rings and captions are added. */
-.f { position: relative; aspect-ratio: 16 / 9; container-type: inline-size; background: var(--ground); color: var(--text); overflow: hidden; border-radius: 6px; }
-.f img { position: absolute; display: block; }
-.dim { filter: brightness(.35); }
-.stmt { position: absolute; font-family: var(--sans); font-weight: 700; letter-spacing: -0.03em; line-height: 1.02; color: #f4f4f6; }
-.cap { position: absolute; left: 50%; transform: translateX(-50%); bottom: 5.5cqw; text-align: center; white-space: nowrap; padding: .5cqw 1.4cqw; border-radius: .6cqw; background: rgba(15,15,15,.78); font-family: var(--sans); font-weight: 500; font-size: 2.3cqw; color: #f4f4f6; text-shadow: 0 .1cqw .8cqw rgba(0,0,0,.9); }
-.ring { position: absolute; border: .2cqw solid var(--signal); border-radius: .8cqw; box-shadow: 0 0 0 100cqw rgba(0,0,0,.28); }
+/* A frame: 1cqw = 19.2 px of the 1920 px film frame. The stills are placed and scaled (the camera); type, rings and captions are added. */
+.f { position: relative; aspect-ratio: 16 / 9; container-type: inline-size; background: var(--film); color: var(--ink); overflow: hidden; border-radius: 6px; }
+.cam { position: absolute; transform-origin: 0 0; }
+.cam img { display: block; width: 100%; height: 100%; }
+.cam.window { border-radius: .52cqw; box-shadow: 0 0 0 .06cqw var(--edge), 0 2cqw 5cqw rgba(0,0,0,.6); overflow: hidden; }
+.cam video, .cam .overlay { position: absolute; }
+.cap { position: absolute; left: 50%; transform: translateX(-50%); bottom: 1.6cqw; text-align: center; white-space: nowrap; padding: .35cqw 1.2cqw; border-radius: .5cqw; background: rgba(12,16,32,.82); font-weight: 500; font-size: 2.08cqw; color: var(--ink); }
+.ring { position: absolute; border: .18cqw solid var(--link); border-radius: .6cqw; }
 .ring.amber { border-color: var(--warn); }
-.mono { font-family: var(--mono); }
-.pre > div { white-space: pre; }
-.pending { position: absolute; display: flex; flex-direction: column; gap: .6cqw; align-items: center; justify-content: center; text-align: center; border: .1cqw dashed #4a4a50; border-radius: .6cqw; color: var(--muted); font-size: 1.1cqw; padding: 1cqw; }
-.pending b { color: var(--text); font-size: 1.4cqw; }
-.badge { position: absolute; left: 1.2cqw; top: 1.2cqw; font-family: var(--mono); font-size: .9cqw; padding: .2cqw .6cqw; border-radius: .3cqw; background: rgba(240,163,58,.18); color: var(--warn); }
-.name::after { content: "Insilode"; }
+.chip { position: absolute; font-size: 1.1cqw; font-weight: 600; padding: .3cqw .8cqw; border-radius: 2cqw; background: var(--signal); color: #fff; }
+.foot { position: absolute; left: 50%; transform: translateX(-50%); bottom: .3cqw; font-size: .8cqw; color: var(--ink-2); white-space: nowrap; }
+.stmt { position: absolute; left: 0; right: 0; text-align: center; font-weight: 650; letter-spacing: -0.025em; line-height: 1.04; }
+.dim::after { content: ""; position: absolute; inset: 0; background: rgba(12,16,32,.78); }
+.lk { position: absolute; left: 0; right: 0; top: 13cqw; display: flex; flex-direction: column; align-items: center; gap: .9cqw; text-align: center; }
+.lk img { width: 7cqw; height: 7cqw; }
+.lk .n { font-size: 5.6cqw; font-weight: 650; letter-spacing: -0.03em; }
+.lk .h { font-size: 2.2cqw; color: var(--ink-2); font-weight: 500; }
+.lk .d { margin-top: 1.4cqw; font-size: 1.8cqw; font-weight: 600; }
+.lk .u { font-family: var(--mono); font-size: 1.55cqw; color: var(--link); }
 </style>
 </head>
 <body>
 <header>
-  <h1>Launch film · storyboard v2</h1>
-  <p>Your agent changed the code. The editor shows you where, on how it runs.</p>
-  <span class="tag">1920×1080 · 80 s · 10 beats · VO + captions</span>
+  <h1>Launch film · storyboard v3</h1>
+  <p>Insilode is a code editor, built on VS Code, that shows how your code runs.</p>
+  <span class="tag">1920×1080 · 62 s · 9 beats · captions (+ voice, pending the audition)</span>
 </header>
-<p class="lede">v2: every product frame is a real capture of the app, rendered by its own code and CSS (the canvas, its tour, the Agents dock and the status island, on the Harbor Goods demo with a real 14-file change). The film only adds framing, camera moves, rings, captions and type. Frames 07 and 08 still need their captures (marked). The product name is one token (<span class="mono">brand.json</span>); "Insilode" below is its current value.</p>
+<p class="lede">v3 starts on the editor, not the canvas: the whole window from the first frame and the category in the first line. Every frame below is a real capture of the workbench in web mode (Insilode Dark, Harbor Goods), framed by the camera on the site's dark stage; the film adds captions, two labels, rings and the end card. Copy follows docs/design/messaging.md. The stills are in <span class="tag">storyboard/captures/</span> (git-ignored; made by the capture scripts).</p>
 
 <div class="grid">
-<div class="act">Act 1 · the problem (no music)</div>
+<div class="act">The editor (0-11 s)</div>
 
-<!-- 01 -->
 <figure>
-  <div class="f" id="frame-01">
-    <img class="dim" src="storyboard/captures/dock.jpg" alt="" style="right:4cqw;top:6cqw;width:30cqw">
-    <img src="storyboard/captures/dock.jpg" alt="" style="right:4cqw;top:6cqw;width:30cqw;clip-path:inset(11% 0 46% 0)">
-    <div class="ring amber" style="right:3.6cqw;top:9.2cqw;width:30.8cqw;height:17.2cqw;box-shadow:none"></div>
-    <div class="stmt" style="left:6cqw;top:20cqw;font-size:5.6cqw;width:54cqw">Your agent just changed 14 files.</div>
-    <div class="stmt" style="left:6cqw;top:38cqw;font-size:4.4cqw;color:var(--muted)">Where?</div>
-  </div>
-  <div class="label"><b>01 · HOOK</b><span>frame-01 · 0.0–6.0</span></div>
-  <p class="note"><b>The dock row turns amber first (0.1 s):</b> Claude asks to edit main.py, models.py, service.py and … The statement enters word by word on the VO; "Where?" holds alone. No music, no logo.</p>
-  <p class="src">Real: Agents dock page (flow-agent dockPage.ts), scripted session.</p>
-  <span class="chip-seam">hard cut</span>
+  <div class="label"><b>01 · The editor</b><span>0.0-5.0</span></div>
+  <div class="f" id="frame-01"><div class="cam window" data-img="A1-editor" data-rect="0,0,1,1"></div><div class="cap">Insilode is a code editor, built on VS Code.</div></div>
+  <p class="note">The whole window: Explorer, OrderController.java, the terminal, the Agents dock. Slow push.</p>
+  <p class="src">A1 · focal (1:1, 9:16): the code tab and the Explorer</p>
 </figure>
 
-<!-- 02 -->
 <figure>
-  <div class="f" id="frame-02">
-    <div class="mono pre" style="position:absolute;left:5cqw;top:5cqw;font-size:1.45cqw;line-height:1.6;color:#cfcfd4">
-<div>$ git diff --stat HEAD~1</div>
-<div> billing-service/app/main.py                        |  2 <span style="color:var(--add)">+</span><span style="color:var(--del)">-</span></div>
-<div> billing-service/app/models.py                      |  2 <span style="color:var(--add)">++</span></div>
-<div> billing-service/app/service.py                     | 10 <span style="color:var(--add)">+++++++</span><span style="color:var(--del)">---</span></div>
-<div> billing-service/app/tasks.py                       |  5 <span style="color:var(--add)">+++</span><span style="color:var(--del)">--</span></div>
-<div> .../java/com/harborgoods/orders/BillingClient.java |  4 <span style="color:var(--add)">+++</span><span style="color:var(--del)">-</span></div>
-<div> .../java/com/harborgoods/orders/DiscountCode.java  | 29 <span style="color:var(--add)">++++++++++++++++++++++++++++</span></div>
-<div style="filter:blur(.1cqw)"> .../com/harborgoods/orders/DiscountRepository.java |  8 <span style="color:var(--add)">++++++++</span></div>
-<div style="filter:blur(.2cqw)"> .../main/java/com/harborgoods/orders/Order.java    | 21 <span style="color:var(--add)">++++++++++++++++++</span><span style="color:var(--del)">--</span></div>
-<div style="filter:blur(.3cqw)"> .../com/harborgoods/orders/OrderController.java    |  9 <span style="color:var(--add)">++++++++</span><span style="color:var(--del)">-</span></div>
-<div style="filter:blur(.4cqw)"> .../com/harborgoods/orders/OrderRepository.java    |  2 <span style="color:var(--add)">++</span></div>
-<div style="filter:blur(.5cqw)"> .../java/com/harborgoods/orders/OrderService.java  | 21 <span style="color:var(--add)">++++++++++++++++++</span><span style="color:var(--del)">---</span></div>
-<div style="filter:blur(.6cqw);opacity:.8"> .../java/com/harborgoods/shipping/OrderEvents.java |  3 <span style="color:var(--add)">++</span><span style="color:var(--del)">-</span></div>
-<div style="filter:blur(.7cqw);opacity:.6"> 14 files changed, 112 insertions(+), 16 deletions(-)</div>
-    </div>
-    <div class="cap">A diff tells you which lines. Not what they reach.</div>
-  </div>
-  <div class="label"><b>02 · DIFF WALL</b><span>frame-02 · 6.0–12.0</span></div>
-  <p class="note"><b>A tick per path as it lands.</b> The camera drifts down the list and it loses focus. At 11 s the paths fold away and the canvas comes in.</p>
-  <p class="src">Real command output: <span class="mono">git diff --stat</span> of the film's commit (14 files, +112 −16).</p>
-  <span class="chip-seam">cut on the downbeat</span>
+  <div class="label"><b>02 · What carries over</b><span>5.0-11.0</span></div>
+  <div class="f" id="frame-02"><div class="cam" data-img="A2-extensions" data-rect="0,0,.62,.62"></div><div class="chip" style="left:19cqw;top:4.2cqw">Extensions from Open VSX</div><div class="cap">Your extensions, themes and keybindings work.</div><div class="foot">Extensions on Open VSX install. A few Microsoft ones are licensed for Microsoft's builds only.</div></div>
+  <p class="note">Extensions (@popular, Open VSX) → themes → Keyboard Shortcuts, in the side bar and the editor.</p>
+  <p class="src">A2 · A3 · A4</p>
 </figure>
 
-<div class="act">Act 2 · the turn (music enters at 12.0)</div>
-
-<!-- 03 -->
 <figure>
-  <div class="f" id="frame-03">
-    <img src="storyboard/captures/changes.jpg" alt="" style="left:-1cqw;top:0;width:167cqw">
-    <div class="ring" style="left:1.6cqw;top:6.2cqw;width:19.8cqw;height:3.6cqw"></div>
-    <div class="ring" style="left:29cqw;top:.5cqw;width:12.2cqw;height:2.4cqw;box-shadow:none"></div>
-    <div class="cap">The editor draws the change on how your code runs.</div>
-  </div>
-  <div class="label"><b>03 · THE TURN</b><span>frame-03 · 12.0–22.0</span></div>
-  <p class="note"><b>The canvas fades up on the downbeat, already moving:</b> a slow push from the change set's root ("14 changed files · 9 endpoints", "Affects 9 endpoints") across the tables the change touches, then down to the green and red cards.</p>
-  <p class="src">Real: the canvas (ui/) showing the 14-file change set, flow-view's own changeSet code.</p>
-  <span class="chip-seam">push in → 04</span>
+  <div class="label"><b>02 · themes, keybindings</b><span>7.6-11.0</span></div>
+  <div class="f" id="frame-02b"><div class="cam" data-img="A4-keys" data-rect=".08,.03,.92,.88"></div><div class="cap">Your extensions, themes and keybindings work.</div></div>
+  <p class="note">The Keyboard Shortcuts editor, the same commands and shortcuts as VS Code.</p>
+  <p class="src">A4</p>
 </figure>
 
-<!-- 04 -->
+<div class="act">What it adds, inside the editor (11-48 s)</div>
+
 <figure>
-  <div class="f" id="frame-04">
-    <img src="storyboard/captures/order-after.jpg" alt="" style="left:-126cqw;top:-76.4cqw;width:238cqw">
-    <div class="ring" style="left:80.2cqw;top:23.2cqw;width:12.2cqw;height:3cqw"></div>
-    <div class="cap">Across services and languages, to the table it writes.</div>
-  </div>
-  <div class="label"><b>04 · ACROSS SERVICES</b><span>frame-04 · 22.0–30.0</span></div>
-  <p class="note"><b>The camera keeps moving down the order flow:</b> applyDiscount in green, then BillingClient's red and green lines with the "+ create_invoice" link into the Python service, then announce's "+ onOrderPlaced" Kafka link. A ring follows each link as the VO names it.</p>
-  <p class="src">Real: POST /orders flow after the change.</p>
-  <span class="chip-seam">tour starts in place</span>
+  <div class="label"><b>03 · Open an endpoint</b><span>11.0-17.0</span></div>
+  <div class="f" id="frame-03"><div class="cam" data-img="B2-flow" data-rect=".14,.02,.82,.8"></div><div class="cap">Open an endpoint, and a tab shows how the request runs.</div></div>
+  <p class="note">The endpoint picker (POST /orders), then the Flow: Order.place tab next to the code tab.</p>
+  <p class="src">B1 · B2</p>
 </figure>
 
-<div class="act">Act 3 · three proofs</div>
-
-<!-- 05 -->
 <figure>
-  <div class="f" id="frame-05">
-    <img src="storyboard/captures/tour-3500.jpg" alt="" style="left:-54cqw;top:-33.8cqw;width:200cqw">
-    <div class="cap">Ask how something works. It walks you through it.</div>
-  </div>
-  <div class="label"><b>05 · GUIDED TOUR</b><span>frame-05 · 30.0–40.0</span></div>
-  <p class="note"><b>The ghost cursor glides first;</b> the camera follows with a slight lag. The tour's own caption ("Agent edit: 2 lines added, 1 removed"), its step bar (1 / 3) and the dimmed cards around the lit one.</p>
-  <p class="src">Real: the canvas's own "Review 3 changes" tour (ui/src/tour). In the build: the ask-and-answer tour from the point-and-ask box.</p>
-  <span class="chip-seam">window recedes</span>
+  <div class="label"><b>04 · Across services</b><span>17.0-22.0</span></div>
+  <div class="f" id="frame-04"><div class="cam" data-img="B3-flow-across" data-rect=".42,.47,.8,.76"><div class="ring" style="left:65.3%;top:56.4%;width:1.2%;height:1.4%"></div><div class="ring" style="left:60.3%;top:67.6%;width:1.2%;height:1.4%"></div></div><div class="cap">Over HTTP into billing. Over Kafka into shipping.</div></div>
+  <p class="note">The same tab, the HTTP edge into billing's FastAPI route and the topic into shipping expanded. Rings on the labels.</p>
+  <p class="src">B3 · focal: the HTTP edge, the topic edge</p>
 </figure>
 
-<!-- 06 -->
 <figure>
-  <div class="f" id="frame-06">
-    <img class="dim" src="storyboard/captures/changes.jpg" alt="" style="left:0;top:0;width:100cqw">
-    <img src="storyboard/captures/island.jpg" alt="" style="left:31cqw;top:1.5cqw;width:38cqw">
-    <img src="storyboard/captures/dock.jpg" alt="" style="right:5cqw;top:11cqw;width:26cqw;border-radius:.6cqw">
-    <div class="cap">It tells you which agent needs you, and why.</div>
-  </div>
-  <div class="label"><b>06 · AGENTS + ISLAND</b><span>frame-06 · 40.0–54.0</span></div>
-  <p class="note"><b>A: the dock slides in and its row turns amber "Needs you";</b> push in on the APPROVAL line. <b>B (50 s):</b> the window darkens and the status island drops from the top edge.</p>
-  <p class="src">Real: dock page and the island page cut from flow-desktop.patch, fed the playground's scripted session.</p>
-  <span class="chip-seam">cut on the downbeat</span>
+  <div class="label"><b>05a · An agent changes the code</b><span>22.0-25.4</span></div>
+  <div class="f" id="frame-05a"><div class="cam" data-img="C1-commit" data-rect=".14,.5,.66,.9"></div><div class="cap">Now let Claude Code make a change.</div></div>
+  <p class="note">The terminal: the agent's commit, 14 files, +112 −16. Prepared for the film, author "Claude Code".</p>
+  <p class="src">C1 · focal: the commit line</p>
 </figure>
 
-<!-- 07 -->
 <figure>
-  <div class="f" id="frame-07">
-    <img src="storyboard/captures/ref-board-sequence.jpg" alt="" style="left:12cqw;top:0;width:76cqw">
-    <span class="badge">reference · recapture on Harbor Goods</span>
-    <div class="cap">Diagrams read straight from the code. Nothing invented.</div>
-  </div>
-  <div class="label"><b>07 · DIAGRAMS FROM CODE</b><span>frame-07 · 54.0–62.0</span></div>
-  <p class="note"><b>Edges draw one by one.</b> Sequence of POST /orders, then the ER of orders, discount_codes and shipments.</p>
-  <p class="src">Real board (docs/media/boards), shown as a reference; the build captures the board of Harbor Goods.</p>
-  <span class="chip-seam">hard cut</span>
+  <div class="label"><b>05b · The change set</b><span>25.4-29.6</span></div>
+  <div class="f" id="frame-05b"><div class="cam" data-img="C3-changes" data-rect=".16,.03,.66,.36"></div><div class="cap">You don't get a wall of diffs.</div></div>
+  <p class="note">"Show Changes in Flow" → Last commit: 14 changed files · 10 endpoints, Review 30 changes.</p>
+  <p class="src">C2 · C3 · focal: the root card</p>
 </figure>
 
-<div class="act">Act 4 · credibility and lockup</div>
-
-<!-- 08 -->
 <figure>
-  <div class="f" id="frame-08">
-    <div class="pending" style="left:2cqw;top:6cqw;width:30cqw;height:34cqw"><b>Skeleton first</b>board: "write these members"<br>capture pending</div>
-    <div class="pending" style="left:35cqw;top:6cqw;width:30cqw;height:34cqw"><b>Harness map</b>health score 96 on Harbor Goods<br>capture pending</div>
-    <div class="pending" style="left:68cqw;top:6cqw;width:30cqw;height:34cqw"><b>Update available</b>Restart to Update<br>capture pending</div>
-    <div class="cap">Design the skeleton first. Keep your harness healthy. Update in place.</div>
-  </div>
-  <div class="label"><b>08 · MONTAGE</b><span>frame-08 · 62.0–68.0</span></div>
-  <p class="note"><b>Three hard cuts, one per downbeat,</b> each a push-in on one control. Captures pending: the web workbench comes up in the light default when driven headless here (the Insilode Dark theme does not load), which is being fixed before capture.</p>
-  <p class="src">Will be real: workbench in web mode on Harbor Goods.</p>
-  <span class="chip-seam">cut back to the 03 framing</span>
+  <div class="label"><b>05b · where it lands</b><span>29.6-34.0</span></div>
+  <div class="f" id="frame-05c"><div class="cam" data-img="C4-place" data-rect=".22,.15,.8,.56"></div><div class="cap">You see where it lands, on how the request runs.</div></div>
+  <p class="note">POST /orders: OrderService.place, the removed line red, applyDiscount green, the new card beside it.</p>
+  <p class="src">C4 · focal: the green lines</p>
 </figure>
 
-<!-- 09 -->
 <figure>
-  <div class="f" id="frame-09">
-    <img src="storyboard/captures/changes.jpg" alt="" style="left:0;top:0;width:100cqw;filter:brightness(.7)">
-    <div class="stmt" style="left:6cqw;top:42cqw;font-size:4.2cqw;font-weight:600;text-shadow:0 .2cqw 1.2cqw rgba(0,0,0,.9)">See how your code runs.</div>
-  </div>
-  <div class="label"><b>09 · HELD FRAME</b><span>frame-09 · 68.0–72.0</span></div>
-  <p class="note"><b>Nothing moves.</b> The 03 canvas, wide, every changed card in view; the line lands at lower left. Callback to 03.</p>
-  <p class="src">Real: the same change-set canvas.</p>
-  <span class="chip-seam">continuous</span>
+  <div class="label"><b>06 · Agents side by side</b><span>34.0-42.0</span></div>
+  <div class="f" id="frame-06"><div class="cam window" data-img="D-base" data-rect=".45,.02,1,.6" data-dock="1"></div><div class="cap">Run Claude Code and Codex side by side.</div></div>
+  <p class="note">The dock in the right side bar comes alive: Codex needs an approval, Claude Code done, a second one working; then pixel pets.</p>
+  <p class="src">D-base + the dock page's live take (capture/agents-live.mjs), laid over the dock at its own size</p>
 </figure>
 
-<!-- 10 -->
 <figure>
-  <div class="f" id="frame-10">
-    <img src="storyboard/captures/changes.jpg" alt="" style="left:0;top:0;width:100cqw;filter:brightness(.18) blur(.3cqw)">
-    <img src="../../editor/branding/icon.png" alt="" style="left:calc(50cqw - 4.7cqw);top:10cqw;width:9.4cqw;height:9.4cqw">
-    <div class="stmt name" style="left:0;right:0;top:21.5cqw;text-align:center;font-size:5cqw"></div>
-    <div style="position:absolute;left:0;right:0;top:28cqw;text-align:center;font-size:1.7cqw;color:var(--muted);font-weight:500">A harness-first code editor. Free and open source.</div>
-    <div style="position:absolute;left:0;right:0;top:33.6cqw;text-align:center;font-size:1.5cqw;font-weight:600">Download for Windows · macOS · Linux</div>
-    <div class="mono" style="position:absolute;left:0;right:0;top:37cqw;text-align:center;font-size:1.4cqw;color:var(--signal)">github.com/bothuany/insilode</div>
-  </div>
-  <div class="label"><b>10 · LOCKUP + CTA</b><span>frame-10 · 72.0–80.0</span></div>
-  <p class="note"><b>The canvas keeps drifting behind;</b> the mark lands at 74.0 on a low hit, then the download line and the URL. Name, tagline, download line and URL come from <span class="mono">brand.json</span>.</p>
-  <p class="src">Real: the canvas behind; the logo from editor/branding.</p>
-  <span class="chip-seam">end</span>
+  <div class="label"><b>07 · The harness map</b><span>42.0-48.0</span></div>
+  <div class="f" id="frame-07"><div class="cam" data-img="E-harness" data-rect="0,.02,.5,.42"></div><div class="cap">And the harness map shows what your agents load, and what to fix.</div></div>
+  <p class="note">Harness in the side bar: Health 96, rules (one to fix), skills, hooks, MCP servers; CLAUDE.md in a tab.</p>
+  <p class="src">E · focal: the map</p>
 </figure>
 
-<!-- seams -->
+<div class="act">The headline and the CTA (48-62 s)</div>
+
 <figure>
-  <div class="f"><div style="padding:2cqw;font-size:1.5cqw;line-height:1.9">
-    <div style="font-weight:600;margin-bottom:.6cqw">Seam map · one world: the canvas</div>
-    <div class="mono" style="font-size:1.2cqw;line-height:1.6">01 ─cut→ 02 ─cut→ 03 ─push→ 04 ─tour in place→ 05 ─recede→ 06 ─cut→ 07 ─cut→ 08 ─cut back→ 09 ─continuous→ 10</div>
-    <div style="margin-top:1cqw;color:var(--muted)">Bar = 2 s at 120 BPM. Cuts on bars: 6 · 12 · 22 · 30 · 40 · 54 · 62 · 68 · 72.</div>
-    <div style="color:var(--muted)">Music enters at 12.0, the first frame of the canvas.</div>
-    <div style="color:var(--muted)">Film adds only framing, camera, rings, captions and type.</div>
-  </div></div>
-  <div class="label"><b>SEAMS</b><span>whole film</span></div>
+  <div class="label"><b>08 · The headline</b><span>48.0-54.0</span></div>
+  <div class="f" id="frame-08"><div class="cam window" data-img="B3-flow-across" data-rect="0,0,1,1" data-scale=".86"></div><div class="stmt" style="bottom:1.8cqw;font-size:3.4cqw">The code editor that shows how your code runs.</div></div>
+  <p class="note">The window again, quiet, a little smaller; the site's headline under it. Line 08.</p>
+  <p class="src">B3</p>
+</figure>
+
+<figure>
+  <div class="label"><b>09 · End card</b><span>54.0-62.0</span></div>
+  <div class="f" id="frame-09"><div class="cam window dim" data-img="A1-editor" data-rect="0,0,1,1" data-scale=".8"></div>
+    <div class="lk"><img src="../../editor/branding/icon.png" alt=""><div class="n">Insilode</div><div class="h">The code editor that shows how your code runs.</div><div class="d">Download for Windows, macOS, Linux</div><div class="u">insilode.dev · github.com/bothuany/insilode</div></div></div>
+  <p class="note">The window dims and keeps drifting behind the lockup; the last 1.5 s hold. Line 09: "It's free, and it's open source."</p>
+  <p class="src">A1 + brand.json</p>
 </figure>
 </div>
+
+<script>
+// Places each still like the film's camera: data-rect (fractions of the 3840x2160 capture) fills the frame, or, for
+// the whole window (0,0,1,1), sits on the stage with the caption band under it.
+for (const cam of document.querySelectorAll('.cam')) {
+  const [x0, y0, x1, y1] = cam.dataset.rect.split(',').map(Number)
+  const img = document.createElement('img')
+  img.src = `storyboard/captures/${cam.dataset.img}.jpg`
+  cam.prepend(img)
+  const whole = x0 === 0 && y0 === 0 && x1 === 1 && y1 === 1
+  if (whole) {
+    const s = Number(cam.dataset.scale ?? 1), h = 48.75 * s, w = h * 16 / 9
+    Object.assign(cam.style, { width: w + 'cqw', height: h + 'cqw', left: (100 - w) / 2 + 'cqw', top: 1.25 + (48.75 - h) / 3 + 'cqw' })
+  } else {
+    // The image's width in cqw so the rect covers the frame (both are 16:9 at full size), centred on the rect.
+    const w = Math.max(100 / (x1 - x0), 100 / (y1 - y0)), h = w * 9 / 16
+    const left = 50 - (x0 + x1) / 2 * w, top = 28.125 - (y0 + y1) / 2 * h
+    Object.assign(cam.style, { width: w + 'cqw', height: h + 'cqw', left: Math.min(0, Math.max(100 - w, left)) + 'cqw', top: Math.min(0, Math.max(56.25 - h, top)) + 'cqw', borderRadius: 0 })
+  }
+  if (cam.dataset.dock) {
+    const d = document.createElement('img')
+    d.src = 'storyboard/captures/dock.jpg'
+    // The dock page's take, laid over the dock: 380x536 CSS px at x 1541, y 100 of the 1920x1080 window.
+    Object.assign(d.style, { position: 'absolute', left: 1541 / 19.2 + '%', top: 100 / 10.8 + '%', width: 380 / 19.2 + '%', height: 536 / 10.8 + '%' })
+    cam.append(d)
+  }
+}
+</script>
 </body>
 </html>
