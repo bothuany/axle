@@ -37,7 +37,7 @@ Optional local scans: `npm run semgrep` (needs `semgrep` on PATH or Docker) and 
 
 ## Licence and the CLA
 
-Insilode is released under the [MIT License](LICENSE). Before your first pull request can be merged, you sign the [Contributor License Agreement](CLA.md) once: a bot comments on the pull request, and you reply with the sentence it gives you. You keep the copyright of your work; the agreement lets the project keep maintaining it and, if that is ever needed, ship it under other licence terms. Code you contribute stays available under the MIT License in the releases that contain it.
+Insilode is released under the [GNU Affero General Public License v3](LICENSE) (AGPL-3.0-only; versions before 0.5.0 were MIT). Before your first pull request can be merged, you sign the [Contributor License Agreement](CLA.md) once: a bot comments on the pull request, and you reply with the sentence it gives you. You keep the copyright of your work; the agreement lets the project keep maintaining it and, if that is ever needed, ship it under other licence terms. Code you contribute stays available under the MIT License in the releases that contain it.
 
 If you contribute as part of your job, make sure your employer allows it (see point 5 of the CLA).
 

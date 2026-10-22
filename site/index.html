@@ -18,7 +18,7 @@
     <meta property="og:image" content="{{site}}/media/editor.jpg" />
     <meta name="twitter:card" content="summary_large_image" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareApplication","name":"{{name}}","description":"The code editor that shows how your code runs. Built on VS Code.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Code editor","operatingSystem":"Windows, macOS, Linux","url":"{{site}}/","downloadUrl":"https://github.com/{{repo}}/releases/latest","license":"https://opensource.org/licenses/MIT","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+      {"@context":"https://schema.org","@type":"SoftwareApplication","name":"{{name}}","description":"The code editor that shows how your code runs. Built on VS Code.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Code editor","operatingSystem":"Windows, macOS, Linux","url":"{{site}}/","downloadUrl":"https://github.com/{{repo}}/releases/latest","license":"https://www.gnu.org/licenses/agpl-3.0.html","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
     </script>
     <link rel="preload" as="image" href="./media/editor.webp" media="(min-width: 761px)" fetchpriority="high" />
     <link rel="preload" as="image" href="./media/editor-narrow.webp" media="(max-width: 760px)" fetchpriority="high" />
@@ -210,8 +210,8 @@
         <h2 class="branch" id="proof-title">Check it yourself.</h2>
         <dl class="proof-list">
           <div>
-            <dt>MIT licensed</dt>
-            <dd>The whole editor is open source, a fork of VS Code's open-source core (Code - OSS, also MIT). <a href="https://github.com/{{repo}}/blob/main/LICENSE">Read the licence</a>.</dd>
+            <dt>Open source, AGPL v3</dt>
+            <dd>The whole editor is open source under the GNU AGPL v3, built on VS Code's open-source core (Code - OSS, MIT). <a href="https://github.com/{{repo}}/blob/main/LICENSE">Read the licence</a>.</dd>
           </div>
           <div>
             <dt>Released often, updated in place</dt>
@@ -240,7 +240,7 @@
 
     <footer class="footer">
       <div class="footer-inner">
-        <p>{{name}} is MIT licensed and built on <a href="https://github.com/microsoft/vscode">VS Code</a> (Code - OSS); it is not affiliated with Microsoft. {{name}}™ and its logo are trademarks of Recep Batuhan Dikmen. The Claude and Codex marks belong to their owners.</p>
+        <p>{{name}} is open source under the GNU AGPL v3 and built on <a href="https://github.com/microsoft/vscode">VS Code</a> (Code - OSS); it is not affiliated with Microsoft. {{name}}™ and its logo are trademarks of Recep Batuhan Dikmen. The Claude and Codex marks belong to their owners.</p>
         <p><a href="https://github.com/{{repo}}">GitHub</a> &nbsp; <a href="https://github.com/{{repo}}/blob/main/CONTRIBUTING.md">Contributing</a> &nbsp; <a href="https://github.com/{{repo}}/blob/main/SECURITY.md">Security</a></p>
       </div>
     </footer>

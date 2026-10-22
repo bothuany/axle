@@ -4,7 +4,7 @@
   "description": "See code as a flow: callers on the left, the method in the middle, everything it calls on the right.",
   "version": "0.1.0",
   "publisher": "flow",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "private": true,
   "engines": {
     "vscode": "^1.100.0"

@@ -1,6 +1,6 @@
 # Insilode name and logo
 
-Insilode's code is open source under the [MIT License](LICENSE): you may use, change and redistribute it. The licence covers the code, not the name. The name **Insilode** for this editor and the Insilode logo (the icons in `editor/branding/` and the marks drawn by the app) identify this project and its official releases, and stay with the project's maintainer, Recep Batuhan Dikmen.
+Insilode's code is open source under the [GNU Affero General Public License v3](LICENSE): you may use, change and redistribute it. The licence covers the code, not the name. The name **Insilode** for this editor and the Insilode logo (the icons in `editor/branding/` and the marks drawn by the app) identify this project and its official releases, and stay with the project's maintainer, Recep Batuhan Dikmen.
 
 **You may, without asking:**
 

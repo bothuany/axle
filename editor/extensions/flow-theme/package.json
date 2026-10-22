@@ -4,7 +4,7 @@
   "description": "Insilode's look, dark and light: flat surfaces, one signal colour and the defaults that go with it.",
   "version": "0.1.0",
   "publisher": "flow",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "private": true,
   "engines": {
     "vscode": "^1.100.0"
