@@ -97,6 +97,22 @@ test('Home: paths are compared resolved, and without case on Windows', () => {
 	assert.notEqual(home.pathKey('/work/A.ts', 'linux'), home.pathKey('/work/a.ts', 'linux'))
 })
 
+test('Home: open accepts only the files the host listed, never another path on disk', () => {
+	const offered = home.offeredFiles(
+		[{ path: 'C:\\work\\app\\src\\orders.ts' }],
+		[{ file: 'C:\\Users\\x\\.claude\\settings.json', line: 3 }, { file: 42 }, null, { message: 'no file' }],
+		'win32',
+	)
+	assert.equal(offered.size, 2)
+	assert.equal(home.canOpen(offered, 'C:\\work\\app\\src\\orders.ts', 'win32'), true)
+	assert.equal(home.canOpen(offered, 'c:/WORK/app/src/Orders.ts', 'win32'), true, 'same file, other spelling')
+	assert.equal(home.canOpen(offered, 'C:\\Users\\x\\.claude\\settings.json', 'win32'), true, 'a harness issue in ~/.claude')
+	for (const bad of ['C:/Users/x/.ssh/id_rsa', 'C:\\work\\app\\src\\orders.ts\\..\\..\\..\\secret.txt', 'C:\\work\\app\\src', '', undefined, 7, ['C:\\work\\app\\src\\orders.ts']]) {
+		assert.equal(home.canOpen(offered, bad, 'win32'), false, String(bad))
+	}
+	assert.equal(home.offeredFiles([], 'not a list', 'linux').size, 0)
+})
+
 /** Runs the Home page's script against a tiny DOM and returns what it wrote, after posting `data` to it. */
 function renderHome(data) {
 	const html = home.homeHtml('TESTNONCE')
@@ -276,6 +292,18 @@ test('claude.cmd: an argument cmd.exe would expand, unquote or cut is refused, n
 	}
 	// Off cmd.exe a % is just a character.
 	assert.deepEqual(command.claudeLaunch(['50%'], 'win32', () => 'C:\\bin\\claude.exe').args, ['50%'])
+})
+
+// ── #9 open_diff and focus ──────────────────────────────────────────────────
+
+test('open_diff: one changed file opens as a diff that keeps focus; several, a new or a deleted file, the multi-file editor', () => {
+	const M = { original: 'git:a', modified: 'file:a' }
+	assert.equal(changes.diffOpening([M], true), 'diff')
+	assert.equal(changes.diffOpening([M], false), 'changes', 'a user click may take focus')
+	assert.equal(changes.diffOpening([M, M], true), 'changes')
+	assert.equal(changes.diffOpening([{ modified: 'file:new' }], true), 'changes')
+	assert.equal(changes.diffOpening([{ original: 'git:gone' }], true), 'changes')
+	assert.equal(changes.diffOpening([], true), 'none')
 })
 
 // ── #11 the canvas's ask message ────────────────────────────────────────────

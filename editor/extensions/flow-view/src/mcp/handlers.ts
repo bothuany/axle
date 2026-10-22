@@ -22,7 +22,7 @@ import { cleanBoardId, type BoardStore } from '../board/store';
 import type { ChangeSet, ChangeSetTrace } from '../changeSet';
 import { POLY_LANGUAGES, type PolyIndex } from '../poly/client';
 import type { FlowProvider, FlowTarget } from '../providers';
-import { changeMark, GitStatus, statusesByFile } from './changes';
+import { changeMark, diffOpening, GitStatus, statusesByFile } from './changes';
 import { flowToText } from './flowtext';
 import { errorResult, type ToolResult } from './protocol';
 import { resolveInWorkspace } from './registry';
@@ -341,15 +341,16 @@ export class AgentTools {
 
 	/** The changes in VS Code's multi-file diff editor (nothing opens when there are none). */
 	async openChanges(changes: Changes, title: string, opts: { preserveFocus?: boolean } = {}) {
-		const [one] = changes.list;
 		// An agent's open_diff must not pull the keyboard out of the terminal the user types in. VS Code's multi-file diff editor
 		// (`vscode.changes`) always takes focus and has no option against it; the two-sided diff editor does, so one changed
 		// file opens there. Several files still open in the multi-file editor (a core change would be needed to keep focus).
-		if (opts.preserveFocus && changes.list.length === 1 && one.original && one.modified) {
+		const how = diffOpening(changes.list, opts.preserveFocus === true);
+		if (how === 'diff') {
+			const [one] = changes.list;
 			await vscode.commands.executeCommand('vscode.diff', one.original, one.modified, title, { preserveFocus: true, preview: true });
 			return;
 		}
-		if (changes.list.length) {
+		if (how === 'changes') {
 			await vscode.commands.executeCommand('vscode.changes', title, changes.list.map(r => [r.uri, r.original, r.modified]));
 		}
 	}

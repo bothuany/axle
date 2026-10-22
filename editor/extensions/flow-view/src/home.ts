@@ -42,6 +42,19 @@ export const pathKey = (file: string, platform: NodeJS.Platform = process.platfo
 	return platform === 'win32' || platform === 'darwin' ? abs.toLowerCase() : abs;
 };
 
+/**
+ * The files the page may ask to open, by `pathKey`: the recent files and the harness issues (in the project or in ~/.claude)
+ * this host listed. Anything else the page names is refused: it is not trusted with a path.
+ */
+export function offeredFiles(files: { path: string }[], issues: unknown, platform: NodeJS.Platform = process.platform): Set<string> {
+	const issueFiles = (Array.isArray(issues) ? issues : []).flatMap((i: { file?: unknown } | null) => typeof i?.file === 'string' && i.file ? [i.file] : []);
+	return new Set([...files.map(f => f.path), ...issueFiles].map(f => pathKey(f, platform)));
+}
+
+/** Whether the page's `open` names a file this host offered. */
+export const canOpen = (offered: Set<string>, file: unknown, platform: NodeJS.Platform = process.platform): file is string =>
+	typeof file === 'string' && file.length > 0 && offered.has(pathKey(file, platform));
+
 /** A 0-based line from the page (flow-harness counts issue lines from 0), as a whole number inside the file, or undefined. */
 export function homeLine(line: unknown, lineCount: number): number | undefined {
 	const n = typeof line === 'number' ? line : NaN;
@@ -142,7 +155,7 @@ export class FlowHome implements vscode.Disposable {
 	 * in the project or in ~/.claude) can be opened: the page is not trusted with a path, so a message cannot open any file on disk.
 	 */
 	private async open(file: unknown, line: unknown) {
-		if (typeof file !== 'string' || !file || !this.offered.has(pathKey(file))) {
+		if (!canOpen(this.offered, file)) {
 			return;
 		}
 		// A listed file can be gone since (or be binary): then there is nothing to open, and nothing to report from a click.
@@ -193,7 +206,7 @@ export class FlowHome implements vscode.Disposable {
 			const show = entryDisplay(e, path.relative(root, e.file));
 			return { id: e.id, source: e.source, label: entryName(e), http: e.http.split(/\s/)[0], route: show.title.replace(/^\S+\s+/, ''), detail: show.detail };
 		});
-		this.offered = new Set([...files.map(f => f.path), ...(Array.isArray(health?.issues) ? health.issues : []).flatMap(i => typeof i?.file === 'string' && i.file ? [i.file] : [])].map(f => pathKey(f)));
+		this.offered = offeredFiles(files, health?.issues);
 		await this.panel?.webview.postMessage({
 			type: 'data',
 			repo: folder?.name ?? 'No folder open',

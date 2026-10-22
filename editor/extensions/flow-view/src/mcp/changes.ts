@@ -23,6 +23,18 @@ export function statusesByFile(all: { uri: { fsPath: string }; status: number }[
 	return by;
 }
 
+/**
+ * How a change list opens. VS Code's multi-file diff editor (`vscode.changes`) always takes focus; the two-sided diff
+ * (`vscode.diff`) can keep it. So when focus must stay (an agent's open_diff while the user types in the terminal), one file
+ * with both sides opens as a two-sided diff; anything else opens in the multi-file editor, and an empty list opens nothing.
+ */
+export function diffOpening(list: { original?: unknown; modified?: unknown }[], preserveFocus: boolean): 'diff' | 'changes' | 'none' {
+	if (!list.length) {
+		return 'none';
+	}
+	return preserveFocus && list.length === 1 && list[0].original && list[0].modified ? 'diff' : 'changes';
+}
+
 /** A, D, R or M for a file with these statuses (A wins: a new file that was then changed is still new). */
 export function changeMark(kinds: number[]): { added: boolean; deleted: boolean; renamed: boolean; mark: 'A' | 'D' | 'R' | 'M' } {
 	const added = kinds.some(k => k === GitStatus.IndexAdded || k === GitStatus.Untracked || k === GitStatus.IntentToAdd);
