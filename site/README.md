@@ -1,6 +1,6 @@
 # The website
 
-https://insilode.dev/: the home page and the Try page, with the real canvas on a fictional demo project (`demo/`: orders and shipping in Java, billing in Python). A static site: no backend, and the only third-party request is GitHub's public API (the star count and the latest release). The design and its reasoning are in [docs/site/direction](../docs/site/direction/README.md) (direction A, "Light table").
+https://insilode.dev/: the home page and the Try page, with the real canvas on a fictional demo project (`demo/`: orders and shipping in Java, billing in Python). A static site: no backend, and the only third-party request is GitHub's public API (the star count and the latest release). The design and its reasoning are in [docs/site/direction](../docs/site/direction/README.md) (direction A, "Light table"), now on a dark page: the site has one theme, dark, like every marketing visual ([docs/design/messaging.md](../docs/design/messaging.md)). The palette and its contrast ratios are at the top of `src/site.css`.
 
 ## The pages
 
@@ -20,7 +20,7 @@ https://insilode.dev/: the home page and the Try page, with the real canvas on a
 | **The three agents** | **written for the page** (`src/agents.ts`): a fixed moment, not a live session; "Allow the test run" moves the waiting one on |
 | Harness section | flow-harness's own scan of the demo project, drawn by the page (`src/clips.ts`) |
 | Stills | headless captures of this site's own canvas and Try page (`scripts/capture-media.mjs`), committed in `public/media/` |
-| Editor window (`public/media/editor.webp`, `editor-narrow.webp`, `editor.jpg`; the README's `docs/media/insilode-editor.webp`) | a headless capture (puppeteer, 1680x1050 at 2x) of the real workbench in web mode (`npm run web`) on a copy of `demo/base` with `demo/changed` left uncommitted, with Claude Code started from the Agents dock and no prompt sent. The narrow one is its left 900 px. Only the web build's test status items (`Hello`, the keyboard layout) are hidden. Capture it again after a visible change to the workbench |
+| Editor window (`public/media/editor.webp`, `editor-narrow.webp`, `editor.jpg`; the README's `docs/media/insilode-editor.webp`) | a headless capture (puppeteer, 1680x1050 at 2x) of the real workbench in web mode (`npm run web`) on a copy of `demo/base` with `demo/changed` left uncommitted, with Claude Code started from the Agents dock and no prompt sent. The copy's `.vscode/settings.json` sets the dark theme (`Default Dark Modern`), the DOM terminal renderer (the GPU one draws text at twice its size in headless Chrome at 2x) and hides `.vscode` itself, which `.git/info/exclude` keeps out of source control. The code tab and the flow tab share one group, so the canvas is wide enough to show the whole `POST /orders` chain at a readable size. The narrow one is its left 900 px. Only the web build's test status items (`Hello`, the keyboard layout) and the canvas's overview map (as on this site) are hidden. Capture it again after a visible change to the workbench |
 
 ## How it fits together
 

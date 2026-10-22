@@ -87,7 +87,7 @@ function page(doc, { body, toc, description }) {
     <meta name="description" content="${escape(description)}" />
     <link rel="canonical" href="{{site}}/docs/${doc.slug ? `${doc.slug}/` : ''}" />
     <link rel="icon" href="${depth}icon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#e4e8ef" />
+    <meta name="theme-color" content="#0c1020" />
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="{{name}}" />
     <meta property="og:title" content="${escape(doc.title)}: {{name}} docs" />

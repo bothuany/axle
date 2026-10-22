@@ -14,6 +14,10 @@ Insilode is a **code editor built on VS Code** that shows how your code runs. A 
 
 Show the real editor window (explorer, a code tab, a canvas tab, the terminal with an agent, the Agents dock) right under the headline. Pictures are captures of the real app, never mock-ups.
 
+## Visual rule
+
+Every marketing visual is dark: the website (dark by default, and the only theme), screenshots of the editor (a dark VS Code theme, Default Dark Modern), the README images and the film. Flow cards in a picture are zoomed so their code can be read.
+
 ## What carries over from VS Code
 
 1. **Your extensions**, from Open VSX, the open extension registry VS Code forks use.
