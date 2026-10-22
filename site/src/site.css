@@ -1451,3 +1451,5 @@ figcaption {
     transform: none;
   }
 }
+
+.brand .tm { font-size: 0.55em; font-weight: 500; margin-left: 0.1em; vertical-align: super; opacity: 0.7; }

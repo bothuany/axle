@@ -2,7 +2,7 @@
   <img src="editor/branding/icon.png" width="112" alt="Insilode icon">
 </p>
 
-<h1 align="center">Insilode</h1>
+<h1 align="center">Insilode™</h1>
 
 <p align="center">
   <b>The code editor that shows how your code runs.</b><br>
@@ -67,4 +67,4 @@ A running Insilode checks the latest GitHub release and shows **Update available
 
 Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately ([SECURITY.md](SECURITY.md)).
 
-MIT licensed; contributors sign a short [CLA](CLA.md). The Insilode name and logo have their own [policy](TRADEMARKS.md). Insilode is built on [VS Code](https://github.com/microsoft/vscode) (Code - OSS) and is not affiliated with Microsoft; the Claude and Codex marks belong to their owners.
+MIT licensed; contributors sign a short [CLA](CLA.md). Insilode™ and its logo are trademarks of Recep Batuhan Dikmen; see the [trademark policy](TRADEMARKS.md). Insilode is built on [VS Code](https://github.com/microsoft/vscode) (Code - OSS) and is not affiliated with Microsoft; the Claude and Codex marks belong to their owners.
