@@ -14,7 +14,49 @@ export interface StageOptions {
   wheel: Wheel
   /** The canvas is not in the tab order until the visitor opens it (the hero); on the Try page it is. */
   tabbable: boolean
+  /** After the canvas's own fit, zoom so the cards fill the frame (the home page, where the flow is the picture). */
+  fill?: boolean
   onDecided?: (what: 'keep' | 'undo') => void
+}
+
+/**
+ * Zooms the canvas in `doc` so its cards fill the canvas area, less a margin, centred. The canvas zooms on a Ctrl+wheel around the
+ * pointer (React Flow's own handling), so this sends that: a zoom by f around the point p maps x to p + (x - p)·f, and p is chosen
+ * so the cards' box lands where it should. How far one wheel step zooms differs by platform, so it measures and corrects.
+ */
+async function fillCanvas(doc: Document) {
+  const view = doc.defaultView as (Window & typeof globalThis) | null
+  const area = doc.querySelector<HTMLElement>('.react-flow')
+  const pane = doc.querySelector<HTMLElement>('.react-flow__pane')
+  if (!view || !area || !pane) return
+  const frame = () => new Promise(r => view.requestAnimationFrame(() => view.requestAnimationFrame(r)))
+  const cards = () => {
+    const nodes = doc.querySelectorAll('.react-flow__node-card').length ? doc.querySelectorAll('.react-flow__node-card') : doc.querySelectorAll('.react-flow__node')
+    const boxes = [...nodes].map(n => n.getBoundingClientRect()).filter(b => b.width > 0)
+    return boxes.length ? { x0: Math.min(...boxes.map(b => b.left)), x1: Math.max(...boxes.map(b => b.right)), y0: Math.min(...boxes.map(b => b.top)), y1: Math.max(...boxes.map(b => b.bottom)) } : null
+  }
+  const wheel = (deltaY: number, clientX: number, clientY: number) =>
+    pane.dispatchEvent(new view.WheelEvent('wheel', { deltaY, deltaMode: 0, ctrlKey: true, clientX, clientY, bubbles: true, cancelable: true }))
+  // How much one unit of deltaY zooms: 2^(0.002 per unit) on Windows and Linux, ten times that on a Mac. Measure it with a small step.
+  const before = cards()
+  if (!before) return
+  const a0 = area.getBoundingClientRect()
+  wheel(-20, a0.left + a0.width / 2, a0.top + a0.height / 2)
+  await frame()
+  const after = cards()
+  if (!after) return
+  const measured = Math.log2((after.x1 - after.x0) / (before.x1 - before.x0)) / 20
+  const perUnit = measured > 0 ? measured : 0.002
+  const a = area.getBoundingClientRect()
+  const { x0, x1, y0, y1 } = after
+  const pad = Math.max(16, Math.min(40, a.width * 0.03))
+  const f = Math.min((a.width - 2 * pad) / (x1 - x0), (a.height - 2 * pad) / (y1 - y0), 1.6)
+  if (Math.abs(f - 1) < 0.01) return
+  // Where the box's top left should land: centred on the axis it does not fill.
+  const tx = a.left + (a.width - f * (x1 - x0)) / 2
+  const ty = a.top + (a.height - f * (y1 - y0)) / 2
+  wheel(-Math.log2(f) / perUnit, (tx - f * x0) / (1 - f), (ty - f * y0) / (1 - f))
+  await frame()
 }
 
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -59,6 +101,7 @@ export class Stage {
         await until(() => doc?.querySelector('.react-flow__node'))
         // The canvas fits its cards to the view in an animation of its own (250 ms) after the first draw.
         await wait(400)
+        if (this.options.fill && doc) await fillCanvas(doc)
         this.root.classList.add('is-live')
         resolve(f.contentWindow!)
       })

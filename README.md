@@ -5,8 +5,8 @@
 <h1 align="center">Insilode™</h1>
 
 <p align="center">
-  Every code editor shows how code is stored. <b>Insilode</b> shows how it runs.<br>
-  Built on VS Code, so your extensions, themes and keybindings work. Plus a live canvas of every request, a review of what your agents changed, and a dock that runs Claude Code and Codex side by side.
+  Every code editor shows your files. <b>Insilode</b> shows how your code runs.<br>
+  Built on VS Code. Your extensions, themes and keybindings work.
 </p>
 
 <p align="center">

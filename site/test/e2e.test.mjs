@@ -135,14 +135,27 @@ test('home: the hero canvas loads on its own, a plain wheel scrolls the page pas
 
 test('home: the first screen says it is a code editor built on VS Code, and the editor window leads to the demo', { skip }, async () => {
 	const { page, problems } = await open()
-	assert.equal(await page.$eval('h1', h => h.textContent.replace(/\s+/g, ' ')), 'Every code editor shows how code is stored. Insilode shows how it runs.')
+	assert.equal(await page.$eval('h1', h => h.textContent.replace(/\s+/g, ' ')), 'Every code editor shows your files. Insilode shows how your code runs.')
 	assert.equal(await page.$eval('h1 .accent', b => b.textContent), 'Insilode', 'the name stands out in the headline')
 	// Both faces are self-hosted: loading them must find a face from the site itself.
 	assert.deepEqual(await page.evaluate(async () => [(await document.fonts.load('650 40px "Instrument Sans"')).length > 0, (await document.fonts.load('14px "JetBrains Mono"')).length > 0]), [true, true], 'the self-hosted fonts load')
 	assert.match(await page.$eval('.hero .lede', p => p.textContent), /Built on VS Code/)
 	assert.equal(await page.$eval('.shot-window', a => new URL(a.href).pathname), '/try/')
-	assert.equal(await page.$eval('.shot img', i => i.complete && i.naturalWidth > 0), true, 'the editor capture loads')
+	// The hero loop: muted and inline (so it may start on its own), playing once on screen, from files the site serves.
+	const loop = await until(() => page.$eval('.shot video', v => !v.paused && v.readyState >= 2 && { muted: v.muted, inline: v.playsInline, loop: v.loop, src: v.currentSrc.split('/').pop() }), 'the hero loop to play')
+	assert.deepEqual(loop, { muted: true, inline: true, loop: true, src: 'hero-loop.webm' })
+	assert.match(await page.$eval('.works', l => l.textContent), /Claude Code.*Codex/s, 'the agents are named under the hero')
 	assert.match(await page.$eval('#vscode', s => s.textContent), /fork of VS Code.*Open VSX/s)
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('home: under reduced motion the hero loop stays on its poster and loads nothing', { skip }, async () => {
+	const { page, problems } = await open()
+	await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }])
+	await page.reload({ waitUntil: 'networkidle0' })
+	await wait(1200)
+	assert.deepEqual(await page.$eval('.shot video', v => ({ paused: v.paused, poster: v.poster.split('/').pop(), loaded: v.readyState })), { paused: true, poster: 'hero-loop-poster.jpg', loaded: 0 })
 	assert.deepEqual(problems, [])
 	await page.close()
 })
@@ -191,6 +204,7 @@ test('home: the harness section is the real scan of the demo project, with its o
 test('home on a phone: no canvas until asked, then full screen; the page has no sideways scroll', { skip }, async () => {
 	const { page, problems } = await open('', { viewport: { width: 375, height: 812, isMobile: true, hasTouch: true }, agent: PHONE })
 	assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 375)
+	assert.ok(await page.$eval('.shot', s => s.getBoundingClientRect().top < innerHeight - 120), 'the hero loop shows in the first screen of a phone')
 	await wait(1500)
 	assert.equal(await page.$('.stage-frame'), null, 'the phone loads no canvas by itself')
 	assert.equal(await page.$eval('.hero [data-download]', a => a.getAttribute('href')), '#download', 'a phone is sent to the list of files')

@@ -283,6 +283,15 @@ h3 {
   line-height: 1.25;
 }
 
+/* No word left alone on the last line of a heading or a short paragraph. */
+h2,
+h3,
+.lede,
+.prose p,
+figcaption {
+  text-wrap: pretty;
+}
+
 .lede {
   margin: 24px 0 0;
   font-size: clamp(19px, 1.6vw, 22px);
@@ -376,8 +385,8 @@ h3 {
 /* The slogan: two sentences, each from a new line, wrapped evenly so no word is left alone on a line. The product's name is in the
    light accent blue (8.5:1 on the page). */
 .hero h1 {
-  max-width: 20ch;
-  font-size: clamp(38px, 4.9vw, 68px);
+  max-width: none;
+  font-size: clamp(36px, 4.5vw, 64px);
   line-height: 1.04;
   letter-spacing: -0.012em;
 }
@@ -397,20 +406,12 @@ h3 {
   max-width: 46ch;
 }
 
-/* The editor window: a capture of the real workbench, the first thing that says "this is an editor". It is a link to the live demo. */
+/* The editor window: a silent loop captured from the real workbench, the first thing that says "this is an editor". It is wider than
+   the text column (it takes the gutter too, over the trace), so the editor's text is shown near its own size. A link to the demo. */
 .shot {
   position: relative;
-  margin: 56px 0 0;
-}
-
-.shot::before {
-  content: '';
-  position: absolute;
-  left: calc(-1 * var(--gutter) + 23px);
-  top: 64px;
-  width: calc(var(--gutter) - 23px);
-  height: 2px;
-  background: var(--signal);
+  z-index: 1;
+  margin: 48px 0 0 calc(-1 * var(--gutter) + 8px);
 }
 
 .shot-window {
@@ -424,10 +425,32 @@ h3 {
   transition: box-shadow 200ms, transform 200ms;
 }
 
-.shot-window img {
+.shot-video {
   display: block;
   width: 100%;
   height: auto;
+  aspect-ratio: 1920 / 1200;
+  background: #1f1f1f;
+}
+
+/* Works with: the agents, named in a row under the window. Plain names, not logos: the marks belong to their owners. */
+.works {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 28px;
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+  font: 600 18px/1.2 var(--sans);
+  color: var(--ink);
+}
+
+.works .works-label {
+  font: 500 13px/1 var(--mono);
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .shot-window:hover {
@@ -550,6 +573,11 @@ h3 {
   padding: 136px 0 0;
 }
 
+/* The POST /orders flow is wide and low: a wider frame than the Try page's, so the cards fill it instead of empty canvas. */
+.adds .stage {
+  aspect-ratio: 16 / 7.4;
+}
+
 .stage-wrap {
   position: relative;
   margin: 56px 0 0;
@@ -665,7 +693,7 @@ h3 {
 
 .problem {
   display: grid;
-  grid-template-columns: 5fr 7fr;
+  grid-template-columns: 4fr 8fr;
   gap: 56px;
   padding: 136px 0 0;
   align-items: start;
@@ -793,25 +821,11 @@ figcaption {
   padding: 136px 0 0;
 }
 
-.with-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 40px;
-  margin: 40px 0 0;
-  padding: 32px 0 0;
-  border-top: 2px solid var(--ink);
-}
-
-.with-grid p {
-  margin: 10px 0 0;
-  color: var(--ink-2);
-}
-
 .mcp {
   display: grid;
   grid-template-columns: 5fr 7fr;
   gap: 56px;
-  margin: 72px 0 0;
+  margin: 0;
   align-items: start;
 }
 
@@ -1274,7 +1288,6 @@ figcaption {
     gap: 28px;
   }
 
-  .with-grid,
   .carry,
   .dl-list {
     grid-template-columns: 1fr;
@@ -1355,19 +1368,31 @@ figcaption {
     width: 100%;
   }
 
-  .stage-wrap::before,
-  .shot::before {
+  .stage-wrap::before {
     left: calc(-1 * var(--gutter) + 7px);
     width: calc(var(--gutter) - 7px);
     top: 48px;
   }
 
   .hero h1 {
-    font-size: 36px;
+    font-size: 32px;
+  }
+
+  .hero .lede {
+    margin-top: 16px;
+  }
+
+  .hero .ctas {
+    margin-top: 24px;
   }
 
   .shot {
-    margin-top: 40px;
+    margin: 28px 0 0;
+  }
+
+  .works {
+    gap: 8px 18px;
+    font-size: 16px;
   }
 
   /* On a phone the button sits under the window, not on it: the window is small enough that it would hide the terminal. */
@@ -1388,7 +1413,8 @@ figcaption {
     padding: 22px 18px;
   }
 
-  .stage {
+  .stage,
+  .adds .stage {
     aspect-ratio: 3 / 4;
   }
 
@@ -1470,4 +1496,4 @@ figcaption {
   }
 }
 
-.brand .tm { font-size: 0.55em; font-weight: 500; margin-left: 0.1em; vertical-align: super; opacity: 0.7; }
+.brand .tm { font-size: 0.5em; font-weight: 500; margin-left: 0.06em; vertical-align: 0.9em; line-height: 0; opacity: 0.75; }
