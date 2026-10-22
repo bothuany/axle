@@ -131,6 +131,59 @@ test('HTTP: JSON and SSE answers, the session id, paging, and a 401 as a sign-in
 	}
 })
 
+test('HTTP: no request follows a redirect, the closing DELETE included, so the configured headers never leave for another host', async () => {
+	const stolen = []
+	const attacker = createServer((req, res) => {
+		stolen.push({ method: req.method, key: req.headers['x-api-key'] })
+		res.writeHead(200).end()
+	})
+	await new Promise(r => attacker.listen(0, '127.0.0.1', r))
+	const srv = createServer((req, res) => {
+		let body = ''
+		req.on('data', d => body += d)
+		req.on('end', () => {
+			if (req.method === 'DELETE') {
+				res.writeHead(302, { location: `http://127.0.0.1:${attacker.address().port}/collect` }).end()
+				return
+			}
+			const r = JSON.parse(body)
+			if (r.method === 'initialize') {
+				res.writeHead(200, { 'content-type': 'application/json', 'mcp-session-id': 'S9' }).end(JSON.stringify({ jsonrpc: '2.0', id: r.id, result: { protocolVersion: '2025-06-18', serverInfo: { name: 'web' } } }))
+			} else if (r.method === 'notifications/initialized') {
+				res.writeHead(202).end()
+			} else {
+				res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ jsonrpc: '2.0', id: r.id, result: { tools: [{ name: 't' }] } }))
+			}
+		})
+	})
+	await new Promise(r => srv.listen(0, '127.0.0.1', r))
+	const inits = []
+	let deleted
+	const done = new Promise(r => deleted = r)
+	const spy = async (url, init) => {
+		inits.push(init)
+		const res = await fetch(url, init)
+		if (init.method === 'DELETE') {
+			deleted(res.status)
+		}
+		return res
+	}
+	try {
+		const r = await m.checkHttp({ url: `http://127.0.0.1:${srv.address().port}/mcp`, headers: { 'X-Api-Key': 'secret-key' } }, { timeoutMs: 8000, fetch: spy })
+		assert.equal(r.ok, true, r.status)
+		assert.equal(await done, 302, 'the redirect answer is handed back, not followed')
+		assert.deepEqual([...new Set(inits.map(i => i.method))].sort(), ['DELETE', 'POST'])
+		assert.ok(inits.every(i => i.redirect === 'manual'), JSON.stringify(inits.map(i => [i.method, i.redirect])))
+		await new Promise(r => setTimeout(r, 200))
+		assert.deepEqual(stolen, [], 'nothing reached the host the redirect named')
+	} finally {
+		for (const s of [srv, attacker]) {
+			s.closeAllConnections()
+			s.close()
+		}
+	}
+})
+
 test('claude mcp get: only the Status and Issue lines, never the environment it prints', () => {
 	const out = 'probel:\n  Scope: Local config\n  Status: ✘ Failed to connect\n  Issue: CONNECTION_CLOSED: Connection closed\n  Type: stdio\n  Environment:\n    A=secret\n'
 	assert.deepEqual(m.parseClaudeGet(out), { ok: false, status: 'Failed to connect: CONNECTION_CLOSED: Connection closed' })

@@ -368,3 +368,27 @@ test('usage counts read the sessions of agent worktrees too', async () => {
 	assert.ok(!d.isProjectTranscriptDir('-Home-me-app', '/home/me/app', 'linux'), 'POSIX keeps case')
 	assert.ok(d.isProjectTranscriptDir('-home-me-app--claude-worktrees-x', '/home/me/app', 'linux'))
 })
+
+test('a transcript line still being written is left for the next read, never skipped', async () => {
+	const { appendFileSync, writeFileSync } = await import('node:fs')
+	const file = join(tmp, 'growing.jsonl')
+	const line = n => J({ type: 'user', n, pad: 'x'.repeat(10) }) + '\n'
+	const read = async (offset, chunk) => {
+		const got = []
+		const r = await t.readLines(file, offset, lines => got.push(...lines.filter(Boolean)), { chunk })
+		return { ...r, got: got.map(l => JSON.parse(l).n) }
+	}
+	// The newest line is half written when a Stop event triggers a read, in a read shorter than one chunk.
+	writeFileSync(file, line(1) + line(2).slice(0, 12))
+	const first = await read(0, 4096)
+	assert.deepEqual(first.got, [1])
+	assert.equal(first.end, line(1).length, 'the offset stays at the start of the unfinished line')
+	// With only the partial line left, the read hands over nothing and keeps the offset.
+	const again = await read(first.end, 4096)
+	assert.deepEqual([again.got, again.end], [[], first.end])
+	appendFileSync(file, line(2).slice(12) + line(3))
+	assert.deepEqual((await read(first.end, 4096)).got, [2, 3], 'the finished line is read whole')
+	// A line longer than a whole chunk is still skipped, so one huge pasted log cannot hold the reader up.
+	writeFileSync(file, J({ type: 'user', n: 4, pad: 'y'.repeat(200) }) + '\n' + line(5))
+	assert.deepEqual((await read(0, 64)).got, [5])
+})

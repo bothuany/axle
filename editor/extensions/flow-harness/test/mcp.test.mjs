@@ -92,6 +92,49 @@ test('a .mcp.json with a comment: Claude Code rejects it, so its servers are lis
 	assert.match(c.problems[0].message, /strict JSON/)
 })
 
+test('a .mcp.json the lenient parser recovers (a missing comma) is still rejected whole, as Claude Code\'s strict parser does', async () => {
+	const c = await cfg.readMcp(windowsInput({
+		'c:/work/app/.mcp.json': '{ "mcpServers": { "a": { "command": "a" } "b": { "command": "b" } } }',
+		'c:/work/app/.claude/settings.json': JSON.stringify({ enableAllProjectMcpServers: true }),
+	}))
+	const project = c.servers.filter(s => s.scope === 'project')
+	assert.ok(project.length, 'the recovered servers are still listed')
+	assert.ok(project.every(s => s.state === 'off'), JSON.stringify(project.map(s => [s.name, s.state])))
+	assert.equal(c.problems.length, 1, 'one problem, not two')
+	assert.match(c.problems[0].message, /rejects the file/)
+})
+
+test('only a definition Claude Code loads shadows another: a rejected, pending or malformed project server leaves the name to the user\'s', async () => {
+	const user = JSON.stringify({ mcpServers: { github: { type: 'http', url: 'https://user.example/mcp' } } })
+	const project = (extra = '') => `{ "mcpServers": { "github": { "type": "http", "url": "https://repo.example/mcp" } }${extra} }`
+	const cases = [
+		['rejected', { 'c:/work/app/.mcp.json': project(), 'c:/work/app/.claude/settings.local.json': JSON.stringify({ disabledMcpjsonServers: ['github'] }) }],
+		['pending', { 'c:/work/app/.mcp.json': project() }],
+		['a trailing comma', { 'c:/work/app/.mcp.json': project(','), 'c:/work/app/.claude/settings.json': JSON.stringify({ enableAllProjectMcpServers: true }) }],
+		['a missing comma', { 'c:/work/app/.mcp.json': '{ "mcpServers": { "github": { "type": "http" "url": "https://repo.example/mcp" } } }', 'c:/work/app/.claude/settings.json': JSON.stringify({ enableAllProjectMcpServers: true }) }],
+	]
+	for (const [why, files] of cases) {
+		const c = await cfg.readMcp(windowsInput({ 'C:/Users/me/.claude.json': user, ...files }))
+		const u = c.servers.find(s => s.name === 'github' && s.scope === 'user')
+		assert.equal(u.shadowedBy, undefined, `${why}: the user definition is the one Claude Code connects`)
+		assert.ok(!u.issues.some(i => /Not used/.test(i.message)), why)
+	}
+	const pending = await cfg.readMcp(windowsInput({ 'C:/Users/me/.claude.json': user, 'c:/work/app/.mcp.json': project() }))
+	assert.match(pending.servers.find(s => s.scope === 'project').issues.map(i => i.message).join(' '), /Until it is approved, the user definition/)
+	// Approved and valid, the project definition still wins.
+	const approved = await cfg.readMcp(windowsInput({ 'C:/Users/me/.claude.json': user, 'c:/work/app/.mcp.json': project(), 'c:/work/app/.claude/settings.json': JSON.stringify({ enabledMcpjsonServers: ['github'] }) }))
+	assert.ok(approved.servers.find(s => s.scope === 'user').shadowedBy)
+	assert.equal(approved.servers.find(s => s.scope === 'project').shadowedBy, undefined)
+})
+
+test('a URL\'s user name is masked as well as its password: a token is often passed as the user name alone', () => {
+	assert.equal(cfg.maskUrl('https://ghp_abcdefghijklmnop0123@host.example/mcp'), 'https://••••@host.example/mcp')
+	assert.equal(cfg.maskUrl('https://u:pa55w0rd@host.example/mcp?token=abc&x=1#f'), 'https://••••:••••@host.example/mcp?token=••••&x=1#f')
+	assert.equal(cfg.maskUrl('https://host.example/mcp?x=1'), 'https://host.example/mcp?x=1')
+	const secrets = cfg.secretsOf([{ env: {}, headers: {}, args: [], url: 'https://ghp_abcdefghijklmnop0123@host.example/mcp' }])
+	assert.ok(secrets.includes('ghp_abcdefghijklmnop0123'), JSON.stringify(secrets))
+})
+
 test('CLAUDE_CONFIG_DIR moves .claude.json into it; POSIX paths and a pending project server', async () => {
 	assert.equal(cfg.claudeJsonPath('/home/me', '/tmp/cc'), join('/tmp/cc', '.claude.json'))
 	assert.equal(cfg.claudeJsonPath('/home/me'), join('/home/me', '.claude.json'))

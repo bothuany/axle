@@ -8,7 +8,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { globMatch } from './effective';
-import { parseRule, ruleProblem, simulate, type Rule, type RuleScope } from './permmatch';
+import { KNOWN_TOOLS, parseRule, ruleProblem, simulate, type Rule, type RuleScope } from './permmatch';
 
 export type LintSeverity = 'error' | 'warning' | 'info';
 
@@ -342,10 +342,6 @@ export const HOOK_EVENTS = new Set(['SessionStart', 'Setup', 'UserPromptSubmit',
 const TOOL_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest', 'PermissionDenied']);
 /** Events that take no matcher: one written there is ignored. */
 const NO_MATCHER = new Set(['UserPromptSubmit', 'UserPromptExpansion', 'Stop', 'TeammateIdle', 'TaskCreated', 'TaskCompleted', 'WorktreeCreate', 'WorktreeRemove', 'CwdChanged', 'PostToolBatch']);
-/** Claude Code's built-in tools, as hook matchers and permission rules name them. */
-export const KNOWN_TOOLS = ['Bash', 'BashOutput', 'KillShell', 'PowerShell', 'Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch',
-	'Task', 'Agent', 'TodoWrite', 'ExitPlanMode', 'EnterPlanMode', 'Skill', 'SlashCommand', 'ToolSearch', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop', 'TaskOutput',
-	'AskUserQuestion', 'Monitor', 'SendMessage', 'CronCreate', 'CronDelete', 'CronList', 'EnterWorktree', 'ExitWorktree', 'ListMcpResourcesTool', 'ReadMcpResourceTool', 'LSP', 'EndConversation'];
 
 function lintHooks(input: LintInput, out: Finding[]) {
 	for (const h of input.hooks) {

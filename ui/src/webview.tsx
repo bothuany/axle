@@ -18,6 +18,7 @@ import { PointAsk, selectedLines, type Pointing } from './tour/PointAsk'
 import { SelectionBar, type Picked, type SelectionAction } from './tour/SelectionBar'
 import { useTourPlayer } from './tour/TourPlayer'
 import { useGaze } from './gaze/Gaze'
+import { loadCounter } from './loads'
 import type { FlowNode } from './types'
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void }
@@ -189,18 +190,21 @@ function Flow() {
   }, [])
 
   /** Counts loads: an answer that arrives after a newer load started (another target, a refresh) is dropped. */
-  const loads = useRef(0)
+  const loads = useRef(loadCounter()).current
   const load = useCallback(async (t: Target, keepFolds: boolean) => {
-    const mine = ++loads.current
+    const mine = loads.start()
     try {
       // The callees are the flow; callers are an addition: when only they fail, the flow still draws.
       const [graph, callers] = await Promise.allSettled([request<FlowNode>('graph', { target: t, turn: turnRef.current }), request<FlowNode | null>('callers', { target: t, turn: turnRef.current })])
-      if (mine !== loads.current) return
+      if (!loads.isCurrent(mine)) return
       if (graph.status === 'rejected') throw graph.reason
       const d = graph.value
       const u = callers.status === 'fulfilled' ? callers.value : null
-      request<TurnSummary[]>('timeline', {}).then(setTurns, () => setTurns([]))
-      if (d.file) request<string[]>('editHooks', { file: d.file }).then(setEditHooks, () => setEditHooks([]))
+      // These fill in after the canvas: an answer for a load that a newer one replaced must not land on the newer flow.
+      const live = loads.whileCurrent(mine)
+      request<TurnSummary[]>('timeline', {}).then(v => live(() => setTurns(v)), () => live(() => setTurns([])))
+      if (d.file) request<string[]>('editHooks', { file: d.file }).then(v => live(() => setEditHooks(v)), () => live(() => setEditHooks([])))
+      else setEditHooks([])
       setDown(d)
       setUp(u)
       setDrawnFor(t)
@@ -216,9 +220,9 @@ function Flow() {
       setError('')
       // Impact walks callers far up; it can take a moment, so it fills in after the canvas.
       if (!keepFolds) setImpact(null)
-      request<{ label: string; items: string[] }>('impact', { target: t }).then(setImpact, () => setImpact(null))
+      request<{ label: string; items: string[] }>('impact', { target: t }).then(v => live(() => setImpact(v)), () => live(() => setImpact(null)))
     } catch (e) {
-      if (mine === loads.current) setError(String((e as Error).message ?? e))
+      if (loads.isCurrent(mine)) setError(String((e as Error).message ?? e))
     }
   }, [])
 

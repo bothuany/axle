@@ -6,6 +6,68 @@
  *  breakdown `/context` printed if the user ran it. Pure (no vscode), so it is tested on its own.
  *--------------------------------------------------------------------------------------------*/
 
+import { promises as fs } from 'fs';
+
+/** Transcripts are read in pieces of this size, so memory stays bounded. */
+const CHUNK = 4 << 20;
+/** Past this only a transcript's newest part is read (they reach hundreds of MB), and the counts say they start there. */
+const MAX_FILE = 256 << 20;
+
+/**
+ * Reads a transcript from `offset` to its end in chunks, handing over whole lines only, so memory stays bounded however
+ * large the file. The last line may still be being written: `end` then stops at its start, and the next read picks it up
+ * whole. Past `maxFile` only the newest part is read: `from` then says when that part begins, since nothing before it
+ * was seen. `chunk` and `maxFile` are there for the tests.
+ */
+export async function readLines(file: string, offset: number, each: (lines: string[]) => void, opts: { chunk?: number; maxFile?: number } = {}): Promise<{ end: number; from?: number }> {
+	const chunk = opts.chunk ?? CHUNK;
+	const maxFile = opts.maxFile ?? MAX_FILE;
+	const h = await fs.open(file, 'r');
+	try {
+		const size = (await h.stat()).size;
+		let pos = offset > size ? 0 : offset; // a shorter file was rewritten: read it again
+		const truncated = size - pos > maxFile;
+		if (truncated) {
+			pos = size - maxFile;
+		}
+		let from: number | undefined;
+		let skipPartial = truncated;
+		const buf = Buffer.alloc(chunk);
+		while (pos < size) {
+			const { bytesRead } = await h.read(buf, 0, Math.min(chunk, size - pos), pos);
+			if (!bytesRead) {
+				break;
+			}
+			const lastNl = buf.lastIndexOf(0x0a, bytesRead - 1);
+			if (lastNl < 0) {
+				if (bytesRead < chunk) {
+					break; // the rest is one line still being written: leave it for the next read
+				}
+				// One line longer than a chunk (a huge pasted log): skip it rather than read it whole.
+				pos += bytesRead;
+				skipPartial = true;
+				continue;
+			}
+			const lines = buf.toString('utf8', 0, lastNl).split('\n');
+			if (skipPartial) {
+				lines.shift();
+				skipPartial = false;
+			}
+			if (truncated && from === undefined) {
+				from = lines.map(l => /"timestamp":"([^"]+)"/.exec(l)?.[1]).map(t => t ? Date.parse(t) : NaN).find(Number.isFinite) ?? Date.now();
+			}
+			each(lines);
+			pos += lastNl + 1;
+			if (bytesRead < chunk && lastNl + 1 < bytesRead) {
+				break; // the rest is a line still being written
+			}
+		}
+		return { end: pos, from };
+	} finally {
+		await h.close();
+	}
+}
+
 export interface Usage {
 	/** Input side of one API call: fresh + cache read + cache creation tokens, as the API reported them. */
 	used: number;
