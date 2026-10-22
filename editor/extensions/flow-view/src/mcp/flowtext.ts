@@ -65,7 +65,9 @@ export function flowToText(root: FlowNode, opts: FlowTextOptions, direction: 'ca
 		if (table && !tables.includes(table)) {
 			tables.push(table);
 		}
-		const key = n.symbolId ?? `${n.file}:${n.startLine}`;
+		// A card with no symbol and no file (an ambiguous call) is known by its label and candidates: two different interface
+		// dispatches must not share one key, or the second one's implementations are never listed.
+		const key = n.symbolId ?? (n.file ? `${n.file}:${n.startLine}` : `${n.kind}:${n.label}:${n.children.map(c => c.node.symbolId ?? c.node.label).join(',')}`);
 		const again = n.kind !== 'db' && n.children.length > 0 && shown.has(key);
 		if (n.kind !== 'db') {
 			shown.add(key);

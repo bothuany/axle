@@ -5,6 +5,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { execFile } from 'child_process';
+import { randomBytes } from 'crypto';
 import { existsSync } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -33,6 +34,44 @@ interface Health {
 	bySource?: { project: Record<string, number>; user: Record<string, number> };
 	/** What the project has not set up. */
 	gaps?: { label: string; message: string }[];
+}
+
+/** How a path is compared with the ones the page was given: resolved, and without case where the file system has none. */
+export const pathKey = (file: string, platform: NodeJS.Platform = process.platform) => {
+	const abs = path.resolve(file);
+	return platform === 'win32' || platform === 'darwin' ? abs.toLowerCase() : abs;
+};
+
+/** A 0-based line from the page (flow-harness counts issue lines from 0), as a whole number inside the file, or undefined. */
+export function homeLine(line: unknown, lineCount: number): number | undefined {
+	const n = typeof line === 'number' ? line : NaN;
+	if (!Number.isInteger(n) || n < 0) {
+		return undefined;
+	}
+	return Math.min(n, Math.max(0, lineCount - 1));
+}
+
+/**
+ * How often git saw each file change lately (last 90 days), by `pathKey`. `--relative` makes the paths relative to `root`
+ * (and leaves out files outside it): without it they are relative to the repository's top, and a workspace that is a
+ * subfolder of the repository would join them onto itself and never match. Nothing when the folder is not a repository.
+ */
+export function gitChurn(root: string): Promise<Map<string, number>> {
+	return new Promise(resolve => {
+		execFile('git', ['log', '--since=90.days', '--relative', '--name-only', '--pretty=format:'], { cwd: root, maxBuffer: 32 * 1024 * 1024, timeout: 10_000, windowsHide: true }, (err, out) => {
+			const counts = new Map<string, number>();
+			if (!err) {
+				for (const line of out.split('\n')) {
+					const rel = line.trim();
+					if (rel) {
+						const key = pathKey(path.join(root, rel));
+						counts.set(key, (counts.get(key) ?? 0) + 1);
+					}
+				}
+			}
+			resolve(counts);
+		});
+	});
 }
 
 /** a1 b1 a2 b2 …: with two backends neither pushes the other off a short list. */
@@ -77,19 +116,46 @@ export class FlowHome implements vscode.Disposable {
 		panel.onDidChangeViewState(e => e.webviewPanel.visible && void this.post());
 	}
 
-	private async onMessage(m: { type: string; text?: string; plan?: boolean; path?: string; id?: string; label?: string; source?: Source; command?: string; line?: number }) {
+	private async onMessage(m: { type: string; text?: string; plan?: boolean; path?: string; id?: string; label?: string; source?: Source; command?: string; line?: unknown }) {
+		// The prompt is the user's own typing: a string, or nothing.
+		if (m.text !== undefined && typeof m.text !== 'string') {
+			return undefined;
+		}
 		switch (m.type) {
 			case 'ready': return this.post();
 			// "Plan first" goes as an option: flow-agent says it the way the chosen agent understands (/plan is Claude Code's).
 			case 'ask': return await askInDock(m.text ?? '', true, 'Home', [], { plan: m.plan === true }) || vscode.commands.executeCommand('workbench.action.chat.open', { query: m.plan === true ? `${PLAN_FIRST} ${m.text ?? ''}` : m.text, isPartialQuery: false });
 			case 'draft': return await askInDock(m.text ?? '', false, 'Home') || vscode.commands.executeCommand('workbench.action.chat.open', { query: m.text, isPartialQuery: true });
-			case 'open': return vscode.window.showTextDocument(vscode.Uri.file(m.path!), { selection: m.line !== undefined ? new vscode.Range(m.line, 0, m.line, 0) : undefined });
-			case 'flow': return vscode.commands.executeCommand(Command.showEntry, m.id, m.label, m.source);
+			case 'open': return this.open(m.path, m.line);
+			// The flow is looked up by its id in the index; the page only gets to name it with text and a known backend.
+			case 'flow': return typeof m.id === 'string' && m.id.length <= 2000 && typeof m.label === 'string'
+				? vscode.commands.executeCommand(Command.showEntry, m.id, m.label.slice(0, 500), m.source === 'roslyn' || m.source === 'poly' ? m.source : undefined)
+				: undefined;
 			// Only the shortcuts this page shows: a message is not a licence to run any command.
 			case 'run': return HOME_COMMANDS.has(m.command ?? '') ? vscode.commands.executeCommand(m.command!) : undefined;
 			default: return undefined;
 		}
 	}
+
+	/**
+	 * Opens a row of the page. Only a file this host itself listed in its last `data` message (a recent file, a harness issue
+	 * in the project or in ~/.claude) can be opened: the page is not trusted with a path, so a message cannot open any file on disk.
+	 */
+	private async open(file: unknown, line: unknown) {
+		if (typeof file !== 'string' || !file || !this.offered.has(pathKey(file))) {
+			return;
+		}
+		// A listed file can be gone since (or be binary): then there is nothing to open, and nothing to report from a click.
+		const doc = await Promise.resolve(vscode.workspace.openTextDocument(vscode.Uri.file(path.resolve(file)))).catch(() => undefined);
+		if (!doc) {
+			return;
+		}
+		const at = homeLine(line, doc.lineCount);
+		await vscode.window.showTextDocument(doc, { selection: at !== undefined ? new vscode.Range(at, 0, at, 0) : undefined });
+	}
+
+	/** The files the last `data` message listed, by `pathKey`: the only ones `open` accepts. */
+	private offered = new Set<string>();
 
 	private async branch(): Promise<string | undefined> {
 		try {
@@ -101,27 +167,10 @@ export class FlowHome implements vscode.Disposable {
 		}
 	}
 
-	/**
-	 * How often git saw each file change lately (last 90 days), by absolute path: the endpoints people work on come first.
-	 * Asked once per window, in the background; nothing when the folder is not a repository.
-	 */
+	/** The endpoints people work on come first: git's churn, asked once per window, in the background. */
 	private churn: Promise<Map<string, number>> | undefined;
 	private churnOf(root: string) {
-		return this.churn ??= new Promise(resolve => {
-			execFile('git', ['log', '--since=90.days', '--name-only', '--pretty=format:'], { cwd: root, maxBuffer: 32 * 1024 * 1024, timeout: 10_000, windowsHide: true }, (err, out) => {
-				const counts = new Map<string, number>();
-				if (!err) {
-					for (const line of out.split('\n')) {
-						const rel = line.trim();
-						if (rel) {
-							const abs = path.join(root, rel).toLowerCase();
-							counts.set(abs, (counts.get(abs) ?? 0) + 1);
-						}
-					}
-				}
-				resolve(counts);
-			});
-		});
+		return this.churn ??= gitChurn(root);
 	}
 
 	private async post() {
@@ -135,7 +184,7 @@ export class FlowHome implements vscode.Disposable {
 		const all = this.endpoints.cached();
 		// The endpoints whose files changed most lately first; then the order the backends gave.
 		const churn = root ? await this.churnOf(root) : new Map<string, number>();
-		const heat = (file: string) => churn.get(path.normalize(file).toLowerCase()) ?? 0;
+		const heat = (file: string) => churn.get(pathKey(file)) ?? 0;
 		const ranked = interleave(all.filter(e => e.source === 'roslyn'), all.filter(e => e.source === 'poly'))
 			.map((e, i) => ({ e, i, heat: heat(e.file) }))
 			.sort((a, b) => b.heat - a.heat || a.i - b.i)
@@ -144,6 +193,7 @@ export class FlowHome implements vscode.Disposable {
 			const show = entryDisplay(e, path.relative(root, e.file));
 			return { id: e.id, source: e.source, label: entryName(e), http: e.http.split(/\s/)[0], route: show.title.replace(/^\S+\s+/, ''), detail: show.detail };
 		});
+		this.offered = new Set([...files.map(f => f.path), ...(Array.isArray(health?.issues) ? health.issues : []).flatMap(i => typeof i?.file === 'string' && i.file ? [i.file] : [])].map(f => pathKey(f)));
 		await this.panel?.webview.postMessage({
 			type: 'data',
 			repo: folder?.name ?? 'No folder open',
@@ -155,8 +205,23 @@ export class FlowHome implements vscode.Disposable {
 	}
 
 	private html() {
-		const csp = `default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';`;
-		return /* html */ `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}">
+		return homeHtml(randomBytes(16).toString('base64'));
+	}
+
+	dispose() {
+		this.panel?.dispose();
+		this.disposables.forEach(d => d.dispose());
+	}
+}
+
+/**
+ * The page. Its one script runs by a nonce made for each load, as on the canvas and the boards: no inline handler and no
+ * injected <script> can run. Everything the host sends is escaped where it goes into markup, numbers included: they come from
+ * another extension (flowHarness.health) and from the indexed source, and are not trusted to be what their type says.
+ */
+export function homeHtml(nonce: string) {
+	const csp = `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';`;
+	return /* html */ `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}">
 <style>
 :root {
 	--bg: var(--vscode-editor-background); --text: var(--vscode-foreground); --muted: var(--vscode-descriptionForeground);
@@ -270,7 +335,7 @@ kbd { font: 11px var(--mono); padding: 0 5px; border: 1px solid var(--line); bor
 		<button data-run="workbench.view.extension.flowHarness"><kbd>Harness</kbd> Open the map</button>
 	</nav>
 </main>
-<script>
+<script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 const $ = id => document.getElementById(id);
 // Shortcut labels follow the OS: ⌥⌘F on a Mac, Ctrl+Alt+F elsewhere (the same chord the keybindings register).
@@ -282,7 +347,9 @@ const keyLabel = k => { const parts = k.split('+'); const key = parts.filter(p =
 	const mods = order.filter(m => parts.includes(m)).map(m => MODS[m][MAC ? 0 : 1]);
 	return MAC ? mods.concat(key).join('') : [...new Set(mods)].concat(key).join('+'); };
 const applyKeys = () => document.querySelectorAll('kbd[data-k]').forEach(el => { el.textContent = keyLabel(el.dataset.k); });
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// A count from the host as a finite number (0 otherwise): numbers are written into markup unescaped only after this.
+const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'now' : m < 60 ? m + ' min' : m < 1440 ? Math.round(m / 60) + ' h' : Math.round(m / 1440) + ' d'; };
 const q = $('q');
 let plan = false;
@@ -302,25 +369,30 @@ window.addEventListener('message', e => {
 	$('files').innerHTML = d.files.length ? d.files.map(f => '<button class="row" data-path="' + esc(f.path) + '"><span class="name">' + esc(f.name) + '</span><span class="sub">' + esc(f.dir || ago(f.at)) + '</span></button>').join('') : '<p class="empty">Files you open show up here.</p>';
 	if (d.flows.length) {
 		const f = d.flows[0];
-		$('resume').innerHTML = '<button class="resume" id="resumeBtn"><svg width="26" height="14" viewBox="0 0 240 120" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="10"><rect x="76" y="20" width="152" height="80" rx="22"/><path d="M46 60h48M136 60h32"/></g><g fill="currentColor"><path d="M14 40l32 20-32 20z"/><path d="M115 39l21 21-21 21-21-21z"/><circle cx="188" cy="60" r="18"/></g></svg><div><b>' + esc(f.label) + '</b><span>Last flow you opened, ' + ago(f.at) + ' ago</span></div><span class="go">Open canvas</span></button>';
+		$('resume').innerHTML = '<button class="resume" id="resumeBtn"><svg width="26" height="14" viewBox="0 0 240 120" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="10"><rect x="76" y="20" width="152" height="80" rx="22"/><path d="M46 60h48M136 60h32"/></g><g fill="currentColor"><path d="M14 40l32 20-32 20z"/><path d="M115 39l21 21-21 21-21-21z"/><circle cx="188" cy="60" r="18"/></g></svg><div><b>' + esc(f.label) + '</b><span>Last flow you opened, ' + esc(ago(f.at)) + ' ago</span></div><span class="go">Open canvas</span></button>';
 		$('resumeBtn').onclick = () => vscode.postMessage({ type: 'flow', id: f.id, label: f.label, source: f.source || '' });
 		$('flowsTitle').innerHTML = 'Flows you opened';
-		$('flows').innerHTML = d.flows.map(f => '<button class="row" data-id="' + esc(f.id) + '" data-source="' + esc(f.source || '') + '" data-label="' + esc(f.label) + '"><svg class="glyph" viewBox="0 0 10 10"><path d="M5 0l5 5-5 5-5-5z" fill="#b88cff"/></svg><span class="name">' + esc(f.label) + '</span><span class="sub">' + ago(f.at) + '</span></button>').join('');
+		$('flows').innerHTML = d.flows.map(f => '<button class="row" data-id="' + esc(f.id) + '" data-source="' + esc(f.source || '') + '" data-label="' + esc(f.label) + '"><svg class="glyph" viewBox="0 0 10 10"><path d="M5 0l5 5-5 5-5-5z" fill="#b88cff"/></svg><span class="name">' + esc(f.label) + '</span><span class="sub">' + esc(ago(f.at)) + '</span></button>').join('');
 	} else {
-		$('flowsTitle').innerHTML = 'Endpoints <span>' + (d.total || '') + '</span>';
+		const total = num(d.total);
+		$('flowsTitle').innerHTML = 'Endpoints <span>' + (total || '') + '</span>';
 		// The route first, as a developer reads it; the service and handler after it.
 		$('flows').innerHTML = (d.endpoints.length ? d.endpoints.map(e => '<button class="row" data-id="' + esc(e.id) + '" data-source="' + esc(e.source) + '" data-label="' + esc(e.label) + '" title="' + esc(e.http + ' ' + e.route + '  ' + e.detail) + '"><span class="verb v-' + esc(e.http) + '">' + esc(e.http) + '</span><span class="name">' + esc(e.route) + '</span><span class="sub">' + esc(e.detail) + '</span></button>').join('') : '<p class="empty">Open a source file and press <kbd data-k="mod+alt+F"></kbd> to draw its flow.</p>')
-			+ (d.total > d.endpoints.length ? '<button class="more" data-run="flow.pickEndpoint">All ' + d.total + ' endpoints…</button>' : '');
+			+ (total > d.endpoints.length ? '<button class="more" data-run="flow.pickEndpoint">All ' + total + ' endpoints…</button>' : '');
 	}
 	const h = d.health;
 	if (h) {
-		const cls = h.score >= 85 ? 'good' : h.score >= 60 ? 'mid' : 'bad';
+		const score = num(h.score);
+		const cls = score >= 85 ? 'good' : score >= 60 ? 'mid' : 'bad';
 		const t = h.totals;
-		const n = (k, one, many) => k + ' ' + (k === 1 ? one : many || one + 's');
-		const list = c => [n(c.instructions, 'instruction'), n(c.skills, 'skill'), n(c.hooks, 'hook'), c.mcp + ' MCP'].join(', ');
+		const n = (k, one, many) => num(k) + ' ' + (num(k) === 1 ? one : many || one + 's');
+		const list = c => { c = c || {}; return [n(c.instructions, 'instruction'), n(c.skills, 'skill'), n(c.hooks, 'hook'), num(c.mcp) + ' MCP'].join(', '); };
 		const gaps = h.gaps || [];
-		$('health').innerHTML = '<div class="health"><span class="score ' + cls + '">' + h.score + '</span><p>' + (h.counts.error ? h.counts.error + ' broken, ' : '') + h.counts.warning + ' to look at<br>' + (h.startupTokens / 1000).toFixed(1) + 'k tokens before your first prompt</p></div>'
-			+ h.issues.slice(0, 4).map(i => '<button class="row" data-path="' + esc(i.file) + '" data-line="' + (i.line ?? '') + '"><span class="sev ' + esc(i.severity) + '"></span><span class="name">' + esc(i.message) + '</span></button>').join('')
+		const counts = h.counts || {};
+		// A line goes back to the host as a number; anything else is no line at all.
+		const lineOf = l => Number.isInteger(l) && l >= 0 ? String(l) : '';
+		$('health').innerHTML = '<div class="health"><span class="score ' + cls + '">' + score + '</span><p>' + (num(counts.error) ? num(counts.error) + ' broken, ' : '') + num(counts.warning) + ' to look at<br>' + (num(h.startupTokens) / 1000).toFixed(1) + 'k tokens before your first prompt</p></div>'
+			+ (h.issues || []).slice(0, 4).map(i => '<button class="row" data-path="' + esc(i.file) + '" data-line="' + lineOf(i.line) + '"><span class="sev ' + esc(i.severity) + '"></span><span class="name">' + esc(i.message) + '</span></button>').join('')
 			+ (gaps.length ? '<p class="gaps" title="' + esc(gaps.map(g => g.message).join(' ')) + '">Not set up here: ' + esc(gaps.map(g => g.label).join(', ')) + '</p>' : '')
 			// Which counts are the project's and which come from your own ~/.claude: an empty project is not "1 instruction, 20 skills".
 			+ (h.bySource
@@ -339,10 +411,4 @@ applyKeys();
 vscode.postMessage({ type: 'ready' });
 q.focus();
 </script></body></html>`;
-	}
-
-	dispose() {
-		this.panel?.dispose();
-		this.disposables.forEach(d => d.dispose());
-	}
 }

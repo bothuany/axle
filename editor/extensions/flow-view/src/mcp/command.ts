@@ -50,6 +50,47 @@ export function shellQuote(arg: string, platform: NodeJS.Platform = process.plat
 	return platform === 'win32' ? `"${arg.replace(/"/g, '\\"')}"` : `'${arg.replace(/'/g, `'\\''`)}'`;
 }
 
+/** How to start `claude <args>` without a shell: a file, its arguments, and whether Node must pass them verbatim. */
+export interface ClaudeLaunch {
+	file: string;
+	args: string[];
+	windowsVerbatimArguments?: boolean;
+}
+
+/**
+ * The process that runs `claude <args>`, with no shell parsing the words. On Windows `claude` is either a real .exe (the native
+ * installer) or npm's .cmd shim; Node runs a .cmd only through cmd.exe, so that one goes as `cmd.exe /d /s /c "<line>"` with every
+ * argument quoted (scripts/lib.mjs does the same). cmd.exe expands %VAR% even inside quotes and a line break ends the command:
+ * an argument with either is refused, never rewritten, so what runs is always what the confirmation showed. Undefined when
+ * there is no `claude` on PATH.
+ */
+export function claudeLaunch(args: string[], platform: NodeJS.Platform = process.platform, find: (name: string) => string | undefined = n => findOnPath(n)): ClaudeLaunch | undefined {
+	if (platform !== 'win32') {
+		return { file: 'claude', args };
+	}
+	const found = find('claude');
+	if (!found) {
+		return undefined;
+	}
+	if (!/\.(cmd|bat)$/i.test(found)) {
+		return { file: found, args };
+	}
+	const line = [found, ...args].map(cmdQuote).join(' ');
+	return { file: 'cmd.exe', args: ['/d', '/s', '/c', `"${line}"`], windowsVerbatimArguments: true };
+}
+
+/**
+ * One argument for cmd.exe and then Node's own command line parser, quoted. A " cannot be in a Windows path and would need
+ * different escaping for each of the two parsers, so it is refused like % and line breaks; backslashes at the end are doubled,
+ * or `"C:\"` would escape its own closing quote and run into the next argument.
+ */
+function cmdQuote(arg: string): string {
+	if (/[%"\r\n]/.test(arg)) {
+		throw new Error(`Cannot pass "${arg.replace(/[\r\n]/g, ' ')}" to claude.cmd: cmd.exe would expand a %, end the quotes at a " or cut the line at a line break. Move Insilode or Node to a folder without one.`);
+	}
+	return `"${arg.replace(/(\\+)$/, '$1$1')}"`;
+}
+
 export const commandLine = (args: string[], platform: NodeJS.Platform = process.platform) => ['claude', ...args.map(a => shellQuote(a, platform))].join(' ');
 
 /** The Claude Code MCP config the Insilode agents get with --mcp-config: the `insilode` server for one workspace folder. */

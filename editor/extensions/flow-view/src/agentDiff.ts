@@ -7,7 +7,7 @@ import { structuredPatch } from 'diff';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { rangesFromHunks, type LineRange } from './mcp/changedMethods';
+import { rangeOfHunk, rangesFromHunks, rangeTouches, spanDiff, undoEdit, type LineRange } from './mcp/changedMethods';
 import type { FlowNode } from './providers';
 
 /** Per-card agent change, in current-file line numbers. */
@@ -520,37 +520,8 @@ export class AgentChanges implements vscode.Disposable {
 	}
 
 	private cardDiff(hunks: Hunk[], start: number, end: number): CardDiff | undefined {
-		const d: CardDiff = { added: [], removed: [], plus: 0, minus: 0 };
-		for (const h of hunks) {
-			// A pure deletion has newLines 0 and newStart = the line *before* the gap.
-			const from = h.newLines ? h.newStart : h.newStart + 1;
-			const to = h.newLines ? h.newStart + h.newLines - 1 : h.newStart;
-			if (to < start || from > end) {
-				continue;
-			}
-			let line = h.newLines ? h.newStart : h.newStart + 1;
-			let pendingRemoved: string[] = [];
-			for (const l of h.lines) {
-				if (l.startsWith('-')) {
-					pendingRemoved.push(l.slice(1));
-					d.minus++;
-				} else if (l.startsWith('+')) {
-					if (pendingRemoved.length) {
-						d.removed.push({ after: line - 1, lines: pendingRemoved });
-						pendingRemoved = [];
-					}
-					if (line >= start && line <= end) {
-						d.added.push(line);
-					}
-					d.plus++;
-					line++;
-				}
-			}
-			if (pendingRemoved.length) {
-				d.removed.push({ after: line - 1, lines: pendingRemoved });
-			}
-		}
-		return d.plus || d.minus ? d : undefined;
+		// Pure and shared with Undo's hunk filter (changedMethods.ts): a pure deletion's gap lies above jsdiff's newStart.
+		return spanDiff(hunks, start, end);
 	}
 
 	/** Keep: the card's file no longer shows as an agent change. */
@@ -567,11 +538,8 @@ export class AgentChanges implements vscode.Disposable {
 		if (this.committed.has(file)) {
 			return { ok: false, message: `This change is measured against ${this.committed.get(file)} and includes committed work; Insilode does not undo commits.` };
 		}
-		const hunks = (await this.hunks(file)).filter(h => {
-			const from = h.newLines ? h.newStart : h.newStart + 1;
-			const to = h.newLines ? h.newStart + h.newLines - 1 : h.newStart;
-			return !(to < start || from > end);
-		});
+		// The same test the card's diff uses, so Undo restores exactly the hunks the card shows.
+		const hunks = (await this.hunks(file)).filter(h => rangeTouches(rangeOfHunk(h), start, end));
 		if (!hunks.length) {
 			return { ok: true };
 		}
@@ -579,13 +547,9 @@ export class AgentChanges implements vscode.Disposable {
 		const eol = doc.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
 		const edit = new vscode.WorkspaceEdit();
 		for (const h of hunks) {
-			const oldText = h.lines.filter(l => l.startsWith('-')).map(l => l.slice(1));
-			if (h.newLines) {
-				const range = new vscode.Range(h.newStart - 1, 0, h.newStart - 1 + h.newLines, 0);
-				edit.replace(doc.uri, range, oldText.map(l => l + eol).join(''));
-			} else {
-				edit.insert(doc.uri, new vscode.Position(h.newStart, 0), oldText.map(l => l + eol).join(''));
-			}
+			// A pure deletion is an empty range at the line after the gap: its old lines go back in above that line.
+			const e = undoEdit(h);
+			edit.replace(doc.uri, new vscode.Range(e.from, 0, e.to, 0), e.lines.map(l => l + eol).join(''));
 		}
 		if (!await vscode.workspace.applyEdit(edit)) {
 			return { ok: false, message: 'Could not undo the change.' };

@@ -37,8 +37,9 @@ export interface BridgeServer {
 	close(): Promise<void>;
 }
 
-export async function startBridgeServer(handle: Handler, opts: { token?: string; log?: (message: string) => void; info?: () => object } = {}): Promise<BridgeServer> {
+export async function startBridgeServer(handle: Handler, opts: { token?: string; log?: (message: string) => void; info?: () => object; maxBody?: number } = {}): Promise<BridgeServer> {
 	const token = opts.token ?? newToken();
+	const maxBody = opts.maxBody ?? MAX_BODY;
 	let port = 0;
 	const reply = (res: http.ServerResponse, status: number, body: object) => {
 		res.statusCode = status;
@@ -68,12 +69,17 @@ export async function startBridgeServer(handle: Handler, opts: { token?: string;
 			req.resume();
 			return reply(res, 404, { error: 'not found' });
 		}
-		let body = '';
+		// Counted in bytes as they arrive, before any decoding: a limit on decoded characters lets a multibyte body be about three times as big.
+		const chunks: Buffer[] = [];
+		let size = 0;
 		let tooBig = false;
-		req.setEncoding('utf8');
-		req.on('data', d => {
-			body += d;
-			if (body.length > MAX_BODY && !tooBig) {
+		req.on('data', (d: Buffer) => {
+			if (tooBig) {
+				return;
+			}
+			size += d.length;
+			chunks.push(d);
+			if (size > maxBody) {
 				tooBig = true;
 				reply(res, 413, { error: 'too large' });
 				req.destroy();
@@ -86,7 +92,7 @@ export async function startBridgeServer(handle: Handler, opts: { token?: string;
 			void (async () => {
 				let msg: { tool?: unknown; args?: unknown };
 				try {
-					msg = JSON.parse(body) as typeof msg;
+					msg = JSON.parse(Buffer.concat(chunks).toString('utf8')) as typeof msg;
 				} catch {
 					return reply(res, 400, { error: 'bad json' });
 				}
@@ -135,6 +141,16 @@ export function callBridge(info: Pick<BridgeInfo, 'port' | 'token'>, tool: strin
 			let body = '';
 			res.setEncoding('utf8');
 			res.on('data', d => body += d);
+			// The window can go away after it started answering (a reload, a crash). The response then emits 'error' ("aborted"),
+			// which without a listener is an uncaught exception that ends this whole MCP server; or only 'close'. Either way the
+			// tool may already have run, so it is a failure of this call, not an unreachable window to try another one for.
+			const broken = (why: string) => reject(new Error(`the Insilode window closed the connection before it finished answering (${why})`));
+			res.on('error', e => broken(e.message));
+			res.on('close', () => {
+				if (!res.complete) {
+					broken('closed');
+				}
+			});
 			res.on('end', () => {
 				if (res.statusCode === 401 || res.statusCode === 403) {
 					return reject(new Unreachable('the Insilode window refused the request (it was restarted?)'));

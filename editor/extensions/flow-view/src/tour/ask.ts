@@ -32,6 +32,24 @@ export function parseTourAsk(m: unknown, playing: { id: string; steps: number } 
 	return question && typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < playing.steps ? { index, question } : undefined;
 }
 
+/** The longest flow label that names the file handed to the agent (it goes into the file name and the prompt). */
+export const MAX_FLOW_LABEL = 100;
+/** The longest flow text handed over: about 4,000 lines of `flow_text`, far beyond what the canvas draws. */
+export const MAX_FLOW_TEXT = 256 * 1024;
+
+/**
+ * "Ask the agent about this flow": the label and the flow as text. Both must be text; the label is one short line and the
+ * flow text is cut at MAX_FLOW_TEXT, so neither a file name too long for the disk nor an unbounded attachment can come of it.
+ * Nothing when either is missing.
+ */
+export function parseFlowAsk(label: unknown, context: unknown): { label: string; text: string } | undefined {
+	const name = oneLine(label, MAX_FLOW_LABEL);
+	if (!name || typeof context !== 'string' || !context.trim()) {
+		return undefined;
+	}
+	return { label: name, text: context.slice(0, MAX_FLOW_TEXT) };
+}
+
 /** What the reader wants done with the lines they point at: ask about them, have them explained, or have the agent change them. */
 export type PointKind = 'ask' | 'explain' | 'edit';
 const KINDS: readonly PointKind[] = ['ask', 'explain', 'edit'];
