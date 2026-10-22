@@ -20,7 +20,7 @@ export const MUSIC = { in: 0, end: 62 }
 // cross-service ring, a chime when the dock's row needs you, one low hit with the logo.
 export const sfx = ({ at }) => [
 	['tick', 5.0, 0.5], ['tick', 7.6, 0.4], ['tick', 9.4, 0.4],
-	['whoosh', 12.3, 0.35],
+	['tick', 11.4, 0.4], ['whoosh', 12.6, 0.35],
 	['pulse', at('04', 'HTTP'), 0.7], ['pulse', at('04', 'Kafka'), 0.7],
 	['tick', 25.4, 0.4], ['whoosh', 26.3, 0.35],
 	['chime', 35.2, 0.5],

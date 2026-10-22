@@ -1,5 +1,5 @@
-// The editor beats (A, B1): the window as a developer meets it, the Extensions view on Open VSX, themes, keyboard
-// shortcuts, then the endpoint picker. Runs in workbench-driver.mjs (p, shot, sleep in scope).
+// The editor beats (A): the window as a developer meets it, the Extensions view on Open VSX, themes, keyboard
+// shortcuts. The endpoint beat is endpoints.js. Runs in workbench-driver.mjs (p, shot, sleep in scope).
 const rows = () => p.evaluate(() => [...document.querySelectorAll('.quick-input-list .monaco-list-row')].map(r => r.getAttribute('aria-label') ?? ''))
 const run = async (title, wait = 1500) => {
 	await p.keyboard.press('Escape'); await sleep(200)
@@ -34,11 +34,4 @@ await snap('A3-themes')
 await run('Preferences: Open Keyboard Shortcuts,', 3000)
 await snap('A4-keys')
 await p.keyboard.press('Escape'); await sleep(300)
-await run('View: Show Explorer', 800)
-await run('View: Hide Panel', 800)
-await run('Insilode: Open Endpoint Flow', 2500)
-for (let i = 0; i < 3; i++) { await p.keyboard.press('ArrowDown'); await sleep(150) }
-await snap('B1-endpoints')
-const title = await p.evaluate(() => document.querySelector('.quick-input-title')?.innerText)
-await p.keyboard.press('Escape')
-return title
+return 'ok'

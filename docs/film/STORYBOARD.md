@@ -95,9 +95,11 @@ Line 02. The note that a few Microsoft extensions are licensed for Microsoft's b
 the full claim (the user's call); the film says only "from Open VSX". Focal: the side bar list.
 
 ### 03 Open an endpoint (11-17 s)
-B1 (11.0-12.4): the endpoint picker ("Insilode: open an endpoint") with POST /orders selected. B2 (12.4-17): the
-**Flow: Order.place** tab opens next to the code tab: controller → service → the `orders` table, BillingClient,
-announce. Camera pushes into the canvas. Line 03. Focal: the picker, then the canvas.
+B1 (11.0-12.6): Insilode's own **Endpoints** view in the side bar (the Insilode activity-bar container; it groups the
+endpoints by the file or controller that declares them: main, Order, OrderEvents, tasks), POST `place` under the
+pointer, highlighted by the view. B2 (12.6-17): the click opens the **Flow: Order.place** tab next to the code tab:
+controller → service → the `orders` table, BillingClient, announce. The camera holds on the row through the click,
+then follows the tab. Line 03. Focal: the Endpoints view, then the canvas.
 
 ### 04 Across services (17-22 s)
 B3: the same tab with the cross-service hops expanded: `HTTP?` into billing's FastAPI `create_invoice` (Python) and

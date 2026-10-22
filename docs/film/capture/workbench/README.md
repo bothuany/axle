@@ -11,8 +11,9 @@ window opens. Order:
    started with its own extensions folder, and the route breaks it.
 4. Send the snippets with `node js.mjs <file.js>` (or `node js.mjs cmd "<palette title>" ["<pick>"]`):
    `settings.js` (Insilode Dark, bash terminal, no minimap), `gallery.js` (gives the web client the Open VSX gallery
-   the product ships, `editor/patches/flow-core.patch`), trust the folder, `shots-a.js` (A1-A4, B1), `b.js` and
-   `b3.js` (B2, B3: the endpoint flow, then the HTTP and topic hops expanded; fit the view after), then commit
+   the product ships, `editor/patches/flow-core.patch`), trust the folder, `shots-a.js` (A1-A4), then
+   `endpoints.js` and `b3.js` (B1-B3-sidebar: POST /orders picked in the Endpoints view, its flow tab, then the HTTP
+   and topic hops expanded; fit the view after), then commit
    `docs/film/demo/changed` on the demo repo with author "Claude Code" and run `c.js`, `c4b.js` and `cde.js`
    (C1-C4, D-base, E-harness). Every snippet checks the theme before each still.
 
