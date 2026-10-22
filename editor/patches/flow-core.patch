@@ -123,11 +123,16 @@ index ebbfe1c5..ccf841f2 100644
  
  		function asJSON(value: unknown): string {
  			return JSON.stringify(value);
-@@ -424,7 +427,11 @@
+@@ -424,7 +427,15 @@
  			folderUri: resolveWorkspaceURI(this._environmentService.args['default-folder']),
  			workspaceUri: resolveWorkspaceURI(this._environmentService.args['default-workspace']),
- 			productConfiguration,
+-			productConfiguration,
 -			callbackRoute: callbackRoute
++			// Flow: the client builds its resource paths (/<quality>-<commit>/vscode-remote-resource) from its own product's
++			// quality, which a client running out of sources does not have, so it fell back to 'oss' while this server
++			// answers under its product.json quality. Sending the server's quality (last, so product.overrides.json cannot
++			// part them again) makes both name the same path.
++			productConfiguration: { ...productConfiguration, quality: this._productService.quality },
 +			callbackRoute: callbackRoute,
 +			// Flow: serve webview content from this server instead of the public vscode-cdn.net, so webviews
 +			// work offline and on locked-down networks. The scheme is the page's own: behind TLS (the socket, or a

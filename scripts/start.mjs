@@ -7,7 +7,7 @@ import { randomBytes } from 'node:crypto'
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { VSCODE, isWin, launch } from './lib.mjs'
+import { VSCODE, ensureCodiconFont, isWin, launch } from './lib.mjs'
 
 const argv = process.argv.slice(2)
 const web = argv.includes('--web')
@@ -18,6 +18,10 @@ const folder = folderArg && resolve(process.env.INIT_CWD ?? process.cwd(), folde
 if (!existsSync(join(VSCODE, 'scripts', 'code-server.js'))) {
 	console.error('Insilode is not set up yet: run `npm run setup` first.')
 	process.exit(1)
+}
+// A checkout set up before setup compiled the icon font into out/ shows every icon as an empty box: mend it here.
+if (existsSync(join(VSCODE, 'out')) && ensureCodiconFont() === 'copied') {
+	console.log('Copied the icon font (codicon.ttf) into editor/vscode/out, which an earlier setup left without it.')
 }
 if (folder && !(existsSync(folder) && statSync(folder).isDirectory())) {
 	console.error(`No such folder: ${folderArg}`)

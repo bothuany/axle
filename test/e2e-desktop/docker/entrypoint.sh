@@ -59,6 +59,15 @@ export INSILODE_E2E_SOURCE=/work/insilode/editor/vscode
 export INSILODE_E2E_OUT=/out
 xvfb=(xvfb-run -a --server-args="-screen 0 1920x1080x24")
 
+# The container has no OS keyring, and the app's first use of secret storage then opens a modal ("An OS keyring couldn't be
+# identified") that blocks the window. launchInsilode passes --password-store=basic; argv.json (which VS Code reads at every
+# start, in the data folder of the product and of a source checkout's "-dev" variant) says the same for any other start.
+data_folder="$(node -p "require('./editor/vscode/product.json').dataFolderName")"
+for d in "$HOME/$data_folder" "$HOME/$data_folder-dev"; do
+	mkdir -p "$d"
+	[ -f "$d/argv.json" ] || printf '{\n\t"password-store": "basic"\n}\n' > "$d/argv.json"
+done
+
 stage "starting"
 status=0
 case "$mode" in

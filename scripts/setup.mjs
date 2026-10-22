@@ -9,7 +9,7 @@
 
 import { copyFileSync, cpSync, existsSync, lstatSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { EXTENSIONS, ROOT, VSCODE, buildableExtensions, isWin, launchSync } from './lib.mjs'
+import { EXTENSIONS, ROOT, VSCODE, buildableExtensions, ensureCodiconFont, isWin, launchSync } from './lib.mjs'
 
 const VSCODE_TAG = '1.141.0'
 /** What editor/vscode/.nvmrc asks for at VS Code 1.141: the same major, at least this minor. */
@@ -175,10 +175,21 @@ if (args.has('--skip-editor-install')) {
 	run('npm', ['ci'], VSCODE)
 }
 step('Compiling the editor')
-run('npm', ['run', 'transpile-client'], VSCODE)
 // The icon font (without it every UI icon renders as an empty box) and the built-in extensions (git, emmet, the
-// language features: without them the editor logs activation errors). `gulp copy-codicons` is part of this task.
+// language features: without them the editor logs activation errors). `gulp copy-codicons` is part of this task and
+// copies the font into src/, so it runs before transpile-client, which copies src/'s non-TypeScript files to out/:
+// the other way round the font reaches src/ only after out/ was written, and every icon is an empty box.
 run('npm', ['run', 'build-fast-extensions'], VSCODE)
+run('npm', ['run', 'transpile-client'], VSCODE)
+// The order above is what puts the font in out/; this says so loudly if it ever stops doing that.
+const font = ensureCodiconFont()
+if (font === 'missing') {
+	console.error('\n✗ The icon font (codicon.ttf) is in neither editor/vscode/out nor node_modules/@vscode/codicons: run setup again with --force-install.')
+	process.exit(1)
+}
+if (font === 'copied') {
+	console.warn('  ! transpile-client left out the icon font (codicon.ttf); copied it into out/.')
+}
 // Electron and the server's Node, the same way scripts/code-server.sh prepares them.
 run('node', ['build/lib/preLaunch.ts'], VSCODE, { optional: true, consequence: 'npm start fetches Electron on its first launch instead' })
 run('npm', ['run', 'gulp', 'node'], VSCODE, { optional: true, consequence: 'npm run web falls back to the Node that runs it' })

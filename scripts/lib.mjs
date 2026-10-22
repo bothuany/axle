@@ -1,6 +1,6 @@
 // Shared by the setup, start and build scripts: where things are, and how to start a program on every OS.
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -26,6 +26,35 @@ export function patchFiles() {
  */
 export function patchesApplied() {
 	return patchFiles().every(patch => launchSync('git', ['apply', '--reverse', '--check', join(PATCHES, patch)], { cwd: VSCODE, stdio: 'ignore' }).status === 0)
+}
+
+/** Where VS Code's icon font comes from (the npm package), where `gulp copy-codicons` puts it (src/) and where the workbench loads it (out/). */
+export function codiconFontPaths(vscode = VSCODE) {
+	const rel = ['vs', 'base', 'browser', 'ui', 'codicons', 'codicon', 'codicon.ttf']
+	return {
+		packaged: join(vscode, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf'),
+		src: join(vscode, 'src', ...rel),
+		out: join(vscode, 'out', ...rel),
+	}
+}
+
+/**
+ * Makes sure the compiled workbench has its icon font: without out/.../codicon.ttf every icon is an empty box, and nothing
+ * in the log says why. 'present' when it is there, 'copied' when it was copied from src/ or the npm package, 'missing'
+ * when there is nothing to copy (the editor's `npm ci` did not run).
+ */
+export function ensureCodiconFont(vscode = VSCODE) {
+	const { packaged, src, out } = codiconFontPaths(vscode)
+	if (existsSync(out)) {
+		return 'present'
+	}
+	const from = [src, packaged].find(p => existsSync(p))
+	if (!from) {
+		return 'missing'
+	}
+	mkdirSync(dirname(out), { recursive: true })
+	copyFileSync(from, out)
+	return 'copied'
 }
 
 /** cmd.exe expands %VAR% even inside quotes, and a line break ends the command: such an argument is refused, not rewritten. */
