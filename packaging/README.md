@@ -40,8 +40,10 @@ A running Insilode updates itself from the release files, without an update serv
 3. The app compares `productVersion` with its own Insilode version (semver; a release is newer than its prereleases). Equal or
    older means no update, which replaces the server's 204. The built app's `version` in `product.json` is VS Code's, so
    `npm run installer` and `npm run package` stamp `insilodeVersion` (from `package.json`) into it; that is what is compared.
-4. `release.yml` writes the files with `scripts/update-manifests.mjs` (sha256 of the right asset) and uploads them as release
-   assets, after everything else is attached. It fails, and uploads nothing, when a platform's asset is missing.
+4. `release.yml` writes the files with `scripts/update-manifests.mjs` (through `scripts/release-files.mjs`, sha256 of each
+   build job's own artifact, not of what is on the release) and uploads them with everything else to a draft release, which
+   it makes public only when every file is on it. It fails, and publishes nothing, when a platform's asset is missing. A
+   prerelease tag (`v0.6.0-rc.1`) is published as a prerelease, never latest, and without update files.
 
 | Platform | The file points at | What the app does |
 |---|---|---|
@@ -68,8 +70,8 @@ A running Insilode updates itself from the release files, without an update serv
 - **Linux** is notification and link only, as in VS Code: there is no apt repository, and an `apt upgrade` cannot update the
   `.deb` until there is ([apt/README.md](apt/README.md)).
 - The first release that carries these files is the first one an old app can learn of; 0.4.1 and older have no updater.
-- Between the release being created and the last job finishing, `latest/download` has no update files yet: a check then gets
-  a 404, which an automatic check ignores and **Check for Updates** shows as an error.
+- The release stays a draft until every file, the update files included, is on it, so `latest/download` never points at a
+  release without them; if a build fails, nothing is published and the previous release stays latest.
 
 **Test it without a release.** `INSILODE_UPDATE_URL` replaces `updateUrl` (https, or http on this machine only):
 

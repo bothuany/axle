@@ -14,12 +14,13 @@ index 64e1c4d2..12b78386 100644
 +	"dataFolderName": ".insilode",
  	"sharedDataFolderName": ".vscode-oss-shared",
 -	"win32MutexName": "vscodeoss",
-+	"win32MutexName": "insilode",
 -	"licenseName": "MIT",
 -	"licenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
+-	"serverLicenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
++	"win32MutexName": "insilode",
 +	"licenseName": "AGPL-3.0-only",
 +	"licenseUrl": "https://github.com/bothuany/insilode/blob/main/LICENSE",
- 	"serverLicenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
++	"serverLicenseUrl": "https://github.com/bothuany/insilode/blob/main/LICENSE",
  	"serverGreeting": [],
  	"serverLicense": [],
  	"serverLicensePrompt": "",
@@ -61,7 +62,8 @@ index 64e1c4d2..12b78386 100644
 +	"linuxDesktopName": "dev.insilode.insilode",
 +	"linuxIconName": "insilode",
  	"licenseFileName": "LICENSE.txt",
- 	"reportIssueUrl": "https://github.com/microsoft/vscode/issues/new",
+-	"reportIssueUrl": "https://github.com/microsoft/vscode/issues/new",
++	"reportIssueUrl": "https://github.com/bothuany/insilode/issues/new",
  	"nodejsArtifactFeed": "",
  	"electronArtifactFeed": "",
 -	"urlProtocol": "code-oss",
@@ -111,15 +113,26 @@ diff --git a/src/vs/server/node/webClientServer.ts b/src/vs/server/node/webClien
 index ebbfe1c5..ccf841f2 100644
 --- a/src/vs/server/node/webClientServer.ts
 +++ b/src/vs/server/node/webClientServer.ts
-@@ -424,7 +424,10 @@ export class WebClientServer {
+@@ -357,6 +357,9 @@
+ 		if (forwardedPort) {
+ 			remoteAuthority = replacePort(remoteAuthority, forwardedPort);
+ 		}
++		// Flow: the scheme the browser used (a TLS socket, or a reverse proxy's x-forwarded-proto), for webviewEndpoint below.
++		const forwardedProto = getFirstHeader('x-forwarded-proto')?.split(',')[0].trim().toLowerCase();
++		const requestScheme = forwardedProto === 'https' || (req.socket as unknown as { encrypted?: boolean }).encrypted ? 'https' : 'http';
+ 
+ 		function asJSON(value: unknown): string {
+ 			return JSON.stringify(value);
+@@ -424,7 +427,11 @@
  			folderUri: resolveWorkspaceURI(this._environmentService.args['default-folder']),
  			workspaceUri: resolveWorkspaceURI(this._environmentService.args['default-workspace']),
  			productConfiguration,
 -			callbackRoute: callbackRoute
 +			callbackRoute: callbackRoute,
 +			// Flow: serve webview content from this server instead of the public vscode-cdn.net, so webviews
-+			// work offline and on locked-down networks.
-+			webviewEndpoint: `http://${remoteAuthority}${staticRoute}/out/vs/workbench/contrib/webview/browser/pre`
++			// work offline and on locked-down networks. The scheme is the page's own: behind TLS (the socket, or a
++			// reverse proxy that says so in x-forwarded-proto) an http:// frame would be blocked as mixed content.
++			webviewEndpoint: `${requestScheme}://${remoteAuthority}${staticRoute}/out/vs/workbench/contrib/webview/browser/pre`
  		};
  
  		const cookies = cookie.parse(req.headers.cookie || '');
@@ -1081,7 +1094,7 @@ index 5b43061..1bef915 100644
  DefaultGroupName={#NameLong}
  AllowNoIcons=yes
  OutputDir={#OutputDir}
-@@ -67,6 +67,14 @@ Name: "hungarian"; MessagesFile: "{#RepoDir}\build\win32\i18n\Default.hu.isl,{#R
+@@ -67,6 +67,14 @@
  Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl,{#RepoDir}\build\win32\i18n\messages.tr.isl" {#LocalizedLanguageFile("trk")}
  
  [InstallDelete]
@@ -1096,7 +1109,7 @@ index 5b43061..1bef915 100644
  Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\out"; Check: IsNotBackgroundUpdate
  Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\plugins"; Check: IsNotBackgroundUpdate
  Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\extensions"; Check: IsNotBackgroundUpdate
-@@ -125,6 +133,12 @@ Filename: "{app}\{#ExeBasename}.exe"; Description: "{cm:LaunchProgram,{#NameLong
+@@ -125,6 +133,12 @@
  #define SoftwareClassesRootKey "HKLM"
  #endif
  
@@ -1109,7 +1122,7 @@ index 5b43061..1bef915 100644
  Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\.ascx\OpenWithProgids"; ValueType: none; ValueName: "{#RegValueName}"; Flags: deletevalue uninsdeletevalue; Tasks: associatewithfiles
  Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\.ascx\OpenWithProgids"; ValueType: string; ValueName: "{#RegValueName}.ascx"; ValueData: ""; Flags: uninsdeletevalue; Tasks: associatewithfiles
  Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\{#RegValueName}.ascx"; ValueType: string; ValueName: ""; ValueData: "{cm:SourceFile,ASCX}"; Flags: uninsdeletekey; Tasks: associatewithfiles
-@@ -1382,7 +1396,7 @@ begin
+@@ -1382,7 +1396,7 @@
  
    #if "user" == InstallTarget
      if not WizardSilent() and IsAdmin() then begin
@@ -1118,7 +1131,7 @@ index 5b43061..1bef915 100644
          Result := False;
        end;
      end;
-@@ -1636,7 +1650,8 @@ begin
+@@ -1636,7 +1650,8 @@
    if IsBackgroundUpdate() then
      Result := ''
    else

@@ -253,8 +253,9 @@ export class Analyzer implements vscode.Disposable {
 		const startedAt = Date.now();
 		let aborted = false;
 		this.cancelStart = () => { aborted = true; };
-		// The token follows the parent pid, so an analyzer build that predates it still starts.
-		const child = this.child = spawn('dotnet', [this.dll, 'serve', sln, String(port), String(process.pid), '--token', this.token], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+		// The token goes in the environment, not on the command line: any user of the machine can read a process's arguments
+		// (ps, /proc/<pid>/cmdline), and only its own user its environment. The analyzer reads INSILODE_ANALYZER_TOKEN and clears it.
+		const child = this.child = spawn('dotnet', [this.dll, 'serve', sln, String(port), String(process.pid)], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true, env: { ...process.env, INSILODE_ANALYZER_TOKEN: this.token } });
 		let stderr = '';
 		child.stderr!.on('data', d => {
 			stderr = (stderr + String(d)).slice(-4000);

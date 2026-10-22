@@ -24,7 +24,8 @@
 import { createHash } from 'node:crypto'
 import { chmodSync, copyFileSync, cpSync, createReadStream, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { EXTENSIONS, ROOT, VSCODE, buildableExtensions, launchSync } from './lib.mjs'
+import { EXTENSIONS, ROOT, VSCODE, buildableExtensions, launchSync, patchesApplied } from './lib.mjs'
+import { debVersion, rpmVersion } from './release-files.mjs'
 
 const argv = process.argv.slice(2)
 let wantArch = ''
@@ -43,6 +44,8 @@ const STAGE = join(DIST, 'stage')
 const PACKAGING = join(ROOT, 'packaging')
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const version = pkg.version
+// Ctrl+C ends the script through `exit`, so what is put back on exit (the extension links, the build files withEdits changed) always is.
+process.on('SIGINT', () => process.exit(130))
 
 function step(title) {
 	console.log(`\n\x1b[1m▸ ${title}\x1b[0m`)
@@ -102,8 +105,7 @@ if (major !== needMajor || minor < needMinor) {
 if (!existsSync(join(VSCODE, 'node_modules', '.package-lock.json'))) {
 	fail('Insilode is not set up yet: run `npm run setup` first (it fetches and builds VS Code, which this packages).')
 }
-const patched = ['flow-core.patch', 'flow-update.patch'].every(patch => launchSync('git', ['apply', '--reverse', '--check', join(ROOT, 'editor', 'patches', patch)], { cwd: VSCODE, stdio: 'ignore' }).status === 0)
-if (!patched) {
+if (!patchesApplied()) {
 	fail('editor/vscode does not carry Insilode\'s patches (or has other changes to the same files): run `npm run setup`, or delete editor/vscode and run it again.')
 }
 const sdks = launchSync('dotnet', ['--list-sdks'], { encoding: 'utf8' })
@@ -209,7 +211,6 @@ const relink = () => {
 }
 if (linked.length) {
 	process.on('exit', relink)
-	process.on('SIGINT', () => process.exit(130))
 	for (const name of linked) {
 		rmSync(join(VSCODE, 'extensions', name), { force: true })
 	}
@@ -379,7 +380,9 @@ if (PLATFORM === 'linux') {
 		}
 		fields.push({ key: line.slice(0, line.indexOf(':')), lines: [line] })
 	}
-	const control = fields.filter(f => !DROP.has(f.key)).map(f => f.key === 'Version' ? [`Version: ${version}`] : f.lines).flat()
+	// A prerelease (0.6.0-rc.1) is written 0.6.0~rc.1, which dpkg sorts before 0.6.0; with a "-" it would read rc.1 as a revision of 0.6.0
+	// and sort it after the release, which would then never upgrade it.
+	const control = fields.filter(f => !DROP.has(f.key)).map(f => f.key === 'Version' ? [`Version: ${debVersion(version)}`] : f.lines).flat()
 	// The package was called axle until 0.4.x: installing this one takes the old one off (its files are not shared, the name is).
 	control.push('Replaces: axle', 'Conflicts: axle', 'Provides: axle', 'Maintainer: Insilode <bothuany@users.noreply.github.com>', `Homepage: ${pkg.repository}`, ...description)
 	writeFileSync(controlFile, `${control.join('\n')}\n`)
@@ -411,9 +414,11 @@ if (PLATFORM === 'linux') {
 		const spec = join(rpmBase, 'rpmbuild', 'SPECS', `${product.applicationName}.spec`)
 		let ok = prepared && existsSync(spec)
 		if (ok) {
+			// RPM's Version cannot hold a "-": a prerelease is Version 0.6.0 with Release 0.rc.1, which sorts before the release's 1.
+			const rpmv = rpmVersion(version)
 			const text = readFileSync(spec, 'utf8')
-				.replace(/^Version:.*$/m, `Version:  ${version}`)
-				.replace(/^Release:.*$/m, 'Release:  1\nObsoletes: axle\nProvides:  axle')
+				.replace(/^Version:.*$/m, `Version:  ${rpmv.version}`)
+				.replace(/^Release:.*$/m, `Release:  ${rpmv.release}\nObsoletes: axle\nProvides:  axle`)
 				.replace(/^Summary:.*$/m, `Summary:  ${description[0].replace('Description: ', '')}`)
 				.replace(/^Vendor:.*$/m, 'Vendor:   Insilode')
 				.replace(/^Packager:.*$/m, 'Packager: Insilode <bothuany@users.noreply.github.com>')

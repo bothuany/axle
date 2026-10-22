@@ -1,13 +1,26 @@
-# Builds Insilode when a version tag is pushed and attaches the result to the GitHub release:
+# Builds Insilode when a version tag is pushed, and publishes the result as a GitHub release:
 #   Windows  the installer (npm run installer)                      Insilode-Setup-<version>-x64.exe
 #   macOS    the app for Apple silicon and Intel (npm run package)  Insilode-<version>-darwin-{arm64,x64}.{zip,dmg}
 #   Linux    the Debian package, an RPM and a tarball               insilode_<version>_amd64.deb, insilode-<version>-1.x86_64.rpm, Insilode-<version>-linux-x64.tar.gz
 # plus SHA256SUMS.txt over all of them (what packaging/homebrew/insilode.rb and packaging/winget need) and the
 # update-<platform>-insilode.json files that a running Insilode reads to learn of this release (scripts/update-manifests.mjs,
 # packaging/README.md "Updates").
+#
+# How it is kept safe and whole:
+# - The build jobs run hours of third-party install scripts and VS Code's build, so they get a read-only token only (for the
+#   GitHub downloads VS Code's build makes, which are rate limited without one), and checkout keeps no credentials. They hand
+#   their files on as workflow artifacts.
+# - `assemble` (read-only too) checks that every platform's files are there, each from its own artifact, and writes
+#   SHA256SUMS.txt and the update files from those artifacts (scripts/release-files.mjs).
+# - Only `publish` can write, and it runs no code from the repository: it creates the release as a draft, uploads everything,
+#   and only then makes it public. If any build fails, nothing is published and the current latest release stays latest.
+# - A tag with a prerelease part (v0.6.0-rc.1) is published as a prerelease: never "latest", and without update files, so no
+#   installed Insilode updates to it.
 # Each build needs the full `npm run setup` (a VS Code checkout, `npm ci`, native modules) and VS Code's production build,
-# so it is slow: plan for 60 to 90 minutes. A manual run (no tag) keeps the files as build artifacts instead.
-# Only the Windows build has been run by hand; the macOS and Linux jobs are first tested by a tag (or a manual run).
+# so it is slow: plan for 60 to 90 minutes.
+#
+# A manual run (Actions > release > Run workflow, on any branch) is a dry run: it builds everything and runs `assemble`, whose
+# artifact (insilode-release) is exactly what `publish` would upload, and publishes nothing.
 #   git tag v0.1.0 && git push origin v0.1.0
 name: release
 
@@ -17,43 +30,67 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  # Creates the release once, before the builds, so that parallel jobs do not race to create it.
-  release:
-    name: Release
+  # What is being built: the version, whether it is a prerelease, and whether this run publishes (a tag) or is a dry run.
+  version:
+    name: Version
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      publish: ${{ steps.version.outputs.publish }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
-      - name: The tag matches package.json
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Version, and the tag matches package.json
+        id: version
         run: |
           version=$(node -p "require('./package.json').version")
-          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${version}: the packages would be named for ${version}."
-            exit 1
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+              echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${version}: the packages would be named for ${version}."
+              exit 1
+            fi
+            publish=true
+          else
+            publish=false
           fi
-
-      - name: Create the release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --title "Insilode ${GITHUB_REF_NAME#v}" --generate-notes
+          if [[ "${version}" == *-* ]]; then prerelease=true; else prerelease=false; fi
+          echo "Insilode ${version}: prerelease ${prerelease}, publish ${publish}"
+          {
+            echo "version=${version}"
+            echo "prerelease=${prerelease}"
+            echo "publish=${publish}"
+          } >> "$GITHUB_OUTPUT"
 
   installer:
     name: Windows installer
-    needs: release
+    needs: version
     # windows-2022 rather than windows-latest (Visual Studio 2026): VS Code 1.141's preinstall accepts only Visual Studio
     # 2019 and 2022, as VS Code's own Windows CI has. Move on when Insilode moves to a VS Code that knows 2026.
     runs-on: windows-2022
     timeout-minutes: 150
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
+    env:
+      # Read-only (this job's permissions): VS Code's setup and build download Electron and built-in extensions from GitHub,
+      # which is rate limited without a token.
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -75,42 +112,26 @@ jobs:
           $vs = & "$vsInstaller\vswhere.exe" -latest -products * -property installationPath
           Start-Process -Wait -FilePath "$vsInstaller\vs_installer.exe" -ArgumentList 'modify', '--installPath', "`"$vs`"", '--add', 'Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre', '--quiet', '--norestart', '--nocache'
 
-      - name: The tag matches package.json
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          version=$(node -p "require('./package.json').version")
-          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${version}: the installer would be named for ${version}."
-            exit 1
-          fi
-
       - name: Set up Insilode
         run: npm run setup
 
       - name: Build the installer
         run: npm run installer
 
-      - name: Attach it to the release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --title "Insilode ${GITHUB_REF_NAME#v}" --generate-notes
-          gh release upload "${GITHUB_REF_NAME}" dist/Insilode-Setup-*.exe --clobber
-
-      # A manual run (no tag) keeps the installer as a build artifact instead.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         with:
-          name: insilode-installer
+          name: insilode-win32-x64
           path: dist/Insilode-Setup-*.exe
+          if-no-files-found: error
           retention-days: 7
 
   packages:
     name: ${{ matrix.name }}
-    needs: release
+    needs: version
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -118,24 +139,35 @@ jobs:
           - name: macOS (Apple silicon)
             runner: macos-latest
             arch: arm64
-            files: dist/Insilode-*-darwin-arm64.zip dist/Insilode-*-darwin-arm64.dmg
+            artifact: insilode-darwin-arm64
+            files: |
+              dist/Insilode-*-darwin-arm64.zip
+              dist/Insilode-*-darwin-arm64.dmg
           # An Intel runner, so that the native modules are built for the processor they run on (no cross-compiling).
           - name: macOS (Intel)
             runner: macos-15-intel
             arch: x64
-            files: dist/Insilode-*-darwin-x64.zip dist/Insilode-*-darwin-x64.dmg
+            artifact: insilode-darwin-x64
+            files: |
+              dist/Insilode-*-darwin-x64.zip
+              dist/Insilode-*-darwin-x64.dmg
           # 22.04 rather than ubuntu-latest: the native modules are compiled here and need this machine's glibc (2.35) or
           # newer, so the .deb also installs on Ubuntu 22.04 and Debian 12. Move to ubuntu-latest when 22.04 is retired.
           - name: Linux (x64)
             runner: ubuntu-22.04
             arch: x64
-            files: dist/insilode_*_amd64.deb dist/insilode-*.rpm dist/Insilode-*-linux-x64.tar.gz
+            artifact: insilode-linux-x64
+            files: |
+              dist/insilode_*_amd64.deb
+              dist/insilode-*.rpm
+              dist/Insilode-*-linux-x64.tar.gz
     defaults:
       run:
         shell: bash
     env:
-      # VS Code's build downloads Electron, built-in extensions and (Linux) sysroots from GitHub: authenticated, it is not rate limited.
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Read-only (this job's permissions): VS Code's build downloads Electron, built-in extensions and (Linux) sysroots from
+      # GitHub, which is rate limited without a token.
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       # The runner has about 14 GB free and the build needs about 20: toolchains Insilode does not use go first.
       - name: Free disk space
@@ -156,6 +188,8 @@ jobs:
           clang++-15 -v 2>&1 | grep 'Selected GCC'
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -172,85 +206,113 @@ jobs:
       - name: Set up Insilode
         run: npm run setup
 
-      # VS Code's deb step fetches Chromium's dpkg-shlibdeps.pl from raw.githubusercontent.com with a plain `curl`, and that
-      # host answers runners "429: Too Many Requests" (with or without a token), saved as the script. A curl earlier on PATH
-      # fetches raw.githubusercontent.com/<owner>/<repo>/<ref>/<path> through the API's contents endpoint with this job's
-      # token instead, retries, and fails on an error page instead of saving it; every other URL is untouched.
+      # VS Code's deb step fetches a script from raw.githubusercontent.com with a plain `curl`, and that host rate limits the
+      # runners: scripts/curl-github-raw.sh, first on PATH as `curl`, fetches it through the API with the read-only token.
       - name: Authenticated downloads from raw.githubusercontent.com
         if: runner.os == 'Linux'
         run: |
           mkdir -p "$RUNNER_TEMP/curl-shim"
-          cat > "$RUNNER_TEMP/curl-shim/curl" <<'SHIM'
-          #!/usr/bin/env bash
-          args=()
-          for arg in "$@"; do
-          	case "$arg" in
-          	https://raw.githubusercontent.com/*)
-          		IFS=/ read -r owner repo ref path <<< "${arg#https://raw.githubusercontent.com/}"
-          		args+=("https://api.github.com/repos/$owner/$repo/contents/$path?ref=$ref" --fail --location --retry 5 --retry-delay 15 --retry-all-errors -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github.raw") ;;
-          	*) args+=("$arg") ;;
-          	esac
-          done
-          exec /usr/bin/curl "${args[@]}"
-          SHIM
-          chmod +x "$RUNNER_TEMP/curl-shim/curl"
+          install -m 755 scripts/curl-github-raw.sh "$RUNNER_TEMP/curl-shim/curl"
           echo "$RUNNER_TEMP/curl-shim" >> "$GITHUB_PATH"
 
       - name: Build the packages
         run: npm run package -- --arch ${{ matrix.arch }}
 
-      - name: Attach them to the release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FILES: ${{ matrix.files }}
-        run: |
-          shopt -s nullglob
-          # The RPM is best effort (scripts/package.mjs): a pattern that matches nothing is left out, not an error.
-          files=()
-          for file in $FILES; do files+=("$file"); done
-          gh release upload "${GITHUB_REF_NAME}" "${files[@]}" --clobber
-
+      # The RPM is best effort (scripts/package.mjs): a pattern that matches nothing is left out; assemble checks the rest.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         with:
-          name: insilode-${{ runner.os }}-${{ matrix.arch }}
-          path: |
-            dist/*.zip
-            dist/*.dmg
-            dist/*.deb
-            dist/*.rpm
-            dist/*.tar.gz
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
           if-no-files-found: error
           retention-days: 7
 
-  # Checksums of everything on the release: the values the Homebrew cask and the winget manifest take.
-  checksums:
-    name: Checksums
-    needs: [installer, packages]
-    if: startsWith(github.ref, 'refs/tags/v')
+  # Every platform's files, each from its own artifact, with SHA256SUMS.txt and (not for a prerelease) the update files: what
+  # publish uploads, as one artifact. A dry run stops here, with the same artifact to look at.
+  assemble:
+    name: Assemble the release
+    needs: [version, installer, packages]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
-      - name: SHA256SUMS.txt
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          mkdir assets && cd assets
-          gh release download "${GITHUB_REF_NAME}" --pattern 'Insilode-*' --pattern 'insilode*'
-          sha256sum -- * | tee ../SHA256SUMS.txt
-          gh release upload "${GITHUB_REF_NAME}" ../SHA256SUMS.txt --clobber
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.x
 
-      # After the checksums, and only when every platform's file is on the release: the script fails on a missing one.
-      # releases/latest/download serves these files to every running Insilode, which compares productVersion with its own.
-      - name: Update files
+      # One folder per artifact (no merge-multiple): a file of the same name in two artifacts cannot replace another.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: insilode-*-*
+          path: artifacts
+
+      - name: Release files, SHA256SUMS.txt and update files
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          mkdir update-assets update-files
-          gh release download "${GITHUB_REF_NAME}" --dir update-assets --pattern 'Insilode-*' --pattern 'insilode_*'
-          node scripts/update-manifests.mjs --dir update-assets --out update-files --version "${GITHUB_REF_NAME#v}" --commit "${GITHUB_SHA}" --repo "${GITHUB_REPOSITORY}"
-          gh release upload "${GITHUB_REF_NAME}" update-files/*.json --clobber
+          node scripts/release-files.mjs --artifacts artifacts --out release --version "${VERSION}" --commit "${GITHUB_SHA}" --repo "${GITHUB_REPOSITORY}"
+          cat release/SHA256SUMS.txt
+
+      - name: What publish does with them
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          PUBLISH: ${{ needs.version.outputs.publish }}
+        run: |
+          if [ "${PRERELEASE}" = true ]; then kind='--prerelease'; latest='--prerelease --latest=false'; else kind=''; latest='--latest'; fi
+          [ "${PUBLISH}" = true ] || echo "A dry run: nothing is published. With the tag v${VERSION}, publish would run:"
+          echo "  gh release create v${VERSION} --draft --verify-tag --title 'Insilode ${VERSION}' --generate-notes ${kind}"
+          echo "  gh release upload v${VERSION} release/* --clobber    ($(find release -type f | wc -l) files)"
+          echo "  gh release edit v${VERSION} --draft=false ${latest}"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: insilode-release
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  # The only job that can write, and it runs nothing from the repository: a draft first, every file, then public.
+  publish:
+    name: Publish
+    needs: [version, assemble]
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: insilode-release
+          path: release
+
+      - name: Draft, upload, publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          tag="v${VERSION}"
+          # A re-run after a failed upload finds its own draft and finishes it; a release that is already public is left alone.
+          if draft=$(gh release view "${tag}" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "${draft}" != true ]; then
+              echo "::error::The release ${tag} is already published: not changing its files."
+              exit 1
+            fi
+            echo "Using the draft release ${tag}"
+          else
+            create=(--draft --verify-tag --title "Insilode ${VERSION}" --generate-notes)
+            if [ "${PRERELEASE}" = true ]; then create+=(--prerelease); fi
+            gh release create "${tag}" "${create[@]}"
+          fi
+          gh release upload "${tag}" release/* --clobber
+          if [ "${PRERELEASE}" = true ]; then
+            gh release edit "${tag}" --draft=false --prerelease --latest=false
+          else
+            gh release edit "${tag}" --draft=false --latest
+          fi
+          gh release view "${tag}" --json url,isDraft,isPrerelease,assets --jq '{url, isDraft, isPrerelease, assets: [.assets[].name]}'

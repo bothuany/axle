@@ -1303,7 +1303,7 @@ new file mode 100644
 index 0000000..a0cb80e
 --- /dev/null
 +++ b/src/insilodeMigrate.ts
-@@ -0,0 +1,135 @@
+@@ -0,0 +1,234 @@
 +/*---------------------------------------------------------------------------------------------
 + *  Insilode: what an Axle install left behind (the product was called Axle until 0.4.x).
 + *
@@ -1326,6 +1326,12 @@ index 0000000..a0cb80e
 +
 +/** What is copied from the user data folder: settings, keybindings, snippets, global and workspace state (trust included), unsaved backups. Caches and logs are not. */
 +const USER_DATA_ENTRIES = ['User', 'Backups', 'storage.json', 'languagepacks.json', 'machineid'];
++
++/**
++ * Per-workspace state and the local history: years of use can leave gigabytes there, and nothing needs them before the first window,
++ * so they are copied after startup (`deferredCopies`), one folder at a time, instead of holding up the start.
++ */
++const DEFERRED_USER_ENTRIES = [path.join('User', 'workspaceStorage'), path.join('User', 'History')];
 +
 +/** What is copied from the data folder in the home directory. The agent bridge folder is runtime state. */
 +const DATA_FOLDER_ENTRIES = ['extensions', 'argv.json'];
@@ -1369,11 +1375,12 @@ index 0000000..a0cb80e
 +	return text.replace(/([\\/])\.axle([\\/])/g, '$1.insilode$2');
 +}
 +
-+function copyEntries(from: string, to: string, entries: readonly string[]): void {
++function copyEntries(from: string, to: string, entries: readonly string[], skip: readonly string[]): void {
++	const skipped = new Set(skip.map(s => path.join(from, s)));
 +	for (const name of entries) {
 +		const source = path.join(from, name);
 +		if (fs.existsSync(source)) {
-+			fs.cpSync(source, path.join(to, name), { recursive: true });
++			fs.cpSync(source, path.join(to, name), { recursive: true, filter: src => !skipped.has(path.normalize(src)) });
 +		}
 +	}
 +}
@@ -1389,27 +1396,112 @@ index 0000000..a0cb80e
 +	}
 +}
 +
-+/** Copies `from` to `to` when `to` is missing: into a sibling first, then a rename, so `to` is either absent or whole. */
-+function migrateFolder(from: string, to: string, entries: readonly string[], rewrite: (folder: string) => void, result: MigrationResult): void {
-+	if (!fs.existsSync(from) || fs.existsSync(to)) {
++function isRunning(pid: number): boolean {
++	if (!Number.isInteger(pid) || pid <= 0) {
++		return false;
++	}
++	try {
++		process.kill(pid, 0);
++		return true;
++	} catch (e) {
++		// EPERM: the process exists, it belongs to another user.
++		return (e as NodeJS.ErrnoException).code === 'EPERM';
++	}
++}
++
++/** Half-made copies no running start owns: `<to>.migrating` (Insilode 0.5.1 and before) or `<to>.migrating-<pid>` of a process that is gone. */
++function removeStalePartials(to: string): void {
++	const dir = path.dirname(to);
++	const prefix = `${path.basename(to)}.migrating`;
++	let names: string[];
++	try {
++		names = fs.readdirSync(dir);
++	} catch {
 +		return;
 +	}
-+	const partial = `${to}.migrating`;
++	for (const name of names) {
++		if (name === prefix || (name.startsWith(`${prefix}-`) && !isRunning(Number(name.slice(prefix.length + 1))))) {
++			fs.rmSync(path.join(dir, name), { recursive: true, force: true });
++		}
++	}
++}
++
++/**
++ * Copies `from` to `to` when `to` is missing: into a sibling of this process's own first, then a rename, so `to` is either absent or
++ * whole. Two starts at once (a double click, or a file association and the dock) each copy into their own sibling; the first rename
++ * wins, and the other start drops its copy, which is not a failure.
++ */
++function migrateFolder(from: string, to: string, entries: readonly string[], skip: readonly string[], rewrite: (folder: string) => void, result: MigrationResult): boolean {
++	if (!fs.existsSync(from) || fs.existsSync(to)) {
++		return false;
++	}
++	removeStalePartials(to);
++	const partial = `${to}.migrating-${process.pid}`;
 +	try {
 +		fs.rmSync(partial, { recursive: true, force: true });
 +		fs.mkdirSync(partial, { recursive: true });
-+		copyEntries(from, partial, entries);
++		copyEntries(from, partial, entries, skip);
 +		rewrite(partial);
 +		fs.writeFileSync(path.join(partial, MARKER), JSON.stringify({ from, at: new Date().toISOString() }) + '\n');
 +		fs.renameSync(partial, to);
 +		result.copied.push(`${from} -> ${to}`);
++		return true;
 +	} catch (e) {
-+		result.failed.push(`${from}: ${(e as Error).message}`);
 +		fs.rmSync(partial, { recursive: true, force: true });
++		// Another start that renamed its copy first: `to` is whole, which is what this one wanted.
++		if (!fs.existsSync(path.join(to, MARKER))) {
++			result.failed.push(`${from}: ${(e as Error).message}`);
++		}
++		return false;
 +	}
 +}
 +
-+/** Never throws: a start must not fail because an old folder could not be copied. It is tried again at the next start. */
++const pending: Promise<void>[] = [];
++
++/** Resolves when the copies `migrateLegacyData` left for after startup are done; they never reject (a failure is logged). */
++export function deferredCopies(): Promise<void> {
++	return Promise.all(pending).then(() => undefined);
++}
++
++/**
++ * Copies each folder in `from` (one per workspace, or per file of the local history) to `to`, in the background. Each goes to a sibling
++ * first and is renamed into place only when the app has not made that folder itself in the meantime: a workspace opened before its copy
++ * arrived keeps what the app wrote, and the app never reads a half-copied folder.
++ */
++function copyChildrenLater(from: string, to: string): void {
++	const log = (message: string) => console.error(`Insilode: could not copy data from Axle: ${message}`);
++	pending.push((async () => {
++		let names: string[];
++		try {
++			names = await fs.promises.readdir(from);
++		} catch {
++			return;
++		}
++		await fs.promises.mkdir(to, { recursive: true });
++		for (const name of names) {
++			const target = path.join(to, name);
++			const partial = path.join(to, `.${name}.migrating-${process.pid}`);
++			try {
++				if (fs.existsSync(target)) {
++					continue;
++				}
++				await fs.promises.cp(path.join(from, name), partial, { recursive: true });
++				if (!fs.existsSync(target)) {
++					await fs.promises.rename(partial, target);
++				}
++			} catch (e) {
++				log(`${path.join(from, name)}: ${(e as Error).message}`);
++			} finally {
++				await fs.promises.rm(partial, { recursive: true, force: true });
++			}
++		}
++	})().catch(e => log((e as Error).message)));
++}
++
++/**
++ * Never throws: a start must not fail because an old folder could not be copied. It is tried again at the next start. What can be large
++ * and is not needed to start (DEFERRED_USER_ENTRIES) is copied in the background afterwards; `deferredCopies` says when that is done.
++ */
 +export function migrateLegacyData(i: MigrationInput): MigrationResult {
 +	const result: MigrationResult = { copied: [], failed: [] };
 +	// A build run from source (VSCODE_DEV) works on folders of its own ("Insilode Dev", ".insilode-dev"): it never takes a person's real data.
@@ -1419,7 +1511,9 @@ index 0000000..a0cb80e
 +	try {
 +		if (!hasFlag(i.argv, 'user-data-dir')) {
 +			const base = appDataFolder(i);
-+			migrateFolder(path.join(base, LEGACY_USER_DATA), path.join(base, i.product.nameShort), USER_DATA_ENTRIES, folder => {
++			const from = path.join(base, LEGACY_USER_DATA);
++			const to = path.join(base, i.product.nameShort);
++			const made = migrateFolder(from, to, USER_DATA_ENTRIES, DEFERRED_USER_ENTRIES, folder => {
 +				rewriteIn(path.join(folder, 'User', 'settings.json'), 'settings');
 +				const profiles = path.join(folder, 'User', 'profiles');
 +				if (fs.existsSync(profiles)) {
@@ -1428,9 +1522,14 @@ index 0000000..a0cb80e
 +					}
 +				}
 +			}, result);
++			if (made) {
++				for (const entry of DEFERRED_USER_ENTRIES) {
++					copyChildrenLater(path.join(from, entry), path.join(to, entry));
++				}
++			}
 +		}
 +		if (!hasFlag(i.argv, 'extensions-dir')) {
-+			migrateFolder(path.join(i.home, LEGACY_DATA_FOLDER), path.join(i.home, i.product.dataFolderName), DATA_FOLDER_ENTRIES, folder => {
++			migrateFolder(path.join(i.home, LEGACY_DATA_FOLDER), path.join(i.home, i.product.dataFolderName), DATA_FOLDER_ENTRIES, [], folder => {
 +				rewriteIn(path.join(folder, 'extensions', 'extensions.json'), 'extensions');
 +			}, result);
 +		}
