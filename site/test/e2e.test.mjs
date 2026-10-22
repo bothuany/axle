@@ -180,6 +180,15 @@ test('home: the film plays with its sound only when asked, in a modal that Esc a
 	// A click outside the player (on the backdrop) closes it too.
 	await page.click('[data-film-open]')
 	await until(async () => (await state()).open, 'the film to open again')
+	// Selecting transcript text and letting go outside the player is not a click outside: it stays open.
+	await page.click('.film-transcript summary')
+	const text = await page.$eval('.film-transcript p', p => { p.scrollIntoView({ block: 'center' }); const r = p.getBoundingClientRect(); return { x: r.left + 20, y: r.top + 8 } })
+	await page.mouse.move(text.x, text.y)
+	await page.mouse.down()
+	await page.mouse.move(4, 4, { steps: 8 })
+	await page.mouse.up()
+	await wait(300)
+	assert.equal((await state()).open, true, 'a drag that ends on the backdrop does not close the film')
 	await page.mouse.click(4, 4)
 	await until(async () => { const s = await state(); return !s.open && s.paused }, 'a click outside to close it')
 	assert.equal((await state()).paused, true)
@@ -228,6 +237,27 @@ test('home: the harness section is the real scan of the demo project, with its o
 	await page.close()
 })
 
+test('home between a phone and a desktop: the canvas fills its frame, but never zooms out below readable cards', { skip }, async () => {
+	const { page, problems } = await open('', { viewport: { width: 900, height: 900 } })
+	const canvas = await inside(page, '.stage-frame')
+	await drawn(canvas)
+	await until(() => page.evaluate(() => document.querySelector('[data-stage]').classList.contains('is-live')), 'the canvas to be filled and shown')
+	const zoom = await canvas.evaluate(() => new DOMMatrixReadOnly(getComputedStyle(document.querySelector('.react-flow__viewport')).transform).a)
+	// READABLE_ZOOM in site/src/stage.ts and ui/src/webview.tsx; a wheel step lands within a few percent of it.
+	assert.ok(zoom >= 0.55 * 0.97, `zoom ${zoom} is readable`)
+	// The flow's first card (its entry point) is in the frame.
+	const first = await canvas.evaluate(() => {
+		const area = document.querySelector('.react-flow').getBoundingClientRect()
+		const cards = [...document.querySelectorAll('.react-flow__node-card')].map(n => n.getBoundingClientRect())
+		const left = cards.sort((a, b) => a.left - b.left)[0]
+		return left && left.left >= area.left - 1 && left.top >= area.top - 1 && left.left < area.right && left.top < area.bottom
+	})
+	assert.equal(first, true, 'the entry card is on screen')
+	if (process.env.SITE_SHOTS) await page.screenshot({ path: `${process.env.SITE_SHOTS}/home-900px-canvas.png` })
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
 test('home on a phone: no canvas until asked, then full screen; the page has no sideways scroll', { skip }, async () => {
 	const { page, problems } = await open('', { viewport: { width: 375, height: 812, isMobile: true, hasTouch: true }, agent: PHONE })
 	assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 375)
@@ -239,6 +269,10 @@ test('home on a phone: no canvas until asked, then full screen; the page has no 
 	const canvas = await inside(page, '.stage-frame')
 	await drawn(canvas)
 	assert.equal(await page.evaluate(() => document.querySelector('[data-stage]').classList.contains('is-full') && document.activeElement?.matches('[data-close]')), true)
+	// Full screen is the whole screen, not the 3/4 box the stage has in the page.
+	const box = await page.$eval('[data-stage]', s => { const r = s.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height } })
+	assert.deepEqual(box, { left: 0, top: 0, width: 375, height: 812 }, 'the full-screen canvas covers the phone\'s screen')
+	if (process.env.SITE_SHOTS) await page.screenshot({ path: `${process.env.SITE_SHOTS}/phone-full-screen-canvas.png` })
 	await page.keyboard.press('Escape')
 	assert.equal(await page.evaluate(() => document.querySelector('[data-stage]').classList.contains('is-full')), false)
 	assert.deepEqual(problems, [])

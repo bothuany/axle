@@ -97,28 +97,59 @@ public sealed class FlowGraph
 
     public async Task<List<EntryPoint>> EntryPointsAsync() => (await EntrySymbolsAsync()).Select(e => e.Entry).ToList();
 
-    /// <summary>The entry points with the methods they are, for the type model (parameter and return types).</summary>
+    /// <summary>
+    /// The entry points with the methods they are, for the type model (parameter and return types). ASP.NET routes the public
+    /// actions a controller inherits as well as its own, so each concrete controller walks its base classes up to ControllerBase:
+    /// an action declared on an abstract <c>BaseApiController&lt;T&gt;</c> is an entry point of every controller that derives
+    /// from it, named for that controller, with the base method as its flow (and so its id). An action a subclass overrides is
+    /// the override's.
+    /// </summary>
     internal async Task<List<(EntryPoint Entry, IMethodSymbol Method)>> EntrySymbolsAsync()
     {
         var result = new List<(EntryPoint Entry, IMethodSymbol Method)>();
         foreach (var t in await SourceTypesAsync())
         {
             if (t.IsAbstract || !InheritsFrom(t, "ControllerBase")) continue;
-            foreach (var m in t.GetMembers().OfType<IMethodSymbol>())
+            var overridden = new HashSet<string>();
+            for (INamedTypeSymbol? c = t; c != null && c.Name is not ("ControllerBase" or "Controller") && c.Locations.Any(l => l.IsInSource); c = c.BaseType)
             {
-                if (m.MethodKind != MethodKind.Ordinary || m.DeclaredAccessibility != Accessibility.Public) continue;
-                var http = m.GetAttributes().Select(a => a.AttributeClass?.Name ?? "")
-                    .FirstOrDefault(n => n.StartsWith("Http") && n.EndsWith("Attribute"));
-                if (http == null) continue;
-                var loc = m.Locations.First(l => l.IsInSource);
-                result.Add((new EntryPoint(
-                    DocumentationCommentId.CreateDeclarationId(m)!,
-                    t.Name, m.Name, http[4..^9].ToUpperInvariant(),
-                    loc.SourceTree!.FilePath, loc.GetLineSpan().StartLinePosition.Line + 1), m));
+                foreach (var m in c.GetMembers().OfType<IMethodSymbol>())
+                {
+                    var def = m.OriginalDefinition;
+                    var id = DocumentationCommentId.CreateDeclarationId(def);
+                    if (id == null || overridden.Contains(id)) continue;
+                    for (var o = def.OverriddenMethod; o != null; o = o.OverriddenMethod)
+                        if (DocumentationCommentId.CreateDeclarationId(o.OriginalDefinition) is { } oid) overridden.Add(oid);
+                    if (m.MethodKind != MethodKind.Ordinary || m.DeclaredAccessibility != Accessibility.Public || m.IsStatic) continue;
+                    var http = HttpVerb(def);
+                    if (http == null) continue;
+                    var loc = def.Locations.First(l => l.IsInSource);
+                    result.Add((new EntryPoint(id, t.Name, def.Name, http, loc.SourceTree!.FilePath, loc.GetLineSpan().StartLinePosition.Line + 1), def));
+                }
             }
         }
-        return result.OrderBy(e => e.Entry.Controller).ThenBy(e => e.Entry.Line).ToList();
+        return result.OrderBy(e => e.Entry.Controller).ThenBy(e => e.Entry.File).ThenBy(e => e.Entry.Line).ToList();
     }
+
+    /// <summary>
+    /// The HTTP verb of an action (<c>[HttpGet]</c> → GET), or null when the method is not one. An override without an attribute of
+    /// its own keeps the verb of the method it overrides, as ASP.NET reads the attributes with inheritance.
+    /// </summary>
+    private static string? HttpVerb(IMethodSymbol m)
+    {
+        for (IMethodSymbol? x = m; x != null; x = x.OverriddenMethod)
+        {
+            var http = x.GetAttributes().Select(a => a.AttributeClass?.Name ?? "")
+                .FirstOrDefault(n => n.Length > "HttpAttribute".Length && n.StartsWith("Http") && n.EndsWith("Attribute"));
+            if (http != null) return http[4..^9].ToUpperInvariant();
+        }
+        return null;
+    }
+
+    /// <summary>A controller action: the one test shared by the entry points, the CodeLens list and impact.</summary>
+    private static bool IsAction(IMethodSymbol m) =>
+        m.MethodKind == MethodKind.Ordinary && m.DeclaredAccessibility == Accessibility.Public && !m.IsStatic &&
+        InheritsFrom(m.ContainingType, "ControllerBase") && HttpVerb(m) != null;
 
     public async Task<IMethodSymbol?> ResolveAsync(string id)
     {
@@ -263,9 +294,7 @@ public sealed class FlowGraph
             if (id == null) continue;
             var span = decl.SyntaxTree.GetLineSpan(decl.Span);
             var nameLine = decl.SyntaxTree.GetLineSpan(decl.Identifier.Span).StartLinePosition.Line + 1;
-            var isEntry = InheritsFrom(m.ContainingType, "ControllerBase") &&
-                          m.GetAttributes().Any(a => a.AttributeClass?.Name.StartsWith("Http") == true);
-            result.Add(new MethodInfo(id, $"{m.ContainingType.Name}.{m.Name}", nameLine, span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1, isEntry));
+            result.Add(new MethodInfo(id, $"{m.ContainingType.Name}.{m.Name}", nameLine, span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1, IsAction(m)));
         }
         return result;
     }
@@ -304,6 +333,8 @@ public sealed class FlowGraph
         if (start == null) return new();
         var endpoints = new SortedSet<string>();
         var seen = new HashSet<string>();
+        // An action declared on a base controller is an endpoint of each controller that inherits it: name those.
+        var routed = (await EntrySymbolsAsync()).ToLookup(e => e.Entry.Id, e => $"{e.Entry.Controller.Replace("Controller", "")}.{e.Entry.Action}");
         var frontier = new List<IMethodSymbol> { start.OriginalDefinition };
         for (var depth = 0; depth <= maxDepth && frontier.Count > 0 && seen.Count < 400; depth++)
         {
@@ -313,9 +344,10 @@ public sealed class FlowGraph
                 ct.ThrowIfCancellationRequested();
                 var mid = DocumentationCommentId.CreateDeclarationId(m);
                 if (mid == null || !seen.Add(mid)) continue;
-                if (InheritsFrom(m.ContainingType, "ControllerBase") && m.GetAttributes().Any(a => a.AttributeClass?.Name.StartsWith("Http") == true))
+                if (IsAction(m))
                 {
-                    endpoints.Add($"{m.ContainingType.Name.Replace("Controller", "")}.{m.Name}");
+                    if (routed.Contains(mid)) endpoints.UnionWith(routed[mid]);
+                    else endpoints.Add($"{m.ContainingType.Name.Replace("Controller", "")}.{m.Name}");
                     continue;
                 }
                 foreach (var (caller, _, _) in await CallSitesAsync(m, ct)) next.Add(caller);

@@ -20,7 +20,47 @@ export interface StageOptions {
 }
 
 /**
- * Zooms the canvas in `doc` so its cards fill the canvas area, less a margin, centred. The canvas zooms on a Ctrl+wheel around the
+ * The zoom below which the canvas's cards stop being readable: the canvas's own fit never goes under it (READABLE_ZOOM in
+ * ui/src/webview.tsx), and neither does fillCanvas, which would otherwise undo that on a long flow.
+ */
+const READABLE_ZOOM = 0.55
+
+/** The canvas's zoom now: the scale of React Flow's viewport transform. */
+function zoomOf(doc: Document): number | null {
+  const viewport = doc.querySelector<HTMLElement>('.react-flow__viewport')
+  const view = doc.defaultView
+  if (!viewport || !view) return null
+  const t = view.getComputedStyle(viewport).transform
+  if (!t || t === 'none') return 1
+  const z = new view.DOMMatrixReadOnly(t).a
+  return z > 0 ? z : null
+}
+
+/**
+ * Waits until the canvas has stopped moving: its own fit after the first draw is an animation (250 ms) that can start a little
+ * after the first card appears, and a measurement taken during it is wrong. "Stopped" is the viewport transform staying the same
+ * for 300 ms; it gives up after 3 s.
+ */
+async function settled(doc: Document) {
+  const viewport = doc.querySelector<HTMLElement>('.react-flow__viewport')
+  const view = doc.defaultView
+  if (!viewport || !view) return
+  const t0 = performance.now()
+  let last = ''
+  let since = performance.now()
+  while (performance.now() - t0 < 3000) {
+    await new Promise(r => view.requestAnimationFrame(r))
+    const now = view.getComputedStyle(viewport).transform
+    if (now !== last) {
+      last = now
+      since = performance.now()
+    } else if (performance.now() - since >= 300 && performance.now() - t0 >= 400) return
+  }
+}
+
+/**
+ * Zooms the canvas in `doc` so its cards fill the canvas area, less a margin, centred, but never below READABLE_ZOOM: a flow too
+ * long for that starts at its left edge (its entry point), as the canvas's own fit does. The canvas zooms on a Ctrl+wheel around the
  * pointer (React Flow's own handling), so this sends that: a zoom by f around the point p maps x to p + (x - p)·f, and p is chosen
  * so the cards' box lands where it should. How far one wheel step zooms differs by platform, so it measures and corrects.
  */
@@ -29,6 +69,7 @@ async function fillCanvas(doc: Document) {
   const area = doc.querySelector<HTMLElement>('.react-flow')
   const pane = doc.querySelector<HTMLElement>('.react-flow__pane')
   if (!view || !area || !pane) return
+  await settled(doc)
   const frame = () => new Promise(r => view.requestAnimationFrame(() => view.requestAnimationFrame(r)))
   const cards = () => {
     const nodes = doc.querySelectorAll('.react-flow__node-card').length ? doc.querySelectorAll('.react-flow__node-card') : doc.querySelectorAll('.react-flow__node')
@@ -50,11 +91,16 @@ async function fillCanvas(doc: Document) {
   const a = area.getBoundingClientRect()
   const { x0, x1, y0, y1 } = after
   const pad = Math.max(16, Math.min(40, a.width * 0.03))
-  const f = Math.min((a.width - 2 * pad) / (x1 - x0), (a.height - 2 * pad) / (y1 - y0), 1.6)
+  const zoom = zoomOf(doc)
+  const fit = Math.min((a.width - 2 * pad) / (x1 - x0), (a.height - 2 * pad) / (y1 - y0), 1.6)
+  // Never smaller than readable: the zoom after this step is zoom·f.
+  const f = zoom ? Math.max(fit, READABLE_ZOOM / zoom) : fit
   if (Math.abs(f - 1) < 0.01) return
-  // Where the box's top left should land: centred on the axis it does not fill.
-  const tx = a.left + (a.width - f * (x1 - x0)) / 2
-  const ty = a.top + (a.height - f * (y1 - y0)) / 2
+  // Where the box's top left should land: centred on an axis it fits in, else at the margin (the flow's start, top left).
+  const w = f * (x1 - x0)
+  const h = f * (y1 - y0)
+  const tx = w <= a.width - 2 * pad ? a.left + (a.width - w) / 2 : a.left + pad
+  const ty = h <= a.height - 2 * pad ? a.top + (a.height - h) / 2 : a.top + pad
   wheel(-Math.log2(f) / perUnit, (tx - f * x0) / (1 - f), (ty - f * y0) / (1 - f))
   await frame()
 }

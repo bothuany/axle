@@ -5,7 +5,13 @@ await Cli.RunAsync(args);
 
 static class Cli
 {
-    const string Usage = "usage: FlowAnalyzer serve <sln|csproj> [port] [parent-pid] --token <hex> | dump <sln|csproj> <controller.action|docId> [depth] | callers <sln|csproj> <file> <method> [depth] | list <sln|csproj> | tables <sln|csproj> | migration <file.cs>";
+    /// <summary>
+    /// Where `serve` takes its token from. The environment, not the command line: any user of the machine can read a process's
+    /// arguments (ps, /proc/&lt;pid&gt;/cmdline), only its own user its environment. `--token` is still read, for a run by hand.
+    /// </summary>
+    const string TokenVariable = "INSILODE_ANALYZER_TOKEN";
+
+    const string Usage = "usage: FlowAnalyzer serve <sln|csproj> [port] [parent-pid] (token in INSILODE_ANALYZER_TOKEN, or --token <hex>) | dump <sln|csproj> <controller.action|docId> [depth] | callers <sln|csproj> <file> <method> [depth] | list <sln|csproj> | tables <sln|csproj> | migration <file.cs>";
 
     static int Fail(string message)
     {
@@ -25,6 +31,10 @@ static class Cli
             else if (rawArgs[i].StartsWith("--token=")) token = rawArgs[i]["--token=".Length..];
             else args.Add(rawArgs[i]);
         }
+        var fromEnvironment = Environment.GetEnvironmentVariable(TokenVariable);
+        if (string.IsNullOrEmpty(token)) token = fromEnvironment;
+        // MSBuild's build hosts are child processes of this one: they have no use for the token.
+        Environment.SetEnvironmentVariable(TokenVariable, null);
 
         // An EF migration is read from its one file: no solution to load.
         if (args.FirstOrDefault() == "migration")
@@ -43,7 +53,7 @@ static class Cli
         switch (args[0])
         {
             case "serve":
-                if (string.IsNullOrEmpty(token)) { Fail("serve needs --token <hex>: every request must carry it in the x-flow-token header.\n" + Usage); return; }
+                if (string.IsNullOrEmpty(token)) { Fail($"serve needs a token, in {TokenVariable} (or --token <hex>): every request must carry it in the x-flow-token header.\n" + Usage); return; }
                 if (args.Count > 2 && (!int.TryParse(args[2], out port) || port is < 0 or > 65535)) { Fail($"Invalid port: {args[2]}"); return; }
                 if (args.Count > 3 && !int.TryParse(args[3], out parentPid)) { Fail($"Invalid parent pid: {args[3]}"); return; }
                 break;

@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ROOT } from './lib.mjs'
-import { WORK_VOLUME, changedFiles, dockerMissingMessage, dockerRunArgs, imageTag } from './docker-config.mjs'
+import { WORK_VOLUME, changedFiles, dockerMissingMessage, dockerRunArgs, imageTag, volumeIsCurrent } from './docker-config.mjs'
 import { summarize } from './sandbox-config.mjs'
 
 const DOCKER_DIR = join(ROOT, 'test', 'e2e-desktop', 'docker')
@@ -121,8 +121,8 @@ async function main() {
 	const child = spawn('docker', args, { stdio: 'inherit' })
 	const code = await new Promise(done => child.on('exit', c => done(c ?? 1)))
 
-	if (code < 125 || code > 127) {
-		// The container got as far as copying: the volume now holds this tree.
+	if (volumeIsCurrent(code)) {
+		// The container copied and rebuilt: the volume now holds this tree.
 		const after = docker(['volume', 'inspect', '--format', '{{.CreatedAt}}', volume])
 		state[`${ROOT}|${volume}|${after.stdout.trim()}`] = now
 		writeFileSync(STATE, JSON.stringify(state))

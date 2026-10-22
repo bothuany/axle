@@ -44,3 +44,13 @@ export function dockerMissingMessage(detail) {
 export function changedFiles(now, previous) {
 	return Object.keys(now).filter(file => previous?.[file] !== now[file])
 }
+
+/**
+ * Whether the volume holds a tree that was copied and rebuilt, so the next run may skip what did not change since. Not when
+ * Docker could not start the container (125-127), when the entrypoint's setup or rebuild failed (3: the files were copied but
+ * not built, and a run that copies nothing would test the old build), nor when the container was killed (128 and up, such as
+ * 137 when it ran out of memory, possibly in the middle of the rebuild).
+ */
+export function volumeIsCurrent(exitCode) {
+	return exitCode < 125 && exitCode !== 3
+}

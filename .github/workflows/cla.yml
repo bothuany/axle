@@ -29,6 +29,11 @@ jobs:
           path-to-signatures: signatures/version1/cla.json
           path-to-document: https://github.com/bothuany/insilode/blob/main/CLA.md
           branch: cla-signatures
-          # The maintainer's own accounts and bots do not need to sign. `claude` is the account GitHub resolves the Claude Code co-author trailer to.
-          allowlist: bothuany,claude,dependabot[bot],github-actions[bot]
+          # Who need not sign depends on who opened the pull request. The action checks each commit's author (else its committer),
+          # which anyone can set: a commit whose email GitHub resolves to bothuany, a bot or `claude` would skip the check. So the
+          # list applies only to pull requests the maintainer or Dependabot opened, where commits authored by Claude Code (the
+          # `claude` account) are the maintainer's own work. On anyone else's pull request every commit author signs, and nobody
+          # is allowlisted. Co-authored-by trailers are never read by the action, so a contributor's own commits with a Claude
+          # co-author trailer need only the contributor's signature.
+          allowlist: ${{ contains(fromJSON('["bothuany", "dependabot[bot]"]'), github.event.pull_request.user.login || github.event.issue.user.login) && 'bothuany,claude,dependabot[bot],github-actions[bot]' || '' }}
           custom-notsigned-prcomment: 'Thanks for your pull request! Before it can be merged, please read the [Contributor License Agreement](https://github.com/bothuany/insilode/blob/main/CLA.md) and sign it by commenting the sentence below. You only do this once.'

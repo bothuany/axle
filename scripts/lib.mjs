@@ -7,11 +7,25 @@ import { fileURLToPath } from 'node:url'
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export const VSCODE = join(ROOT, 'editor', 'vscode')
 export const EXTENSIONS = join(ROOT, 'editor', 'extensions')
+export const PATCHES = join(ROOT, 'editor', 'patches')
 export const isWin = process.platform === 'win32'
 
 /** The Insilode extensions that have a build of their own (an esbuild.mjs), in folder order. */
 export function buildableExtensions() {
 	return readdirSync(EXTENSIONS).filter(name => name.startsWith('flow-') && existsSync(join(EXTENSIONS, name, 'esbuild.mjs')))
+}
+
+/** Insilode's patches to VS Code (editor/patches/*.patch), in the order setup applies them. */
+export function patchFiles() {
+	return readdirSync(PATCHES).filter(name => name.endsWith('.patch')).sort()
+}
+
+/**
+ * Whether editor/vscode carries every patch in editor/patches. Each one is checked on its own (`git apply --reverse --check`),
+ * which is why no two patches may change the same file (test/update checks that).
+ */
+export function patchesApplied() {
+	return patchFiles().every(patch => launchSync('git', ['apply', '--reverse', '--check', join(PATCHES, patch)], { cwd: VSCODE, stdio: 'ignore' }).status === 0)
 }
 
 /** cmd.exe expands %VAR% even inside quotes, and a line break ends the command: such an argument is refused, not rewritten. */

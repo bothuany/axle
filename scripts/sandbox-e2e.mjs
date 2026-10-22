@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ROOT, isWin, launchSync } from './lib.mjs'
-import { buildWsb, missingSandboxMessage, sandboxExe, summarize } from './sandbox-config.mjs'
+import { buildWsb, missingSandboxMessage, parseDoneMarker, psQuote, sandboxExe, summarize } from './sandbox-config.mjs'
 
 const E2E = join(ROOT, 'test', 'e2e-desktop')
 const WAIT_MINUTES = 45
@@ -100,17 +100,17 @@ async function main() {
 	console.log(`Starting Windows Sandbox (minimized) with ${installer}\n  config  ${wsb}\n  output  ${output}\nThe run takes 10 to 20 minutes; the sandbox closes itself when it is done.`)
 
 	// Minimized, so it does not come to the front over what you are doing. Nothing else of this machine is touched.
-	spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Start-Process -FilePath '${exe}' -ArgumentList '"${wsb}"' -WindowStyle Minimized`], { stdio: 'ignore', windowsHide: true }).unref()
+	spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Start-Process -FilePath ${psQuote(exe)} -ArgumentList ${psQuote(`"${wsb}"`)} -WindowStyle Minimized`], { stdio: 'ignore', windowsHide: true }).unref()
 
 	const marker = join(output, 'done.json')
 	const end = Date.now() + WAIT_MINUTES * 60000
-	while (!existsSync(marker)) {
+	let done
+	while (!(done = existsSync(marker) ? parseDoneMarker(readFileSync(marker, 'utf8')) : undefined)) {
 		if (Date.now() > end) {
 			fail(`No result after ${WAIT_MINUTES} minutes. Look at ${join(output, 'sandbox.log')} (if it exists) and close the sandbox window.`)
 		}
 		await new Promise(r => setTimeout(r, 5000))
 	}
-	const done = JSON.parse(readFileSync(marker, 'utf8'))
 	const resultsFile = join(output, 'results.json')
 	if (!existsSync(resultsFile)) {
 		fail(`The sandbox finished (exit code ${done.exitCode}) without results. Its log: ${join(output, 'sandbox.log')}`)

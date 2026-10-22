@@ -16,9 +16,20 @@ export function mountFilm(open: HTMLElement | null, dialog: HTMLDialogElement | 
     })
   })
   close.addEventListener('click', () => dialog.close())
-  // The dialog element is the backdrop's area: a click on it, not on its content, is a click outside the player.
+  // A click on the backdrop closes it. The dialog element is the target of a backdrop click, but also of a click on its own
+  // padding or scrollbar, and of a click that ends there after a drag (selecting transcript text): so the press and the release
+  // must both be outside the dialog's box.
+  const outside = (e: MouseEvent) => {
+    const r = dialog.getBoundingClientRect()
+    return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom
+  }
+  let pressedOutside = false
+  dialog.addEventListener('pointerdown', e => {
+    pressedOutside = e.target === dialog && outside(e)
+  })
   dialog.addEventListener('click', e => {
-    if (e.target === dialog) dialog.close()
+    if (pressedOutside && e.target === dialog && outside(e)) dialog.close()
+    pressedOutside = false
   })
   dialog.addEventListener('close', () => {
     video.pause()

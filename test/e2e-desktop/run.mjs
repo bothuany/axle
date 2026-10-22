@@ -127,8 +127,8 @@ async function main() {
 					await page?.screenshot({ path: join(out, 'shots', `${label}-${s.id}-failed-${attempt}.png`) }).catch(() => undefined)
 					throw e
 				} finally {
-					await app.close()
-					collectLogs(app, out, `${s.id}-${attempt}`)
+					// The logs are copied before close() deletes the profile they are in.
+					await app.close(() => collectLogs(app, out, `${s.id}-${attempt}`))
 				}
 			}, (n, e) => console.log(`  ${s.id}: attempt ${n} failed (${String(e.message).split('\n')[0]}); trying again from a fresh app`)))
 		}

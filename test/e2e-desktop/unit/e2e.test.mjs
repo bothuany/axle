@@ -153,3 +153,17 @@ test('a run copies only the files that changed since the last one', async () => 
 	assert.deepEqual(changedFiles({ a: '1:1', b: '2:2' }, { a: '1:1', b: '2:2' }), [])
 	assert.deepEqual(changedFiles({ a: '1:1', b: '3:2', c: '1:1' }, { a: '1:1', b: '2:2' }), ['b', 'c'])
 })
+
+test('the sandbox\'s done.json is read with the byte order mark Windows PowerShell writes, and not before it is whole', async () => {
+	const { parseDoneMarker, psQuote } = await import('../../../scripts/sandbox-config.mjs')
+	assert.deepEqual(parseDoneMarker('\uFEFF{ "exitCode": 0, "at": "x" }'), { exitCode: 0, at: 'x' })
+	assert.deepEqual(parseDoneMarker('{"exitCode":1}'), { exitCode: 1 })
+	assert.equal(parseDoneMarker('\uFEFF{ "exitCo'), undefined, 'a file still being written')
+	assert.equal(psQuote('C:\\Users\\O\'Brien\\x.wsb'), '\'C:\\Users\\O\'\'Brien\\x.wsb\'')
+})
+
+test('a docker run whose setup or rebuild failed, or that was killed, leaves the volume to be rebuilt next time', async () => {
+	const { volumeIsCurrent } = await import('../../../scripts/docker-config.mjs')
+	assert.deepEqual([0, 1, 2].map(volumeIsCurrent), [true, true, true])
+	assert.deepEqual([3, 125, 126, 127, 137].map(volumeIsCurrent), [false, false, false, false, false])
+})

@@ -1,7 +1,8 @@
 // The first-start copy of what an Axle install left (editor/patches/flow-desktop.patch, src/insilodeMigrate.ts).
 // The module is pure TypeScript: it is cut out of the patch (what ships, not a copy) and run by Node's type stripping.
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import fs, { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { syncBuiltinESMExports } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
@@ -18,7 +19,7 @@ function addedLines(file) {
 
 const dir = mkdtempSync(join(realpathSync.native(tmpdir()), 'insilode-migrate-'))
 writeFileSync(join(dir, 'insilodeMigrate.ts'), addedLines('src/insilodeMigrate.ts').join('\n') + '\n')
-const { migrateLegacyData, appDataFolder, rewriteSettings, MARKER } = await import(pathToFileURL(join(dir, 'insilodeMigrate.ts')).href)
+const { migrateLegacyData, appDataFolder, rewriteSettings, deferredCopies, MARKER } = await import(pathToFileURL(join(dir, 'insilodeMigrate.ts')).href)
 
 const write = (file, text = 'x') => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, text) }
 const product = { nameShort: 'Insilode', dataFolderName: '.insilode' }
@@ -80,6 +81,60 @@ test('it runs once: a folder that exists is never overwritten, and a half-made c
 	const r = migrateLegacyData(fresh.input())
 	assert.equal(r.copied.length, 2)
 	assert.ok(!existsSync(join(fresh.appData, 'Insilode.migrating')) && !existsSync(join(fresh.appData, 'Insilode', 'leftover')))
+})
+
+test('workspace state and local history are copied after startup, and a folder the app made first is kept', async () => {
+	const m = axleMachine()
+	write(join(m.appData, 'Axle', 'User', 'workspaceStorage', 'ws1', 'state.vscdb'), 'old ws1')
+	write(join(m.appData, 'Axle', 'User', 'workspaceStorage', 'ws2', 'state.vscdb'), 'old ws2')
+	write(join(m.appData, 'Axle', 'User', 'History', 'h1', 'entries.json'), '{}')
+	const r = migrateLegacyData(m.input())
+	assert.deepEqual(r.failed, [])
+	const ws = join(m.appData, 'Insilode', 'User', 'workspaceStorage')
+	// Nothing of it is copied before the start goes on, so a large folder cannot hold up the first window.
+	assert.ok(!existsSync(join(ws, 'ws1')) && !existsSync(join(m.appData, 'Insilode', 'User', 'History', 'h1')))
+	assert.ok(existsSync(join(m.appData, 'Insilode', 'User', 'settings.json')))
+	// The app opens ws2 before its copy arrives: what the app wrote stays.
+	write(join(ws, 'ws2', 'state.vscdb'), 'the app\'s')
+	await deferredCopies()
+	assert.equal(readFileSync(join(ws, 'ws1', 'state.vscdb'), 'utf8'), 'old ws1')
+	assert.equal(readFileSync(join(ws, 'ws2', 'state.vscdb'), 'utf8'), 'the app\'s')
+	assert.ok(existsSync(join(m.appData, 'Insilode', 'User', 'History', 'h1', 'entries.json')))
+	assert.deepEqual(readdirSync(ws).sort(), ['ws1', 'ws2'], 'no half-made copies are left')
+})
+
+test('two starts at once: each copies into its own folder, and the one that loses the rename does not report a failure', () => {
+	const m = axleMachine()
+	// A copy another start is making right now (its process is alive) is not touched; one whose process is gone is removed.
+	write(join(m.appData, `Insilode.migrating-${process.ppid}`, 'busy'), 'another start')
+	write(join(m.appData, 'Insilode.migrating-2147483646', 'stale'), 'a start that died')
+	const r = migrateLegacyData(m.input())
+	assert.equal(r.copied.length, 2)
+	assert.ok(existsSync(join(m.appData, `Insilode.migrating-${process.ppid}`, 'busy')))
+	assert.ok(!existsSync(join(m.appData, 'Insilode.migrating-2147483646')))
+
+	// The other start renames its copy into place between this one's copy and its rename.
+	const lost = axleMachine()
+	const rename = fs.renameSync
+	let raced = false
+	fs.renameSync = (from, to) => {
+		raced = true
+		fs.renameSync = rename
+		syncBuiltinESMExports()
+		write(join(to, MARKER), '{}')
+		throw Object.assign(new Error(`ENOTEMPTY: directory not empty, rename '${from}' -> '${to}'`), { code: 'ENOTEMPTY' })
+	}
+	syncBuiltinESMExports()
+	try {
+		const r2 = migrateLegacyData(lost.input())
+		assert.ok(raced, 'the rename was the one that lost')
+		assert.deepEqual(r2.failed, [])
+		assert.equal(r2.copied.length, 1, 'only the extensions folder is this start\'s')
+		assert.deepEqual(readdirSync(lost.appData).filter(n => n.includes('.migrating')), [], 'its own copy is dropped')
+	} finally {
+		fs.renameSync = rename
+		syncBuiltinESMExports()
+	}
 })
 
 test('nothing to migrate, a chosen folder and portable mode are left alone', () => {

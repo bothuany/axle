@@ -3,6 +3,9 @@
 # would break setup. Keep them LF everywhere; git apply still matches them against a CRLF working tree.
 *.patch eol=lf
 
+# Shell scripts run on Linux runners and in containers, where a CR at a line end breaks them.
+*.sh eol=lf
+
 # Golden test output is compared byte for byte with what the generators print ("\n"). A Windows checkout with
 # core.autocrlf=true turned the expected files to CRLF and the Mermaid/PlantUML export tests failed there.
 editor/extensions/flow-view/test/expected/** text eol=lf

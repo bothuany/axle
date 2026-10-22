@@ -381,14 +381,12 @@ figcaption {
   margin: 14px 0 0;
 }
 
-/* The headline names the category ("code editor"), so it runs longer than the old one: a wider measure keeps it to three lines. */
 /* The slogan: two sentences, each from a new line, wrapped evenly so no word is left alone on a line. The product's name is in the
    light accent blue (8.5:1 on the page). */
 .hero h1 {
   max-width: none;
   font-size: clamp(36px, 4.5vw, 64px);
   line-height: 1.04;
-  letter-spacing: -0.012em;
 }
 
 .hero h1 > span {
@@ -1535,8 +1533,9 @@ figcaption {
     padding: 22px 18px;
   }
 
-  .stage,
-  .adds .stage {
+  /* Not when it is full screen: .adds .stage outranks .stage.is-full, which would keep the 3/4 box on a phone's screen. */
+  .stage:not(.is-full),
+  .adds .stage:not(.is-full) {
     aspect-ratio: 3 / 4;
   }
 

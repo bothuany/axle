@@ -13,7 +13,14 @@ mountLoop(document.querySelector<HTMLVideoElement>('[data-loop]'))
 mountFilm(document.querySelector<HTMLElement>('[data-film-open]'), document.querySelector<HTMLDialogElement>('[data-film]'))
 
 let data: Promise<DemoData> | undefined
-const demo = () => (data ??= fetch('./data/demo.json').then(r => r.json() as Promise<DemoData>))
+// A load that failed is not kept: the next click or scroll asks again.
+const demo = () =>
+  (data ??= fetch('./data/demo.json')
+    .then(r => (r.ok ? (r.json() as Promise<DemoData>) : Promise.reject(new Error(`demo.json: ${r.status}`))))
+    .catch(e => {
+      data = undefined
+      throw e
+    }))
 
 // The live canvas: it loads once the page is idle on a wide screen, zoomed so the flow fills it; on a phone only when asked, full screen.
 const root = document.querySelector<HTMLElement>('[data-stage]')!
@@ -24,16 +31,22 @@ if (!narrow.matches) stage.loadWhenIdle()
 root.querySelector('[data-play]')?.addEventListener('click', async e => {
   const button = e.currentTarget as HTMLButtonElement
   button.disabled = true
-  const tour = (await demo()).tours.find(t => t.id === button.dataset.play)
-  if (tour) {
-    // The tour bar takes the bottom of the canvas: the button steps aside while the tour plays.
-    root.classList.add('is-touring')
-    await stage.play(tour, 'OrderController.place')
-    stage.setTabbable(true)
-    // The tour bar has the keys (next, back, close): give it the focus, so a keyboard can drive the tour.
-    stage.window?.focus()
+  try {
+    const tour = (await demo()).tours.find(t => t.id === button.dataset.play)
+    if (tour) {
+      // The tour bar takes the bottom of the canvas: the button steps aside while the tour plays.
+      root.classList.add('is-touring')
+      await stage.play(tour, 'OrderController.place')
+      stage.setTabbable(true)
+      // The tour bar has the keys (next, back, close): give it the focus, so a keyboard can drive the tour.
+      stage.window?.focus()
+    }
+  } catch {
+    root.classList.remove('is-touring')
+    stage.note('The tour could not be loaded. Try again in a moment.')
+  } finally {
+    button.disabled = false
   }
-  button.disabled = false
 })
 
 const close = root.querySelector<HTMLButtonElement>('[data-close]')!

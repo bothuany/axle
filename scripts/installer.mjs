@@ -5,7 +5,7 @@
 //   npm run installer -- --system     also the system-wide one (dist/Insilode-Setup-<version>-x64-system.exe)
 //   npm run installer -- --system-only
 //   npm run installer -- --fast       reuse editor/VSCode-win32-x64 from the last full build, if nothing it was built from has
-//                                     changed (VS Code's version, Insilode's core patch, product.json, the icon: a stamp says so).
+//                                     changed (VS Code's version, Insilode's patches, product.json, the icon: a stamp says so).
 //                                     Only Insilode's own parts and the Inno Setup step are redone: minutes, not half an hour.
 //                                     Without a matching stamp it says so and does the full build.
 //   npm run installer -- --full       the full build, whatever the stamp says (this is also the default)
@@ -22,7 +22,7 @@
 import { createHash } from 'node:crypto'
 import { copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { EXTENSIONS, ROOT, VSCODE, buildableExtensions, isWin, launchSync } from './lib.mjs'
+import { EXTENSIONS, PATCHES, ROOT, VSCODE, buildableExtensions, isWin, launchSync, patchFiles, patchesApplied } from './lib.mjs'
 
 const args = new Set(process.argv.slice(2))
 const KNOWN = ['--system', '--system-only', '--fast', '--full']
@@ -79,8 +79,7 @@ if (major !== needMajor || minor < needMinor) {
 if (!existsSync(join(VSCODE, 'node_modules', '.package-lock.json'))) {
 	fail('Insilode is not set up yet: run `npm run setup` first (it fetches and builds VS Code, which the installer packages).')
 }
-const patched = ['flow-core.patch', 'flow-update.patch'].every(patch => launchSync('git', ['apply', '--reverse', '--check', join(ROOT, 'editor', 'patches', patch)], { cwd: VSCODE, stdio: 'ignore' }).status === 0)
-if (!patched) {
+if (!patchesApplied()) {
 	fail('editor/vscode does not carry Insilode\'s patches (or has other changes to the same files): run `npm run setup`, or delete editor/vscode and run it again.')
 }
 const product = readJson(join(VSCODE, 'product.json'))
@@ -174,7 +173,12 @@ function appStamp() {
 	const hash = createHash('sha256')
 	const described = launchSync('git', ['describe', '--tags'], { cwd: VSCODE, encoding: 'utf8' })
 	hash.update(described.status === 0 ? described.stdout.trim() : 'unknown version')
-	for (const file of [join(ROOT, 'editor', 'patches', 'flow-core.patch'), join(ROOT, 'editor', 'patches', 'flow-update.patch'), join(VSCODE, 'product.json'), join(VSCODE, 'resources', 'win32', 'code.ico')]) {
+	// Every patch, by name and content: each one changes VS Code sources that go into the build (flow-desktop.patch too).
+	for (const patch of patchFiles()) {
+		hash.update(`${patch}\0`)
+		hash.update(readFileSync(join(PATCHES, patch)))
+	}
+	for (const file of [join(VSCODE, 'product.json'), join(VSCODE, 'resources', 'win32', 'code.ico')]) {
 		hash.update(readFileSync(file))
 	}
 	return hash.digest('hex')
@@ -187,7 +191,7 @@ if (args.has('--fast')) {
 	if (!existsSync(join(APP, 'Insilode.exe'))) {
 		console.log(`  --fast: ${relative(ROOT, APP)} has no earlier build: doing the full build.`)
 	} else if (last !== stamp) {
-		console.log(`  --fast: ${last ? 'VS Code, the core patch, product.json or the icon changed since the last full build' : 'no record of the last full build (dist/app-build.stamp)'}: doing the full build.`)
+		console.log(`  --fast: ${last ? 'VS Code, a patch, product.json or the icon changed since the last full build' : 'no record of the last full build (dist/app-build.stamp)'}: doing the full build.`)
 	} else {
 		reuse = true
 	}
