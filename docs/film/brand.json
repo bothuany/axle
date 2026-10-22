@@ -1,8 +1,8 @@
 {
   "productName": "Insilode",
   "spokenName": "Insihlode",
-  "tagline": "The code editor that shows how your code runs.",
-  "headline": "The code editor that shows how your code runs.",
+  "tagline": "Every code editor shows your files. {productName} shows how your code runs.",
+  "headline": "Every code editor shows your files. {productName} shows how your code runs.",
   "repoUrl": "github.com/bothuany/insilode",
   "siteUrl": "insilode.dev",
   "download": "Download for Windows, macOS, Linux",

@@ -17,7 +17,7 @@ it, e.g. `%LOCALAPPDATA%\Temp\insilode-film-v3\shots`). Only the delivered files
 
 ## The name and the copy
 
-The product name, the headline, the download line, the URLs and the licence line live in [brand.json](brand.json).
+The product name, the slogan (headline and end card), the download line, the URLs and the licence line live in [brand.json](brand.json).
 `spokenName` is the spelling the voice model says closest to IN-sih-lohd ("Insihlode"); the captions show
 `productName`. Copy follows `docs/design/messaging.md`. The end line ("It's free, and it's open source.") has an
 alternative take in `vo/script.json` (`09alt`, "It's free, and the source is open.") for a licence change.

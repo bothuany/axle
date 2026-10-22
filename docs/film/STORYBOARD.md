@@ -21,7 +21,7 @@ extensions", never an "Import from VS Code" button (not released).
 
 **Format.** 1920×1080, 62 s, 30 fps. The window sits on the site's dark stage (`--film` #0c1020) with a 10 px radius
 and the site's window edge, so the film and insilode.dev read as one thing. Captions in the band under the window
-(one line, Archivo 40 px); when the camera pushes into the window they sit on a dark plate. A silent 15 s loop, a 1:1
+(one line, Instrument Sans 42 px); when the camera pushes into the window they sit on a dark plate. A silent 15 s loop, a 1:1
 and a 9:16 cut come from the same project; each beat names a focal region for the narrow cuts.
 
 **One world.** One window for the whole film: the same Harbor Goods workspace, the same Explorer, the same Agents dock
@@ -53,7 +53,7 @@ The film adds only the stage, camera moves, a few rings, captions, two labels an
 | Signal (rings, URL) | `#9aa8ff` on dark, button `#3f52c9` | site `--link`, `--signal` |
 | Inside the window | Insilode Dark, as captured | the app |
 
-Type: **Archivo** (variable, OFL; the site's face) 650 for statements, 500 for captions; **JetBrains Mono** for the URL.
+Type: the site's faces, **Instrument Sans** (OFL) 700 for statements, 500 for captions, and **JetBrains Mono** for the URLs.
 Easing: `power2.inOut` for the camera, `power3.out` for type. No bounce, no glow, no gradient text.
 
 ## Script (voiceover and captions)
@@ -75,7 +75,7 @@ line 08 and "Ensilode" in line 01.
 | 05b | 26.3 | "You don't get a wall of diffs. You see where it lands, on how the request runs." |
 | 06 | 34.3 | "Run Claude Code and Codex side by side. The dock shows who's working, and who needs you." |
 | 07 | 42.3 | "And the harness map shows what your agents load, and what to fix." |
-| 08 | 48.5 | "Insilode. The code editor that shows how your code runs." |
+| 08 | 48.5 | "Every code editor shows your files. Insilode shows how your code runs." |
 | 09 | 55.2 | "It's free, and it's open source." (alternative take: "It's free, and the source is open.") |
 
 About 105 words in 62 s. The name is in 01 and 08 only.
@@ -123,11 +123,11 @@ E: the side bar switches to **Harness**: Map, Health 96, instructions, rules (on
 skills, subagents, hooks, MCP servers; `CLAUDE.md` in a tab. Camera on the side bar. Line 07. Focal: the map.
 
 ### 08 The headline (48-54 s)
-B3 again, the whole window, quiet. "The code editor that shows how your code runs." in Archivo 650 under the window
-(the site's headline). Line 08. No other motion but a slow pull back.
+B3 again, the whole window, quiet. The slogan "Every code editor shows your files. Insilode shows how your code runs."
+in two lines of Instrument Sans 700 under the window, the name in the signal blue (#9aa8ff). Line 08. No other motion but a slow pull back.
 
 ### 09 End card (54-62 s)
-The window scales down and dims behind the lockup: the mark, **Insilode**, the headline, then "Download for Windows,
+The window scales down and dims behind the lockup: the mark, **Insilode**, the slogan, then "Download for Windows,
 macOS, Linux", "insilode.dev · github.com/bothuany/insilode". Line 09. The window keeps drifting (the lockup lands on
 moving footage); the last 1.5 s hold.
 

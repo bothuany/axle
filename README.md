@@ -17,7 +17,7 @@
 
 <p align="center"><b><a href="https://insilode.dev/try/">Try it in your browser</a></b>: follow a request across services, review what an agent changed, and answer an agent waiting for you. Nothing to install.</p>
 
-[![Launch film, 62 s: Insilode, the code editor that shows how your code runs](docs/media/film/launch-film-poster.jpg)](docs/media/film/launch-film.mp4)
+[![Launch film, 62 s: every code editor shows your files; Insilode shows how your code runs](docs/media/film/launch-film-poster.jpg)](docs/media/film/launch-film.mp4)
 
 ## See how your code runs
 

@@ -14,7 +14,7 @@
     { "id": "05b", "text": "You don't get a wall of diffs. You see where it lands, on how the request runs.", "say": "You don't get a wall of diffs. You see where it lands... on how the request runs.", "seed": 31, "exaggeration": 0.3, "cfg": 0.15, "tempo": 0.86, "pauses": [["diffs", 0.45], ["lands", 0.2]] },
     { "id": "06", "text": "Run Claude Code and Codex side by side. The dock shows who's working, and who needs you.", "say": "Run Claude Code and Codex, side by side. The dock shows who's working... and who needs you.", "seed": 23, "exaggeration": 0.4, "cfg": 0.3 },
     { "id": "07", "text": "And the harness map shows what your agents load, and what to fix.", "say": "And the harness map shows what your agents load... and what to fix.", "seed": 23, "exaggeration": 0.3, "cfg": 0.15, "tempo": 0.86, "pauses": [["load", 0.3]] },
-    { "id": "08", "text": "{productName}. The code editor that shows how your code runs.", "say": "{spokenName}. The code editor that shows how your code runs.", "seed": 23, "exaggeration": 0.4, "cfg": 0.3 },
+    { "id": "08", "text": "Every code editor shows your files. {productName} shows how your code runs.", "say": "Every code editor shows your files. {spokenName} shows how your code runs.", "seed": 7, "exaggeration": 0.4, "cfg": 0.3 },
     { "id": "09", "text": "It's free, and it's open source.", "say": "It's free... and it's open source.", "seed": 31, "exaggeration": 0.3, "cfg": 0.15 },
     { "id": "09alt", "text": "It's free, and the source is open.", "say": "It's free... and the source is open.", "seed": 7, "exaggeration": 0.3, "cfg": 0.15, "tempo": 0.9, "alt": "the end line if the licence becomes FSL; not in the film" }
   ]

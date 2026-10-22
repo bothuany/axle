@@ -16,6 +16,8 @@ const brand = JSON.parse(readFileSync(join(film, 'brand.json'), 'utf8'))
 const script = JSON.parse(readFileSync(join(film, 'vo', 'script.json'), 'utf8'))
 const line = id => script.lines.find(l => l.id === id).text.replace('{productName}', brand.productName)
 const { at, voEnd } = timing(shots)
+// The slogan in two lines, the name in the signal blue (the site's --link).
+const slogan = brand.headline.replace(/\. /, '.<br>').replace('{productName}', `<span class="nm">${brand.productName}</span>`)
 
 // Every still is the same window at 2x: 3840x2160 image px = 1920x1080 CSS px.
 const IW = 3840, IH = 2160
@@ -74,7 +76,7 @@ function shotList() {
 	// 07 The harness map in the side bar, next to CLAUDE.md.
 	s.push({ id: 's07', img: 'E-harness', start: 42, dur: 6, keys: [key(0, whole(0.86), { focus: [0.1, 0.35] }), key(1.0, [0, 0.03, 0.55, 0.5], { focus: [0.09, 0.3], zoom: 1.8 }), key(6, [0, 0.04, 0.5, 0.46], { focus: [0.09, 0.3], zoom: 1.8 })] })
 	// 08 The headline: the window again, quiet, pulling back. 09 End card: the window dims behind the lockup and drifts.
-	s.push({ id: 's08', img: 'B3-flow-across', start: 48, dur: 6, keys: [key(0, whole(0.82), { focus: [0.5, 0.45] }), key(6, whole(0.76), { focus: [0.5, 0.45] })] })
+	s.push({ id: 's08', img: 'B3-flow-across', start: 48, dur: 6, keys: [key(0, whole(0.78), { focus: [0.5, 0.45] }), key(6, whole(0.73), { focus: [0.5, 0.45] })] })
 	s.push({ id: 's09', img: 'A1-editor', start: 54, dur: 8, dim: 0, dimTo: [0.82, 54.2, 1.2], keys: [key(0, whole(0.76), { focus: [0.4, 0.4] }), key(8, whole(0.7), { focus: [0.4, 0.4] })] })
 	return s
 }
@@ -178,7 +180,7 @@ function build(variant) {
 	for (const name of used) copyFileSync(join(shots, 'wb', `${name}.jpg`), join(out, 'assets', `${name}.jpg`))
 	if (dockUsed) copyFileSync(join(shots, DOCK.src), join(out, 'assets', 'dock-live.mp4'))
 	copyFileSync(join(film, '..', '..', 'editor', 'branding', 'icon.png'), join(out, 'assets', 'icon.png'))
-	for (const font of ['archivo-latin-standard-normal', 'jetbrains-mono-latin-400-normal']) copyFileSync(join(film, 'assets', 'fonts', `${font}.woff2`), join(out, 'assets', 'fonts', `${font}.woff2`))
+	for (const font of ['instrument-sans-latin-500-normal', 'instrument-sans-latin-600-normal', 'instrument-sans-latin-700-normal', 'jetbrains-mono-latin-400-normal']) copyFileSync(join(film, 'assets', 'fonts', `${font}.woff2`), join(out, 'assets', 'fonts', `${font}.woff2`))
 	if (!f.silent && existsSync(join(shots, 'audio', 'mix.wav'))) copyFileSync(join(shots, 'audio', 'mix.wav'), join(out, 'assets', 'mix.wav'))
 	writeFileSync(join(out, 'index.html'), page(f, html, tl))
 	writeFileSync(join(out, 'hyperframes.json'), JSON.stringify({ paths: { assets: 'assets' }, media: { autoProxy: true } }, null, 2))
@@ -187,10 +189,10 @@ function build(variant) {
 
 function headline(f, tl) {
 	const v = f.h > f.w, sq = f.w === f.h
-	const size = v ? 74 : sq ? 62 : 64
+	const size = v ? 64 : sq ? 54 : 56
 	tl.push(`tl.fromTo('#hl-in', { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out' }, 48.6)`)
 	tl.push(`tl.to('#hl-in', { opacity: 0, duration: 0.4, ease: 'power2.in' }, 53.7)`)
-	return `<div id="hl" class="clip" data-start="48.4" data-duration="5.7" data-track-index="3"><div class="stmt" id="hl-in" style="bottom:${Math.round(f.h * (v ? 0.06 : 0.04))}px;font-size:${size}px;padding:0 ${v ? 70 : 40}px" data-var-text="headline">${brand.headline}</div></div>\n`
+	return `<div id="hl" class="clip" data-start="48.4" data-duration="5.7" data-track-index="3"><div class="stmt" id="hl-in" style="bottom:${Math.round(f.h * (v ? 0.06 : 0.04))}px;font-size:${size}px;padding:0 ${v ? 70 : 40}px">${slogan}</div></div>\n`
 }
 
 function lockup(f, tl) {
@@ -206,7 +208,7 @@ function lockup(f, tl) {
 	return `<div id="lockup" class="clip" data-start="54" data-duration="8" data-track-index="4"><div class="lk" style="top:${top}px;padding:0 60px">
 <img id="lk-logo" src="assets/icon.png" style="width:${logo}px;height:${logo}px" alt="">
 <div id="lk-name" class="name" style="font-size:${name}px" data-var-text="productName">${brand.productName}</div>
-<div id="lk-tag" class="tag" data-var-text="headline">${brand.headline}</div>
+<div id="lk-tag" class="tag">${slogan}</div>
 <div id="lk-cta"><div class="dl-line" data-var-text="download">${brand.download}</div><div class="url" data-var-text="urls">${brand.siteUrl} · ${brand.repoUrl}</div></div>
 <div id="lk-free" class="free" data-var-text="freeLine">${brand.freeLine}</div>
 </div></div>\n`
@@ -215,8 +217,7 @@ function lockup(f, tl) {
 function page(f, body, tl) {
 	const vars = [
 		{ id: 'productName', type: 'string', label: 'Product name', default: brand.productName },
-		{ id: 'headline', type: 'string', label: 'Headline', default: brand.headline },
-		{ id: 'download', type: 'string', label: 'Download line', default: brand.download },
+				{ id: 'download', type: 'string', label: 'Download line', default: brand.download },
 		{ id: 'urls', type: 'string', label: 'Site and repository', default: `${brand.siteUrl} · ${brand.repoUrl}` },
 		{ id: 'freeLine', type: 'string', label: 'Licence line', default: brand.freeLine },
 	]
@@ -229,13 +230,16 @@ function page(f, body, tl) {
 <meta name="viewport" content="width=${f.w}, height=${f.h}">
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
 <style>
-@font-face { font-family: Archivo; font-weight: 100 900; src: url(assets/fonts/archivo-latin-standard-normal.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 500; src: url(assets/fonts/instrument-sans-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 600; src: url(assets/fonts/instrument-sans-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 700; src: url(assets/fonts/instrument-sans-latin-700-normal.woff2) format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url(assets/fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2"); }
-/* The site's dark stage (site/src/site.css): --film, --ink, --ink-2, --link, the window edge and radius. */
+/* The site's dark stage (site/src/site.css): --film, --ink, --ink-2, --link, the window edge and radius. Type: the site's
+   Instrument Sans and JetBrains Mono. */
 :root { --film: #0c1020; --ink: #e9ecf5; --ink-2: #a9b1c9; --link: #9aa8ff; --signal: #3f52c9; --edge: rgba(255, 255, 255, .09); }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { width: ${f.w}px; height: ${f.h}px; overflow: hidden; background: var(--film); }
-#root { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--film); font-family: Archivo, sans-serif; color: var(--ink); }
+#root { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--film); font-family: "Instrument Sans", sans-serif; color: var(--ink); }
 #root > .clip { position: absolute; inset: 0; overflow: hidden; }
 .cam { position: absolute; left: 0; top: 0; transform-origin: 0 0; border-radius: 20px; overflow: hidden; box-shadow: 0 0 0 2px var(--edge), 0 60px 160px rgba(0, 0, 0, .65); }
 .cam img { display: block; width: 100%; height: 100%; }
@@ -243,10 +247,11 @@ html, body { width: ${f.w}px; height: ${f.h}px; overflow: hidden; background: va
 .dim { position: absolute; inset: 0; background: var(--film); }
 .ring { position: absolute; border: 6px solid var(--link); border-radius: 12px; opacity: 0; box-shadow: 0 0 0 4px rgba(12, 16, 32, .6); }
 .label { position: absolute; opacity: 0; font-size: 46px; font-weight: 600; padding: 10px 28px; border-radius: 40px; background: var(--signal); color: #fff; white-space: nowrap; }
-.stmt { position: absolute; left: 0; right: 0; text-align: center; font-weight: 650; letter-spacing: -0.025em; line-height: 1.06; color: var(--ink); }
-.loopt { position: absolute; left: 0; right: 0; bottom: 44px; text-align: center; font-size: 60px; font-weight: 650; letter-spacing: -0.02em; text-shadow: 0 4px 30px rgba(0, 0, 0, .85); }
+.stmt { position: absolute; left: 0; right: 0; text-align: center; font-weight: 700; letter-spacing: -0.025em; line-height: 1.06; color: var(--ink); }
+.loopt { position: absolute; left: 0; right: 0; bottom: 44px; text-align: center; font-size: 60px; font-weight: 700; letter-spacing: -0.02em; text-shadow: 0 4px 30px rgba(0, 0, 0, .85); }
 .lk { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
-.lk .name { font-weight: 650; letter-spacing: -0.03em; line-height: 1; }
+.nm { color: var(--link); }
+.lk .name { font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
 .lk .tag { font-size: ${v ? 44 : 36}px; font-weight: 500; color: var(--ink-2); }
 .lk .dl-line { margin-top: 30px; font-size: ${v ? 40 : 34}px; font-weight: 600; }
 .lk .url { margin-top: 10px; font-family: "JetBrains Mono", monospace; font-size: ${v ? 32 : 30}px; color: var(--link); }

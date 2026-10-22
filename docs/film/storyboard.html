@@ -5,13 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Launch film · storyboard v3</title>
 <style>
-@font-face { font-family: Archivo; font-weight: 100 900; src: url(assets/fonts/archivo-latin-standard-normal.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 500; src: url(assets/fonts/instrument-sans-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 700; src: url(assets/fonts/instrument-sans-latin-700-normal.woff2) format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url(assets/fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2"); }
 /* The site's dark stage (site/src/site.css on the positioning branch): --film, --ink, --ink-2, --link, the window edge. */
 :root {
   --film: #0c1020; --ink: #e9ecf5; --ink-2: #a9b1c9; --link: #9aa8ff; --signal: #3f52c9; --edge: rgba(255,255,255,.09); --warn: #f2b65c;
   --sheet: #e9e7e2; --sheet-ink: #1c1f26; --sheet-muted: #6a6f7a;
-  --sans: Archivo, system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+  --sans: "Instrument Sans", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--sheet); color: var(--sheet-ink); font-family: var(--sans); padding: 48px 40px 80px; }
@@ -40,11 +41,11 @@ figure { display: flex; flex-direction: column; gap: 8px; }
 .ring.amber { border-color: var(--warn); }
 .chip { position: absolute; font-size: 1.1cqw; font-weight: 600; padding: .3cqw .8cqw; border-radius: 2cqw; background: var(--signal); color: #fff; }
 .foot { position: absolute; left: 50%; transform: translateX(-50%); bottom: .3cqw; font-size: .8cqw; color: var(--ink-2); white-space: nowrap; }
-.stmt { position: absolute; left: 0; right: 0; text-align: center; font-weight: 650; letter-spacing: -0.025em; line-height: 1.04; }
+.stmt { position: absolute; left: 0; right: 0; text-align: center; font-weight: 700; letter-spacing: -0.025em; line-height: 1.04; }
 .dim::after { content: ""; position: absolute; inset: 0; background: rgba(12,16,32,.78); }
 .lk { position: absolute; left: 0; right: 0; top: 13cqw; display: flex; flex-direction: column; align-items: center; gap: .9cqw; text-align: center; }
 .lk img { width: 7cqw; height: 7cqw; }
-.lk .n { font-size: 5.6cqw; font-weight: 650; letter-spacing: -0.03em; }
+.lk .n { font-size: 5.6cqw; font-weight: 700; letter-spacing: -0.03em; }
 .lk .h { font-size: 2.2cqw; color: var(--ink-2); font-weight: 500; }
 .lk .d { margin-top: 1.4cqw; font-size: 1.8cqw; font-weight: 600; }
 .lk .u { font-family: var(--mono); font-size: 1.55cqw; color: var(--link); }
@@ -53,7 +54,7 @@ figure { display: flex; flex-direction: column; gap: 8px; }
 <body>
 <header>
   <h1>Launch film · storyboard v3</h1>
-  <p>Insilode is a code editor, built on VS Code, that shows how your code runs.</p>
+  <p>Every code editor shows your files. Insilode shows how your code runs.</p>
   <span class="tag">1920×1080 · 62 s · 9 beats · captions (+ voice, pending the audition)</span>
 </header>
 <p class="lede">v3 starts on the editor, not the canvas: the whole window from the first frame and the category in the first line. Every frame below is a real capture of the workbench in web mode (Insilode Dark, Harbor Goods), framed by the camera on the site's dark stage; the film adds captions, two labels, rings and the end card. Copy follows docs/design/messaging.md. The stills are in <span class="tag">storyboard/captures/</span> (git-ignored; made by the capture scripts).</p>
@@ -137,7 +138,7 @@ figure { display: flex; flex-direction: column; gap: 8px; }
 
 <figure>
   <div class="label"><b>08 · The headline</b><span>48.0-54.0</span></div>
-  <div class="f" id="frame-08"><div class="cam window" data-img="B3-flow-across" data-rect="0,0,1,1" data-scale=".86"></div><div class="stmt" style="bottom:1.8cqw;font-size:3.4cqw">The code editor that shows how your code runs.</div></div>
+  <div class="f" id="frame-08"><div class="cam window" data-img="B3-flow-across" data-rect="0,0,1,1" data-scale=".86"></div><div class="stmt" style="bottom:1.8cqw;font-size:3.4cqw">Every code editor shows your files.<br><span style="color:var(--link)">Insilode</span> shows how your code runs.</div></div>
   <p class="note">The window again, quiet, a little smaller; the site's headline under it. Line 08.</p>
   <p class="src">B3</p>
 </figure>
@@ -145,7 +146,7 @@ figure { display: flex; flex-direction: column; gap: 8px; }
 <figure>
   <div class="label"><b>09 · End card</b><span>54.0-62.0</span></div>
   <div class="f" id="frame-09"><div class="cam window dim" data-img="A1-editor" data-rect="0,0,1,1" data-scale=".8"></div>
-    <div class="lk"><img src="../../editor/branding/icon.png" alt=""><div class="n">Insilode</div><div class="h">The code editor that shows how your code runs.</div><div class="d">Download for Windows, macOS, Linux</div><div class="u">insilode.dev · github.com/bothuany/insilode</div></div></div>
+    <div class="lk"><img src="../../editor/branding/icon.png" alt=""><div class="n">Insilode</div><div class="h">Every code editor shows your files.<br><span style="color:var(--link)">Insilode</span> shows how your code runs.</div><div class="d">Download for Windows, macOS, Linux</div><div class="u">insilode.dev · github.com/bothuany/insilode</div></div></div>
   <p class="note">The window dims and keeps drifting behind the lockup; the last 1.5 s hold. Line 09: "It's free, and it's open source."</p>
   <p class="src">A1 + brand.json</p>
 </figure>
