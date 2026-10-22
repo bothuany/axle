@@ -5,7 +5,8 @@
  *  deny, then ask across all scopes; then the checks no allow rule passes (protected paths,
  *  rm of a critical path, reads from a network path); then allow; then the read-only set and the
  *  permission mode. Bash compound commands are split (loop and if bodies too) and wrappers
- *  stripped; gitignore-style paths with the //, ~/, / and ./ anchors; parameter rules; WebFetch
+ *  stripped; nested commands ($( ), backticks, <( ), subshells) are decided on their own and the
+ *  most restrictive answer wins; a redirect to a file is never read-only; gitignore-style paths with the //, ~/, / and ./ anchors; parameter rules; WebFetch
  *  domains; MCP and Agent rules. Codex's approval policy and sandbox get a coarser answer. Pure
  *  (no vscode), so every case is tested on its own (test/permmatch.test.mjs).
  *--------------------------------------------------------------------------------------------*/
@@ -52,6 +53,11 @@ export interface Call {
 	params?: Record<string, unknown>;
 }
 
+/** Claude Code's built-in tools, as hook matchers and permission rules name them. */
+export const KNOWN_TOOLS = ['Bash', 'BashOutput', 'KillShell', 'PowerShell', 'Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'NotebookRead', 'Glob', 'Grep', 'LS', 'WebFetch', 'WebSearch',
+	'Task', 'Agent', 'TodoWrite', 'ExitPlanMode', 'EnterPlanMode', 'Skill', 'SlashCommand', 'ToolSearch', 'TaskCreate', 'TaskUpdate', 'TaskList', 'TaskGet', 'TaskStop', 'TaskOutput',
+	'AskUserQuestion', 'Monitor', 'SendMessage', 'CronCreate', 'CronDelete', 'CronList', 'EnterWorktree', 'ExitWorktree', 'ListMcpResourcesTool', 'ReadMcpResourceTool', 'LSP', 'EndConversation'];
+
 /** Each tool's primary input field: a parameter rule cannot name it, and a JSON call's `arg` is taken from it. */
 const PRIMARY: Record<string, string> = {
 	Bash: 'command', PowerShell: 'command', Read: 'file_path', Edit: 'file_path', Write: 'file_path', MultiEdit: 'file_path',
@@ -59,8 +65,16 @@ const PRIMARY: Record<string, string> = {
 };
 
 /**
+ * Whether a bare word names a tool rather than a command: a built-in tool (case as Claude Code writes it, so `ls` and
+ * `grep` stay commands while `LS` and `Grep` are tools), an MCP tool, or a multi-word PascalCase name such as a newer
+ * built-in this list does not know yet.
+ */
+const isToolName = (word: string) => KNOWN_TOOLS.includes(word) || word.startsWith('mcp__') || /^[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+$/.test(word);
+
+/**
  * `Tool` or `Tool(arg)`: the tool name runs to the first `(`, the argument to the last `)`, so parentheses inside it are
  * literal. An argument that is a JSON object is the tool's whole input, so parameter rules can be checked against it.
+ * Anything else (`git status`, a single word such as `pwd` or `make`) is a Bash command.
  */
 export function parseCall(text: string): Call | undefined {
 	const t = text.trim();
@@ -68,8 +82,9 @@ export function parseCall(text: string): Call | undefined {
 		return undefined;
 	}
 	const open = t.indexOf('(');
-	if (open < 0) {
-		return /^[\w*.-]+$/.test(t) ? { tool: t, arg: '' } : { tool: 'Bash', arg: t };
+	// `echo $(date)` and `ls (a)` are commands: a call is a name directly followed by its parenthesis.
+	if (open < 0 || !/^[\w*.-]+\(/.test(t)) {
+		return isToolName(t) ? { tool: t, arg: '' } : { tool: 'Bash', arg: t };
 	}
 	const close = t.lastIndexOf(')');
 	if (close < open) {
@@ -162,8 +177,8 @@ export function splitCompound(command: string): string[] | undefined {
 		}
 		const two = command.slice(i, i + 2);
 		const op = depth ? undefined : two === '&&' || two === '||' || two === '|&' ? two : c === ';' || c === '|' || c === '&' || c === '\n' ? c : undefined;
-		// `2>&1` and `&>` are redirections, not operators.
-		if (op === '&' && (command[i - 1] === '>' || command[i + 1] === '>')) {
+		// `2>&1`, `<&3` and `&>` are redirections, not operators, and so is the `|` of `>|` (write even with noclobber).
+		if ((op === '&' && (command[i - 1] === '>' || command[i - 1] === '<' || command[i + 1] === '>')) || (op === '|' && command[i - 1] === '>')) {
 			cur += c;
 			continue;
 		}
@@ -187,30 +202,160 @@ export function splitCompound(command: string): string[] | undefined {
 	return dangling ? undefined : parts;
 }
 
-/** Commands nested in $( ), backticks and ( ) subshells: deny and ask rules reach them too. */
-export function nestedCommands(command: string): string[] {
-	const out: string[] = [];
-	for (let i = 0; i < command.length; i++) {
-		if (command[i] === '`') {
-			const end = command.indexOf('`', i + 1);
-			if (end > i) {
-				out.push(command.slice(i + 1, end));
-				i = end;
+/** The index of the `)` that closes the `(` at `open`, skipping quoted text and escapes; -1 when it is never closed. */
+function closingParen(s: string, open: number, powershell: boolean): number {
+	const esc = powershell ? '`' : '\\';
+	let depth = 0;
+	for (let i = open; i < s.length; i++) {
+		const c = s[i];
+		if (c === esc) {
+			i++;
+		} else if (c === '\'') {
+			const end = s.indexOf('\'', i + 1);
+			if (end < 0) {
+				return -1;
 			}
-		} else if (command[i] === '(') {
-			let depth = 1;
-			let j = i + 1;
-			for (; j < command.length && depth; j++) {
-				depth += command[j] === '(' ? 1 : command[j] === ')' ? -1 : 0;
+			i = end;
+		} else if (c === '"') {
+			for (i++; i < s.length && s[i] !== '"'; i++) {
+				if (s[i] === esc) {
+					i++;
+				}
 			}
-			if (!depth) {
-				const inner = command.slice(i + 1, j - 1);
-				out.push(inner, ...nestedCommands(inner));
-				i = j - 1;
+			if (i >= s.length) {
+				return -1;
 			}
+		} else if (c === '(') {
+			depth++;
+		} else if (c === ')' && --depth === 0) {
+			return i;
 		}
 	}
-	return out.map(s => s.trim()).filter(Boolean).flatMap(s => splitCompound(s) ?? [s]);
+	return -1;
+}
+
+/**
+ * The commands a command runs inside itself, read the way the shell reads them: `$( )` and backtick substitutions
+ * (outside single quotes; inside double quotes too), `<( )` and `>( )` process substitutions, and `( )` subshells that
+ * start a command. Quoted text and escaped characters are literal, so `grep -E '(a|b)'` and `echo '$(x)'` run nothing
+ * nested. `$(( ))` is arithmetic, not a command, but a substitution inside it still runs. In PowerShell `$( )` and
+ * `@( )` are subexpressions and the backtick is the escape character. `ok` is false when a substitution is never
+ * closed: the shell would not run it as written, and no allow rule may approve it.
+ */
+export function substitutions(command: string, powershell = false): { bodies: string[]; ok: boolean } {
+	const bodies: string[] = [];
+	const esc = powershell ? '`' : '\\';
+	let quote: '"' | '\'' | undefined;
+	/** Whether the last significant character starts a command, so a `(` there opens a subshell. */
+	let atStart = true;
+	for (let i = 0; i < command.length; i++) {
+		const c = command[i];
+		if (quote === '\'') {
+			if (c === '\'') {
+				quote = undefined;
+			}
+			continue;
+		}
+		if (c === esc) {
+			i++;
+			atStart = false;
+			continue;
+		}
+		if (c === '"') {
+			quote = quote ? undefined : '"';
+			atStart = false;
+			continue;
+		}
+		if (c === '\'' && !quote) {
+			quote = '\'';
+			atStart = false;
+			continue;
+		}
+		if (c === '`' && !powershell) {
+			let end = i + 1;
+			while (end < command.length && command[end] !== '`') {
+				end += command[end] === '\\' ? 2 : 1;
+			}
+			if (end >= command.length) {
+				return { bodies, ok: false };
+			}
+			bodies.push(command.slice(i + 1, end).replace(/\\`/g, '`'));
+			i = end;
+			atStart = false;
+			continue;
+		}
+		const sub = (c === '$' || (powershell && c === '@')) && command[i + 1] === '(' ? i + 1
+			: !quote && !powershell && (c === '<' || c === '>') && command[i + 1] === '(' ? i + 1
+				: !quote && c === '(' && atStart ? i : -1;
+		if (sub >= 0) {
+			const end = closingParen(command, sub, powershell);
+			if (end < 0) {
+				return { bodies, ok: false };
+			}
+			const inner = command.slice(sub + 1, end);
+			if (c === '$' && !powershell && inner.startsWith('(') && inner.endsWith(')')) {
+				// Arithmetic: only the substitutions inside it run.
+				const nested = substitutions(inner.slice(1, -1), powershell);
+				if (!nested.ok) {
+					return { bodies, ok: false };
+				}
+				bodies.push(...nested.bodies);
+			} else if (inner.trim()) {
+				bodies.push(inner);
+			}
+			i = end;
+			atStart = false;
+			continue;
+		}
+		if (!quote && /\s/.test(c)) {
+			continue;
+		}
+		atStart = !quote && (c === ';' || c === '&' || c === '|' || c === '(' || c === '{' || c === '\n');
+	}
+	return { bodies: bodies.map(b => b.trim()).filter(Boolean), ok: !quote };
+}
+
+/** Every command nested in `command`, at any depth, each split at its operators: what deny and ask rules must reach. */
+function allNested(command: string, powershell: boolean): string[] {
+	const out: string[] = [];
+	for (const body of substitutions(command, powershell).bodies) {
+		for (const part of splitCompound(body) ?? [body]) {
+			out.push(part, ...allNested(part, powershell));
+		}
+	}
+	return out;
+}
+
+/**
+ * Whether a command writes a file through a redirect. Only a redirect to /dev/null (`> /dev/null`, `2>/dev/null`,
+ * `&>/dev/null`) and a file-descriptor duplication (`2>&1`, `>&2`, `3>&-`) leave no file behind; every other `>`,
+ * `>>`, `>|`, `N>`, `&>`, `<>` or `>&word` writes the file it names. Quoted text is literal, so `grep '>' f` and
+ * `echo "a > b"` write nothing, while `> "out"` does. A `>( )` process substitution is a nested command, not a file.
+ */
+export function redirectsToFile(command: string): boolean {
+	// Quoted text and escaped characters become plain word characters: what was inside stays readable as a target.
+	const plain = command
+		.replace(/\\[\s\S]/g, '_')
+		.replace(/'[^']*'|"(?:[^"\\]|\\.)*"/g, q => q.slice(1, -1).replace(/[\s<>&|;()]/g, '_'));
+	const re = /(&|\d+)?>(>|\||&)?[ \t]*/g;
+	for (let m = re.exec(plain); m; m = re.exec(plain)) {
+		const rest = plain.slice(m.index + m[0].length);
+		if (m[0] === '>' && rest.startsWith('(')) {
+			continue; // `>(cmd)`: process substitution
+		}
+		const target = /^[^\s;&|<>()]*/.exec(rest)![0];
+		if (!target && /^[<>]\(/.test(rest)) {
+			continue; // `> >(cmd)`: into a process substitution, which is checked as a nested command
+		}
+		if (m[2] === '&' && m[1] !== '&' && /^(?:\d+|-)$/.test(target)) {
+			continue; // `2>&1`, `>&2`, `3>&-`
+		}
+		if (target === '/dev/null') {
+			continue;
+		}
+		return true;
+	}
+	return false;
 }
 
 /** Shell keywords that open a body or condition: what follows them is the command (`do git clean -f`, `if test -f x`). */
@@ -317,7 +462,12 @@ export function isReadOnlyCommand(command: string): boolean {
 	const w = words(command);
 	const program = (w[0] ?? '').replace(/^.*\//, '');
 	// A redirect writes a file: the Edit rules decide that, so it is not read-only on its own.
-	if (/(?:^|[^2&])>{1,2}\s*(?!\/dev\/null|&)\S/.test(command) || /\btee\b/.test(command)) {
+	if (redirectsToFile(command) || /\btee\b/.test(command)) {
+		return false;
+	}
+	// A nested command ($( ), backticks, <( ), a subshell) runs whatever it names: the read-only set never covers it.
+	const nested = substitutions(command);
+	if (!nested.ok || nested.bodies.length) {
 		return false;
 	}
 	if (program === 'git') {
@@ -434,14 +584,17 @@ export function pathMatches(spec: string, rule: Rule, file: string, ctx: SimCont
 			anyDepth = !glob.includes('/') || (segments.length === 1 && glob.endsWith('/**') && rule.effect !== 'allow');
 		}
 	}
-	const target = posixPath(file);
+	// Windows file systems ignore case, and so does the match there: the anchor as much as the glob. Both sides are folded
+	// before the prefix is cut off, so a character whose lower case is longer cannot shift where the relative part starts.
+	const fold = sameCase(ctx) ? (p: string) => p.toLowerCase() : (p: string) => p;
+	const target = fold(posixPath(file));
+	anchor = fold(anchor);
 	const base = anchor ? `${anchor}/` : '/';
 	if (!target.startsWith(base) && target !== anchor) {
 		return false;
 	}
 	const rel = target === anchor ? '' : target.slice(base.length);
-	// Windows file systems ignore case, and so does the match there.
-	const re = globRegex(glob, /^[A-Za-z]:/.test(ctx.cwd));
+	const re = globRegex(glob, sameCase(ctx));
 	if (re.test(rel)) {
 		return true;
 	}
@@ -941,7 +1094,8 @@ function simulateBash(call: Call, rules: Rule[], ctx: SimContext, notes: string[
 	});
 	const spec = (r: Rule) => parseRule(r.pattern).tool.includes('*') ? undefined : parseRule(r.pattern).spec;
 	// Deny and ask reach every subcommand, nested ones and loop bodies included, past any environment assignment.
-	const reach = [...parts, ...parts.flatMap(nestedCommands).map(commandOfPart).filter((x): x is string => !!x)];
+	const powershell = tool === 'PowerShell';
+	const reach = [...new Set([...parts, ...parts.flatMap(p => allNested(p, powershell)).map(commandOfPart).filter((x): x is string => !!x)])];
 	for (const effect of ['deny', 'ask'] as const) {
 		const param = firstParamMatch(rules, effect, call);
 		if (param) {
@@ -995,13 +1149,30 @@ function simulateBash(call: Call, rules: Rule[], ctx: SimContext, notes: string[
 		notes.push('A cd into another directory combined with git asks even when each part is read-only: git there can run that directory\'s hooks');
 	}
 	const acceptEdits = modeOf(ctx) === 'acceptEdits';
+	const nestedRows: NonNullable<Verdict['parts']> = [];
 	const results = parts.map((part, i) => {
 		const { command, unsafeEnv } = stripWrappers(part, true);
-		const rule = !split || unsafeEnv ? undefined : bashRules.find(r => r.effect === 'allow' && bashMatches(spec(r), command)
+		// A part that runs nested commands is approved only by an allow rule for the part itself, and only when every nested
+		// command is allowed on its own: each one goes through the whole decision (rules, safety checks, read-only set,
+		// mode), and the most restrictive answer wins. The read-only set and acceptEdits never cover such a part.
+		const subs = substitutions(part, powershell);
+		const hasNested = !subs.ok || subs.bodies.length > 0;
+		let nestedOk = subs.ok;
+		for (const body of subs.bodies) {
+			const v = simulateBash({ tool, arg: body }, rules, ctx, []);
+			nestedRows.push({ command: `↳ ${body}`, decision: v.decision, rule: v.rule });
+			nestedOk &&= v.decision === 'allow';
+		}
+		const rule = !split || unsafeEnv || !nestedOk ? undefined : bashRules.find(r => r.effect === 'allow' && bashMatches(spec(r), command)
 			&& !(prefixCannotApprove(command) && (spec(r) ?? '*').includes('*')));
 		const program = programOf(command);
-		const readOnly = !!split && !unsafeEnv && tool === 'Bash' && isReadOnlyCommand(command) && cdOk[i] && !(gitAfterCd && (program === 'git' || program === 'cd'));
-		const edit = !!split && !unsafeEnv && tool === 'Bash' && acceptEdits && acceptEditsRuns(command, ctx, cwdOf[i]);
+		const readOnly = !!split && !unsafeEnv && !hasNested && tool === 'Bash' && isReadOnlyCommand(command) && cdOk[i] && !(gitAfterCd && (program === 'git' || program === 'cd'));
+		const edit = !!split && !unsafeEnv && !hasNested && tool === 'Bash' && acceptEdits && acceptEditsRuns(command, ctx, cwdOf[i]);
+		if (hasNested) {
+			notes.push(subs.ok
+				? `"${part}" runs nested commands: an allow rule must cover it and each nested command must be allowed on its own; the built-in read-only set never covers it`
+				: `"${part}" has a substitution that is never closed: no allow rule approves it`);
+		}
 		if (unsafeEnv) {
 			notes.push(`"${part}" starts with an environment assignment that is not on Claude Code's safe list, so allow rules do not match it`);
 		}
@@ -1019,7 +1190,7 @@ function simulateBash(call: Call, rules: Rule[], ctx: SimContext, notes: string[
 			return {
 				decision: 'allow', rule: decided.rule, by: 'rule', notes,
 				reason: results.length > 1 ? `Every part is allowed (${[...new Set(results.map(r => r.rule?.pattern ?? 'read-only'))].join(', ')})` : `${decided.rule.pattern} in ${decided.rule.scope} settings allows it`,
-				parts: results.map(r => ({ command: r.command, decision: 'allow', rule: r.rule })),
+				parts: [...results.map(r => ({ command: r.command, decision: 'allow' as const, rule: r.rule })), ...nestedRows],
 			};
 		}
 		if (results.some(r => r.edit && !r.rule && !r.readOnly)) {
@@ -1034,11 +1205,13 @@ function simulateBash(call: Call, rules: Rule[], ctx: SimContext, notes: string[
 	}
 	const missing = results.filter(r => !r.rule && !r.readOnly && !r.edit);
 	const v = byMode(call, ctx, undefined, false);
+	const blockedNested = nestedRows.find(r => r.decision !== 'allow');
 	return {
 		...v,
-		reason: results.length > 1 ? `${v.reason} (no allow rule covers "${missing[0].command}"; each part must be allowed on its own)` : v.reason,
+		reason: blockedNested ? `${v.reason} (the nested command "${blockedNested.command.slice(2)}" is not allowed on its own, so nothing approves the command around it)`
+			: results.length > 1 ? `${v.reason} (no allow rule covers "${missing[0].command}"; each part must be allowed on its own)` : v.reason,
 		notes: [...notes, ...v.notes],
-		parts: results.map(r => ({ command: r.command, decision: r.rule || r.readOnly || r.edit ? 'allow' : 'none', rule: r.rule })),
+		parts: [...results.map(r => ({ command: r.command, decision: r.rule || r.readOnly || r.edit ? 'allow' as const : 'none' as const, rule: r.rule })), ...nestedRows],
 	};
 }
 

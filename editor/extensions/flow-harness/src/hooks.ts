@@ -11,9 +11,8 @@ import * as vscode from 'vscode';
 import type { HarnessItem } from './scan';
 import { arrayAt, objectAt, previewAndWrite } from './settings';
 import { claudeDir } from './dirs';
+import { hookVerdict } from './hookverdict';
 
-/** What the hook decided, read from its JSON output or exit code 2. */
-type Verdict = 'allowed' | 'blocked' | 'asked' | 'ok' | 'failed';
 
 /** The payload Claude Code sends on stdin for this event, filled in from the active editor. */
 function samplePayload(event: string, root: string, matcher?: string) {
@@ -166,14 +165,8 @@ export class HookStudio implements vscode.Disposable {
 			child.stdin.end(JSON.stringify(payload));
 		});
 		const ms = Date.now() - started;
-		let verdict: Verdict = run.exit === 0 ? 'ok' : run.exit === 2 ? 'blocked' : 'failed';
-		try {
-			const json = JSON.parse(run.stdout) as { decision?: string; hookSpecificOutput?: { permissionDecision?: string } };
-			const d = json.hookSpecificOutput?.permissionDecision ?? json.decision;
-			verdict = d === 'deny' || d === 'block' ? 'blocked' : d === 'ask' ? 'asked' : d === 'allow' || d === 'approve' ? 'allowed' : verdict;
-		} catch {
-			// plain text output
-		}
+		// Claude Code reads the JSON decision only on exit 0; exit 2 blocks whatever stdout says, any other exit is an error.
+		const verdict = hookVerdict(run.exit, run.stdout);
 		this.out.appendLine(`── ${new Date(started).toLocaleTimeString()}  ${item.label}  (${item.hook.event})  exit ${run.exit ?? 'killed'}  ${ms} ms  → ${verdict}`);
 		if (run.stdout.trim()) {
 			this.out.appendLine(`stdout:\n${run.stdout.trimEnd()}`);

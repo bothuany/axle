@@ -230,7 +230,12 @@ export async function readMcp(input: McpReadInput): Promise<McpConfig> {
 		}
 		const { value, error } = parseJson(text);
 		if (error || !isObject(value)) {
-			problems.push({ file, message: error ?? 'Not a JSON object' });
+			// The lenient parser recovers what it can (a missing comma, a stray brace), but Claude Code's strict parser
+			// rejects the whole file: the recovered servers are listed, as off.
+			if (strict && isObject(value)) {
+				nonStrict.add(file);
+			}
+			problems.push({ file, message: `${error ?? 'Not a JSON object'}${strict && isObject(value) ? ': Claude Code rejects the file and loads none of its servers' : ''}` });
 			return isObject(value) ? value : undefined;
 		}
 		if (strict) {
@@ -293,20 +298,29 @@ export async function readMcp(input: McpReadInput): Promise<McpConfig> {
 			[s.state, s.stateWhy] = ['off', 'Turned off for this folder (disabledMcpServers, as /mcp writes it)'];
 		}
 	}
+	for (const s of claude.filter(x => nonStrict.has(x.file))) {
+		[s.state, s.stateWhy] = ['off', `${path.basename(s.file)} is not strict JSON, so Claude Code rejects the whole file`];
+	}
 	// One definition per name: local, project, user, plugin (managed-mcp.json, when there is one, replaces all of them).
+	// Only a definition Claude Code actually loads takes the name: one in a file it rejects, and a project server that is
+	// rejected or not approved yet, leave it to the next definition (the user's, say), which is the one that connects.
 	const rank: Record<McpScope, number> = { managed: 0, local: 1, project: 2, user: 3, plugin: 4, profile: 5 };
+	const loads = (s: McpServer) => !nonStrict.has(s.file) && (s.scope !== 'project' || s.state === 'on');
 	const winner = new Map<string, McpServer>();
 	for (const s of [...claude].sort((a, b) => rank[a.scope] - rank[b.scope])) {
 		const w = winner.get(s.name);
 		if (w) {
 			s.shadowedBy = w.id;
 			s.issues.push({ severity: 'info', message: `Not used: the ${w.scope} definition of "${s.name}" wins (fields are not merged)` });
-		} else {
+		} else if (loads(s)) {
 			winner.set(s.name, s);
 		}
 	}
-	for (const s of claude.filter(x => nonStrict.has(x.file))) {
-		[s.state, s.stateWhy] = ['off', `${path.basename(s.file)} is not strict JSON, so Claude Code rejects the whole file`];
+	for (const s of claude.filter(x => x.scope === 'project' && x.state === 'pending' && !nonStrict.has(x.file))) {
+		const other = claude.find(o => o !== s && o.name === s.name && !o.shadowedBy && loads(o));
+		if (other) {
+			s.issues.push({ severity: 'info', message: `Until it is approved, the ${other.scope} definition of "${s.name}" is the one used; once approved, this one wins` });
+		}
 	}
 	if (managed) {
 		for (const s of claude.filter(x => x.scope !== 'managed')) {
@@ -494,19 +508,20 @@ export function maskArgs(args: string[]): string[] {
 	});
 }
 
-/** A URL with its password and secret-looking query values hidden. */
+/**
+ * A URL with its user info and secret-looking query values hidden. The user name is hidden as well as the password: a
+ * token is often passed as the user name alone (`https://ghp_…@host/mcp`).
+ */
 export function maskUrl(url: string): string {
 	try {
 		const u = new URL(url);
-		if (u.password) {
-			u.password = 'x';
+		const masked = [...u.searchParams].some(([k, v]) => /key|token|secret|auth|sig|password|code/i.test(k) || looksSecret(v));
+		if (!u.username && !u.password && !masked) {
+			return u.toString();
 		}
-		for (const [k, v] of u.searchParams) {
-			if (/key|token|secret|auth|sig|password|code/i.test(k) || looksSecret(v)) {
-				u.searchParams.set(k, 'x');
-			}
-		}
-		return u.toString().replace(/:x@/, `:${MASK}@`).replace(/=x(?=&|$)/g, `=${MASK}`);
+		const user = u.username || u.password ? `${u.username ? MASK : ''}${u.password ? `:${MASK}` : ''}@` : '';
+		const query = [...u.searchParams].map(([k, v]) => `${encodeURIComponent(k)}=${/key|token|secret|auth|sig|password|code/i.test(k) || looksSecret(v) ? MASK : encodeURIComponent(v)}`).join('&');
+		return `${u.protocol}//${user}${u.host}${u.pathname}${query ? `?${query}` : ''}${u.hash}`;
 	} catch {
 		return url;
 	}
@@ -532,12 +547,15 @@ export function secretsOf(servers: (Pick<McpServer, 'env' | 'headers' | 'args'> 
 			}
 		}
 		maskArgs(s.args).forEach((m, n) => m !== s.args[n] && out.add(s.args[n].replace(/^--?[\w-]+=/, '')));
-		// What maskUrl hides in a URL: its password and secret-looking query values.
+		// What maskUrl hides in a URL: its user info and secret-looking query values. A short user name is a name, not a
+		// token, and hiding it everywhere would hit ordinary words.
 		try {
 			const u = new URL(s.url ?? '');
-			if (u.password) {
-				out.add(decodeURIComponent(u.password));
-				out.add(u.password);
+			for (const part of [u.password, u.username.length >= 6 ? u.username : '']) {
+				if (part) {
+					out.add(decodeURIComponent(part));
+					out.add(part);
+				}
 			}
 			for (const [k, v] of u.searchParams) {
 				if (v && (/key|token|secret|auth|sig|password|code/i.test(k) || looksSecret(v))) {

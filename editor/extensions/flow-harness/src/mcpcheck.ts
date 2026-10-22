@@ -228,10 +228,13 @@ export async function checkHttp(def: HttpDef, opts: { timeoutMs?: number; env?: 
 	const done = (r: Omit<CheckResult, 'ms' | 'at' | 'how'>): CheckResult => ({ how: 'handshake', ...r, ms: Date.now() - started, at: Date.now() });
 	let session: string | undefined;
 	let version = PROTOCOL;
+	// Every request goes through here, so none can forget it: redirects are never followed, since the configured headers
+	// (an API key, a token read from the environment) would go to wherever the server points. fetch strips only
+	// Authorization across origins, not custom headers.
+	const send = (init: RequestInit) => doFetch(url, { ...init, redirect: 'manual' });
 	const post = async (msg: object, id?: number): Promise<{ status: number; rpc?: Rpc }> => {
-		// Redirects are not followed: the configured headers (an API key) would go to wherever the server points.
-		const res = await doFetch(url, {
-			method: 'POST', signal: deadline, redirect: 'manual',
+		const res = await send({
+			method: 'POST', signal: deadline,
 			headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': version, ...(session ? { 'mcp-session-id': session } : {}), ...headers },
 			body: JSON.stringify({ jsonrpc: '2.0', ...msg }),
 		});
@@ -297,7 +300,9 @@ export async function checkHttp(def: HttpDef, opts: { timeoutMs?: number; env?: 
 		}
 		// Ending the session is a courtesy; a server that does not support it says 405.
 		if (session) {
-			void doFetch(url, { method: 'DELETE', headers: { 'mcp-session-id': session, ...headers }, signal: AbortSignal.timeout(3000) }).catch(() => undefined);
+			// A redirect answer is simply not followed: the session ends when it times out on the server.
+			void send({ method: 'DELETE', headers: { 'mcp-session-id': session, ...headers }, signal: AbortSignal.timeout(3000) })
+				.then(res => res.body?.cancel(), () => undefined).catch(() => undefined);
 		}
 		const schemaTokens = tokensOf(tools);
 		return done({ ok: true, status: summary(tools, schemaTokens), serverName: info.serverInfo?.name, serverVersion: info.serverInfo?.version, tools: tools.map(t => ({ name: t.name, description: t.description })), schemaTokens });

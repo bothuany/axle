@@ -11,17 +11,13 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { countEvent, countTranscript, coveredDays, coveredFrom, loadActivity, prune, summary, WINDOW_DAYS, type ActivityData, type AgentEvent, type HookLike, type Summary } from './activity';
 import { redact, type FailureRecord, type PromptRecord } from './friction';
-import { isTranscriptPath, parseTranscript, type TranscriptFacts } from './transcript';
+import { isTranscriptPath, parseTranscript, readLines, type TranscriptFacts } from './transcript';
 import { claudeDir, projectTranscripts } from './dirs';
 
 const ACTIVITY = 'flowHarness.activity';
 const FRICTION = 'flowHarness.friction';
 const MAX_PROMPTS = 300;
 const MAX_FAILURES = 300;
-/** Transcripts are read in pieces of this size, so memory stays bounded. */
-const CHUNK = 4 << 20;
-/** Past this only a transcript's newest part is read (they reach hundreds of MB), and the counts say they start there. */
-const MAX_FILE = 256 << 20;
 const BACKFILL_FILES = 200;
 const DAY = 86_400_000;
 /** Agents remembered by name, for the X-ray's session list. */
@@ -72,55 +68,6 @@ export function eventOf(raw: unknown): AgentEvent | undefined {
 		id: str(r.id, 200), mode: typeof r.mode === 'string' && MODES.has(r.mode) ? r.mode : undefined,
 		prompt: str(r.prompt, 2000), agentType: str(r.agentType, 200), transcript: isTranscriptPath(r.transcript, claudeDir()) ? r.transcript : undefined,
 	};
-}
-
-/**
- * Reads a transcript from `offset` to its end in chunks, handing over whole lines only (the last one may still be being
- * written), so memory stays bounded however large the file. Past MAX_FILE only the newest part is read: `from` then
- * says when that part begins, since nothing before it was seen.
- */
-async function readLines(file: string, offset: number, each: (lines: string[]) => void): Promise<{ end: number; from?: number }> {
-	const h = await fs.open(file, 'r');
-	try {
-		const size = (await h.stat()).size;
-		let pos = offset > size ? 0 : offset; // a shorter file was rewritten: read it again
-		const truncated = size - pos > MAX_FILE;
-		if (truncated) {
-			pos = size - MAX_FILE;
-		}
-		let from: number | undefined;
-		let skipPartial = truncated;
-		const buf = Buffer.alloc(CHUNK);
-		while (pos < size) {
-			const { bytesRead } = await h.read(buf, 0, Math.min(CHUNK, size - pos), pos);
-			if (!bytesRead) {
-				break;
-			}
-			const lastNl = buf.lastIndexOf(0x0a, bytesRead - 1);
-			if (lastNl < 0) {
-				// One line longer than a chunk (a huge pasted log): skip it rather than read it whole.
-				pos += bytesRead;
-				skipPartial = true;
-				continue;
-			}
-			const lines = buf.toString('utf8', 0, lastNl).split('\n');
-			if (skipPartial) {
-				lines.shift();
-				skipPartial = false;
-			}
-			if (truncated && from === undefined) {
-				from = lines.map(l => /"timestamp":"([^"]+)"/.exec(l)?.[1]).map(t => t ? Date.parse(t) : NaN).find(Number.isFinite) ?? Date.now();
-			}
-			each(lines);
-			pos += lastNl + 1;
-			if (bytesRead < CHUNK && lastNl + 1 < bytesRead) {
-				break; // the rest is a line still being written
-			}
-		}
-		return { end: pos, from };
-	} finally {
-		await h.close();
-	}
 }
 
 export class Live implements vscode.Disposable {
