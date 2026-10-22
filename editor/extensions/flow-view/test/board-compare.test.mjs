@@ -75,9 +75,11 @@ test('board-compare: repeated messages between the same two participants are tol
 	// A relabelled message is changed, not removed and added.
 	const relabelled = compare.compareBoards(base, seq([msg('read user', 1), msg('read open orders', 2), msg('write audit', 3)]))
 	assert.deepEqual(relabelled.edges.map(e => [e.label, e.change]), [['read user', undefined], ['read open orders', 'changed'], ['write audit', undefined]])
-	// Two messages that swap places both moved.
+	// One message moved: it alone is marked, not the messages it moved past.
+	const moved = compare.compareBoards(base, seq([msg('write audit', 1), msg('read user', 2), msg('read orders', 3)]))
+	assert.deepEqual(moved.edges.map(e => [e.label, e.change]), [['write audit', 'changed'], ['read user', undefined], ['read orders', undefined]])
 	const swapped = compare.compareBoards(base, seq([msg('read orders', 1), msg('read user', 2), msg('write audit', 3)]))
-	assert.deepEqual(swapped.edges.map(e => [e.label, e.change]), [['read orders', 'changed'], ['read user', 'changed'], ['write audit', undefined]])
+	assert.equal(swapped.edges.filter(e => e.change === 'changed').length, 1, 'of two swapped messages one moved')
 	// One more message of the same pair is added, the rest stay.
 	const added = compare.compareBoards(base, seq([msg('read user', 1), msg('read orders', 2), msg('read cart', 3), msg('write audit', 4)]))
 	assert.deepEqual(added.edges.map(e => [e.label, e.change]), [['read user', undefined], ['read orders', undefined], ['read cart', 'added'], ['write audit', undefined]])

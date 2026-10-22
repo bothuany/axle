@@ -60,20 +60,35 @@ function pairEdges(base: BoardEdge[], next: BoardEdge[]): Map<number, BoardEdge>
 
 /**
  * The paired edges whose place in the message order changed. A message removed or added before them renumbers the rest, which is not
- * a change to them; only a message that now comes before another it used to follow (or after one it preceded) moved.
+ * a change to them. Of the messages that keep their order, the longest run that is still in the old order stays; the others moved, so
+ * one message moved past several is the only one marked.
  */
 function movedEdges(pairs: Map<number, BoardEdge>, next: BoardEdge[]): Set<number> {
-	const ordered = [...pairs].filter(([i, old]) => old.order !== undefined && next[i].order !== undefined);
-	const out = new Set<number>();
-	for (const [i, old] of ordered) {
-		for (const [j, other] of ordered) {
-			if (i !== j && Math.sign(old.order! - other.order!) !== Math.sign(next[i].order! - next[j].order!)) {
-				out.add(i);
-				break;
+	const ordered = [...pairs]
+		.filter(([i, old]) => old.order !== undefined && next[i].order !== undefined)
+		.sort(([a], [b]) => next[a].order! - next[b].order! || a - b);
+	// Longest strictly increasing run of old orders, in new order (n is the edges of one board: quadratic is fine).
+	const len: number[] = [];
+	const prev: number[] = [];
+	let best = -1;
+	ordered.forEach(([, old], k) => {
+		len[k] = 1;
+		prev[k] = -1;
+		for (let j = 0; j < k; j++) {
+			if (ordered[j][1].order! < old.order! && len[j] + 1 > len[k]) {
+				len[k] = len[j] + 1;
+				prev[k] = j;
 			}
 		}
+		if (best < 0 || len[k] > len[best]) {
+			best = k;
+		}
+	});
+	const stay = new Set<number>();
+	for (let k = best; k >= 0; k = prev[k]) {
+		stay.add(ordered[k][0]);
 	}
-	return out;
+	return new Set(ordered.map(([i]) => i).filter(i => !stay.has(i)));
 }
 
 /**
