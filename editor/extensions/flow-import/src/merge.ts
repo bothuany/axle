@@ -1,0 +1,271 @@
+/*---------------------------------------------------------------------------------------------
+ *  Merging another editor's settings, keyboard shortcuts and snippets into Insilode's, text in and text out. The rule
+ *  everywhere is "merge, don't clobber": what the user already set in Insilode stays, the import only adds what is
+ *  missing, and the files keep their comments and layout (edits go through jsonc-parser's `modify`).
+ *
+ *  No `vscode` and no file system: tested on its own (test/merge.test.mjs).
+ *--------------------------------------------------------------------------------------------*/
+
+import { applyEdits, modify, parse, type FormattingOptions, type ParseError } from 'jsonc-parser';
+
+/**
+ * Keys that belong to Insilode or to the user's Insilode setup and are never taken from another editor: Insilode's own
+ * settings, and the ones about Microsoft services (telemetry, Settings Sync and Cloud Changes, which need a Microsoft or
+ * GitHub account Insilode does not use, experiments, the natural-language settings search, the update service).
+ */
+const PROTECTED = [/^flow\./, /^flowHarness\./, /^flow-agent\./, /^insilode\./, /^axle\./];
+const DENIED = [
+	/^telemetry\./,
+	/^settingsSync\./,
+	/^sync\./,
+	/^workbench\.cloudChanges\./,
+	/^workbench\.experimental\.cloudChanges\./,
+	/^workbench\.enableExperiments$/,
+	/^workbench\.settings\.enableNaturalLanguageSearch$/,
+	/^update\./,
+	/^extensions\.gallery\./,
+	/^microsoft-authentication\./,
+	/^remote\.tunnels\.access\./,
+];
+
+/** The colour and icon theme settings: imported only when the theme is chosen, and a theme only when it is installed. */
+export const THEME_KEYS = [
+	'workbench.colorTheme',
+	'workbench.preferredDarkColorTheme',
+	'workbench.preferredLightColorTheme',
+	'workbench.preferredHighContrastColorTheme',
+	'workbench.preferredHighContrastLightColorTheme',
+	'workbench.iconTheme',
+	'workbench.productIconTheme',
+	'workbench.colorCustomizations',
+	'editor.tokenColorCustomizations',
+	'editor.semanticTokenColorCustomizations',
+];
+const THEME_SET = new Set(THEME_KEYS);
+
+export type ThemeKind = 'color' | 'icon' | 'product';
+/** Which kind of theme a setting names; the customization keys name none. */
+export function themeKind(key: string): ThemeKind | undefined {
+	return key === 'workbench.iconTheme' ? 'icon' : key === 'workbench.productIconTheme' ? 'product' : /colorTheme$/i.test(key) ? 'color' : undefined;
+}
+
+const LANGUAGE_BLOCK = /^\[.+\]$/;
+
+export interface SettingsPlan {
+	/** Settings to add, in the order of the imported file. A language block (`[python]`) may be added part by part. */
+	add: { path: string[]; value: unknown }[];
+	/** Theme settings, kept apart: the host applies them only when the theme item is chosen and the theme exists. */
+	theme: { key: string; value: unknown }[];
+	/** Keys the user has already set in Insilode (their value stays). */
+	kept: string[];
+	/** Keys that are Insilode's own or about Microsoft services. */
+	skipped: string[];
+}
+
+export function parseObject(text: string | undefined): Record<string, unknown> {
+	if (!text) {
+		return {};
+	}
+	const errors: ParseError[] = [];
+	const v = parse(text, errors, { allowTrailingComma: true, disallowComments: false });
+	return v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+}
+
+/** Whether a settings file sets anything at all (a file with only comments or `{}` does not). */
+export function hasSettings(text: string | undefined): boolean {
+	return Object.keys(parseObject(text)).length > 0;
+}
+
+const isSkipped = (key: string) => PROTECTED.some(r => r.test(key)) || DENIED.some(r => r.test(key));
+const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/** What to take from `imported` into `current` (both settings.json texts). */
+export function planSettings(current: string | undefined, imported: string | undefined): SettingsPlan {
+	const mine = parseObject(current);
+	const theirs = parseObject(imported);
+	const plan: SettingsPlan = { add: [], theme: [], kept: [], skipped: [] };
+	for (const [key, value] of Object.entries(theirs)) {
+		if (isSkipped(key)) {
+			plan.skipped.push(key);
+		} else if (THEME_SET.has(key)) {
+			if (key in mine) {
+				plan.kept.push(key);
+			} else {
+				plan.theme.push({ key, value });
+			}
+		} else if (LANGUAGE_BLOCK.test(key) && isObject(value)) {
+			// A language block is merged setting by setting: one the user set for that language in Insilode stays.
+			const own = isObject(mine[key]) ? mine[key] as Record<string, unknown> : undefined;
+			if (!own) {
+				const kept = Object.fromEntries(Object.entries(value).filter(([k]) => !isSkipped(k)));
+				if (Object.keys(kept).length) {
+					plan.add.push({ path: [key], value: kept });
+				}
+				continue;
+			}
+			for (const [k, v] of Object.entries(value)) {
+				if (isSkipped(k)) {
+					plan.skipped.push(`${key}.${k}`);
+				} else if (k in own) {
+					plan.kept.push(`${key}.${k}`);
+				} else {
+					plan.add.push({ path: [key, k], value: v });
+				}
+			}
+		} else if (key in mine) {
+			plan.kept.push(key);
+		} else {
+			plan.add.push({ path: [key], value });
+		}
+	}
+	return plan;
+}
+
+const FORMAT: FormattingOptions = { insertSpaces: false, tabSize: 4, eol: '\n' };
+
+/** `current` with each value written at its path, comments and the rest of the file untouched. */
+export function writeSettings(current: string | undefined, entries: { path: string[]; value: unknown }[]): string {
+	let text = current && current.trim() ? current : '{\n}\n';
+	for (const e of entries) {
+		text = applyEdits(text, modify(text, e.path, e.value, { formattingOptions: FORMAT }));
+	}
+	return text;
+}
+
+export interface Keybinding {
+	key: string;
+	command: string;
+	when?: string;
+	args?: unknown;
+}
+
+export interface KeybindingsPlan {
+	add: Keybinding[];
+	/** Shortcuts the user already has in Insilode for the same key and context (theirs stays). */
+	kept: Keybinding[];
+	/** Exact duplicates of one Insilode already has. */
+	duplicates: number;
+}
+
+function parseArray(text: string | undefined): Keybinding[] {
+	if (!text) {
+		return [];
+	}
+	const v = parse(text, [], { allowTrailingComma: true, disallowComments: false });
+	return Array.isArray(v) ? v.filter((k): k is Keybinding => isObject(k) && typeof k.key === 'string' && typeof k.command === 'string') : [];
+}
+
+/** `ctrl+K  ctrl+S` and `ctrl+k ctrl+s` are the same chord. */
+const normKey = (k: string) => k.toLowerCase().trim().split(/\s+/).join(' ');
+const normWhen = (w: unknown) => typeof w === 'string' ? w.replace(/\s+/g, '') : '';
+const slot = (k: Keybinding) => `${normKey(k.key)}\u0000${normWhen(k.when)}`;
+const identity = (k: Keybinding) => `${slot(k)}\u0000${k.command}\u0000${JSON.stringify(k.args ?? null)}`;
+
+/**
+ * Shortcuts to append. A removal (`-command`) is a shortcut too. When Insilode already binds the same key in the same
+ * context, the user's own binding stays; an import never rebinds a key the user chose.
+ */
+export function planKeybindings(current: string | undefined, imported: string | undefined): KeybindingsPlan {
+	const mine = parseArray(current);
+	const have = new Set(mine.map(identity));
+	// A removal does not take a key: binding the key to something else in the same context is still the user's choice.
+	const taken = new Set(mine.filter(k => !k.command.startsWith('-')).map(slot));
+	const plan: KeybindingsPlan = { add: [], kept: [], duplicates: 0 };
+	const adding = new Set<string>();
+	for (const k of parseArray(imported)) {
+		const id = identity(k);
+		if (have.has(id) || adding.has(id)) {
+			plan.duplicates++;
+		} else if (!k.command.startsWith('-') && taken.has(slot(k))) {
+			plan.kept.push(k);
+		} else {
+			adding.add(id);
+			plan.add.push(k);
+		}
+	}
+	return plan;
+}
+
+/** `current` with the shortcuts appended to its array, comments untouched. */
+export function writeKeybindings(current: string | undefined, add: Keybinding[]): string {
+	let text = current && Array.isArray(parse(current)) ? current : '// Place your key bindings in this file to override the defaults\n[\n]\n';
+	for (const k of add) {
+		text = applyEdits(text, modify(text, [-1], k, { formattingOptions: FORMAT, isArrayInsertion: true }));
+	}
+	return text;
+}
+
+export interface SnippetPlan {
+	/** The text to write, or undefined when nothing changes. */
+	text?: string;
+	added: number;
+	kept: number;
+}
+
+/** One snippets file: copied as it is when Insilode has none of that name, else its snippets with new names added. */
+export function mergeSnippets(current: string | undefined, imported: string): SnippetPlan {
+	const theirs = parseObject(imported);
+	if (current === undefined || !current.trim()) {
+		return { text: imported, added: Object.keys(theirs).length, kept: 0 };
+	}
+	const mine = parseObject(current);
+	let text = current;
+	let added = 0;
+	let kept = 0;
+	for (const [name, snippet] of Object.entries(theirs)) {
+		if (name in mine) {
+			kept++;
+		} else {
+			text = applyEdits(text, modify(text, [name], snippet, { formattingOptions: FORMAT }));
+			added++;
+		}
+	}
+	return { text: added ? text : undefined, added, kept };
+}
+
+/** Settings the item list counts, without the theme and skipped ones. */
+export function countSettings(imported: string | undefined): { settings: number; theme: { key: string; value: unknown }[] } {
+	const plan = planSettings(undefined, imported);
+	return { settings: plan.add.length, theme: plan.theme };
+}
+
+/**
+ * Colour theme names VS Code still writes but no longer has a theme for: it renamed its built-in themes and maps the
+ * old names when it reads the setting (migrateThemeSettingsId in workbenchThemeService.ts). The import writes the new
+ * name, which Insilode's built-in themes carry.
+ */
+const LEGACY_THEME_IDS: Record<string, string> = {
+	'Default Dark Modern': 'Dark Modern',
+	'Default Light Modern': 'Light Modern',
+	'Default Dark+': 'Dark+',
+	'Default Light+': 'Light+',
+};
+
+/**
+ * The theme settings that can be applied: a theme the editor does not have (an extension that is not installed or not
+ * on Open VSX) would leave Insilode on a fallback theme, so it is left out and named in the report instead.
+ */
+export function applicableTheme(theme: { key: string; value: unknown }[], has: (kind: ThemeKind, id: string) => boolean): { apply: { key: string; value: unknown }[]; missing: { key: string; value: unknown }[] } {
+	const apply: { key: string; value: unknown }[] = [];
+	const missing: { key: string; value: unknown }[] = [];
+	for (const original of theme) {
+		const kind = themeKind(original.key);
+		const t = kind === 'color' && typeof original.value === 'string' ? { ...original, value: LEGACY_THEME_IDS[original.value] ?? original.value } : original;
+		if (!kind || (typeof t.value === 'string' && has(kind, t.value)) || (kind === 'icon' && t.value === null)) {
+			apply.push(t);
+		} else {
+			missing.push(t);
+		}
+	}
+	return { apply, missing };
+}
+
+/** The error text VS Code's install command throws when the gallery has no such extension. */
+export function isNotFound(message: string): boolean {
+	return /\bnot found\b/i.test(message);
+}
+
+/** The error text when the editor has no extension gallery configured (extensionGalleryService.ts). */
+export function isNoGallery(message: string): boolean {
+	return /no extension gallery/i.test(message);
+}

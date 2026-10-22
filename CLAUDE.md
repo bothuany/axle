@@ -7,6 +7,7 @@ A harness-first code editor: a VS Code fork with built-in extensions. Contributo
 - `editor/extensions/flow-view`: call-flow canvas host, polyglot index (`src/poly`, tree-sitter), type boards, the `insilode` MCP server (`mcp/insilode-mcp.ts` + `src/mcp`).
 - `editor/extensions/flow-agent`: Claude Code / Codex sessions over ACP, the agent dock.
 - `editor/extensions/flow-harness`: harness map, hooks studio, permissions.
+- `editor/extensions/flow-import`: Import from VS Code (settings, keybindings, snippets, theme, extensions from Open VSX), docs/import-from-vscode.md.
 - `ui/`: the canvas webview (React Flow + Monaco), built into a bundle flow-view inlines.
 - `protocol/`: the types flow-view sends the canvas, declared once and imported type-only by both.
 - `site/`: the website (GitHub Pages): the real canvas on a fake host (`src/host.ts`) over demo data from `scripts/site-data.mjs`. The product name lives in `site/src/brand.ts` only.

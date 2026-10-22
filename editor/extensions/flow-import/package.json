@@ -1,0 +1,48 @@
+{
+  "name": "flow-import",
+  "displayName": "Insilode Import",
+  "description": "Switch from VS Code (or Cursor) in one step: settings, keyboard shortcuts, snippets, theme and extensions, merged into Insilode's own.",
+  "version": "0.1.0",
+  "publisher": "flow",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "enabledApiProposals": [
+    "extensionsAny"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "flow.importFromVSCode",
+        "title": "Import from VS Code…",
+        "category": "Insilode"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "typecheck": "node ../../vscode/node_modules/typescript/bin/tsc6 --noEmit -p .",
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
+  },
+  "dependencies": {
+    "jsonc-parser": "3.3.1"
+  }
+}

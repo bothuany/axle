@@ -1,0 +1,8 @@
+[
+	{ "identifier": { "id": "esbenp.prettier-vscode", "uuid": "96fa4707-6983-4489-b7c5-d5ffdfdcce90" }, "version": "11.0.0", "location": { "$mid": 1, "path": "/c:/Users/me/.vscode/extensions/esbenp.prettier-vscode-11.0.0", "scheme": "file" }, "relativeLocation": "esbenp.prettier-vscode-11.0.0" },
+	{ "identifier": { "id": "PKief.material-icon-theme" }, "version": "5.20.0", "location": { "$mid": 1, "path": "/c:/Users/me/.vscode/extensions/pkief.material-icon-theme-5.20.0", "scheme": "file" }, "relativeLocation": "pkief.material-icon-theme-5.20.0" },
+	{ "identifier": { "id": "ms-vscode-remote.remote-ssh" }, "version": "0.120.0", "location": { "$mid": 1, "path": "/c:/Users/me/.vscode/extensions/ms-vscode-remote.remote-ssh-0.120.0", "scheme": "file" }, "relativeLocation": "ms-vscode-remote.remote-ssh-0.120.0" },
+	{ "identifier": { "id": "esbenp.prettier-vscode" }, "version": "10.4.0", "location": { "$mid": 1, "path": "/c:/Users/me/.vscode/extensions/esbenp.prettier-vscode-10.4.0", "scheme": "file" }, "relativeLocation": "esbenp.prettier-vscode-10.4.0" },
+	{ "identifier": { "id": "dbaeumer.vscode-eslint" }, "version": "3.0.10", "location": { "$mid": 1, "path": "/c:/Users/me/.vscode/extensions/dbaeumer.vscode-eslint-3.0.10", "scheme": "file" }, "relativeLocation": "dbaeumer.vscode-eslint-3.0.10" },
+	{ "identifier": { "id": "flow.flow-view" }, "version": "0.1.0", "relativeLocation": "flow.flow-view-0.1.0" }
+]

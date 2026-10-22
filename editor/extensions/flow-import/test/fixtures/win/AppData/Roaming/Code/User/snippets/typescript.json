@@ -1,0 +1,11 @@
+{
+	// A snippet the Insilode fixture already has (it keeps its own) and one it does not.
+	"Log": {
+		"prefix": "log",
+		"body": ["console.log($1);"]
+	},
+	"Arrow": {
+		"prefix": "af",
+		"body": ["const $1 = ($2) => {", "\t$0", "};"]
+	}
+}
