@@ -659,8 +659,8 @@ interface Change {
 
 function html(): string {
 	return page('MCP Servers', `
-<div class="row"><h1 class="grow">MCP servers</h1>
-<button id="add" class="primary">Add server…</button> <button id="checkAll">Check all</button> <button id="refresh">Refresh</button></div>
+<div class="head"><h1 class="who">MCP servers</h1>
+<div class="actions"><button id="add" class="primary">Add server…</button><button id="checkAll">Check all</button><button id="refresh">Refresh</button></div></div>
 <p class="sub">Every server Claude Code and Codex load for this folder, with where it is written. Check starts one once (or contacts its URL), lists its tools and stops it; nothing runs until you click.</p>
 <div id="problems"></div>
 <div id="list"></div>`, SCRIPT, STYLE);
@@ -670,11 +670,14 @@ const STYLE = `
 .srv { scroll-margin: 40px; }
 .srv.focus { outline: 1px solid var(--accent); }
 .srv.shadowed { opacity: .65; }
-.name { font-weight: 600; }
-.chip { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 9px; border: 1px solid var(--line); margin-left: 4px; }
+.name { font-weight: 600; margin-right: 4px; }
+.chip { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 9px; border: 1px solid var(--line); margin-right: 4px; white-space: nowrap; }
 .on { color: var(--allow); } .off { color: var(--deny); } .pending { color: var(--ask); }
-.actions button { margin-left: 4px; }
-.kv { margin: 4px 0 0; }
+/* A title and its buttons: in a narrow panel the buttons wrap onto a line of their own under the title instead of squeezing it (and, as inline buttons taller than the line, drawing over it). */
+.head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 10px; }
+.head .who { flex: 1 1 12em; min-width: 0; overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.kv { margin: 4px 0 0; overflow-wrap: anywhere; }
 .kv span + span::before { content: ' · '; color: var(--muted); }
 .issue { font-size: 12px; margin-top: 4px; }
 .issue.error { color: var(--deny); } .issue.warning { color: var(--ask); } .issue.info { color: var(--muted); }
@@ -699,8 +702,8 @@ function row(s, cli, trusted) {
 	const canEdit = !s.readOnly;
 	const runsRepoCode = s.scope === 'project';
 	return el('div', { class: 'card srv' + (s.shadowed ? ' shadowed' : ''), id: 's-' + s.id },
-		el('div', { class: 'row' },
-			el('div', { class: 'grow' },
+		el('div', { class: 'head' },
+			el('div', { class: 'who' },
 				el('span', { class: 'name' }, s.name),
 				el('span', { class: 'chip' }, SCOPE[s.scope] + (s.profile ? ' ' + s.profile : '')),
 				el('span', { class: 'chip' }, s.transport),

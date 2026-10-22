@@ -167,3 +167,10 @@ test('a docker run whose setup or rebuild failed, or that was killed, leaves the
 	assert.deepEqual([0, 1, 2].map(volumeIsCurrent), [true, true, true])
 	assert.deepEqual([3, 125, 126, 127, 137].map(volumeIsCurrent), [false, false, false, false, false])
 })
+
+test('on Linux the app keeps secrets in the profile, so no keyring prompt blocks the window', async () => {
+	const { passwordStoreArgs } = await import('../lib/app.mjs')
+	assert.deepEqual(passwordStoreArgs('linux'), ['--password-store=basic'])
+	assert.deepEqual(passwordStoreArgs('win32'), [])
+	assert.deepEqual(passwordStoreArgs('darwin'), [])
+})

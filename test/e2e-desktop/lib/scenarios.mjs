@@ -27,7 +27,16 @@ export function tourFile(folder) {
 /** Branding and onboarding: the window says Insilode, nothing says Code - OSS, and no Welcome or Get Started page opened itself. */
 export async function branding(ctx) {
 	const page = await ctx.app.workbench()
-	await until('the window title to say Insilode', async () => /Insilode/.test(await page.title()), { ms: 30000 })
+	// flow-theme's default window.title is "${rootName} - ${activeEditorShort}", without the app name: the title says
+	// "Insilode" only until that default applies, so it cannot show the branding. The product the window was started with can.
+	const product = await until('the product name', () => page.evaluate(() => {
+		const p = globalThis.vscode?.context?.configuration?.()?.product
+		return p && `${p.nameLong} (${p.nameShort})`
+	}), { ms: 30000 })
+	if (!/Insilode/.test(product) || /Code - OSS|Visual Studio Code/.test(product)) {
+		throw new Error(`The window runs as "${product}", not as Insilode`)
+	}
+	await until('a window title', async () => (await page.title()).trim(), { ms: 30000 })
 	const title = await page.title()
 	if (/Code - OSS|Visual Studio Code/.test(title)) {
 		throw new Error(`The window title still carries another product's name: "${title}"`)
@@ -43,7 +52,7 @@ export async function branding(ctx) {
 	if (onboarding.length || await page.locator('.gettingStartedContainer').count()) {
 		throw new Error(`VS Code's onboarding opened: ${onboarding.join(', ') || 'the Get Started page'}`)
 	}
-	return pass(`title "${title}", tabs: ${tabs.length ? tabs.join(' | ') : 'none'}`, [picture])
+	return pass(`${product}, title "${title}", tabs: ${tabs.length ? tabs.join(' | ') : 'none'}`, [picture])
 }
 
 /** The flow canvas opens (as an editor tab where this build does that) and a tour plays on it. */
@@ -132,7 +141,10 @@ export async function island(ctx) {
 		const before = (await overlayInfo(ctx)).bounds
 		const [sx, sy] = [before.x + before.width / 2, before.y + before.height / 2]
 		if (movePointer(sx, sy)) {
-			const box = await overlay.locator('.box').boundingBox()
+			// movePointer just put the real cursor on the island: its mouseenter makes the page build .box again (as the list)
+			// while the window resizes to it, so for a moment there is no box on screen and boundingBox() answers null. A race
+			// of this test, not of the app: wait for the new box.
+			const box = await until('the island on screen', () => overlay.locator('.box').boundingBox({ timeout: 1000 }), { ms: 10000, every: 100 })
 			const [px, py] = [box.x + box.width / 2, box.y + box.height / 2]
 			// The island follows the pointer, so in the page's own coordinates the pointer stays where it is while the real cursor moves.
 			await overlay.mouse.move(px, py)

@@ -43,6 +43,16 @@ export async function withRetries(tries, fn, onRetry = () => { }) {
 	throw error
 }
 
+/**
+ * Linux has no OS keyring in a container (no GNOME Keyring or KWallet on the session bus), and the first read of secret
+ * storage (flow-view keeps its IDE bridge token there) then opens a modal "An OS keyring couldn't be identified" that
+ * blocks the window until someone answers it. The basic store keeps secrets in the throwaway profile and asks nothing.
+ * Windows and macOS always have their keychain, so they keep the default.
+ */
+export function passwordStoreArgs(platform = process.platform) {
+	return platform === 'linux' ? ['--password-store=basic'] : []
+}
+
 const isWorkbench = url => /workbench(\.desktop)?\.html|workbench\.esm/.test(url) || (url.startsWith('vscode-file:') && url.includes('workbench'))
 export const isOverlay = url => url.startsWith('data:text/html')
 
@@ -78,6 +88,7 @@ export async function launchInsilode(o) {
 		'--disable-workspace-trust', '--skip-release-notes',
 		// --disable-dev-shm-usage: in a container (Docker's /dev/shm is small) Chromium otherwise fails a few percent of the module loads, and the workbench never starts.
 		'--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', ...(o.updates ? [] : ['--disable-updates']),
+		...passwordStoreArgs(),
 		...(o.extensions ?? []).map(e => `--extensionDevelopmentPath=${e}`),
 		...(o.folder ? [o.folder] : []),
 	]
