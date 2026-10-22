@@ -15,7 +15,7 @@ import { innermost, type Analyzer } from '../analyzer';
 import { entryName, type Endpoints, type Entry, type Source } from '../backends';
 import { formatLint, lintBoard } from '../board/lint';
 import { importMermaid } from '../board/mermaidImport';
-import { parseBoard, parseBoardWithNotes, type BoardHighlight, type BoardSpec } from '../board/spec';
+import { parseBoardWithNotes, type BoardHighlight, type BoardSpec } from '../board/spec';
 import { describeCandidate, matchSymbols, symbolQuery, type SymbolCandidate } from '../board/symbols';
 import { annotate, architectureFromGraph, checkScope, erFromTables, sequenceFromFlow, stateFromEnum, strings, type Generated } from '../board/fromCode';
 import { cleanBoardId, type BoardStore } from '../board/store';
