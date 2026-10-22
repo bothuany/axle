@@ -40,7 +40,7 @@ Merge, don't clobber:
 - **Snippets:** a file Insilode does not have is copied as it is; a file it has gains only the snippets whose names it lacks.
 - **Comments and layout stay.** The files are edited in place (jsonc-parser), not rewritten, so your comments and order survive.
 - **The theme is applied last**, after the extensions, and only if Insilode then has that theme. A theme whose extension is not on Open VSX would otherwise leave Insilode on a fallback theme, so the report names it and Insilode keeps its own (Insilode Dark).
-- **Extensions are installed from Open VSX**, one at a time, by their id. Insilode never copies the other editor's extension folders, so no Microsoft extension binaries are copied. An extension Open VSX does not have (most Microsoft ones, such as Remote - SSH, Live Share or Pylance) is listed in the final notification and the report instead of failing the import; the Extensions view may have an alternative. Extensions already installed are skipped.
+- **Extensions are installed from Open VSX**, one at a time, by their id. Insilode never copies the other editor's extension folders, so no Microsoft extension binaries are copied. An extension Open VSX does not have (most Microsoft ones, such as Remote - SSH, Live Share or Pylance) is listed in the final notification and the report instead of failing the import; the Extensions view may have an alternative. Extensions already installed are skipped. The first time an extension from a publisher is installed, the editor asks whether you trust that publisher (VS Code's own dialog, kept as it is). If you cancel it, that extension is skipped and listed in the report, and the import goes on with the next one.
 
 ### Never imported
 
@@ -75,4 +75,5 @@ Next to the copies, `import-report.txt` lists what was added, what was kept, wha
 
 - `src/sources.ts`: finding the editors and reading what they have (no `vscode`; the platform and folders are passed in). `src/merge.ts`: the merge rules, text in and text out. `src/extension.ts`: the notification, the command, the backup, the extension installs.
 - Tests: `cd editor/extensions/flow-import && npm test` runs both modules against fixture homes in `test/fixtures` laid out as Windows, macOS and Linux keep them (an `XDG_CONFIG_HOME` case, an install without `extensions.json`, duplicates and `.obsolete`).
+- The desktop path end to end, with real installs from Open VSX: `npm run docker:e2e -- --probe test/e2e-desktop/probes/import-from-vscode.mjs` (three extensions installed, Pylance reported as not on Open VSX, the publisher trust dialogs answered as a person would).
 - `INSILODE_IMPORT_HOME=<folder>` makes the extension read that folder as the home folder (with `AppData/Roaming`, `Library/Application Support` or `.config` below it, by OS), so a probe imports a fixture, never your own VS Code. Set it on the process that runs the extension host, e.g. `INSILODE_IMPORT_HOME=... npm run web`.

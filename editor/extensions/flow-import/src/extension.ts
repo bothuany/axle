@@ -283,6 +283,12 @@ async function doImport(context: vscode.ExtensionContext, source: Source, conten
 	});
 }
 
+/** A CancellationError (its name and message are both "Canceled"), as the publisher trust dialog throws on Cancel. */
+function isCancelled(e: unknown): boolean {
+	const err = e as { name?: unknown; message?: unknown } | undefined;
+	return err?.name === 'Canceled' || err?.message === 'Canceled';
+}
+
 /** Ids of every installed extension, whichever extension host runs it (lower case). */
 function installedIds(): Set<string> {
 	return new Set(allExtensions().map(e => e.id.toLowerCase()));
@@ -303,6 +309,7 @@ async function installExtensions(list: string[], report: Report, progress: vscod
 	const todo = list.filter(id => !have.has(id));
 	const installed: string[] = [];
 	const failed: string[] = [];
+	const untrusted: string[] = [];
 	const step = todo.length ? 100 / todo.length : 0;
 	for (const [i, id] of todo.entries()) {
 		if (token.isCancellationRequested) {
@@ -322,6 +329,10 @@ async function installExtensions(list: string[], report: Report, progress: vscod
 			}
 			if (isNotFound(message)) {
 				report.notFound.push(id);
+			} else if (isCancelled(e)) {
+				// The editor asks whether to trust a publisher the first time one of its extensions is installed; "Cancel" there
+				// skips that extension, and the import goes on with the next.
+				untrusted.push(id);
 			} else {
 				failed.push(`${id} (${message})`);
 			}
@@ -335,6 +346,9 @@ async function installExtensions(list: string[], report: Report, progress: vscod
 	report.lines.push(`Extensions: ${installed.length} installed${installed.length ? ` (${installed.join(', ')})` : ''}, ${list.length - todo.length} already installed.`);
 	if (report.notFound.length) {
 		report.lines.push(`Not on Open VSX, so not installed: ${report.notFound.join(', ')}. Look for an alternative in the Extensions view, or install a .vsix you are allowed to use.`);
+	}
+	if (untrusted.length) {
+		report.lines.push(`Not installed because you did not trust the publisher: ${untrusted.join(', ')}.`);
 	}
 	if (failed.length) {
 		report.lines.push(`Could not install: ${failed.join(', ')}.`);
