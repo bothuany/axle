@@ -487,6 +487,124 @@ figcaption {
   transform: translateX(3px);
 }
 
+/* Watch the film: a quiet third action beside the two buttons, and the modal player it opens. */
+.film-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 600 17px/1 var(--sans);
+  cursor: pointer;
+}
+
+.film-open svg {
+  width: 30px;
+  height: 30px;
+  padding: 9px 8px 9px 10px;
+  border-radius: 50%;
+  background: var(--film-2);
+  box-shadow: 0 0 0 1px var(--rule);
+  fill: var(--link);
+}
+
+.film-open .film-length {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.film-open:hover svg {
+  background: var(--signal);
+  fill: #fff;
+}
+
+.film {
+  width: min(1200px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--window-edge), 0 40px 120px rgba(0, 0, 0, 0.7);
+  overflow: auto;
+}
+
+.film::backdrop {
+  background: rgba(4, 6, 14, 0.82);
+}
+
+.film-box {
+  padding: 14px 16px 16px;
+}
+
+.film-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.film-head h2 {
+  font-size: 20px;
+  max-width: none;
+}
+
+.film-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--film-2);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.film-close svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.film-close:hover {
+  background: var(--signal);
+}
+
+.film-video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: #000;
+}
+
+.film-transcript {
+  margin: 12px 0 0;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.film-transcript summary {
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.film-transcript p {
+  margin: 8px 0 0;
+  max-width: 80ch;
+}
+
 /* ---- built on VS Code --------------------------------------------------------------------------------------------------------- */
 
 .vscode {
@@ -1366,6 +1484,10 @@ figcaption {
 
   .ctas .btn {
     width: 100%;
+  }
+
+  .film-open {
+    min-height: 44px;
   }
 
   .stage-wrap::before {

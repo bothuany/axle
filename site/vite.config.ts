@@ -1,5 +1,5 @@
 import react from '@vitejs/plugin-react'
-import { existsSync, readdirSync } from 'node:fs'
+import { createReadStream, existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
 import { NAME, REPO } from './src/brand.ts'
@@ -10,6 +10,9 @@ const SITE = (process.env.SITE_URL || 'https://insilode.dev').replace(/\/$/, '')
 const DOC_PAGES = existsSync(resolve(import.meta.dirname, 'docs'))
   ? ['docs/', ...readdirSync(resolve(import.meta.dirname, 'docs'), { withFileTypes: true }).filter(d => d.isDirectory()).map(d => `docs/${d.name}/`)]
   : []
+/** The launch film the home page plays in its modal: served from the repository's own copy (docs/media/film), not a second one. */
+const FILM_DIR = resolve(import.meta.dirname, '../docs/media/film')
+const FILM = ['launch-film.mp4', 'launch-film-poster.jpg']
 const PAGES = ['', 'try/', ...DOC_PAGES]
 
 /**
@@ -23,6 +26,7 @@ function site(): Plugin {
     name: 'insilode-site',
     transformIndexHtml: html => html.replaceAll('{{site}}', SITE).replaceAll('{{name}}', NAME).replaceAll('{{repo}}', REPO),
     generateBundle() {
+      for (const f of FILM) this.emitFile({ type: 'asset', fileName: `media/film/${f}`, source: readFileSync(resolve(FILM_DIR, f)) })
       this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemap(new Date().toISOString().slice(0, 10)) })
       // GitHub Pages keeps a custom domain only while the published folder carries a CNAME file: without it a deploy drops the domain. Not on <owner>.github.io.
       const host = new URL(SITE).hostname
@@ -33,6 +37,12 @@ function site(): Plugin {
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
+        const film = FILM.find(f => (req.url ?? '').split('?')[0] === `/media/film/${f}`)
+        if (film) {
+          res.setHeader('Content-Type', film.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg')
+          createReadStream(resolve(FILM_DIR, film)).pipe(res)
+          return
+        }
         if ((req.url ?? '').split('?')[0] !== '/sitemap.xml') return next()
         res.setHeader('Content-Type', 'application/xml')
         res.end(sitemap())

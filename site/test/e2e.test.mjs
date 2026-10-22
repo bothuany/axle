@@ -160,6 +160,33 @@ test('home: under reduced motion the hero loop stays on its poster and loads not
 	await page.close()
 })
 
+test('home: the film plays with its sound only when asked, in a modal that Esc and a click outside close', { skip }, async () => {
+	const { page, problems } = await open()
+	const state = () => page.evaluate(() => {
+		const d = document.querySelector('[data-film]')
+		const v = d.querySelector('video')
+		return { open: d.open, paused: v.paused, muted: v.muted, time: v.currentTime, loaded: v.readyState, focus: document.activeElement?.className ?? '' }
+	})
+	// Nothing of the film loads, let alone plays, until the visitor asks for it.
+	assert.deepEqual(await state(), { open: false, paused: true, muted: false, time: 0, loaded: 0, focus: '' })
+	await page.click('[data-film-open]')
+	const playing = await until(async () => { const s = await state(); return s.open && !s.paused && s.time > 0.3 && s }, 'the film to play')
+	assert.equal(playing.muted, false, 'with its sound, after the click')
+	assert.equal(playing.focus, 'film-close', 'focus moves into the dialog')
+	await page.keyboard.press('Escape')
+	await until(async () => { const s = await state(); return !s.open && s.paused }, 'Esc to close it and stop the film')
+	const closed = await state()
+	assert.deepEqual({ ...closed, loaded: undefined }, { open: false, paused: true, muted: false, time: 0, loaded: undefined, focus: 'film-open' }, 'closing stops and rewinds it, and gives the focus back')
+	// A click outside the player (on the backdrop) closes it too.
+	await page.click('[data-film-open]')
+	await until(async () => (await state()).open, 'the film to open again')
+	await page.mouse.click(4, 4)
+	await until(async () => { const s = await state(); return !s.open && s.paused }, 'a click outside to close it')
+	assert.equal((await state()).paused, true)
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
 test('home: the download button names the visitor\'s system and points at its file; the stars are counted', { skip }, async () => {
 	const { page, problems } = await open()
 	const primary = () => page.$eval('.hero [data-download]', a => ({ text: a.textContent, href: a.href }))

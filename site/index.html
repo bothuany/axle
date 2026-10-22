@@ -48,6 +48,7 @@
         <div class="ctas">
           <a class="btn btn-primary" data-download href="https://github.com/{{repo}}/releases/latest">Download {{name}}</a>
           <a class="btn btn-secondary" href="./try/">Try it in your browser</a>
+          <button class="film-open" type="button" data-film-open aria-haspopup="dialog"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0l9 5-9 5z" /></svg>Watch the film <span class="film-length">&middot;&nbsp;1&nbsp;min</span></button>
         </div>
         <p class="quiet" data-platforms>Free and open source, for Windows, macOS and Linux.</p>
 
@@ -227,6 +228,24 @@
         <div class="dl-list" data-download-list></div>
       </section>
     </main>
+
+    <!-- The launch film, with its voice: it plays only when the visitor asks (a click on Watch the film), never on its own. Its
+         captions are part of the picture; the transcript below says the same for a reader. -->
+    <dialog class="film" data-film aria-labelledby="film-title">
+      <div class="film-box">
+        <div class="film-head">
+          <h2 id="film-title">{{name}} in a minute</h2>
+          <button class="film-close" type="button" data-film-close aria-label="Close the film"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13" /></svg></button>
+        </div>
+        <video class="film-video" controls preload="none" playsinline poster="./media/film/launch-film-poster.jpg" width="1920" height="1080">
+          <source src="./media/film/launch-film.mp4" type="video/mp4" />
+        </video>
+        <details class="film-transcript">
+          <summary>Transcript</summary>
+          <p>{{name}} is a code editor, built on VS Code. Your extensions, themes and keybindings work. Open an endpoint, and a tab shows how the request runs. Over HTTP into billing. Over Kafka into shipping. Now let Claude Code make a change. You don't get a wall of diffs. You see where it lands, on how the request runs. Run Claude Code and Codex side by side. The dock shows who's working, and who needs you. And the harness map shows what your agents load, and what to fix. Every code editor shows your files. {{name}} shows how your code runs. It's free, and it's open source.</p>
+        </details>
+      </div>
+    </dialog>
 
     <footer class="footer">
       <div class="footer-inner">

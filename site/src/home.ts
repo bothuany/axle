@@ -5,10 +5,12 @@ import { mountClips, mountHarness } from './clips'
 import { wireDownloads } from './download'
 import { Stage } from './stage'
 import { mountLoop } from './loop'
+import { mountFilm } from './film'
 
 wireDownloads()
 mountClips()
 mountLoop(document.querySelector<HTMLVideoElement>('[data-loop]'))
+mountFilm(document.querySelector<HTMLElement>('[data-film-open]'), document.querySelector<HTMLDialogElement>('[data-film]'))
 
 let data: Promise<DemoData> | undefined
 const demo = () => (data ??= fetch('./data/demo.json').then(r => r.json() as Promise<DemoData>))
