@@ -16,5 +16,5 @@ folder with `npm i playwright`), against:
 The demo repo is `site/demo/base` with `demo/changed/` committed on top, line endings LF.
 
 Stills, captures and voice samples are review material and never go in the repo: they live in
-`%LOCALAPPDATA%\Temp\axle-film-shots\`. `storyboard.html` reads its images from `storyboard/captures/`
+`%LOCALAPPDATA%\Temp\insilode-film-shots\`. `storyboard.html` reads its images from `storyboard/captures/`
 (git-ignored); copy them there to view the sheet from the repo.

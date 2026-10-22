@@ -27,11 +27,13 @@ const IMG = {
 	islandWorking: ['capture/agents/island-1-working-2.png', 996, 165],
 	islandNeeds: ['capture/agents/island-2-needs-you.png', 996, 165],
 	tour: ['capture/tour.mp4', 1920, 1080],
-	// The dock and island pages recorded live (their avatars animate), gyro first, pixel pets from 9.97 s (agents-live.mjs).
-	dockLive: ['capture/dock-live.mp4', 968, 500],
-	// The same take under another name: two clips of one file in a film get their seeks mixed up when rendered.
-	dockLiveHook: ['capture/dock-live-hook.mp4', 968, 500],
-	islandLive: ['capture/island-live.mp4', 600, 96],
+	// The dock and island pages recorded live on the site's Try page (agents-live.mjs): three agents, the avatars animate;
+	// the page's own switch goes to pixel pets at 9.47 s and its "Allow" answers Codex at 13.42 s.
+	dockLive: ['capture/dock-live.mp4', 760, 1072],
+	// The top of the same take (Codex waiting, Claude done) for the hook; a separate file, since two clips of one file in
+	// a film get their seeks mixed up when rendered.
+	dockLiveHook: ['capture/dock-live-hook.mp4', 760, 560],
+	islandLive: ['capture/island-live.mp4', 720, 80],
 	// The same take at 7x zoom on the dock's first row, so the pixel pet is drawn large, not upscaled.
 	petsClose: ['capture/pets-close.mp4', 1920, 1080],
 	skeleton: ['wb/skeleton.png', 3840, 2160],
@@ -53,8 +55,8 @@ const key = (t, rect, more = {}) => ({ t, rect, ...more })
 function shots16(f) {
 	const s = []
 	// 01 Hook: the dock's real row turns amber while the statement lands.
-	// The live dock: working, then its row turns amber at 1.26 s (the recording's "needs you" is at 6.457 s).
-	s.push({ id: 's01', video: 'dockLiveHook', start: 0, dur: 4.2, mediaStart: 5.2, place: dockPlace(f) })
+	// The live dock: Codex waits for an approval, Claude Code is done.
+	s.push({ id: 's01', video: 'dockLiveHook', start: 0, dur: 4.2, mediaStart: 2, place: dockPlace(f) })
 	// 03 The turn: the change set, from its root down through the changed cards.
 	s.push({ id: 's03', img: 'changes', start: 12, dur: 10, fadeIn: 0.5, keys: [
 		key(0, [0, 0, 0.56, 0.14], { square: [0, 0, 0.34, 0.12], vertical: [0, 0, 0.3, 0.16] }),
@@ -86,11 +88,13 @@ function shots16(f) {
 	// 06 Agents: the dock beside a darkened canvas, the row turning amber on "needs you"; then the island drops.
 	const flip = at('06a', 'needs')
 	s.push({ id: 's06bg', img: 'changes', start: 40, dur: 14, dim: 0.72, keys: [key(0, [0, 0.24, 0.7, 0.38]), key(14, [0.02, 0.25, 0.66, 0.37])] })
-	// One live take: the row turns amber on "needs" (6.457 s in the take), switches to pixel pets at 47.23 s, then works on.
-	s.push({ id: 's06a', video: 'dockLive', start: 40, dur: 14, mediaStart: +(6.457 - (flip - 40)).toFixed(3), place: agentsPlace(f), pushTo: 1.1, pushAt: 4.8 })
-	// Close on the avatar: the gyro, then the pixel cat with its "needs you" face (switch at 9.953 s in the take, 47.9 s here).
-	s.push({ id: 's06p', video: 'petsClose', start: 47, dur: 3.2, mediaStart: 9.053, place: closePlace(f), pushTo: 1.06, pushAt: 0.8 })
-	s.push({ id: 's06c', video: 'islandLive', start: 50.2, dur: 3.8, mediaStart: +(6.457 - (flip - 40) + 10.2).toFixed(3), place: islandPlace(f), drop: true })
+	// One live take: three agents; the camera pushes to the waiting one on "needs", the page switches to pixel pets at
+	// 47.9 s (9.47 s in the take), and Codex is allowed at 51.85 s and starts working.
+	const take = 9.47 - 7.9
+	s.push({ id: 's06a', video: 'dockLive', start: 40, dur: 14, mediaStart: take, place: agentsPlace(f), pushTo: 1.12, pushAt: flip - 40, origin: '50% 8%' })
+	// Close on the first row: the gyro, then the pixel bunny with its "needs you" mark (switch at 9.487 s in the close take).
+	s.push({ id: 's06p', video: 'petsClose', start: 47, dur: 3.2, mediaStart: 9.487 - 0.9, place: closePlace(f), pushTo: 1.06, pushAt: 0.8 })
+	s.push({ id: 's06c', video: 'islandLive', start: 50.2, dur: 3.8, mediaStart: take + 10.2, place: islandPlace(f), drop: true })
 	// 07 Diagrams: the sequence board of POST /orders, read from the index.
 	s.push({ id: 's07', img: 'seq', start: 54, dur: 8, keys: [
 		key(0, [0.02, 0.07, 0.98, 0.86], { square: [0.08, 0.15, 0.55, 0.65], vertical: [0.08, 0.15, 0.45, 0.85] }),
@@ -116,16 +120,16 @@ function shotsLoop() {
 		{ id: 'l1', img: 'changes', start: 0, dur: 5, keys: [key(0, A), key(1, A), key(5, [0.16, 0.25, 0.64, 0.355])] },
 		{ id: 'l2', video: 'tour', start: 5, dur: 5, mediaStart: 0.4, keys: [key(0, [0, 0, 1, 1]), key(5, [0.05, 0.05, 0.95, 0.95])] },
 		{ id: 'l3bg', img: 'changes', start: 10, dur: 3, dim: 0.72, keys: [key(0, [0, 0.24, 0.7, 0.38])] },
-		{ id: 'l3', video: 'dockLive', start: 10, dur: 3, mediaStart: 9.4, place: agentsPlace(FORMATS.loop) },
+		{ id: 'l3', video: 'dockLive', start: 10, dur: 3, mediaStart: 10.2, place: agentsPlace(FORMATS.loop) },
 		{ id: 'l4', img: 'changes', start: 13, dur: 2, keys: [key(0, [0.1, 0.12, 0.6, 0.25]), key(2, A)] },
 	]
 }
 
 // Where a fixed (not camera-driven) image sits, per format, in frame pixels: x, y, width.
-function dockPlace(f) { return f.h > f.w ? { x: 140, y: 220, w: 800 } : f.w === f.h ? { x: 520, y: 90, w: 500 } : { x: 1180, y: 150, w: 600 } }
-function agentsPlace(f) { return f.h > f.w ? { x: 90, y: 360, w: 900 } : f.w === f.h ? { x: 190, y: 220, w: 700 } : { x: 1000, y: 230, w: 820 } }
+function dockPlace(f) { return f.h > f.w ? { x: 140, y: 200, w: 800 } : f.w === f.h ? { x: 520, y: 90, w: 500 } : { x: 1160, y: 150, w: 640 } }
+function agentsPlace(f) { return f.h > f.w ? { x: 140, y: 300, w: 800 } : f.w === f.h ? { x: 290, y: 150, w: 500 } : { x: 1180, y: 150, w: 560 } }
 function closePlace(f) { return f.h > f.w ? { x: 0, y: 656, w: 1080 } : f.w === f.h ? { x: 0, y: 236, w: 1080 } : { x: 0, y: 0, w: 1920 } }
-function islandPlace(f) { return f.h > f.w ? { x: 60, y: 60, w: 960 } : f.w === f.h ? { x: 90, y: 40, w: 900 } : { x: 520, y: 34, w: 880 } }
+function islandPlace(f) { return f.h > f.w ? { x: 90, y: 60, w: 900 } : f.w === f.h ? { x: 140, y: 30, w: 800 } : { x: 300, y: 34, w: 820 } }
 
 // The camera transform that fits `rect` of an image (iw x ih) into the picture area of the frame.
 function fit(rect, iw, ih, f) {
@@ -178,7 +182,7 @@ function build(variant) {
 		if (s.video && s.place) {
 			// A live page recording placed in the frame (the dock, the island): sized by place, pushed or dropped in.
 			const p = s.place, h = Math.round(p.w * ih / iw)
-			html += `<video id="${s.id}" class="clip media placed" src="${asset(s.video)}" muted playsinline data-start="${s.start}" data-duration="${s.dur}" data-media-start="${s.mediaStart ?? 0}" data-track-index="2" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${h}px"></video>
+			html += `<video id="${s.id}" class="clip media placed" src="${asset(s.video)}" muted playsinline data-start="${s.start}" data-duration="${s.dur}" data-media-start="${s.mediaStart ?? 0}" data-track-index="2" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${h}px${s.origin ? `;transform-origin:${s.origin}` : ''}"></video>
 `
 			if (s.drop) tl.push(`tl.fromTo('#${s.id}', { y: -${h + p.y + 20} }, { y: 0, duration: 0.55, ease: 'power3.out' }, ${s.start})`)
 			if (s.pushTo) tl.push(`tl.fromTo('#${s.id}', { scale: 1 }, { scale: ${s.pushTo}, duration: ${(s.dur - s.pushAt).toFixed(2)}, ease: 'power2.inOut' }, ${s.start + s.pushAt})`)
@@ -292,7 +296,7 @@ function page(f, body, tl) {
 @font-face { font-family: "Instrument Sans"; font-weight: 600; src: url(assets/fonts/instrument-sans-latin-600-normal.woff2) format("woff2"); }
 @font-face { font-family: "Instrument Sans"; font-weight: 700; src: url(assets/fonts/instrument-sans-latin-700-normal.woff2) format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url(assets/fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2"); }
-/* The app's own colours (sampled from Axle Dark): editor ground, text, the signal blue, change-set green and red. */
+/* The app's own colours (sampled from Insilode Dark): editor ground, text, the signal blue, change-set green and red. */
 :root { --ground: #0f0f0f; --text: #f2f2f4; --muted: #8a8a90; --signal: #6f86ff; --add: #5fe0a1; --del: #ff6b7d; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { width: ${f.w}px; height: ${f.h}px; overflow: hidden; background: var(--ground); }

@@ -1,6 +1,6 @@
 # The film's demo change
 
-The film shows Axle on Harbor Goods, the site's demo project (`site/demo/base`: orders
+The film shows Insilode on Harbor Goods, the site's demo project (`site/demo/base`: orders
 and shipping in Java, billing in Python). `changed/` is the agent's change for the film, laid over
 `base` the same way `site/demo/changed` is: "add discount codes to orders", 14 files across
 the three services. The hook's number, the diff stat and the green and red lines in the film come

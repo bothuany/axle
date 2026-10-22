@@ -1,4 +1,4 @@
-// Headless captures of Axle's real canvas from the playground (canvas.html on its fake host, fed the film's demo data).
+// Headless captures of Insilode's real canvas from the playground (canvas.html on its fake host, fed the film's demo data).
 //   node shoot.mjs <baseUrl> <outDir> [name...]
 // Every shot is 1920x1080 CSS px at 2x. Nothing opens a window.
 import { chromium } from 'playwright'

@@ -9,7 +9,7 @@ Agents dock and status island pages, the workbench in web mode) on Harbor Goods,
 real 14-file change made for the film ([demo/](demo)). The film adds framing, camera moves, rings, type and captions.
 The voice is generated on this machine by an open model (Kokoro-82M); the music is composed and synthesized in code.
 
-Stills, captures, voice takes and renders are working material and stay out of the repo (`%LOCALAPPDATA%\Temp\axle-film-shots`
+Stills, captures, voice takes and renders are working material and stay out of the repo (`%LOCALAPPDATA%\Temp\insilode-film-shots`
 below, the "shots" folder). Only the delivered files go in `docs/media/film`.
 
 ## The name

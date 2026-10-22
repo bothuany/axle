@@ -1,7 +1,7 @@
 ---
 format: 1920x1080
 duration: 80s
-message: "Your agent changed the code. Axle shows you where, on how it runs."
+message: "Your agent changed the code. Insilode shows you where, on how it runs."
 arc: Problem (hook) → Turn (the canvas answers) → Proof ×3 (tour, agents, diagrams) → Credibility → One CTA
 audience: developers who run Claude Code or Codex on real codebases
 mode: collaborative
@@ -10,7 +10,7 @@ version: v2 (built)
 
 # Launch film: storyboard v2
 
-**Message.** Your agent changed the code. Axle shows you where, on how it runs.
+**Message.** Your agent changed the code. Insilode shows you where, on how it runs.
 
 **Audience and arc.** Developers who already let an agent edit their repo. Pain → turn → proof → lockup:
 the hook asks a question every agent user has had, the canvas answers it, three features show the
@@ -38,11 +38,11 @@ the playground's host (`site/canvas.html`, `scripts/site-data.mjs`), and the wor
 web mode for the frames that need the whole window. The film adds only framing, camera moves, rings,
 captions and type. The agent's change is a real commit for the film (`demo/changed/`, 14 files,
 +112 −16), so the count, the diff and the green/red lines are real. The tour's steps are scripted, and the dock and the island are the app's own pages fed the playground's
-scripted session. The question in 05 is asked in Axle's own point-and-ask box (`ui/src/tour/PointAsk.tsx`).
+scripted session. The question in 05 is asked in Insilode's own point-and-ask box (`ui/src/tour/PointAsk.tsx`).
 
 ## Brand (from the product)
 
-Sampled from the captures (Axle Dark), so the film's ground is the app's own:
+Sampled from the captures (Insilode Dark), so the film's ground is the app's own:
 
 | Role | Hex | Source |
 |---|---|---|
@@ -53,7 +53,7 @@ Sampled from the captures (Axle Dark), so the film's ground is the app's own:
 | Added / removed | `#5fe0a1` / `#ff6b7d` | change-set lines (only where code changed) |
 | Needs you | amber of the dock's "Needs you" | dock attention only |
 
-Two-color discipline: signal blue is Axle; green and red appear only where code changed; amber only
+Two-color discipline: signal blue is Insilode; green and red appear only where code changed; amber only
 where an agent needs you. Nothing else gets a color.
 
 Type: **Instrument Sans** 600/700 for statements (tight tracking, -0.03 em, 96-150 px), 500 for
@@ -80,7 +80,7 @@ from `assets/fonts/`. Easing: `power3.out` for arrivals, `power2.inOut` for came
 The name may change. It lives in one place, `brand.json` (`productName`, `spokenName`, `tagline`,
 `repoUrl`, `download`); the root composition declares them as variables
 (`data-composition-variables` in `index.html`) and every title, caption and the CTA bind to them
-(`data-var-text`). The VO lines that say the name ("Axle. Free and open source.") are generated from
+(`data-var-text`). The VO lines that say the name ("Insilode. Free and open source.") are generated from
 `spokenName` and are re-generated once the name is decided. Nothing with the name is rendered until then.
 
 ## Changes from v1
@@ -103,7 +103,7 @@ olan görseller, CSS'ler kullanılmalıydı", and the product name may change.
 
 ## Changes after the first cut (user notes)
 
-- "videonun sonunda bothuany/axle yazıyor": the URL is github.com/bothuany/insilode (brand.json).
+- "videonun sonunda eski repo adresi yazıyor": the URL is github.com/bothuany/insilode (brand.json).
 - "40. saniyede animasyon yok agent simgesinde": the dock and the island are now recorded live
   (`capture/agents-live.mjs`), so the avatar animates; the hook uses the same take.
 - "pixel seçeneği datlı bir şekilde gösterilsin": at 47–50 s a close-up on the dock's first row (the page at 7× zoom,
@@ -143,7 +143,7 @@ real VO after it is generated.
   40, 54, 62, 68, 72, 80), so cuts land on downbeats.
 - **Bed.** Minimal electronic pulse: muted kick on 1 and 3, a soft synth bass, one bell-like
   motif that returns at the lockup. Silent under the hook (0-12 s): only room tone and UI sounds.
-  The bed enters on the downbeat at 12.0 s, the moment Axle appears. It drops to the bass alone under
+  The bed enters on the downbeat at 12.0 s, the moment Insilode appears. It drops to the bass alone under
   the held frame (68-72 s) and resolves on the logo at 74 s. Ducked about 8 dB under VO.
 - **Source:** composed and synthesized in code (`tools/score.py`): kick, band-limited hats, a saw bass, a Karplus-Strong
   arpeggio, a detuned pad and an FM bell motif. No model and no samples, so there is no licence to clear.
@@ -161,7 +161,7 @@ real VO after it is generated.
 - **15 s silent loop** (README, site hero): 03 turn (chips land, 5 s) → 05 tour (cursor walks two
   cards, 5 s) → 06 dock row turns amber (3 s) → back to the canvas framing of the first frame (2 s),
   so the last frame matches the first. On-screen words carry it: "See what your agent changed." →
-  "On how your code runs." → "Axle". No captions, no VO.
+  "On how your code runs." → "Insilode". No captions, no VO.
 - **1:1 and 9:16:** same compositions, re-framed per beat on the focal region named in each beat
   below; captions move to the lower third inside title-safe.
 - **Per-feature clips** for the website (`docs/media/film/clips/`, silent, 16:9): `change-set.mp4`,
@@ -216,15 +216,15 @@ lines with no shape.
 
 ## Frame 03 — The turn: the change on the flow (12.0–22.0, 10 s)
 
-- scene: Axle's canvas: POST /orders → OrderController.place → OrderService.place → BillingClient / OrderRepository / orders table. The 14 chips fly in and land on their cards; green and red lines light up inside the cards.
+- scene: Insilode's canvas: POST /orders → OrderController.place → OrderService.place → BillingClient / OrderRepository / orders table. The 14 chips fly in and land on their cards; green and red lines light up inside the cards.
 - duration: 10s
 - transition_in: chips fly (continuous from 02)
-- voiceover: "Axle draws the change on how your code runs: every endpoint it touches, cut down to the methods that changed."
+- voiceover: "Insilode draws the change on how your code runs: every endpoint it touches, cut down to the methods that changed."
 - poster: 7
 - focal: OrderService.place card (center-left)
 - src: compositions/03-turn.html
 
-On screen: real capture of "Show Git Changes in Flow" on Harbor Goods: the Axle window (workbench
+On screen: real capture of "Show Git Changes in Flow" on Harbor Goods: the Insilode window (workbench
 chrome visible for the first 2 s, then the camera pushes into the canvas). The chips travel along
 `expo.out` arcs (0.6 s, staggered 60 ms) to the cards; each landing lights a card's border in
 signal blue and reveals its real diff lines (green added, red removed). At 18 s push in on
@@ -243,7 +243,7 @@ count and placement come from the capture. **Why:** the answer to "Where?".
 - focal: the HTTP edge label, then the DB card
 - src: compositions/04-across.html
 
-On screen: real canvas, edges labelled as Axle labels them ("HTTP", "topic"), the Python card's
+On screen: real canvas, edges labelled as Insilode labels them ("HTTP", "topic"), the Python card's
 code readable. A thin signal-blue highlight ring follows the edge being named by the VO
 ("HTTP" at 25.4 s, "Kafka" at 26.4 s, "table" at 28.2 s). **Audio:** a low pulse per edge. **Seam out:**
 the ghost cursor enters from the right edge (continuity into 05). **No** extra labels over the UI.
@@ -251,7 +251,7 @@ the ghost cursor enters from the right edge (continuity into 05). **No** extra l
 
 ## Frame 05 — Proof 1: the guided tour (30.0–40.0, 10 s)
 
-- scene: Axle's ghost cursor walks the flow card by card; the tour caption ("Step 2 of 5 — the discount is applied before the order is saved…") and the tour bar sit on the canvas.
+- scene: Insilode's ghost cursor walks the flow card by card; the tour caption ("Step 2 of 5 — the discount is applied before the order is saved…") and the tour bar sit on the canvas.
 - duration: 10s
 - transition_in: cursor enters (continuous)
 - voiceover: "Ask how something works, and the agent walks you through it, on the real code, step by step."
@@ -262,7 +262,7 @@ the ghost cursor enters from the right edge (continuity into 05). **No** extra l
 On screen: the real tour player (`ui/src/tour`): ghost cursor, caption card, step counter, the line
 highlight in the card. Three steps in 10 s: OrderController.place → OrderService.applyDiscount →
 BillingClient.createInvoice. The camera follows the cursor with a slight lag (`power2.inOut`).
-The tour starts from Axle's point-and-ask box on the card ("how is a discount applied?"), the real
+The tour starts from Insilode's point-and-ask box on the card ("how is a discount applied?"), the real
 box `ui/src/tour/PointAsk.tsx` draws.
 **Audio:** cursor glide, a tick per step. **Seam out:** the canvas slides left to make room for the
 Agents dock (the window splits). **No** fake captions: the caption text is the tour's own.
@@ -270,18 +270,18 @@ Agents dock (the window splits). **No** fake captions: the caption text is the t
 
 ## Frame 06 — Proof 2: agents side by side, and the island (40.0–54.0, 14 s)
 
-- scene: Axle's Agents dock with a Claude Code row and a Codex row (model, context bar, cost, branch); the Codex row turns amber "Needs approval" with its text; then the window dims and the status island drops from the top edge with both agents' avatars.
+- scene: Insilode's Agents dock with a Claude Code row and a Codex row (model, context bar, cost, branch); the Codex row turns amber "Needs approval" with its text; then the window dims and the status island drops from the top edge with both agents' avatars.
 - duration: 14s
 - transition_in: split (continuous)
-- voiceover: "Run Claude Code and Codex side by side. Axle ranks who needs you, and why. Even when the editor is in the background."
+- voiceover: "Run Claude Code and Codex side by side. Insilode ranks who needs you, and why. Even when the editor is in the background."
 - poster: 7
 - focal: the amber row (40-50 s), then the island at top center (50-54 s)
 - src: compositions/06-agents.html
 
-On screen, two shots. **A (40-50 s):** the Axle window with two terminals (Claude Code left, Codex
+On screen, two shots. **A (40-50 s):** the Insilode window with two terminals (Claude Code left, Codex
 right) and the Agents dock on the side; at 45.8 s the Codex row jumps to the top, amber, "Needs
 approval: run `npm test`?"; push in on that row. **B (50-54 s):** the window recedes to 60 % scale and
-darkens; the status island (Axle's own island page, captured headless) drops from the top edge,
+darkens; the status island (Insilode's own island page, captured headless) drops from the top edge,
 showing "Claude · working" and "Codex · needs you". **Audio:** a two-note chime on the amber flip;
 a soft drop on the island. **Seam out:** cut on the downbeat to 07. **No** OS chrome we cannot capture:
 the island floats over the dimmed window, not over a desktop. **Why:** supervising the agents is the
@@ -297,8 +297,8 @@ other half of working with them.
 - focal: the diagram's center
 - src: compositions/07-diagrams.html
 
-On screen: Axle's board (real capture), recorded while it lays out. 54-58.5 s the sequence diagram;
-58.5-62 s the ER diagram. Caption under the board's title: "from the index" (Axle's own wording).
+On screen: Insilode's board (real capture), recorded while it lays out. 54-58.5 s the sequence diagram;
+58.5-62 s the ER diagram. Caption under the board's title: "from the index" (Insilode's own wording).
 **Audio:** pencil scratch per edge. **Seam out:** hard cut on the downbeat. **No** hand-drawn
 diagrams. **Why:** the design view, generated, so it cannot drift from the code.
 
@@ -333,10 +333,10 @@ answer land.
 
 ## Frame 10 — Lockup and CTA (72.0–80.0, 8 s)
 
-- scene: The canvas slowly pulls back and darkens; the Axle mark and "Axle" land; under it "A harness-first code editor"; then "Download for Windows · macOS · Linux" and "github.com/bothuany/axle".
+- scene: The canvas slowly pulls back and darkens; the Insilode mark and "Insilode" land; under it "A harness-first code editor"; then "Download for Windows · macOS · Linux" and "github.com/bothuany/insilode".
 - duration: 8s
 - transition_in: continuous
-- voiceover: "Axle. Free and open source."
+- voiceover: "Insilode. Free and open source."
 - poster: 5
 - focal: center lockup
 - src: compositions/10-cta.html

@@ -9,7 +9,7 @@
 @font-face { font-family: "Instrument Sans"; font-weight: 600; src: url(assets/fonts/instrument-sans-latin-600-normal.woff2) format("woff2"); }
 @font-face { font-family: "Instrument Sans"; font-weight: 700; src: url(assets/fonts/instrument-sans-latin-700-normal.woff2) format("woff2"); }
 @font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url(assets/fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2"); }
-/* Colours sampled from Axle's own rendering (Axle Dark): editor #0f0f0f, canvas #1a1a1b, signal #6f86ff, button #5b72ff. */
+/* Colours sampled from Insilode's own rendering (Insilode Dark): editor #0f0f0f, canvas #1a1a1b, signal #6f86ff, button #5b72ff. */
 :root {
   --ground: #0f0f0f; --canvas: #1a1a1b; --text: #e8e8ea; --muted: #8a8a90; --signal: #6f86ff; --add: #5fe0a1; --del: #ff6b7d; --warn: #f0a33a;
   --sheet: #e9e7e2; --sheet-ink: #1c1f26; --sheet-muted: #6a6f7a;
@@ -45,7 +45,7 @@ figure { display: flex; flex-direction: column; gap: 8px; }
 .pending { position: absolute; display: flex; flex-direction: column; gap: .6cqw; align-items: center; justify-content: center; text-align: center; border: .1cqw dashed #4a4a50; border-radius: .6cqw; color: var(--muted); font-size: 1.1cqw; padding: 1cqw; }
 .pending b { color: var(--text); font-size: 1.4cqw; }
 .badge { position: absolute; left: 1.2cqw; top: 1.2cqw; font-family: var(--mono); font-size: .9cqw; padding: .2cqw .6cqw; border-radius: .3cqw; background: rgba(240,163,58,.18); color: var(--warn); }
-.name::after { content: "Axle"; }
+.name::after { content: "Insilode"; }
 </style>
 </head>
 <body>
@@ -54,7 +54,7 @@ figure { display: flex; flex-direction: column; gap: 8px; }
   <p>Your agent changed the code. The editor shows you where, on how it runs.</p>
   <span class="tag">1920×1080 · 80 s · 10 beats · VO + captions</span>
 </header>
-<p class="lede">v2: every product frame is a real capture of the app, rendered by its own code and CSS (the canvas, its tour, the Agents dock and the status island, on the Harbor Goods demo with a real 14-file change). The film only adds framing, camera moves, rings, captions and type. Frames 07 and 08 still need their captures (marked). The product name is one token (<span class="mono">brand.json</span>); "Axle" below is its current value.</p>
+<p class="lede">v2: every product frame is a real capture of the app, rendered by its own code and CSS (the canvas, its tour, the Agents dock and the status island, on the Harbor Goods demo with a real 14-file change). The film only adds framing, camera moves, rings, captions and type. Frames 07 and 08 still need their captures (marked). The product name is one token (<span class="mono">brand.json</span>); "Insilode" below is its current value.</p>
 
 <div class="grid">
 <div class="act">Act 1 · the problem (no music)</div>
@@ -182,7 +182,7 @@ figure { display: flex; flex-direction: column; gap: 8px; }
     <div class="cap">Design the skeleton first. Keep your harness healthy. Update in place.</div>
   </div>
   <div class="label"><b>08 · MONTAGE</b><span>frame-08 · 62.0–68.0</span></div>
-  <p class="note"><b>Three hard cuts, one per downbeat,</b> each a push-in on one control. Captures pending: the web workbench comes up in the light default when driven headless here (the Axle Dark theme does not load), which is being fixed before capture.</p>
+  <p class="note"><b>Three hard cuts, one per downbeat,</b> each a push-in on one control. Captures pending: the web workbench comes up in the light default when driven headless here (the Insilode Dark theme does not load), which is being fixed before capture.</p>
   <p class="src">Will be real: workbench in web mode on Harbor Goods.</p>
   <span class="chip-seam">cut back to the 03 framing</span>
 </figure>
@@ -207,7 +207,7 @@ figure { display: flex; flex-direction: column; gap: 8px; }
     <div class="stmt name" style="left:0;right:0;top:21.5cqw;text-align:center;font-size:5cqw"></div>
     <div style="position:absolute;left:0;right:0;top:28cqw;text-align:center;font-size:1.7cqw;color:var(--muted);font-weight:500">A harness-first code editor. Free and open source.</div>
     <div style="position:absolute;left:0;right:0;top:33.6cqw;text-align:center;font-size:1.5cqw;font-weight:600">Download for Windows · macOS · Linux</div>
-    <div class="mono" style="position:absolute;left:0;right:0;top:37cqw;text-align:center;font-size:1.4cqw;color:var(--signal)">github.com/bothuany/axle</div>
+    <div class="mono" style="position:absolute;left:0;right:0;top:37cqw;text-align:center;font-size:1.4cqw;color:var(--signal)">github.com/bothuany/insilode</div>
   </div>
   <div class="label"><b>10 · LOCKUP + CTA</b><span>frame-10 · 72.0–80.0</span></div>
   <p class="note"><b>The canvas keeps drifting behind;</b> the mark lands at 74.0 on a low hit, then the download line and the URL. Name, tagline, download line and URL come from <span class="mono">brand.json</span>.</p>

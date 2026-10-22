@@ -1,6 +1,6 @@
-// Calls the app's own MCP server (flow-view's out/axle-mcp.js) the way an agent does: it finds the window that has
+// Calls the app's own MCP server (flow-view's out/insilode-mcp.js) the way an agent does: it finds the window that has
 // the working directory open through the bridge files that window writes, so a board it draws appears in that window.
-//   node mcp-call.mjs <axle-mcp.js> <folder> <tool> '<json arguments>' [<tool> '<json>' ...]
+//   node mcp-call.mjs <insilode-mcp.js> <folder> <tool> '<json arguments>' [<tool> '<json>' ...]
 import { spawn } from 'node:child_process'
 
 const [server, folder, ...pairs] = process.argv.slice(2)

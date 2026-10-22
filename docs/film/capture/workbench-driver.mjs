@@ -4,10 +4,10 @@ import { createServer } from 'node:http'
 import { join } from 'node:path'
 const [url, out, port = '7311'] = process.argv.slice(2)
 const ctx = await chromium.launchPersistentContext(join(out, '..', 'wb-profile'), { headless: true, viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 2, colorScheme: 'dark' })
-// The dev web client asks for extension files under /oss-dev/ while the server serves them under /axle-dev/
+// The dev web client asks for extension files under /oss-dev/ while the server serves them under /insilode-dev/
 // (the client is not told the product quality), so the theme and other extension files 404 in a fresh
 // profile. Route them to where the server has them.
-await ctx.route(/\/oss-dev\/vscode-remote-resource/, r => r.continue({ url: r.request().url().replace('/oss-dev/', '/axle-dev/') }))
+await ctx.route(/\/oss-dev\/vscode-remote-resource/, r => r.continue({ url: r.request().url().replace('/oss-dev/', '/insilode-dev/') }))
 const p = ctx.pages()[0] ?? await ctx.newPage()
 const log = []
 p.on('pageerror', e => log.push('pageerror ' + e.message.slice(0, 200)))

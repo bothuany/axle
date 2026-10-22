@@ -1,4 +1,4 @@
-# Axle launch video and website: research for a from-scratch redo
+# Insilode launch video and website: research for a from-scratch redo
 
 Researched 2026-10-21 with the obscura browser. "Verified" means I read it on the linked page this session. "[unverified]" marks claims from memory or from sources I could not check. Star counts and versions are as shown on the pages that day.
 
@@ -8,10 +8,10 @@ Researched 2026-10-21 with the obscura browser. "Verified" means I read it on th
 
 ### 1.1 The frameworks
 
-| Tool | What you write | Agent fit | License | Notes for Axle |
+| Tool | What you write | Agent fit | License | Notes for Insilode |
 |---|---|---|---|---|
 | **HyperFrames** (HeyGen) [repo](https://github.com/heygen-com/hyperframes), [docs](https://hyperframes.heygen.com/introduction) | Plain HTML/CSS plus a **paused GSAP timeline** registered on `window.__timelines`. Clips are DOM elements with `data-start`, `data-duration` and `data-track-index` | Built for agents. It ships a Claude Code plugin (`claude plugin install hyperframes@hyperframes`) and skills (`/hyperframes`, `-cli`, `-registry`, `/media-use`) that cover plan, storyboard, lint, check, snapshot and render. A registry of about 450 blocks (transitions, kinetic type, captions, code and terminal windows) | Apache-2.0 | Repo shows about 69k stars. Needs Node 22+ and FFmpeg. Renders locally on Windows: the troubleshooting page has a Windows FFmpeg path and says to render from PowerShell so Chrome uses the GPU through Direct3D ([troubleshooting](https://hyperframes.heygen.com/guides/troubleshooting)). Already installed in this environment as skills. |
-| **Remotion** [agents](https://www.remotion.dev/docs/ai/coding-agents), [skills](https://www.remotion.dev/docs/ai/skills) | React components that are a function of `useCurrentFrame()` | Good. Official `npx skills add remotion-dev/skills`, and `npx create-video --yes --blank` | Own license: **free for individuals and companies of up to 3 people**, paid above that ([pricing](https://www.remotion.dev/docs/license/pricing)) | The one real pull is that Axle's `ui/` is React, so Remotion could import the canvas components directly. Check the license if the owning organization has 4 or more people. |
+| **Remotion** [agents](https://www.remotion.dev/docs/ai/coding-agents), [skills](https://www.remotion.dev/docs/ai/skills) | React components that are a function of `useCurrentFrame()` | Good. Official `npx skills add remotion-dev/skills`, and `npx create-video --yes --blank` | Own license: **free for individuals and companies of up to 3 people**, paid above that ([pricing](https://www.remotion.dev/docs/license/pricing)) | The one real pull is that Insilode's `ui/` is React, so Remotion could import the canvas components directly. Check the license if the owning organization has 4 or more people. |
 | **Revideo** [repo](https://github.com/midrender/revideo) (moved from redotvideo to midrender) | TypeScript scene graph (a Motion Canvas fork) with a headless render API | Fine, but smaller ecosystem | MIT | About 4.1k stars. No agent skills that I found. |
 | **Motion Canvas** [repo](https://github.com/motion-canvas/motion-canvas) | TypeScript generators on a canvas, with an editor UI | Weak for headless agents: rendering is editor-driven [unverified that a headless CLI exists today] | MIT | Good for explainer diagrams, but a poor fit for "no window". |
 | **Manim** (Python) | Math-style scene code | Good for diagram animation, not product UI | MIT | Only useful for a "diagrams from code" B-roll beat. Overkill. |
@@ -53,7 +53,7 @@ This combines HyperFrames' product-video guide, the baz guide and the ShipScenes
 ### 1.4 What separates good from AI-generic
 
 - **Real product, legible.** Generic AI videos use invented dashboards. Good ones show the actual UI with real labels and real code, sharp enough to read, and push the camera in on one control. Rebuilding or seeking the real UI beats a soft screen recording (baz: recordings "lock you to one resolution and one account state").
-- **One idea per shot.** Two to four features, not seven. Axle has seven, so pick three for the launch cut: call-flow canvas, the ghost-cursor tour, and the agent dock. Use the rest as a quick montage or separate clips.
+- **One idea per shot.** Two to four features, not seven. Insilode has seven, so pick three for the launch cut: call-flow canvas, the ghost-cursor tour, and the agent dock. Use the rest as a quick montage or separate clips.
 - **Typography as a character.** One deliberate typeface with strong scale contrast, kinetic type only on the hook and the lockup, and never captions-as-decoration on every shot.
 - **Sound sold to picture.** Key clicks, UI ticks and whooshes tied to real state changes, with the bed ducked under VO. baz: sound is "the difference between 'made with AI' and 'made by a studio'".
 - **VO or captions.** Most viewers start muted, so burned-in captions or on-screen text must carry the story alone. VO is optional. A human VO beats stock TTS. Mediocre TTS is a strong "AI" tell [general observation].
@@ -92,7 +92,7 @@ Common thread: each has one visual idea that belongs only to that product.
 
 - **The cause.** The [frontend-design article](https://claude.com/resources/articles/improving-frontend-design-through-skills) (Nov 2025) names the cause "distributional convergence": without direction, Claude samples Inter, purple-on-white gradients and minimal animation. It is "highly steerable": naming defaults to avoid and alternatives to prefer, along typography, color/theme, motion and backgrounds, improves output immediately. Prompt "at the right altitude", meaning neither hex codes nor vague vibes.
 - **The current [frontend-design SKILL.md](https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/SKILL.md)** (installed here as `frontend-design`) adds concrete rules:
-  - **Ground the design in the subject's vernacular.** For Axle that is call graphs, cursors, terminals, harness wiring.
+  - **Ground the design in the subject's vernacular.** For Insilode that is call graphs, cursors, terminals, harness wiring.
   - **Hero:** open with "the most characteristic thing in the subject's world", for example a live demo. The big-number-plus-gradient hero is the default to avoid.
   - **Type:** one or two deliberate families on a real type scale. Avoid single-word accent colors or italics in headlines, all-caps labels, and decorative eyebrows.
   - **Structure is information.** Use 01/02/03 markers only for real sequences.
@@ -104,7 +104,7 @@ Common thread: each has one visual idea that belongs only to that product.
     - the SaaS-card kit with identical radius and shadow;
     - template chrome: ALL-CAPS eyebrows, "A · B · C" meta strings, a monospace face for small labels, "→" on every link.
   - **Process:** write a token plan first (4-6 named hex colors, type roles, ASCII wireframes for layout, principles). Review it against "would I produce this for any similar brief?" and revise. Then build, then critique.
-- **Caution for Axle.** As a dev tool, Axle will be pulled toward cluster 2 (near-black plus a neon accent) and toward "mono labels everywhere". Choose deliberately, or derive the look from Axle's own canvas UI.
+- **Caution for Insilode.** As a dev tool, Insilode will be pulled toward cluster 2 (near-black plus a neon accent) and toward "mono labels everywhere". Choose deliberately, or derive the look from Insilode's own canvas UI.
 
 ### 2.2 Prompting patterns that produce non-templated pages
 
@@ -128,7 +128,7 @@ Verified this session unless marked otherwise:
   - Animated benchmark bars ("replay in real time"), each with methodology and a **"reproduce" link** to the bench source.
   - Credibility through verifiable numbers.
 - **tldraw** ([tldraw.dev](https://tldraw.dev)): the GitHub star count (51K) in the nav, `npm create tldraw` plus a code sample in the hero, and a customer logo wall. [unverified: whether the hero canvas is live; tldraw.com itself is the live app.]
-- **Excalidraw** [unverified this session]: the landing page *is* the working canvas. That is the ultimate "live demo", and it is directly relevant to Axle's canvas.
+- **Excalidraw** [unverified this session]: the landing page *is* the working canvas. That is the ultimate "live demo", and it is directly relevant to Insilode's canvas.
 - **Astro** ([astro.build](https://astro.build)): Playground and Themes in the nav, and community links (Discord, GitHub) everywhere.
 - **Vercel v0** [unverified]: a prompt box as the hero, so the visitor starts using it in one keystroke.
 
@@ -140,7 +140,7 @@ Main source: Evil Martians, [100 dev tool landing pages](https://evilmartians.co
 - **General:** "No salesy BS" and "clever and simple wins". Most pages use a centered, max-width layout. Full-bleed reads premium but is harder to execute.
 - **Hero:**
   - A centered headline over a product visual. In order of power: live embed, animated UI, switchable UIs, static UI.
-  - A live embed is "a power move if you can pull it off". For Axle it is realistic, because the canvas already runs in web mode.
+  - A live embed is "a power move if you can pull it off". For Insilode it is realistic, because the canvas already runs in web mode.
   - Use an eyebrow for the latest release only if it is real news.
 - **CTAs:**
   - Two, visually distinct. The primary is specific ("Download for Windows", not "Get started").
@@ -149,17 +149,17 @@ Main source: Evil Martians, [100 dev tool landing pages](https://evilmartians.co
 - **Trust for individual-oriented tools:**
   - Use numbers (GitHub stars, downloads) rather than logos.
   - Put a live star count in the nav (tldraw, Warp).
-  - Do not fake logos. Early on, use a quote from a real user or a "built with Axle" proof, such as the repo dogfooding itself.
+  - Do not fake logos. Early on, use a quote from a real user or a "built with Insilode" proof, such as the repo dogfooding itself.
 - **Features:**
   - Problem-oriented stories convert better than function lists.
   - One section per real pain, each with a real UI loop: "you ask an agent to change X, you can't see what it touched" leads to the call-flow canvas plus impact.
-- **Proof:** concrete, reproducible claims (Bun's reproduce links). For Axle, link each claim to the doc or test that proves it.
+- **Proof:** concrete, reproducible claims (Bun's reproduce links). For Insilode, link each claim to the doc or test that proves it.
 - **Final CTA:** repeat the install, plus a GitHub star button and the changelog. OSS visitors also look for the license, contributing guide and roadmap.
 - **Playground:** keep it separate from the hero, as a product tour with live tiles (matches the user's stated preference, memory note "Playground presentation"). Do not clone the IDE.
 
 ---
 
-## 4. Tooling recommendations for Axle
+## 4. Tooling recommendations for Insilode
 
 ### 4.1 Video: HyperFrames, rendered headless on Windows, with the real canvas as the footage source
 
@@ -193,7 +193,7 @@ Main source: Evil Martians, [100 dev tool landing pages](https://evilmartians.co
   - 1:1 or 9:16 social cuts from the same project.
 - **Story:**
   - Hook: "Your agent changed 14 files. Where?"
-  - Turn: Axle opens the call-flow canvas.
+  - Turn: Insilode opens the call-flow canvas.
   - Proof: (1) the ghost-cursor tour walks the flow, (2) skeleton-first and diagrams from code, (3) the agent dock running Claude Code and Codex side by side.
   - Credibility: open source, a VS Code fork, the extensions you already use.
   - Lockup: a download or winget line plus the GitHub URL.
@@ -203,12 +203,12 @@ Main source: Evil Martians, [100 dev tool landing pages](https://evilmartians.co
 - **Hero:**
   - Embed the built `ui/` canvas bundle with a recorded fixture: a real `flow_text` and board JSON from a demo repo, served statically.
   - Visitors pan and zoom the real call-flow, and one button starts a ghost-cursor tour on the page.
-  - This gives Axle the Zed/Linear/Excalidraw "product is the hero" move with real data.
+  - This gives Insilode the Zed/Linear/Excalidraw "product is the hero" move with real data.
 - **Load strategy:** keep a static poster frame plus the 15 s loop as an instant first paint, and lazy-load Monaco.
 - **Process:**
   1. Write a brief from README facts.
   2. Run the `frontend-design` skill's two passes: three directions as ASCII and tokens, a "generic?" review, then build.
-  3. Derive tokens from Axle's own canvas theme so site and product match.
+  3. Derive tokens from Insilode's own canvas theme so site and product match.
   4. Build in Vite.
   5. Run headless screenshot critique at 375 and 1440 widths against the skill's cluster list.
   6. Verify Lighthouse and CSP.
