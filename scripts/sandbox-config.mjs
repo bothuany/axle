@@ -67,6 +67,22 @@ export function missingSandboxMessage(exe) {
 	].join('\n')
 }
 
+/**
+ * The sandbox's done.json, or undefined while it is not whole yet. run-in-sandbox.ps1 writes it with Windows PowerShell 5.1,
+ * whose `Set-Content -Encoding utf8` starts the file with a byte order mark (JSON.parse rejects it), and the host can see the
+ * file before the write has finished.
+ */
+export function parseDoneMarker(text) {
+	try {
+		return JSON.parse(String(text).replace(/^\uFEFF/, ''))
+	} catch {
+		return undefined
+	}
+}
+
+/** A string as a single-quoted PowerShell literal: a ' in a path (C:\Users\O'Brien) would otherwise end it. */
+export const psQuote = text => `'${String(text).replace(/'/g, "''")}'`
+
 /** The summary the launcher prints from <out>/results.json. */
 export function summarize(results, outDir) {
 	const rows = results.scenarios.map(s => `  ${{ pass: 'PASS', fail: 'FAIL', skip: 'SKIP' }[s.status]}  ${s.title}${s.detail ? `\n        ${s.detail}` : ''}`)

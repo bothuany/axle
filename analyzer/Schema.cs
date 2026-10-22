@@ -60,7 +60,8 @@ public sealed class SchemaReader
         entity ??= setTypeArgs.FirstOrDefault();   // _db.Set<T>()
         var writes = ops.Any(WriteOps.Contains) || ops.Any(o => o.StartsWith("SaveChanges"));
         if (entity == null) return null;
-        var e = await _cache.GetOrAdd(entity.ToDisplayString(), _ => ReadAsync(entity, member));
+        // Keyed by the entity alone, so what it holds must not depend on how the first caller reached it (a DbSet property, or Set<T>()).
+        var e = await _cache.GetOrAdd(entity.ToDisplayString(), _ => ReadAsync(entity));
         return new DbSchema(entity.Name, e.Table, e.Schema, context.Name, e.Columns, e.Relations, ops.ToList(), writes, e.File, e.Line) { Guess = !e.Explicit };
     }
 
@@ -71,17 +72,17 @@ public sealed class SchemaReader
     public async Task<List<TableEntity>> EntitiesAsync()
     {
         var types = await _sourceTypes();
-        var found = new Dictionary<string, (ITypeSymbol Type, string? Member)>();
+        var found = new Dictionary<string, ITypeSymbol>();
         foreach (var t in types)
         {
             if (!InheritsFrom(t, "DbContext")) continue;
             foreach (var p in AllMembers(t).OfType<IPropertySymbol>())
                 if (p.Type is INamedTypeSymbol { IsGenericType: true } set && set.Name == "DbSet" && set.TypeArguments.Length == 1)
-                    found.TryAdd(set.TypeArguments[0].ToDisplayString(), (set.TypeArguments[0], p.Name));
+                    found.TryAdd(set.TypeArguments[0].ToDisplayString(), set.TypeArguments[0]);
         }
         foreach (var t in types)
             foreach (var i in t.AllInterfaces.Where(i => i.Name == "IEntityTypeConfiguration" && i.TypeArguments.Length == 1))
-                found.TryAdd(i.TypeArguments[0].ToDisplayString(), (i.TypeArguments[0], null));
+                found.TryAdd(i.TypeArguments[0].ToDisplayString(), i.TypeArguments[0]);
         foreach (var t in types.Where(t => InheritsFrom(t, "DbContext")))
             foreach (var syntaxRef in t.DeclaringSyntaxReferences)
             {
@@ -91,12 +92,12 @@ public sealed class SchemaReader
                 foreach (var call in node.DescendantNodes().OfType<InvocationExpressionSyntax>())
                     if (call.Expression is MemberAccessExpressionSyntax { Name: GenericNameSyntax { Identifier.Text: "Entity", TypeArgumentList.Arguments.Count: 1 } gn }
                         && model.GetTypeInfo(gn.TypeArgumentList.Arguments[0]).Type is { } mapped && mapped.Locations.Any(l => l.IsInSource))
-                        found.TryAdd(mapped.ToDisplayString(), (mapped, null));
+                        found.TryAdd(mapped.ToDisplayString(), mapped);
             }
         var list = new List<TableEntity>();
-        foreach (var (entity, member) in found.Values)
+        foreach (var entity in found.Values)
         {
-            var e = await _cache.GetOrAdd(entity.ToDisplayString(), _ => ReadAsync(entity, member));
+            var e = await _cache.GetOrAdd(entity.ToDisplayString(), _ => ReadAsync(entity));
             if (e.Spans.Count > 0) list.Add(new TableEntity(entity.Name, e.Table, e.Schema, "EF Core", !e.Explicit, e.Spans));
         }
         return list;
@@ -153,7 +154,24 @@ public sealed class SchemaReader
         _ => null,
     };
 
-    private async Task<Entity> ReadAsync(ITypeSymbol entity, string? member)
+    /// <summary>
+    /// The DbSet property that maps an entity, in the first DbContext in source that has one: EF Core's default table name when no
+    /// [Table] or ToTable names it. The same answer whoever asks, so it can be cached by the entity.
+    /// </summary>
+    private async Task<string?> DbSetNameAsync(ITypeSymbol entity)
+    {
+        var wanted = entity.ToDisplayString();
+        foreach (var t in await _sourceTypes())
+        {
+            if (!InheritsFrom(t, "DbContext")) continue;
+            foreach (var p in AllMembers(t).OfType<IPropertySymbol>())
+                if (p.Type is INamedTypeSymbol { IsGenericType: true, Name: "DbSet", TypeArguments.Length: 1 } set && set.TypeArguments[0].ToDisplayString() == wanted)
+                    return p.Name;
+        }
+        return null;
+    }
+
+    private async Task<Entity> ReadAsync(ITypeSymbol entity)
     {
         string? table = null, schema = null;
         var spans = new List<TableSpan>();
@@ -278,7 +296,7 @@ public sealed class SchemaReader
             }
 
         var loc = entity.Locations.FirstOrDefault(l => l.IsInSource);
-        return new Entity(table ?? member ?? entity.Name, schema, columns.OrderByDescending(c => c.Key).ToList(), relations.Distinct().ToList(),
+        return new Entity(table ?? await DbSetNameAsync(entity) ?? entity.Name, schema, columns.OrderByDescending(c => c.Key).ToList(), relations.Distinct().ToList(),
             loc?.SourceTree?.FilePath, (loc?.GetLineSpan().StartLinePosition.Line ?? 0) + 1, table != null, spans);
     }
 }

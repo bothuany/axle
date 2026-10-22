@@ -129,7 +129,11 @@ export async function launchInsilode(o) {
 			writeFileSync(join(userData, 'User', 'settings.json'), JSON.stringify(settings, null, 2))
 		},
 		pid: () => proc?.pid ?? app?.process().pid,
-		async close() {
+		/**
+		 * Quits the app and deletes its profile. `beforeRemove` runs once the app is gone and before the profile is deleted: the
+		 * moment to copy its logs or read what it wrote (they are complete then, and gone after).
+		 */
+		async close(beforeRemove) {
 			try {
 				if (mode === '_electron') {
 					await Promise.race([app.close(), sleep(15000)])
@@ -142,6 +146,11 @@ export async function launchInsilode(o) {
 				// already gone
 			}
 			await sleep(500)
+			try {
+				await beforeRemove?.(profile)
+			} catch (e) {
+				console.log(`  after closing the app: ${e.message}`)
+			}
 			try {
 				rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 400 })
 			} catch {

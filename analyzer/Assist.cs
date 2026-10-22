@@ -236,8 +236,24 @@ public sealed class Assist
     private static string ParamLabel(IParameterSymbol p, SemanticModel model, int pos)
     {
         var s = (p.IsParams ? "params " : "") + p.Type.ToMinimalDisplayString(model, pos) + " " + p.Name;
-        if (p.HasExplicitDefaultValue) s += " = " + (p.ExplicitDefaultValue is null ? (p.Type.IsValueType ? "default" : "null") : p.ExplicitDefaultValue is string str ? "\"" + str + "\"" : p.ExplicitDefaultValue is bool b ? (b ? "true" : "false") : p.ExplicitDefaultValue.ToString());
+        if (p.HasExplicitDefaultValue) s += " = " + DefaultValueText(p);
         return s;
+    }
+
+    /// <summary>
+    /// A parameter's default value as C# writes it: whatever the machine's culture (0.5, not 0,5), a char quoted, an enum by its
+    /// member name (Color.Red, not 0).
+    /// </summary>
+    internal static string DefaultValueText(IParameterSymbol p)
+    {
+        var v = p.ExplicitDefaultValue;
+        if (v is null) return p.Type.IsValueType && p.Type.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T ? "default" : "null";
+        if (p.Type is INamedTypeSymbol { TypeKind: TypeKind.Enum } e)
+        {
+            var member = e.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(f => f.HasConstantValue && Equals(f.ConstantValue, v));
+            if (member != null) return $"{e.Name}.{member.Name}";
+        }
+        return SymbolDisplay.FormatPrimitive(v, quoteStrings: true, useHexadecimalNumbers: false) ?? v.ToString() ?? "";
     }
 
     private static SigInfo Describe(IMethodSymbol m, SemanticModel model, int pos)

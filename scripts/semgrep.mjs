@@ -22,13 +22,19 @@ const run = local
 	? launchSync('semgrep', args, { cwd: ROOT, stdio: 'inherit', windowsHide: true })
 	: launchSync('docker', ['run', '--rm', '-v', `${ROOT}:/src`, '-v', `${out}:/out`, '-w', '/src', IMAGE, 'semgrep', ...args], { stdio: 'inherit', windowsHide: true })
 
-// The JSON decides: semgrep also exits non-zero for files it could only partly parse, which is not a finding.
+// The JSON decides: semgrep also exits non-zero for files it could only partly parse (errors of level "warn"), which is not a
+// finding. An error of level "error" (a rule that does not load, a ruleset that could not be fetched) means rules did not run:
+// that fails the run, or a scan that checked nothing would pass.
 let code = 1
 try {
 	const { results = [], errors = [] } = JSON.parse(readFileSync(join(out, 'results.json'), 'utf8'))
 	const blocking = results.filter(r => r.extra?.severity === 'ERROR')
-	console.log(`\nsemgrep: ${blocking.length} blocking (ERROR), ${results.length - blocking.length} advisory; ${errors.length} files only partly parsed`)
-	code = blocking.length === 0 ? 0 : 1
+	const fatal = errors.filter(e => e.level === 'error')
+	for (const e of fatal) {
+		console.error(`semgrep error: ${Array.isArray(e.type) ? e.type[0] : e.type}: ${e.message ?? ''}`.trim())
+	}
+	console.log(`\nsemgrep: ${blocking.length} blocking (ERROR), ${results.length - blocking.length} advisory; ${errors.length - fatal.length} files only partly parsed; ${fatal.length} errors`)
+	code = blocking.length === 0 && fatal.length === 0 ? 0 : 1
 } catch {
 	console.error(`semgrep produced no results (exit ${run.status}).`)
 } finally {

@@ -49,7 +49,7 @@ public static class MigrationReader
             };
             if (table == null)
             {
-                if (name is "CreateTable" or "DropTable" or "RenameTable" or "AddColumn" or "DropColumn" or "RenameColumn" or "AlterColumn" or "CreateIndex" or "DropIndex" or "AddForeignKey" or "DropForeignKey" or "AddPrimaryKey" or "DropPrimaryKey" or "AddUniqueConstraint" or "DropUniqueConstraint")
+                if (name is "CreateTable" or "DropTable" or "RenameTable" or "AddColumn" or "DropColumn" or "RenameColumn" or "AlterColumn" or "CreateIndex" or "DropIndex" or "AddForeignKey" or "DropForeignKey" or "AddPrimaryKey" or "DropPrimaryKey" or "AddUniqueConstraint" or "DropUniqueConstraint" or "AddCheckConstraint" or "DropCheckConstraint")
                     notes.Add($"line {line}: {name} on a table name that is not a string literal");
                 continue;
             }
@@ -63,7 +63,9 @@ public static class MigrationReader
                     ops.Add(new MigrationOpFact(table, "drop", new(), null, line));
                     break;
                 case "RenameTable":
-                    ops.Add(new MigrationOpFact(table, "rename", new(), Str(Arg(inv, "newName", 2)) ?? Str(Arg(inv, "newName", 1)), line));
+                    // RenameTable(name, schema, newName, newSchema): position 1 is the schema, so RenameTable("Orders", "dbo") moves a
+                    // table to another schema and renames nothing.
+                    ops.Add(new MigrationOpFact(table, "rename", new(), Str(Arg(inv, "newName", 2)), line));
                     break;
                 case "AddColumn":
                     ops.Add(new MigrationOpFact(table, "alter-add", Some(column), null, line));
@@ -78,8 +80,11 @@ public static class MigrationReader
                     ops.Add(new MigrationOpFact(table, "alter", Some(column), null, line));
                     break;
                 case "CreateIndex":
-                case "DropIndex":
                     ops.Add(new MigrationOpFact(table, "index", IndexColumns(inv), null, line));
+                    break;
+                case "DropIndex":
+                    // DropIndex(name, table, schema): no columns, and position 2 is the schema.
+                    ops.Add(new MigrationOpFact(table, "index", new(), null, line));
                     break;
                 case "AddForeignKey":
                 case "DropForeignKey":
@@ -116,11 +121,14 @@ public static class MigrationReader
             .Select(i => i.NameEquals?.Name.Identifier.Text ?? (i.Expression as MemberAccessExpressionSyntax)?.Name.Identifier.Text)
             .OfType<string>().ToList() ?? new();
 
-    /// <summary><c>column: "Key"</c> or <c>columns: new[] { "Key", "CreatedAt" }</c>.</summary>
+    /// <summary>
+    /// CreateIndex(name, table, column) or CreateIndex(name, table, columns): <c>column: "Key"</c>, <c>columns: new[] { "Key", "CreatedAt" }</c>,
+    /// or either one third, unnamed.
+    /// </summary>
     private static List<string> IndexColumns(InvocationExpressionSyntax inv)
     {
-        if (Str(Arg(inv, "column", 99)) is { } one) return new() { one };
-        var many = Arg(inv, "columns", 99);
+        if (Str(Arg(inv, "column", 2)) is { } one) return new() { one };
+        var many = Arg(inv, "columns", 2);
         var items = many switch
         {
             ArrayCreationExpressionSyntax a => a.Initializer?.Expressions,

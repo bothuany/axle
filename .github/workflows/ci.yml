@@ -53,6 +53,10 @@ jobs:
       - name: Analyzer
         run: dotnet build analyzer -nologo -v q
 
+      # Unit tests on in-memory solutions; the analyzer's end-to-end tests are flow-view's C# tests below, which need the build above.
+      - name: Analyzer tests
+        run: dotnet test analyzer/tests -nologo -v q
+
       - name: Canvas
         working-directory: ui
         run: |

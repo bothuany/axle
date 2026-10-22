@@ -3,6 +3,7 @@
 // its poster. Loops play only while on screen, and never when the visitor asks for reduced motion.
 import { NAME } from './brand'
 import type { DemoData, HarnessItem } from './demo'
+import { playWhileVisible } from './loop'
 
 export interface Clip {
   poster: string
@@ -54,7 +55,7 @@ function clipElement(c: Clip) {
   v.width = c.width
   v.height = c.height
   v.setAttribute('aria-label', c.alt)
-  new IntersectionObserver(([e]) => (e.isIntersecting ? v.play().catch(() => undefined) : v.pause()), { threshold: 0.4 }).observe(v)
+  playWhileVisible(v)
   return v
 }
 

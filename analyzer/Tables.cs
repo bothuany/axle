@@ -16,11 +16,13 @@ public sealed class TableWalk
     private const int MaxEntries = 3000;
     private const int MaxUses = 20_000;
     private const int Depth = 5;
+    private const int MaxCancelled = 3;
 
     private readonly FlowGraph _graph;
     private int _version = -1;
     private List<EntryPoint> _entries = new();
     private int _next;
+    private int _cancelled; // how many times in a row the walk of _entries[_next] was cancelled
     private List<TableUseFact> _uses = new();
 
     public TableWalk(FlowGraph graph) => _graph = graph;
@@ -33,18 +35,35 @@ public sealed class TableWalk
             _version = _graph.Version;
             _entries = (await _graph.EntryPointsAsync()).Take(MaxEntries).ToList();
             _next = 0;
+            _cancelled = 0;
             _uses = new();
         }
         if (_next >= _entries.Count || _uses.Count >= MaxUses) return true;
-        var entry = _entries[_next++];
+        // The entry is taken only once it is walked: a request that is cancelled half way (the client's timeout, the editor closing)
+        // leaves it for the next step, instead of leaving its tables out of an index that then says it is done. A flow that is
+        // cancelled MaxCancelled times in a row (longer than any request waits) is given up, as one that cannot be traced is, so
+        // it cannot stop the walk for good.
+        var entry = _entries[_next];
         try
         {
             if (await _graph.BuildAsync(entry.Id, Depth, ct) is { } root) Collect(entry.Id, root);
+        }
+        catch (OperationCanceledException) when (++_cancelled < MaxCancelled)
+        {
+            throw;
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
             // one flow that cannot be traced must not lose the others
         }
+        catch (OperationCanceledException)
+        {
+            _next++;
+            _cancelled = 0;
+            throw;
+        }
+        _next++;
+        _cancelled = 0;
         return _next >= _entries.Count || _uses.Count >= MaxUses;
     }
 

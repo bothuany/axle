@@ -34,6 +34,8 @@ npm run docker:e2e                             # desktop e2e (or a probe script,
 npm run sandbox:e2e                            # desktop e2e inside Windows Sandbox (Windows only, needs the feature turned on), docs/building.md
 cd ui && npm run typecheck && npm run build
 dotnet build analyzer
+dotnet test analyzer/tests                     # analyzer unit tests (in-memory solutions); flow-view's C# tests need the build above
+node --test test/update/*.test.mjs             # update service, Axle migration, release assembly (scripts/release-files.mjs), curl shim
 ```
 
 ## Conventions

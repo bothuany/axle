@@ -23,6 +23,20 @@ function run(exe, args, ms = 600000) {
 	return r
 }
 
+/** Best effort, after a failed step: stops the app and runs whatever uninstaller the install folder has. */
+function uninstallLeftover(dir) {
+	try {
+		spawnSync('taskkill.exe', ['/F', '/T', '/IM', 'Insilode.exe'], { windowsHide: true })
+		spawnSync('taskkill.exe', ['/F', '/T', '/IM', 'Axle.exe'], { windowsHide: true })
+		const unins = existsSync(dir) ? readdirSync(dir).find(n => /^unins\d+\.exe$/i.test(n)) : undefined
+		if (unins) {
+			run(join(dir, unins), ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], 120000)
+		}
+	} catch (e) {
+		console.log(`  could not uninstall what the failed upgrade left in ${dir}: ${e.message}`)
+	}
+}
+
 /** `reg query` of a key (a plain argument list, no shell): its text, or undefined when the key is not there. */
 function reg(key) {
 	const r = spawnSync('reg.exe', ['query', key], { encoding: 'utf8', windowsHide: true })
@@ -65,46 +79,54 @@ export async function upgradeFromAxle({ oldSetup, setup, out }) {
 	const dir = join(local, 'Programs', 'Axle')
 	mkdirSync(out, { recursive: true })
 
-	// 1. Axle, installed the way a user did: the default folder, "Open with" for folders.
-	const first = run(oldSetup, upgradeArgs(join(out, 'setup-axle.log')))
-	check(first.status === 0 && existsSync(join(dir, 'Axle.exe')), `Axle's Setup installed Axle.exe into ${dir}`)
-	const before = uninstallEntries()
-	check(before.length === 1, `one uninstall entry before: ${before.map(e => e.name).join(', ')}`)
-	const hadMenu = reg('HKCU\\Software\\Classes\\directory\\shell\\Axle') !== undefined
-	notes.push(hadMenu ? '"Open with Axle" was registered' : '"Open with Axle" was not registered by this Axle Setup')
-	// What the user had made with it: settings (the old theme) and an extension folder.
-	mkdirSync(join(roaming, 'Axle', 'User'), { recursive: true })
-	writeFileSync(join(roaming, 'Axle', 'User', 'settings.json'), '{\n\t"workbench.colorTheme": "Axle Dark",\n\t"editor.fontSize": 17\n}\n')
-	mkdirSync(join(homedir(), '.axle', 'extensions'), { recursive: true })
-	writeFileSync(join(homedir(), '.axle', 'argv.json'), '{}\n')
-
-	// 2. Insilode's Setup over it.
-	const second = run(setup, upgradeArgs(join(out, 'setup-insilode.log')))
-	check(second.status === 0, `Insilode's Setup exited with ${second.status}`)
-	const beside = join(local, 'Programs', 'Insilode')
-	check(existsSync(join(dir, 'Insilode.exe')) && !existsSync(join(beside, 'Insilode.exe')), `Insilode.exe is in ${dir} (the old folder), not in ${beside}`)
-	check(!existsSync(join(dir, 'Axle.exe')), 'Axle.exe is gone')
-	check(!existsSync(join(dir, 'bin', 'axle.cmd')) && existsSync(join(dir, 'bin', 'insilode.cmd')), 'bin\\axle.cmd is gone, bin\\insilode.cmd is there')
-	const after = uninstallEntries()
-	check(after.length === 1 && /insilode/i.test(after[0].name) && after[0].key === before[0].key, `one uninstall entry, the same key, now called ${after.map(e => e.name).join(', ')}`)
-	check(find(programs, 'Insilode.lnk') && !find(programs, 'Axle.lnk'), 'the Start menu has Insilode.lnk and no Axle.lnk')
-	check(reg('HKCU\\Software\\Classes\\directory\\shell\\Axle') === undefined, '"Open with Axle" is removed')
-	check(reg('HKCU\\Software\\Classes\\directory\\shell\\Insilode') !== undefined, '"Open with Insilode" is registered')
-
-	// 3. The first start copies what Axle left: Insilode's own window opens here, in the sandbox, and is closed again.
-	const child = spawn(join(dir, 'Insilode.exe'), [], { stdio: 'ignore', windowsHide: true, detached: true })
-	child.unref()
-	const marker = join(roaming, 'Insilode', '.migrated-from-axle')
+	// A failed check in steps 1 to 3 leaves Axle or Insilode installed: it is uninstalled, so the scenarios after this one start
+	// on a clean machine.
 	try {
-		await until('Insilode to copy the Axle user data on its first start', () => existsSync(marker), { ms: 120000, every: 1000 })
-	} finally {
-		spawnSync('taskkill.exe', ['/F', '/T', '/IM', 'Insilode.exe'], { windowsHide: true })
-		await sleep(2000)
+		// 1. Axle, installed the way a user did: the default folder, "Open with" for folders.
+		const first = run(oldSetup, upgradeArgs(join(out, 'setup-axle.log')))
+		check(first.status === 0 && existsSync(join(dir, 'Axle.exe')), `Axle's Setup installed Axle.exe into ${dir}`)
+		const before = uninstallEntries()
+		check(before.length === 1, `one uninstall entry before: ${before.map(e => e.name).join(', ')}`)
+		const hadMenu = reg('HKCU\\Software\\Classes\\directory\\shell\\Axle') !== undefined
+		notes.push(hadMenu ? '"Open with Axle" was registered' : '"Open with Axle" was not registered by this Axle Setup')
+		// What the user had made with it: settings (the old theme) and an extension folder.
+		mkdirSync(join(roaming, 'Axle', 'User'), { recursive: true })
+		writeFileSync(join(roaming, 'Axle', 'User', 'settings.json'), '{\n\t"workbench.colorTheme": "Axle Dark",\n\t"editor.fontSize": 17\n}\n')
+		mkdirSync(join(homedir(), '.axle', 'extensions'), { recursive: true })
+		writeFileSync(join(homedir(), '.axle', 'argv.json'), '{}\n')
+	
+		// 2. Insilode's Setup over it.
+		const second = run(setup, upgradeArgs(join(out, 'setup-insilode.log')))
+		check(second.status === 0, `Insilode's Setup exited with ${second.status}`)
+		const beside = join(local, 'Programs', 'Insilode')
+		check(existsSync(join(dir, 'Insilode.exe')) && !existsSync(join(beside, 'Insilode.exe')), `Insilode.exe is in ${dir} (the old folder), not in ${beside}`)
+		check(!existsSync(join(dir, 'Axle.exe')), 'Axle.exe is gone')
+		check(!existsSync(join(dir, 'bin', 'axle.cmd')) && existsSync(join(dir, 'bin', 'insilode.cmd')), 'bin\\axle.cmd is gone, bin\\insilode.cmd is there')
+		const after = uninstallEntries()
+		check(after.length === 1 && /insilode/i.test(after[0].name) && after[0].key === before[0].key, `one uninstall entry, the same key, now called ${after.map(e => e.name).join(', ')}`)
+		check(find(programs, 'Insilode.lnk') && !find(programs, 'Axle.lnk'), 'the Start menu has Insilode.lnk and no Axle.lnk')
+		check(reg('HKCU\\Software\\Classes\\directory\\shell\\Axle') === undefined, '"Open with Axle" is removed')
+		check(reg('HKCU\\Software\\Classes\\directory\\shell\\Insilode') !== undefined, '"Open with Insilode" is registered')
+	
+		// 3. The first start copies what Axle left: Insilode's own window opens here, in the sandbox, and is closed again.
+		const child = spawn(join(dir, 'Insilode.exe'), [], { stdio: 'ignore', windowsHide: true, detached: true })
+		child.unref()
+		const marker = join(roaming, 'Insilode', '.migrated-from-axle')
+		try {
+			await until('Insilode to copy the Axle user data on its first start', () => existsSync(marker), { ms: 120000, every: 1000 })
+		} finally {
+			spawnSync('taskkill.exe', ['/F', '/T', '/IM', 'Insilode.exe'], { windowsHide: true })
+			await sleep(2000)
+		}
+		const settings = readFileSync(join(roaming, 'Insilode', 'User', 'settings.json'), 'utf8')
+		check(/"workbench.colorTheme": "Insilode Dark"/.test(settings) && /"editor.fontSize": 17/.test(settings), 'the settings were copied, the theme renamed')
+		check(existsSync(join(homedir(), '.insilode', 'argv.json')), '~/.insilode was copied from ~/.axle')
+		check(/Axle Dark/.test(readFileSync(join(roaming, 'Axle', 'User', 'settings.json'), 'utf8')), 'the Axle folder is as it was')
+	
+	} catch (e) {
+		uninstallLeftover(dir)
+		throw e
 	}
-	const settings = readFileSync(join(roaming, 'Insilode', 'User', 'settings.json'), 'utf8')
-	check(/"workbench.colorTheme": "Insilode Dark"/.test(settings) && /"editor.fontSize": 17/.test(settings), 'the settings were copied, the theme renamed')
-	check(existsSync(join(homedir(), '.insilode', 'argv.json')), '~/.insilode was copied from ~/.axle')
-	check(/Axle Dark/.test(readFileSync(join(roaming, 'Axle', 'User', 'settings.json'), 'utf8')), 'the Axle folder is as it was')
 
 	// 4. Gone again: the uninstaller removes the one install.
 	const unins = readdirSync(dir).find(n => /^unins\d+\.exe$/i.test(n))
