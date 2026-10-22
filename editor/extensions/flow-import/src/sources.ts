@@ -76,23 +76,59 @@ export interface SourceContent {
 	snippets: Snippet[];
 	/** Extension ids (`publisher.name`, lower case), sorted. */
 	extensions: string[];
+	/** Files that are there but could not be read (locked, no permission), with the reason; they are not imported. */
+	unreadable: { file: string; reason: string }[];
 }
 
-/** Everything that can be imported from one source, as text (settings and keybindings are JSON with comments). */
-export function readSource(source: Source): SourceContent {
+/** Reads a file as text; `readFileSync` but for tests, which make it fail as a locked file would. */
+export type ReadFile = (path: string) => string;
+const readUtf8: ReadFile = path => readFileSync(path, 'utf8');
+
+/**
+ * Everything that can be imported from one source, as text (settings and keybindings are JSON with comments). A file
+ * that is missing is simply not there; one that exists but cannot be read (a snippet file a virus scanner holds, EBUSY,
+ * or one without permission, EPERM) is skipped and listed in `unreadable`, so one bad file does not stop the import.
+ */
+export function readSource(source: Source, read: ReadFile = readUtf8): SourceContent {
+	const unreadable: SourceContent['unreadable'] = [];
+	const tryRead = (path: string): string | undefined => {
+		try {
+			return read(path);
+		} catch (e) {
+			if ((e as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+				unreadable.push({ file: path, reason: (e as NodeJS.ErrnoException)?.code ?? (e as Error)?.message ?? String(e) });
+			}
+			return undefined;
+		}
+	};
 	const snippetsDir = join(source.userDir, 'snippets');
-	const snippets = isDir(snippetsDir)
-		? readdirSync(snippetsDir)
-			.filter(name => /\.(json|code-snippets)$/i.test(name) && isFile(join(snippetsDir, name)))
-			.sort()
-			.map(name => ({ name, text: readFileSync(join(snippetsDir, name), 'utf8') }))
-		: [];
+	const snippets: Snippet[] = [];
+	if (isDir(snippetsDir)) {
+		for (const name of readdirSync(snippetsDir).filter(n => /\.(json|code-snippets)$/i.test(n) && isFile(join(snippetsDir, n))).sort()) {
+			const text = tryRead(join(snippetsDir, name));
+			if (text !== undefined) {
+				snippets.push({ name, text });
+			}
+		}
+	}
 	return {
-		settings: readText(join(source.userDir, 'settings.json')),
-		keybindings: readText(join(source.userDir, 'keybindings.json')),
+		settings: tryRead(join(source.userDir, 'settings.json')),
+		keybindings: tryRead(join(source.userDir, 'keybindings.json')),
 		snippets,
 		extensions: listExtensions(source.extensionsDir),
+		unreadable,
 	};
+}
+
+/**
+ * The folders Insilode itself installs extensions into, where the editor looks for them (environmentService.ts
+ * `extensionsPath`): `$VSCODE_EXTENSIONS`, a portable install's `extensions` folder, or `<home>/<dataFolderName>/extensions`
+ * (`~/.insilode/extensions`). Read to find extensions that are installed but disabled, which the extension API does
+ * not list.
+ */
+export function ownExtensionDirs(home: string, dataFolderName: string | undefined, env: { VSCODE_EXTENSIONS?: string; VSCODE_PORTABLE?: string }): string[] {
+	const dirs = [env.VSCODE_EXTENSIONS, env.VSCODE_PORTABLE && join(env.VSCODE_PORTABLE, 'extensions'), dataFolderName && join(home, dataFolderName, 'extensions')];
+	return [...new Set(dirs.filter((d): d is string => !!d))];
 }
 
 /** Ids that are Insilode's own (they ship with it) and are never installed from a gallery. */

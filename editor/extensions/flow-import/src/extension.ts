@@ -8,9 +8,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { findSources, readSource, type Env, type Platform, type Source, type SourceContent } from './sources';
-import { applicableTheme, hasSettings, isNoGallery, isNotFound, mergeSnippets, planKeybindings, planSettings, writeKeybindings, writeSettings, type ThemeKind } from './merge';
+import { join } from 'node:path';
+import { findSources, listExtensions, ownExtensionDirs, readSource, type Env, type Platform, type Source, type SourceContent } from './sources';
+import { applicableTheme, hasSettings, isFileNotFound, isNoGallery, isNotFound, mergeSnippets, planKeybindings, planSettings, themeSettingsId, writeKeybindings, writeSettings, type ThemeKind } from './merge';
 
 const COMMAND = 'flow.importFromVSCode';
 /** Set once the first-start offer was shown (or not needed), so it never comes back. */
@@ -22,7 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
 	log = vscode.window.createOutputChannel('Insilode Import', { log: true });
 	context.subscriptions.push(
 		log,
-		vscode.commands.registerCommand(COMMAND, () => runImport(context)),
+		vscode.commands.registerCommand(COMMAND, () => runExclusive(context)),
 	);
 	void offerOnFirstStart(context).catch(e => log.warn(`First-start offer: ${(e as Error).message}`));
 }
@@ -48,6 +50,12 @@ function sourceEnv(): Env {
  * Insilode's own User folder, as a URI the workbench's file service resolves. In the desktop app it is two levels above
  * this extension's global storage; in a browser (web mode) user data lives in the browser under `vscode-userdata:/User`,
  * not on the server, so it is addressed there. Settings, keybindings and snippets of the default profile live in it.
+ *
+ * The extension prefers the UI side (`extensionKind: ["ui", "workspace"]`), so in a desktop window connected to a
+ * remote machine it runs on this computer and the global storage, and with it the User folder, is this computer's.
+ * "workspace" is there for web mode only: a browser has no Node extension host, and an extension that is "ui" alone is
+ * disabled there (DisabledByExtensionKind). A user can still force it onto the remote side of a desktop window with
+ * `remote.extensionKind`; `runsRemotely` refuses then, since the folder would be the server's.
  */
 function userDir(context: vscode.ExtensionContext): vscode.Uri {
 	return vscode.env.uiKind === vscode.UIKind.Web
@@ -55,11 +63,40 @@ function userDir(context: vscode.ExtensionContext): vscode.Uri {
 		: vscode.Uri.joinPath(context.globalStorageUri, '..', '..');
 }
 
+/**
+ * A file's text, or undefined when the file does not exist. Any other failure (a file OneDrive or a virus scanner
+ * holds, no permission) is thrown: treating such a file as empty would replace it with the imported keys alone and,
+ * since there is nothing to back up, lose the user's settings.
+ */
 async function readText(uri: vscode.Uri): Promise<string | undefined> {
 	try {
 		return new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
-	} catch {
-		return undefined;
+	} catch (e) {
+		if (isFileNotFound(e)) {
+			return undefined;
+		}
+		throw new Error(`Could not read ${uri.toString(true)}: ${(e as Error)?.message ?? String(e)}`);
+	}
+}
+
+/** In a desktop window on a remote machine, running on the server: only when `remote.extensionKind` forced it there. */
+function runsRemotely(context: vscode.ExtensionContext): boolean {
+	return vscode.env.uiKind === vscode.UIKind.Desktop && !!vscode.env.remoteName && context.extension.extensionKind === vscode.ExtensionKind.Workspace;
+}
+
+/** The import that is running now: a second one (the first-start offer and the command at once) would add everything twice. */
+let running: Promise<void> | undefined;
+
+async function runExclusive(context: vscode.ExtensionContext, preset?: Source): Promise<void> {
+	if (running) {
+		void vscode.window.showInformationMessage('An import from VS Code is already running. Wait for it to finish.');
+		return;
+	}
+	running = runImport(context, preset);
+	try {
+		await running;
+	} finally {
+		running = undefined;
 	}
 }
 
@@ -71,13 +108,18 @@ async function offerOnFirstStart(context: vscode.ExtensionContext) {
 	if (context.globalState.get(OFFERED)) {
 		return;
 	}
+	if (runsRemotely(context)) {
+		return;
+	}
 	const sources = findSources(sourceEnv());
 	if (!sources.length) {
 		return;
 	}
+	// Read before the offer is marked as shown: a settings file that cannot be read now is asked about next time.
+	const settings = await readText(vscode.Uri.joinPath(userDir(context), 'settings.json'));
 	await context.globalState.update(OFFERED, true);
 	// Someone who already set Insilode up (or came from Axle, whose settings were copied over) is not asked.
-	if (hasSettings(await readText(vscode.Uri.joinPath(userDir(context), 'settings.json')))) {
+	if (hasSettings(settings)) {
 		return;
 	}
 	const source = sources[0];
@@ -91,7 +133,7 @@ async function offerOnFirstStart(context: vscode.ExtensionContext) {
 	);
 	log.info(`First-start offer for ${name}: ${pick ?? 'dismissed'}.`);
 	if (pick === importIt) {
-		await runImport(context, source);
+		await runExclusive(context, source);
 	}
 }
 
@@ -128,6 +170,10 @@ async function pickSource(sources: Source[]): Promise<Source | undefined> {
 }
 
 async function runImport(context: vscode.ExtensionContext, preset?: Source) {
+	if (runsRemotely(context)) {
+		void vscode.window.showWarningMessage('Import from VS Code runs on this computer, but remote.extensionKind moved it to the remote machine, where it would write the server\'s settings. Remove flow.flow-import from remote.extensionKind and run it again.');
+		return;
+	}
 	const env = sourceEnv();
 	const source = preset ?? await pickSource(findSources(env));
 	if (!source) {
@@ -152,24 +198,37 @@ async function runImport(context: vscode.ExtensionContext, preset?: Source) {
 		return;
 	}
 	const ids = new Set(chosen.map(i => i.id));
-	await vscode.window.withProgress(
-		{ location: vscode.ProgressLocation.Notification, title: `Importing from ${source.product.name}`, cancellable: true },
-		(progress, token) => doImport(context, source, content, ids, progress, token),
-	);
+	const written: string[] = [];
+	try {
+		await vscode.window.withProgress(
+			{ location: vscode.ProgressLocation.Notification, title: `Importing from ${source.product.name}`, cancellable: true },
+			(progress, token) => doImport(context, source, content, ids, progress, token, written),
+		);
+	} catch (e) {
+		// Every file is read before the first write, so a read that fails stops the import with nothing changed.
+		const message = (e as Error)?.message ?? String(e);
+		log.error(`Import from ${source.product.name} stopped: ${message}${written.length ? ` (already written: ${written.join(', ')})` : ''}`);
+		void vscode.window.showErrorMessage(`Import from ${source.product.name} stopped: ${message}. ${written.length ? `Already written: ${written.join(', ')}; the backup in import-backups holds them as they were.` : 'Nothing was changed.'}`);
+	}
 }
 
 interface Report {
 	lines: string[];
 	summary: string[];
 	notFound: string[];
+	/** Extensions installed in Insilode but disabled: not installed again, and left disabled. */
+	disabled: string[];
 	noGallery?: boolean;
 	backup?: vscode.Uri;
 }
 
-async function doImport(context: vscode.ExtensionContext, source: Source, content: SourceContent, ids: Set<ItemId>, progress: vscode.Progress<{ message?: string; increment?: number }>, token: vscode.CancellationToken) {
+async function doImport(context: vscode.ExtensionContext, source: Source, content: SourceContent, ids: Set<ItemId>, progress: vscode.Progress<{ message?: string; increment?: number }>, token: vscode.CancellationToken, written: string[]) {
 	const user = userDir(context);
-	const report: Report = { lines: [`Import from ${source.product.name} (${source.userDir}) into ${user.toString(true)}`], summary: [], notFound: [] };
+	const report: Report = { lines: [`Import from ${source.product.name} (${source.userDir}) into ${user.toString(true)}`], summary: [], notFound: [], disabled: [] };
 	const at = (...parts: string[]) => vscode.Uri.joinPath(user, ...parts);
+	for (const u of content.unreadable) {
+		report.lines.push(`Not imported, ${source.product.name}'s file could not be read: ${u.file} (${u.reason}).`);
+	}
 
 	// 1. Work out every file to write first, so the backup holds each one as it was before anything changed.
 	progress.report({ message: 'Reading your settings' });
@@ -238,28 +297,31 @@ async function doImport(context: vscode.ExtensionContext, source: Source, conten
 	progress.report({ message: 'Writing settings, shortcuts and snippets' });
 	for (const w of writes) {
 		await writeText(at(...w.rel), w.after);
+		written.push(w.rel.join('/'));
 	}
 
 	// 3. Extensions, one at a time from the gallery (Open VSX), so the progress says which and a cancel stops between two.
 	if (ids.has('extensions')) {
-		await installExtensions(content.extensions, report, progress, token);
+		await installExtensions(context, content.extensions, report, progress, token);
 	}
 
 	// 4. The theme last: a theme from an extension is only there once that extension is installed.
 	if (themeChosen && !token.isCancellationRequested) {
 		progress.report({ message: 'Applying the theme' });
-		const themes = await installedThemes();
-		const { apply, missing } = applicableTheme(settingsPlan.theme, (kind, id) => themes[kind].has(id.toLowerCase()));
+		const { apply, missing } = applicableTheme(settingsPlan.theme, installedThemes());
 		if (apply.length) {
 			// settings.json as it was before the import (unchanged by it when settings were not chosen).
 			await backup(['settings.json'], settingsBefore);
 			const current = await readText(at('settings.json'));
 			await writeText(at('settings.json'), writeSettings(current, apply.map(t => ({ path: [t.key], value: t.value }))));
+			if (!written.includes('settings.json')) {
+				written.push('settings.json');
+			}
 			report.summary.push('your theme');
 			report.lines.push(`Theme settings applied: ${apply.map(t => `${t.key} = ${JSON.stringify(t.value)}`).join(', ')}.`);
 		}
 		if (missing.length) {
-			report.lines.push(`Not applied because the theme is not installed (its extension is not on Open VSX or did not install): ${missing.map(t => `${t.key} = ${JSON.stringify(t.value)}`).join(', ')}. Insilode keeps its own theme for these.`);
+			report.lines.push(`Not applied because the theme is not installed (its extension is not on Open VSX, did not install, or is disabled in Insilode): ${missing.map(t => `${t.key} = ${JSON.stringify(t.value)}`).join(', ')}. Insilode keeps its own theme for these.`);
 		}
 	}
 
@@ -276,7 +338,8 @@ async function doImport(context: vscode.ExtensionContext, source: Source, conten
 	const what = report.summary.length ? report.summary.join(', ') : 'nothing new (you already have all of it)';
 	const missingText = report.notFound.length ? ` ${plural(report.notFound.length, 'extension')} ${report.notFound.length === 1 ? 'is' : 'are'} not on Open VSX: ${report.notFound.slice(0, 5).join(', ')}${report.notFound.length > 5 ? '…' : ''}.` : '';
 	const galleryText = report.noGallery ? ' Extensions were not installed: this Insilode has no extension gallery.' : '';
-	void vscode.window.showInformationMessage(`Imported from ${source.product.name}: ${what}.${missingText}${galleryText}`, 'Show Details').then(pick => {
+	const unreadableText = content.unreadable.length ? ` ${plural(content.unreadable.length, 'file')} could not be read and ${content.unreadable.length === 1 ? 'was' : 'were'} skipped.` : '';
+	void vscode.window.showInformationMessage(`Imported from ${source.product.name}: ${what}.${missingText}${galleryText}${unreadableText}`, 'Show Details').then(pick => {
 		if (pick) {
 			log.show(true);
 		}
@@ -289,9 +352,32 @@ function isCancelled(e: unknown): boolean {
 	return err?.name === 'Canceled' || err?.message === 'Canceled';
 }
 
-/** Ids of every installed extension, whichever extension host runs it (lower case). */
-function installedIds(): Set<string> {
+/** Ids of every enabled extension, whichever extension host runs it (lower case). */
+function enabledIds(): Set<string> {
 	return new Set(allExtensions().map(e => e.id.toLowerCase()));
+}
+
+/**
+ * Ids of every extension installed in Insilode's own extensions folder, enabled or not (lower case). The extension API
+ * lists enabled extensions only, so one the user disabled would otherwise be installed again, stay disabled, and be
+ * counted as installed.
+ */
+function installedOnDisk(context: vscode.ExtensionContext): Set<string> {
+	let product: { dataFolderName?: string; serverDataFolderName?: string } = {};
+	try {
+		product = JSON.parse(readFileSync(join(vscode.env.appRoot, 'product.json'), 'utf8')) as typeof product;
+	} catch (e) {
+		log.warn(`product.json: ${(e as Error).message}; disabled extensions are not recognised.`);
+	}
+	// On a server (web mode) extensions are installed in the server's data folder.
+	const folder = context.extension.extensionKind === vscode.ExtensionKind.Workspace ? product.serverDataFolderName ?? product.dataFolderName : product.dataFolderName;
+	const ids = new Set<string>();
+	for (const dir of ownExtensionDirs(homedir(), folder, process.env)) {
+		for (const id of listExtensions(dir)) {
+			ids.add(id);
+		}
+	}
+	return ids;
 }
 
 function allExtensions(): readonly vscode.Extension<unknown>[] {
@@ -304,9 +390,11 @@ function allExtensions(): readonly vscode.Extension<unknown>[] {
 	}
 }
 
-async function installExtensions(list: string[], report: Report, progress: vscode.Progress<{ message?: string; increment?: number }>, token: vscode.CancellationToken) {
-	const have = installedIds();
-	const todo = list.filter(id => !have.has(id));
+async function installExtensions(context: vscode.ExtensionContext, list: string[], report: Report, progress: vscode.Progress<{ message?: string; increment?: number }>, token: vscode.CancellationToken) {
+	const enabled = enabledIds();
+	const onDisk = installedOnDisk(context);
+	report.disabled = list.filter(id => !enabled.has(id) && onDisk.has(id));
+	const todo = list.filter(id => !enabled.has(id) && !onDisk.has(id));
 	const installed: string[] = [];
 	const failed: string[] = [];
 	const untrusted: string[] = [];
@@ -327,7 +415,7 @@ async function installExtensions(list: string[], report: Report, progress: vscod
 				report.noGallery = true;
 				return;
 			}
-			if (isNotFound(message)) {
+			if (isNotFound(e)) {
 				report.notFound.push(id);
 			} else if (isCancelled(e)) {
 				// The editor asks whether to trust a publisher the first time one of its extensions is installed; "Cancel" there
@@ -344,6 +432,9 @@ async function installExtensions(list: string[], report: Report, progress: vscod
 		await extensionsSettled();
 	}
 	report.lines.push(`Extensions: ${installed.length} installed${installed.length ? ` (${installed.join(', ')})` : ''}, ${list.length - todo.length} already installed.`);
+	if (report.disabled.length) {
+		report.lines.push(`Installed in Insilode but disabled, so left as they are: ${report.disabled.join(', ')}. Enable them in the Extensions view to use them (and a theme they bring).`);
+	}
 	if (report.notFound.length) {
 		report.lines.push(`Not on Open VSX, so not installed: ${report.notFound.join(', ')}. Look for an alternative in the Extensions view, or install a .vsix you are allowed to use.`);
 	}
@@ -375,30 +466,27 @@ function extensionsSettled(): Promise<void> {
 }
 
 interface ThemeContribution {
-	id?: string;
-	label?: string;
+	id?: unknown;
+	label?: unknown;
 }
 
-/** The colour, file icon and product icon themes installed now, by the id a setting names them with (lower case). */
-async function installedThemes(): Promise<Record<ThemeKind, Set<string>>> {
-	const out: Record<ThemeKind, Set<string>> = { color: new Set(), icon: new Set(), product: new Set() };
+/** The colour, file icon and product icon themes installed now, by the exact id a setting names them with. */
+function installedThemes(): Record<ThemeKind, string[]> {
+	const out: Record<ThemeKind, string[]> = { color: [], icon: [], product: [] };
 	for (const e of allExtensions()) {
 		const c = (e.packageJSON as { contributes?: Record<string, ThemeContribution[] | undefined> })?.contributes ?? {};
-		const add = (set: Set<string>, list: ThemeContribution[] | undefined, withLabel: boolean) => {
+		const add = (kind: ThemeKind, list: ThemeContribution[] | undefined) => {
 			for (const t of Array.isArray(list) ? list : []) {
-				if (typeof t.id === 'string') {
-					set.add(t.id.toLowerCase());
-				}
-				// A colour theme without an id is named by its label.
-				if (withLabel && typeof t.label === 'string' && !t.label.startsWith('%')) {
-					set.add(t.label.toLowerCase());
+				const id = themeSettingsId(kind, t);
+				if (id !== undefined) {
+					out[kind].push(id);
 				}
 			}
 		};
-		add(out.color, c.themes, true);
-		add(out.icon, c.iconThemes, false);
-		add(out.product, c.productIconThemes, false);
+		add('color', c.themes);
+		add('icon', c.iconThemes);
+		add('product', c.productIconThemes);
 	}
-	log.info(`Installed themes: ${out.color.size} colour, ${out.icon.size} file icon, ${out.product.size} product icon (from ${allExtensions().length} extensions).`);
+	log.info(`Installed themes: ${out.color.length} colour, ${out.icon.length} file icon, ${out.product.length} product icon (from ${allExtensions().length} extensions).`);
 	return out;
 }

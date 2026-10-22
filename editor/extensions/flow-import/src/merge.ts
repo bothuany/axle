@@ -223,12 +223,6 @@ export function mergeSnippets(current: string | undefined, imported: string): Sn
 	return { text: added ? text : undefined, added, kept };
 }
 
-/** Settings the item list counts, without the theme and skipped ones. */
-export function countSettings(imported: string | undefined): { settings: number; theme: { key: string; value: unknown }[] } {
-	const plan = planSettings(undefined, imported);
-	return { settings: plan.add.length, theme: plan.theme };
-}
-
 /**
  * Colour theme names VS Code still writes but no longer has a theme for: it renamed its built-in themes and maps the
  * old names when it reads the setting (migrateThemeSettingsId in workbenchThemeService.ts). The import writes the new
@@ -239,20 +233,60 @@ const LEGACY_THEME_IDS: Record<string, string> = {
 	'Default Light Modern': 'Light Modern',
 	'Default Dark+': 'Dark+',
 	'Default Light+': 'Light+',
+	'Experimental Dark': 'Dark 2026',
+	'VS Code Dark': 'Dark 2026',
+	'Experimental Light': 'Light 2026',
+	'VS Code Light': 'Light 2026',
 };
 
+/** The themes of each kind the editor has, by the exact id a setting must name them with. */
+export type ThemeIds = Record<ThemeKind, readonly string[]>;
+
 /**
- * The theme settings that can be applied: a theme the editor does not have (an extension that is not installed or not
- * on Open VSX) would leave Insilode on a fallback theme, so it is left out and named in the report instead.
+ * The id the editor knows a theme by, for a name a setting gives. VS Code matches a theme setting exactly
+ * (`settingsId === value`, themeExtensionPoints.ts), so a name that differs only in case would leave Insilode on a
+ * fallback theme: such a name is rewritten to the one installed theme it matches. Two installed themes that differ
+ * only in case make the name ambiguous, and it is not applied.
  */
-export function applicableTheme(theme: { key: string; value: unknown }[], has: (kind: ThemeKind, id: string) => boolean): { apply: { key: string; value: unknown }[]; missing: { key: string; value: unknown }[] } {
+export function resolveTheme(installed: readonly string[], name: string): string | undefined {
+	if (installed.includes(name)) {
+		return name;
+	}
+	const lower = name.toLowerCase();
+	const matches = [...new Set(installed.filter(id => id.toLowerCase() === lower))];
+	return matches.length === 1 ? matches[0] : undefined;
+}
+
+/**
+ * The name a theme contribution is chosen by in settings, as VS Code derives it: a colour theme's `id`, or its label
+ * when it has no id (colorThemeData.ts, `theme.id || label`); an icon or product icon theme's `id`. A label that is
+ * still a `%placeholder%` names nothing a user could have written.
+ */
+export function themeSettingsId(kind: ThemeKind, theme: { id?: unknown; label?: unknown }): string | undefined {
+	if (typeof theme.id === 'string' && theme.id) {
+		return theme.id;
+	}
+	return kind === 'color' && typeof theme.label === 'string' && theme.label && !theme.label.startsWith('%') ? theme.label : undefined;
+}
+
+/**
+ * The theme settings that can be applied: a theme the editor does not have (an extension that is not installed, is
+ * disabled, or is not on Open VSX) would leave Insilode on a fallback theme, so it is left out and named in the report
+ * instead. A theme that is applied is written with the exact id the editor knows it by.
+ */
+export function applicableTheme(theme: { key: string; value: unknown }[], installed: ThemeIds): { apply: { key: string; value: unknown }[]; missing: { key: string; value: unknown }[] } {
 	const apply: { key: string; value: unknown }[] = [];
 	const missing: { key: string; value: unknown }[] = [];
 	for (const original of theme) {
 		const kind = themeKind(original.key);
 		const t = kind === 'color' && typeof original.value === 'string' ? { ...original, value: LEGACY_THEME_IDS[original.value] ?? original.value } : original;
-		if (!kind || (typeof t.value === 'string' && has(kind, t.value)) || (kind === 'icon' && t.value === null)) {
+		if (!kind || (kind === 'icon' && t.value === null)) {
 			apply.push(t);
+			continue;
+		}
+		const id = typeof t.value === 'string' ? resolveTheme(installed[kind], t.value) : undefined;
+		if (id !== undefined) {
+			apply.push({ ...t, value: id });
 		} else {
 			missing.push(t);
 		}
@@ -260,9 +294,24 @@ export function applicableTheme(theme: { key: string; value: unknown }[], has: (
 	return { apply, missing };
 }
 
-/** The error text VS Code's install command throws when the gallery has no such extension. */
-export function isNotFound(message: string): boolean {
-	return /\bnot found\b/i.test(message);
+/**
+ * Whether the install command failed because the gallery has no such extension. VS Code throws an
+ * ExtensionManagementError whose name is its code (`NotFound`), and the name and code survive the command's round trip
+ * to the extension host. The message is localized (a language pack translates it), so it is not looked at.
+ */
+export function isNotFound(error: unknown): boolean {
+	const e = error as { name?: unknown; code?: unknown } | undefined;
+	return e?.name === 'NotFound' || e?.code === 'NotFound';
+}
+
+/**
+ * Whether a file system error from `vscode.workspace.fs` means the file is not there: a FileSystemError with the code
+ * `FileNotFound` (or, from Node, ENOENT). Anything else (a file locked by OneDrive or a virus scanner, EBUSY; no
+ * permission, EPERM) means the file may well exist, and the import must stop rather than treat it as empty.
+ */
+export function isFileNotFound(error: unknown): boolean {
+	const e = error as { code?: unknown } | undefined;
+	return e?.code === 'FileNotFound' || e?.code === 'ENOENT';
 }
 
 /** The error text when the editor has no extension gallery configured (extensionGalleryService.ts). */

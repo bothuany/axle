@@ -79,6 +79,72 @@ export function codexProfile(command: string, timeout = 5): string {
 }
 
 /**
+ * How to start `codex` without a shell: a program to run directly, a JavaScript entry for Node, or a batch file of the
+ * user's own (a wrapper that is not npm's shim), which only cmd.exe can run.
+ */
+export type CodexLaunch = { file: string } | { script: string; node?: string } | { batch: string };
+
+/** The file system calls `codexLaunch` needs, passed in so tests lay out a PATH of their own. */
+export interface LaunchFs {
+	exists(file: string): boolean;
+	read(file: string): string | undefined;
+}
+
+/**
+ * Where `codex` is, found the way a shell would find it, so it can be started with an argument array and no shell.
+ * Elsewhere than Windows that is the first `codex` on PATH. On Windows each PATH folder is tried with each PATHEXT
+ * ending, in order: an `.exe` (Codex's standalone install) runs as it is; npm's `codex.cmd` shim, which Node cannot
+ * start without cmd.exe, is read for the script it hands to Node (`"%dp0%\node_modules\@openai\codex\bin\codex.js"`)
+ * and the node.exe beside it, if there is one. Any other .cmd (a wrapper the user wrote, such as one that runs the
+ * Codex desktop app's codex.exe) is returned as a batch file. Undefined when there is no codex.
+ */
+export function codexLaunch(platform: NodeJS.Platform, envPath: string, pathext: string | undefined, fs: LaunchFs): CodexLaunch | undefined {
+	const win = platform === 'win32';
+	const join = win ? path.win32.join : path.posix.join;
+	const dirs = envPath.split(win ? ';' : ':').map(d => d.replace(/^"|"$/g, '')).filter(Boolean);
+	if (!win) {
+		const dir = dirs.find(d => fs.exists(join(d, 'codex')));
+		return dir ? { file: join(dir, 'codex') } : undefined;
+	}
+	const exts = (pathext || '.COM;.EXE;.BAT;.CMD').split(';').map(e => e.trim().toLowerCase()).filter(Boolean);
+	for (const dir of dirs) {
+		for (const ext of exts) {
+			const file = join(dir, `codex${ext}`);
+			if (!fs.exists(file)) {
+				continue;
+			}
+			if (ext === '.exe' || ext === '.com') {
+				return { file };
+			}
+			if (ext === '.cmd' || ext === '.bat') {
+				const shim = /"%~?dp0%?\\([^"%]+?\.[cm]?js)"/i.exec(fs.read(file) ?? '');
+				const script = shim ? join(dir, shim[1]) : undefined;
+				if (!script || !fs.exists(script)) {
+					return { batch: file };
+				}
+				const node = join(dir, 'node.exe');
+				return { script, ...(fs.exists(node) ? { node } : {}) };
+			}
+		}
+	}
+	return undefined;
+}
+
+/**
+ * cmd.exe's arguments for running a batch file with fixed arguments: `/d /s /c ""<file>" <args>"`, to be passed with
+ * `windowsVerbatimArguments` (what Node itself builds for `shell: true`, but with nothing but this one command line).
+ * The arguments are Insilode's own constants; the file comes from PATH. Undefined when any of it holds a character
+ * cmd.exe would still interpret inside quotes (`"`, `%`, `!`) or a line break, so nothing is ever expanded.
+ */
+export function batchCommandLine(file: string, args: readonly string[]): string[] | undefined {
+	const parts = [file, ...args];
+	if (parts.some(p => /["%!\r\n]/.test(p)) || args.some(a => !/^[\w.-]+$/.test(a))) {
+		return undefined;
+	}
+	return ['/d', '/s', '/c', `""${file}" ${args.join(' ')}"`];
+}
+
+/**
  * The shared hook script: posts the event to the Insilode window named by the terminal's FLOW_HOOK_DIR,
  * and prints nothing (Codex then takes no decision from it; Stop treats empty output as success).
  */
