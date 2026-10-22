@@ -152,7 +152,9 @@ kbd { font: 10.5px var(--fl-mono); padding: 0 4px; border: 1px solid var(--fl-li
 .card-editor-msg.warn { color: #ffb454; }
 .card-editor .monaco-editor, .card-editor .monaco-editor .margin, .card-editor .monaco-editor-background { background: var(--fl-card) !important; }
 .ask, .chip, .wv-status { white-space: nowrap; flex: none; }
-.wv-status { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+/* The status comes and goes after the flow draws ("No callers…"): it takes only the room left on the bar's line (a zero basis), so
+   it never wraps the bar onto another line and moves the canvas below it. The full text is its title. */
+.wv-status { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right; }
 @media (max-width: 720px) {
   .react-flow__minimap { display: none; }
 }
