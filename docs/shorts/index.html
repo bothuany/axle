@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1080, height=1920">
+<title>Dry Run 1: ALLOW or DENY? Three commands</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<link rel="stylesheet" href="assets/brand.css">
+<script src="assets/shorts.js"></script>
+<style>
+html, body { margin: 0; width: 1080px; height: 1920px; overflow: hidden; background: #0c1020; }
+#root { position: relative; width: 100%; height: 100%; overflow: hidden; background: linear-gradient(180deg, #182036 0%, #0c1020 38%); }
+#root > div { position: absolute; inset: 0; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="18" data-width="1080" data-height="1920" data-fps="30">
+<div id="tpl-c-host" data-composition-id="tpl-c" data-composition-src="compositions/tpl-c.html" data-start="0" data-duration="18" data-track-index="1" data-track-kind="graphics" data-width="1080" data-height="1920" data-variable-values='{"question":"Would your agent|*run* this?","cam":"[{\"t\":0,\"cx\":0.16,\"cy\":0.42,\"w\":0.3},{\"t\":15,\"cx\":0.135,\"cy\":0.43,\"w\":0.25}]","rounds":"[{\"shown\":\"./mvnw -q test\",\"result\":\"allow\",\"t\":0,\"reveal\":3.4},{\"shown\":\"rm -rf node_modules\",\"result\":\"ask\",\"t\":5.4,\"reveal\":8.6},{\"shown\":\"echo $(git push --force)\",\"result\":\"deny\",\"t\":10.8,\"reveal\":14.2}]","duration":18,"loop":2,"r1e":"assets/captures/P5-sim-empty-ok.jpg","r1v":"assets/captures/P6-sim-verdict-ok.jpg","r2e":"assets/captures/Q1-empty.jpg","r2v":"assets/captures/Q1-verdict.jpg","r3e":"assets/captures/P1-sim-empty.jpg","r3v":"assets/captures/P2-sim-verdict.jpg"}'></div>
+<div id="tag-host" data-composition-id="tag" data-composition-src="compositions/tag.html" data-start="16" data-duration="2" data-track-index="3" data-track-kind="graphics" data-width="1080" data-height="1920" data-variable-values='{"duration":2,"pet":"assets/pets/cat.png"}'></div>
+<div id="captions-host" data-composition-id="captions" data-composition-src="compositions/captions.html" data-start="0" data-duration="16" data-track-index="2" data-track-kind="captions" data-width="1080" data-height="1920" data-variable-values='{"captions":"[{\"t\":0.3,\"d\":2.6,\"text\":\"Three commands. You *guess*.\"},{\"t\":3.6,\"d\":1.9,\"text\":\"*ALLOW*. A rule says so.\"},{\"t\":5.7,\"d\":2.7,\"text\":\"Next: delete *node_modules*.\"},{\"t\":8.8,\"d\":1.9,\"text\":\"No rule. So it *asks*.\"},{\"t\":10.9,\"d\":3.1,\"text\":\"Last one: a force-push hiding in an *echo*.\"},{\"t\":14.4,\"d\":1.5,\"text\":\"Still *DENY*.\"}]","duration":16}'></div>
+<audio id="music" src="assets/audio/music.wav" data-start="0" data-duration="18" data-track-index="4" data-volume="1"></audio>
+<audio id="sfx" src="assets/audio/sfx.wav" data-start="0" data-duration="18" data-track-index="5" data-volume="1"></audio>
+</div>
+<script>
+const tl = gsap.timeline({ paused: true })
+tl.to({}, { duration: 18 }, 0)
+window.__timelines["main"] = tl
+</script>
+</body>
+</html>

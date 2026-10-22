@@ -1,0 +1,84 @@
+<!doctype html>
+<!-- Template D, "Case file": short text beats (the detective, the deadpan list, the agents arguing) over ONE real capture.
+     Each beat is at most 6-7 words and replaces the last through its own clip box. A beat of kind "bubble" is a pet
+     talking over the picture (the pets are the dock's real avatars). The last 2 s return to the first beat. -->
+<html lang="en" data-composition-variables='[
+{"id":"beats","type":"string","label":"Beats (JSON: t, d, text with *accent*, kind line|reveal|bubble, who cat|codex)","default":"[]"},
+{"id":"captureUrl","type":"string","label":"Capture","default":"assets/captures/C3-changes.jpg"},
+{"id":"cam","type":"string","label":"Camera keys (JSON)","default":"[{\"t\":0,\"cx\":0.3,\"cy\":0.15,\"w\":0.4}]"},
+{"id":"rings","type":"string","label":"Rings on the UI (JSON)","default":"[]"},
+{"id":"duration","type":"number","label":"Scene length (s)","default":16},
+{"id":"loop","type":"number","label":"Loop-back length (s)","default":2}
+]'>
+<body>
+<template id="tpl-d-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#d-text { position: absolute; left: var(--tx0); top: 250px; width: 864px; height: 340px; }
+		.d-beat { position: absolute; left: 0; top: 0; width: 864px; font-size: 92px; }
+		.d-beat.reveal { color: var(--ink); }
+		#d-panel { left: var(--px); top: 640px; width: var(--pw); height: 650px; }
+		.d-bub { position: absolute; left: 24px; right: 24px; bottom: 24px; display: flex; gap: 20px; align-items: flex-end; }
+		.d-bub img { width: 112px; height: 112px; flex: none; image-rendering: pixelated; border-radius: 22px; }
+		.d-bub .t { padding: 22px 30px 26px; font-size: 44px; font-weight: 600; line-height: 1.15; letter-spacing: -0.015em; }
+	</style>
+	<div id="root" data-composition-id="tpl-d" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="d-text"></div>
+		<div id="d-panel" class="panel">
+			<div id="d-cam" class="cam" data-layout-allow-overflow><img data-var-src="captureUrl" src="assets/blank.png#d" alt=""></div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('tpl-d'), S = Shorts
+			var dur = V.duration, loop = V.loop, cut = dur - loop
+			var tl = gsap.timeline({ paused: true })
+			var beats = S.json(V.beats, [])
+			var keys = S.json(V.cam, [])
+			var last = keys[keys.length - 1]
+			keys.push({ t: cut, cx: last.cx, cy: last.cy, w: last.w })
+			keys.push({ t: dur - 0.05, cx: keys[0].cx, cy: keys[0].cy, w: keys[0].w })
+			S.camera(tl, '#d-cam', keys, 972, 650)
+			S.rings(tl, document.getElementById('d-cam'), S.json(V.rings, []))
+
+			var texts = beats.filter(function (b) { return b.kind !== 'bubble' })
+			var first = null
+			texts.forEach(function (b, i) {
+				var box = document.createElement('div')
+				box.className = 'd-beat hl ' + (b.kind || 'line')
+				box.setAttribute('data-layout-allow-overlap', '')
+				box.id = 'd-beat' + i
+				document.getElementById('d-text').appendChild(box)
+				var spans = S.lines(box, b.text, 'd-beat' + i)
+				if (i === 0) {
+					first = spans
+					tl.set(spans, { yPercent: 0 }, 0)
+				} else {
+					S.rise(tl, spans, b.t)
+				}
+				S.leave(tl, spans, b.t + b.d - 0.35)
+			})
+			// Back to the first beat for the loop.
+			if (first) { tl.set(first, { yPercent: 108 }, cut - 0.001); S.rise(tl, first, cut) }
+
+			beats.filter(function (b) { return b.kind === 'bubble' }).forEach(function (b, i) {
+				var el = document.createElement('div')
+				el.className = 'd-bub'
+				el.style.visibility = 'hidden'
+				el.id = 'd-bub' + i
+				el.setAttribute('data-layout-allow-overflow', '')
+				el.setAttribute('data-layout-allow-occlusion', '')
+				el.innerHTML = '<img src="' + b.petUrl + '" alt=""><div class="t plate">' + S.rich(b.text) + '</div>'
+				document.getElementById('d-panel').appendChild(el)
+				tl.set(el, { autoAlpha: 1 }, b.t)
+				tl.fromTo(el, { yPercent: 130 }, { yPercent: 0, duration: 0.45, ease: 'power3.out', immediateRender: false }, b.t)
+				tl.to(el, { yPercent: 130, duration: 0.4, ease: 'power2.in' }, b.t + b.d - 0.4)
+				tl.set(el, { autoAlpha: 0 }, b.t + b.d)
+			})
+			window.__timelines['tpl-d'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

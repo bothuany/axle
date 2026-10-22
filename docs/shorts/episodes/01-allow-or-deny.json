@@ -1,0 +1,32 @@
+{
+	"id": "01-allow-or-deny",
+	"series": "Dry Run",
+	"no": 1,
+	"title": "ALLOW or DENY? Three commands",
+	"template": "C",
+	"duration": 18,
+	"vars": {
+		"question": "Would your agent|*run* this?",
+		"cam": [
+			{ "t": 0, "cx": 0.16, "cy": 0.42, "w": 0.3 },
+			{ "t": 15, "cx": 0.135, "cy": 0.43, "w": 0.25 }
+		],
+		"rounds": [
+			{ "shown": "./mvnw -q test", "result": "allow", "t": 0, "reveal": 3.4, "empty": "P5-sim-empty-ok", "verdict": "P6-sim-verdict-ok" },
+			{ "shown": "rm -rf node_modules", "result": "ask", "t": 5.4, "reveal": 8.6, "empty": "Q1-empty", "verdict": "Q1-verdict" },
+			{ "shown": "echo $(git push --force)", "result": "deny", "t": 10.8, "reveal": 14.2, "empty": "P1-sim-empty", "verdict": "P2-sim-verdict" }
+		]
+	},
+	"captions": [
+		{ "t": 0.3, "d": 2.6, "text": "Three commands. You *guess*." },
+		{ "t": 3.6, "d": 1.9, "text": "*ALLOW*. A rule says so." },
+		{ "t": 5.7, "d": 2.7, "text": "Next: delete *node_modules*." },
+		{ "t": 8.8, "d": 1.9, "text": "No rule. So it *asks*." },
+		{ "t": 10.9, "d": 3.1, "text": "Last one: a force-push hiding in an *echo*." },
+		{ "t": 14.4, "d": 1.5, "text": "Still *DENY*." }
+	],
+	"music": { "bpm": 96 },
+	"voice": null,
+	"description": "Would your agent run this? Three commands against the permission simulator in Insilode, a code editor built on VS Code. Demo project (Harbor Goods), real captures of the app; the verdicts are the simulator's own. insilode.dev",
+	"hashtags": ["#dryrun", "#claudecode", "#codeeditor", "#devtools"]
+}

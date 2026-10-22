@@ -1,0 +1,62 @@
+/* Insilode Shorts: brand tokens and the few shared classes. Dark only. The values are the site's (site/src/site.css,
+   docs/design/messaging.md); the layout tokens are the safe-area choices in docs/design/shorts-system.md. */
+@font-face { font-family: "Instrument Sans"; font-weight: 400 700; font-style: normal; src: url(fonts/instrument-sans-latin-wght-normal.woff2) format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 400 700; font-style: normal; src: url(fonts/jetbrains-mono-latin-wght-normal.woff2) format("woff2"); }
+
+:root {
+	/* Palette */
+	--bg: #0c1020;
+	--bg-2: #182036;
+	--surface: #121830;
+	--ink: #e9ecf5;
+	--ink-2: #a9b1c9;
+	--signal: #3f52c9;
+	--accent: #9aa8ff;
+	--entry: #e3a23b;
+	--added: #5fe0a1;
+	--removed: #ff6b7d;
+	--rule: #2a3352;
+	/* Type */
+	--sans: "Instrument Sans", system-ui, sans-serif;
+	--mono: "JetBrains Mono", ui-monospace, monospace;
+	/* Safe area (px on the 1080 x 1920 canvas). Conservative choices, not platform specs. */
+	--tx0: 108px;      /* text left edge: the stricter of 8% and HyperFrames' title-safe 10% */
+	--tx1: 907px;      /* text right edge in the lower 60%: 108 + 65 for the platform button rail */
+	--tx1-top: 972px;  /* text right edge above the rail (title-safe, 10%) */
+	--ty0: 192px;      /* top: 10% */
+	--ty1: 1459px;     /* bottom: 24% is the platform caption block */
+	--px: 54px;        /* a picture of the real UI may use the action-safe width (5%) */
+	--pw: 972px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: var(--bg); }
+body { font-family: var(--sans); color: var(--ink); -webkit-font-smoothing: antialiased; }
+.fill { position: absolute; inset: 0; }
+
+/* A real capture of the app, cropped by a camera that moves inside it. */
+.panel { position: absolute; overflow: hidden; border-radius: 28px; background: #0e0e0e; box-shadow: 0 0 0 2px rgba(255, 255, 255, .09), 0 40px 100px rgba(0, 0, 0, .6); }
+.cam { position: absolute; left: 0; top: 0; width: 3840px; height: 2160px; transform-origin: 0 0; }
+.cam img { display: block; width: 100%; height: 100%; }
+.ring { position: absolute; border: 7px solid var(--accent); border-radius: 14px; opacity: 0; box-shadow: 0 0 0 5px rgba(12, 16, 32, .6); }
+
+/* Headline type: weight 650, slightly tight. A line sits in a clip box so it can rise into place and leave the same way. */
+.hl { font-weight: 650; letter-spacing: -0.028em; line-height: 1.04; color: var(--ink); }
+.ln { overflow: hidden; padding-bottom: .12em; margin-bottom: -.12em; }
+.ln > span { display: block; }
+.k { color: var(--accent); font-style: normal; }
+.chip { display: inline-block; font-family: var(--mono); font-weight: 500; font-size: 30px; letter-spacing: 0; color: var(--accent); border: 2px solid var(--rule); background: var(--surface); border-radius: 14px; padding: 8px 20px; }
+.chip.amber { color: var(--entry); }
+.chip.green { color: var(--added); }
+.chip.red { color: var(--removed); }
+
+/* The recurring signature: a small "demo project" chip (the honesty label, on every episode), the stamp, the plate. */
+.demo { position: absolute; left: var(--tx0); top: var(--ty0); font-family: var(--mono); font-size: 28px; font-weight: 500; color: var(--ink-2); display: flex; gap: 14px; align-items: center; }
+.demo::before { content: ""; width: 12px; height: 12px; border-radius: 3px; background: var(--entry); }
+.q { position: absolute; left: var(--tx0); top: 250px; width: 864px; font-size: 100px; }
+.stamp { position: absolute; font-family: var(--mono); font-weight: 700; letter-spacing: .02em; line-height: 1; padding: 14px 34px 18px; border: 12px solid currentColor; border-radius: 22px; background: rgba(12, 16, 32, .9); opacity: 0; }
+.stamp.deny { color: var(--removed); }
+.stamp.allow { color: var(--added); }
+.stamp.ask { color: var(--entry); }
+.plate { background: rgba(12, 16, 32, .92); border: 2px solid var(--rule); border-radius: 22px; }
+.mono { font-family: var(--mono); }

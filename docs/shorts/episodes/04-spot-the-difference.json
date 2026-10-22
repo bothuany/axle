@@ -1,0 +1,38 @@
+{
+	"id": "04-spot-the-difference",
+	"series": "Dry Run",
+	"no": 4,
+	"title": "Same commit. Spot the difference.",
+	"template": "B",
+	"duration": 16,
+	"vars": {
+		"question": "Same commit.|Spot the *difference*.",
+		"captureTop": "C1-commit",
+		"camTop": [
+			{ "t": 0, "cx": 0.27, "cy": 0.865, "w": 0.4 },
+			{ "t": 8, "cx": 0.26, "cy": 0.865, "w": 0.34 }
+		],
+		"labelTop": "git log -1 --shortstat",
+		"captureBottom": "C3-changes",
+		"camBottom": [
+			{ "t": 9.6, "cx": 0.4, "cy": 0.12, "w": 0.4 },
+			{ "t": 14, "cx": 0.37, "cy": 0.12, "w": 0.34 }
+		],
+		"labelBottom": "the flow",
+		"rings": [
+			{ "t": 11.0, "d": 2.8, "cx": 0.328, "cy": 0.082, "w": 0.08, "h": 0.028 }
+		],
+		"revealAt": 9.6
+	},
+	"captions": [
+		{ "t": 0.4, "d": 2.4, "text": "This is all git *says*." },
+		{ "t": 3.0, "d": 3.2, "text": "14 files. 112 in, 16 out. Fine?" },
+		{ "t": 6.6, "d": 2.6, "text": "Nothing *else*?" },
+		{ "t": 9.9, "d": 2.2, "text": "Same commit, on the *flow*." },
+		{ "t": 12.3, "d": 1.6, "text": "*10 endpoints*." }
+	],
+	"music": { "bpm": 96 },
+	"voice": null,
+	"description": "Same commit, two views: what git log says, and what the change set on the flow shows (10 affected endpoints). Insilode, a code editor built on VS Code. Demo project (Harbor Goods), real captures of the app. insilode.dev",
+	"hashtags": ["#dryrun", "#git", "#codereview", "#codeeditor"]
+}

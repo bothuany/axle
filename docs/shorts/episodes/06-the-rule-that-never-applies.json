@@ -1,0 +1,33 @@
+{
+	"id": "06-the-rule-that-never-applies",
+	"series": "Dry Run",
+	"no": 6,
+	"title": "The rule that never applies",
+	"template": "A",
+	"duration": 14,
+	"vars": {
+		"question": "Three rules.|One never|*applies*.",
+		"capture": "E-harness",
+		"cam": [
+			{ "t": 0, "cx": 0.14, "cy": 0.24, "w": 0.28 },
+			{ "t": 9, "cx": 0.12, "cy": 0.24, "w": 0.22 }
+		],
+		"rings": [
+			{ "t": 8.8, "d": 3.0, "cx": 0.09, "cy": 0.248, "w": 0.13, "h": 0.03 }
+		],
+		"countdown": { "t": 6.2, "n": 3, "step": 0.8 },
+		"answerAt": 8.6,
+		"answerKind": "matches no file",
+		"answer": "*graphql-schema.md*: its pattern finds nothing here"
+	},
+	"captions": [
+		{ "t": 0.4, "d": 2.6, "text": "Your agent loads *2.8k tokens* first." },
+		{ "t": 3.2, "d": 2.2, "text": "Which one is *dead*?" },
+		{ "t": 5.7, "d": 2.5, "text": "Read the *patterns*." },
+		{ "t": 8.9, "d": 3.0, "text": "It watches .graphql files. There are *none*." }
+	],
+	"music": { "bpm": 92 },
+	"voice": null,
+	"description": "Your agent reads instructions and rules before you type. In Insilode's harness map, one rule in the demo project matches no file. Insilode, a code editor built on VS Code. Demo project (Harbor Goods), real capture of the app. insilode.dev",
+	"hashtags": ["#dryrun", "#claudecode", "#aiagents", "#codeeditor"]
+}

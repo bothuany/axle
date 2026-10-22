@@ -1,0 +1,9 @@
+# Working material: made by tools/setup.mjs and tools/episode.mjs, never committed (renders, stills and captures stay out of the repo).
+/assets/captures/
+/assets/pets/
+/assets/audio/
+/assets/icon.png
+/assets/blank.png
+/build/
+/renders/
+/.hyperframes/

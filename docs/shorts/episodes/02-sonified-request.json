@@ -1,0 +1,36 @@
+{
+	"id": "02-sonified-request",
+	"series": "Dry Run",
+	"no": 2,
+	"title": "Sonified request: listen to POST /orders",
+	"template": "E",
+	"duration": 16,
+	"vars": {
+		"question": "Where does one|request *end up*?",
+		"capture": "B3-sidebar",
+		"cam": [
+			{ "t": 0, "cx": 0.3, "cy": 0.4, "w": 0.24 },
+			{ "t": 2.6, "cx": 0.4, "cy": 0.43, "w": 0.22 },
+			{ "t": 5.0, "cx": 0.45, "cy": 0.45, "w": 0.2 },
+			{ "t": 7.8, "cx": 0.66, "cy": 0.58, "w": 0.22 },
+			{ "t": 11.0, "cx": 0.65, "cy": 0.69, "w": 0.22 }
+		],
+		"hops": [
+			{ "t": 5.2, "label": "writes the orders table", "ring": { "cx": 0.505, "cy": 0.456, "w": 0.13, "h": 0.1 } },
+			{ "t": 8.4, "label": "HTTP into billing", "ring": { "cx": 0.6575, "cy": 0.572, "w": 0.04, "h": 0.03 } },
+			{ "t": 11.6, "label": "topic into shipping", "ring": { "cx": 0.606, "cy": 0.683, "w": 0.04, "h": 0.03 } }
+		],
+		"timer": ""
+	},
+	"captions": [
+		{ "t": 0.4, "d": 2.2, "text": "POST /orders. Now *listen*." },
+		{ "t": 2.9, "d": 2.1, "text": "One note per *hop*." },
+		{ "t": 5.5, "d": 2.3, "text": "First, the *table*." },
+		{ "t": 8.7, "d": 2.4, "text": "Then billing, over *HTTP*." },
+		{ "t": 11.9, "d": 1.9, "text": "And shipping. No *grep*." }
+	],
+	"music": { "bpm": 90 },
+	"voice": null,
+	"description": "Where does one request end up? A ride along the real flow of POST /orders in Insilode, a code editor built on VS Code: the table, billing over HTTP, shipping over a Kafka topic. Demo project (Harbor Goods), real capture of the app. insilode.dev",
+	"hashtags": ["#dryrun", "#backend", "#microservices", "#codeeditor"]
+}

@@ -1,0 +1,142 @@
+<!doctype html>
+<!-- Template C, "Verdict rounds" (ALLOW or DENY?): a command in a card, a short guess (3, 2, 1), then the real permission
+     simulator answers and a stamp lands. Up to four rounds, a tally in the corner. The picture is a pair of real captures
+     per round (before and after "Check"), swapped in place at the reveal, so the camera never jumps. The last 1.6 s cut
+     back to round one's first frame, so the video loops. -->
+<html lang="en" data-composition-variables='[
+{"id":"question","type":"string","label":"Question, lines split by |, *accent*","default":"Would your agent|*run* this?"},
+{"id":"rounds","type":"string","label":"Rounds (JSON: shown, result allow|ask|deny, t, reveal)","default":"[]"},
+{"id":"cam","type":"string","label":"Camera keys (JSON)","default":"[{\"t\":0,\"cx\":0.165,\"cy\":0.42,\"w\":0.3}]"},
+{"id":"r1e","type":"string","label":"Round 1 before","default":"assets/blank.png"},{"id":"r1v","type":"string","label":"Round 1 after","default":"assets/blank.png"},
+{"id":"r2e","type":"string","label":"Round 2 before","default":"assets/blank.png"},{"id":"r2v","type":"string","label":"Round 2 after","default":"assets/blank.png"},
+{"id":"r3e","type":"string","label":"Round 3 before","default":"assets/blank.png"},{"id":"r3v","type":"string","label":"Round 3 after","default":"assets/blank.png"},
+{"id":"r4e","type":"string","label":"Round 4 before","default":"assets/blank.png"},{"id":"r4v","type":"string","label":"Round 4 after","default":"assets/blank.png"},
+{"id":"duration","type":"number","label":"Scene length (s)","default":17},
+{"id":"loop","type":"number","label":"Loop-back length (s)","default":1.6}
+]'>
+<body>
+<template id="tpl-c-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#c-q { font-size: 88px; }
+		#c-tally { position: absolute; right: 108px; top: var(--ty0); font-family: var(--mono); font-size: 28px; color: var(--ink-2); width: 440px; height: 38px; }
+		#c-tally span { position: absolute; right: 0; top: 0; white-space: nowrap; opacity: 0; }
+		#c-tally b { font-weight: 500; }
+		#c-tally .a { color: var(--added); } #c-tally .k { color: var(--entry); } #c-tally .d { color: var(--removed); }
+		#c-cd { position: absolute; right: 108px; top: 236px; width: 190px; height: 190px; font-family: var(--mono); font-weight: 700; font-size: 170px; color: var(--accent); opacity: 0; }
+		#c-card { position: absolute; left: var(--tx0); top: 470px; width: 799px; height: 196px; overflow: hidden; }
+		.c-cmd { position: absolute; left: 34px; right: 34px; top: 0; bottom: 0; display: flex; align-items: center; font-family: var(--mono); font-weight: 500; font-size: 46px; line-height: 1.22; color: var(--ink); overflow-wrap: anywhere; }
+		.c-cmd > div > i { font-style: normal; color: var(--accent); margin-right: 18px; }
+		.c-cmd .ch { opacity: 0; }
+		#c-panel { left: var(--px); top: 700px; width: var(--pw); height: 590px; }
+		#c-panel img { position: absolute; left: 0; top: 0; opacity: 0; }
+	</style>
+	<div id="root" data-composition-id="tpl-c" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="c-tally"></div>
+		<div id="c-q" class="q hl"></div>
+		<div id="c-cd"></div>
+		<div id="c-card" class="plate"></div>
+		<div id="c-panel" class="panel">
+			<div id="c-cam" class="cam" data-layout-allow-overflow>
+				<img id="c-r1e" data-var-src="r1e" src="assets/blank.png#r1e" alt=""><img id="c-r1v" data-var-src="r1v" src="assets/blank.png#r1v" alt="">
+				<img id="c-r2e" data-var-src="r2e" src="assets/blank.png#r2e" alt=""><img id="c-r2v" data-var-src="r2v" src="assets/blank.png#r2v" alt="">
+				<img id="c-r3e" data-var-src="r3e" src="assets/blank.png#r3e" alt=""><img id="c-r3v" data-var-src="r3v" src="assets/blank.png#r3v" alt="">
+				<img id="c-r4e" data-var-src="r4e" src="assets/blank.png#r4e" alt=""><img id="c-r4v" data-var-src="r4v" src="assets/blank.png#r4v" alt="">
+			</div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('tpl-c'), S = Shorts
+			var dur = V.duration, loop = V.loop, cut = dur - loop
+			var rounds = S.json(V.rounds, [])
+			var tl = gsap.timeline({ paused: true })
+			var $ = function (id) { return document.getElementById(id) }
+			S.lines($('c-q'), V.question, 'c-q')
+			S.camera(tl, '#c-cam', S.json(V.cam, []), 972, 590)
+
+			// The tally: one state per number of rounds answered, swapped on the stamp.
+			var word = { allow: 'ALLOW', ask: 'ASK', deny: 'DENY' }
+			var cls = { allow: 'a', ask: 'k', deny: 'd' }
+			var done = { allow: 0, ask: 0, deny: 0 }
+			var states = [{ allow: 0, ask: 0, deny: 0 }]
+			rounds.forEach(function (r) { done[r.result]++; states.push({ allow: done.allow, ask: done.ask, deny: done.deny }) })
+			states.forEach(function (s, i) {
+				var el = document.createElement('span')
+				el.id = 'c-tally-' + i
+				el.innerHTML = '<b class="a">ALLOW ' + s.allow + '</b> &middot; <b class="k">ASK ' + s.ask + '</b> &middot; <b class="d">DENY ' + s.deny + '</b>'
+				$('c-tally').appendChild(el)
+				var from = i === 0 ? 0 : rounds[i - 1].reveal
+				var to = i < rounds.length ? rounds[i].reveal : cut
+				tl.set(el, { opacity: 1 }, from)
+				tl.set(el, { opacity: 0 }, to)
+			})
+			tl.set('#c-tally-0', { opacity: 1 }, cut)
+
+			rounds.forEach(function (r, i) {
+				var n = i + 1
+				var end = i + 1 < rounds.length ? rounds[i + 1].t : cut
+				// The command: typed in on every round but the first (the first frame must already be a question).
+				var wrap = document.createElement('div')
+				wrap.className = 'c-cmd'
+				wrap.id = 'c-cmd' + n
+				if (i > 0) wrap.style.visibility = 'hidden'
+				var inner = document.createElement('div')
+				inner.innerHTML = '<i>' + (r.prompt || '$') + '</i>'
+				var chars = []
+				Array.from(r.shown).forEach(function (c, k) {
+					var s = document.createElement('span')
+					s.className = 'ch'
+					s.id = 'c-cmd' + n + '-' + k
+					s.textContent = c
+					inner.appendChild(s)
+					chars.push(s)
+				})
+				wrap.appendChild(inner)
+				$('c-card').appendChild(wrap)
+				if (i === 0) {
+					tl.set(chars, { opacity: 1 }, 0)
+				} else {
+					tl.set(wrap, { autoAlpha: 1 }, r.t)
+					tl.fromTo(wrap, { yPercent: 110 }, { yPercent: 0, duration: 0.4, ease: 'power3.out', immediateRender: false }, r.t)
+					chars.forEach(function (c, k) { tl.set(c, { opacity: 1 }, r.t + 0.35 + k * 0.03) })
+				}
+				tl.to(wrap, { yPercent: -110, duration: 0.35, ease: 'power2.in' }, end - 0.4)
+				tl.set(wrap, { autoAlpha: 0 }, end - 0.05)
+				if (i === 0) {
+					// Back at the loop cut, round one's command is on the card again.
+					tl.set(wrap, { yPercent: 0, autoAlpha: 1 }, cut)
+				}
+				// The picture: this round's "before", then its "after" at the reveal; both in the same camera.
+				tl.set('#c-r' + n + 'e', { opacity: 1 }, i === 0 ? 0 : r.t)
+				tl.set('#c-r' + n + 'e', { opacity: 0 }, r.reveal)
+				tl.set('#c-r' + n + 'v', { opacity: 1 }, r.reveal)
+				tl.set('#c-r' + n + 'v', { opacity: 0 }, end)
+				// The guess: 3, 2, 1 into the reveal.
+				S.countdown(tl, $('c-cd'), { t: r.reveal - 2.4, n: 3, step: 0.8 })
+				// The stamp: thud in, held, gone with the round.
+				var st = document.createElement('div')
+				st.className = 'stamp ' + r.result
+				st.id = 'c-stamp' + n
+				st.style.cssText = 'left:' + (r.x || 540) + 'px;top:' + (r.y || 735) + 'px;font-size:124px;transform-origin:50% 50%'
+				st.textContent = word[r.result]
+				$('root').appendChild(st)
+				tl.set(st, { opacity: 1, scale: 1.7, rotation: -2, x: 0, y: 0, yPercent: 0 }, r.reveal)
+				tl.to(st, { scale: 1, rotation: -7, duration: 0.14, ease: 'power4.in' }, r.reveal)
+				tl.to(st, { x: 5, y: 4, duration: 0.05, yoyo: true, repeat: 3, ease: 'none' }, r.reveal + 0.14)
+				tl.to(st, { yPercent: 160, duration: 0.35, ease: 'power2.in' }, end - 0.4)
+				tl.set(st, { opacity: 0 }, end)
+			})
+			// The loop cut: round one's "before" and command, no stamp.
+			if (rounds.length) {
+				var last = rounds[rounds.length - 1]
+				tl.set('#c-r1e', { opacity: 1 }, cut)
+				tl.set('#c-r' + rounds.length + 'v', { opacity: 0 }, cut)
+			}
+			window.__timelines['tpl-c'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

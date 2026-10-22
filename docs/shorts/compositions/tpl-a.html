@@ -1,0 +1,61 @@
+<!doctype html>
+<!-- Template A, "Question over live UI": a question in big type over a real capture that is already moving, an optional
+     countdown, then the answer on a plate that rises from the picture's bottom edge. The last 1.6 s hand the picture back
+     to its first frame (the loop). Everything comes from variables; see docs/design/shorts-system.md. -->
+<html lang="en" data-composition-variables='[
+{"id":"question","type":"string","label":"Question, lines split by |, *accent*","default":"Which services|does one request|*touch*?"},
+{"id":"captureUrl","type":"string","label":"Capture (path of the jpg)","default":"assets/captures/B3-sidebar.jpg"},
+{"id":"cam","type":"string","label":"Camera keys (JSON)","default":"[{\"t\":0,\"cx\":0.45,\"cy\":0.5,\"w\":0.62},{\"t\":6,\"cx\":0.6,\"cy\":0.68,\"w\":0.34}]"},
+{"id":"rings","type":"string","label":"Rings on the UI (JSON)","default":"[]"},
+{"id":"countdown","type":"string","label":"Countdown (JSON {t,n,step}) or empty","default":""},
+{"id":"answerAt","type":"number","label":"Answer time (s)","default":7},
+{"id":"answerKind","type":"string","label":"Answer chip","default":"answer"},
+{"id":"answer","type":"string","label":"Answer text, *accent*","default":"Three *services*"},
+{"id":"duration","type":"number","label":"Scene length (s)","default":10},
+{"id":"loop","type":"number","label":"Loop-back length (s)","default":1.6}
+]'>
+<body>
+<template id="tpl-a-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#a-q { font-size: 92px; }
+		#a-panel { left: var(--px); top: 600px; width: var(--pw); height: 690px; }
+		#a-cd { position: absolute; inset: 0; background: rgba(12, 16, 32, .72); opacity: 0; font-family: var(--mono); font-weight: 700; font-size: 300px; color: var(--ink); }
+		#a-ans { visibility: hidden; position: absolute; left: 28px; right: 28px; bottom: 28px; padding: 26px 32px 30px; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+		#a-ans .t { font-weight: 650; font-size: 60px; letter-spacing: -0.025em; line-height: 1.05; }
+	</style>
+	<div id="root" data-composition-id="tpl-a" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="a-q" class="q hl"></div>
+		<div id="a-panel" class="panel">
+			<div id="a-cam" class="cam" data-layout-allow-overflow><img id="a-img" data-var-src="captureUrl" src="assets/blank.png" alt=""></div>
+			<div id="a-cd"></div>
+			<div id="a-ans" class="plate" data-layout-allow-overflow data-layout-allow-occlusion><span class="chip" id="a-kind" data-var-text="answerKind">answer</span><div class="t" id="a-t"></div></div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('tpl-a'), S = Shorts
+			var dur = V.duration, loop = V.loop
+			var tl = gsap.timeline({ paused: true })
+			S.lines(document.getElementById('a-q'), V.question, 'a-q')
+			document.getElementById('a-t').innerHTML = S.rich(V.answer)
+
+			var keys = S.json(V.cam, [])
+			var last = keys[keys.length - 1]
+			keys.push({ t: dur - loop, cx: last.cx, cy: last.cy, w: last.w })
+			keys.push({ t: dur - 0.05, cx: keys[0].cx, cy: keys[0].cy, w: keys[0].w })
+			S.camera(tl, '#a-cam', keys, 972, 690)
+			S.rings(tl, document.getElementById('a-cam'), S.json(V.rings, []))
+			S.countdown(tl, document.getElementById('a-cd'), S.json(V.countdown, null))
+
+			tl.set('#a-ans', { autoAlpha: 1 }, V.answerAt)
+				tl.fromTo('#a-ans', { yPercent: 125 }, { yPercent: 0, duration: 0.5, ease: 'power3.out', immediateRender: false }, V.answerAt)
+			tl.to('#a-ans', { yPercent: 125, duration: 0.45, ease: 'power2.in' }, dur - loop)
+				tl.set('#a-ans', { autoAlpha: 0 }, dur - loop + 0.45)
+			window.__timelines['tpl-a'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

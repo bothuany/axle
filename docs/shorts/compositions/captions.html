@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- The caption track: burned in, Instrument Sans 650, at most two lines, the starred word in the accent colour, each word
+     in on its own beat. One host, every group of the episode, so Studio shows one caption row. -->
+<html lang="en" data-composition-variables='[
+{"id":"captions","type":"string","label":"Caption groups (JSON: t, d, text with *accent*, optional words[] times)","default":"[]"},
+{"id":"duration","type":"number","label":"Length (s)","default":10}
+]'>
+<body>
+<template id="captions-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		.cap { position: absolute; left: var(--tx0); width: 799px; bottom: 470px; display: flex; opacity: 0; }
+		.cap p { font-size: 56px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.12; color: var(--ink); padding: 14px 26px 18px; margin-left: -26px; border-radius: 20px; background: rgba(12, 16, 32, .88); }
+		.cap .w { display: inline-block; opacity: 0; white-space: pre; }
+	</style>
+	<div id="root" data-composition-id="captions" data-width="1080" data-height="1920"></div>
+	<script>
+		(function () {
+			var V = Shorts.vars('captions')
+			var tl = gsap.timeline({ paused: true })
+			var root = document.getElementById('root')
+			Shorts.json(V.captions, []).forEach(function (c, g) {
+				var box = document.createElement('div')
+				box.className = 'cap'
+				box.id = 'cap' + g
+				var p = document.createElement('p')
+				// "Open an *endpoint*": split into words, remember which are starred.
+				var words = []
+				var star = false
+				c.text.split(/(\*)/).forEach(function (part) {
+					if (part === '*') { star = !star; return }
+					part.split(/(\s+)/).forEach(function (w) { if (w) words.push({ w: w, k: star }) })
+				})
+				var real = words.filter(function (x) { return x.w.trim() })
+				var spans = []
+				words.forEach(function (x, i) {
+					var s = document.createElement('span')
+					s.className = 'w' + (x.k ? ' k' : '')
+					s.id = 'cap' + g + '-w' + i
+					s.textContent = x.w
+					p.appendChild(s)
+					spans.push(s)
+				})
+				box.appendChild(p)
+				root.appendChild(box)
+				// Word times: given, or spread over the first 70% of the group.
+				var n = 0
+				var step = (c.d * 0.7) / Math.max(1, real.length)
+				words.forEach(function (x, i) {
+					var at = c.t
+					if (x.w.trim()) { at = c.words ? c.t + c.words[n] : c.t + n * step; n++ } else { at = c.t }
+					tl.fromTo(spans[i], { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.16, ease: 'power2.out' }, at)
+				})
+				tl.set(box, { opacity: 1 }, c.t)
+				tl.set(box, { opacity: 0 }, c.t + c.d)
+			})
+			window.__timelines['captions'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- The end tag: the quiet line on the loop frame. The mark, "Free and open source", the address, a pet in the corner. It
+     is not a download button and it does not ask for anything. -->
+<html lang="en" data-composition-variables='[
+{"id":"line","type":"string","label":"Licence line","default":"Free and open source"},
+{"id":"address","type":"string","label":"Address","default":"insilode.dev"},
+{"id":"sub","type":"string","label":"What it is","default":"A code editor, built on VS Code"},
+{"id":"pet","type":"string","label":"Pet cameo (image)","default":"assets/pets/cat.png"},
+{"id":"duration","type":"number","label":"Length (s)","default":2}
+]'>
+<body>
+<template id="tag-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#tag { position: absolute; left: var(--tx0); top: 1330px; width: 799px; height: 120px; display: flex; align-items: center; gap: 26px; }
+		#tag img.mark { width: 96px; height: 96px; border-radius: 22px; }
+		#tag .txt { display: flex; flex-direction: column; gap: 4px; }
+		#tag .addr { font-family: var(--mono); font-size: 44px; font-weight: 500; color: var(--accent); line-height: 1.1; }
+		#tag .free { font-size: 32px; font-weight: 500; color: var(--ink); line-height: 1.15; }
+		#tag .sub { font-size: 28px; color: var(--ink-2); line-height: 1.15; }
+		#tag img.pet { position: absolute; right: 0; bottom: 6px; width: 104px; height: 104px; image-rendering: pixelated; border-radius: 22px; }
+	</style>
+	<div id="root" data-composition-id="tag" data-width="1080" data-height="1920">
+		<div id="tag">
+			<img class="mark" src="assets/icon.png" alt="">
+			<div class="txt"><div class="addr" data-var-text="address">insilode.dev</div><div class="free" data-var-text="line">Free and open source</div><div class="sub" data-var-text="sub">A code editor, built on VS Code</div></div>
+			<img id="tag-pet" class="pet" data-var-src="pet" src="assets/blank.png" alt="">
+		</div>
+	</div>
+	<script>
+		(function () {
+			var tl = gsap.timeline({ paused: true })
+			tl.fromTo('#tag', { yPercent: 160 }, { yPercent: 0, duration: 0.5, ease: 'power3.out' }, 0.1)
+			// The pet bobs once, like it is looking at you.
+			tl.fromTo('#tag-pet', { y: 0 }, { y: -12, duration: 0.25, ease: 'power2.out', yoyo: true, repeat: 1 }, 0.7)
+			window.__timelines['tag'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

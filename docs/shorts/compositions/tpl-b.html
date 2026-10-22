@@ -1,0 +1,65 @@
+<!doctype html>
+<!-- Template B, "Spot the difference": two real captures stacked. The top one is what you usually get (a plain diff, a log);
+     the bottom one slides up from the frame's edge at the reveal and is what Insilode shows. Until then the second slot
+     is empty on purpose: the viewer looks for what is missing. -->
+<html lang="en" data-composition-variables='[
+{"id":"question","type":"string","label":"Question, lines split by |, *accent*","default":"What does this|diff *not* tell you?"},
+{"id":"topUrl","type":"string","label":"Top capture","default":"assets/captures/C1-commit.jpg"},
+{"id":"camTop","type":"string","label":"Top camera keys (JSON)","default":"[{\"t\":0,\"cx\":0.3,\"cy\":0.8,\"w\":0.4}]"},
+{"id":"labelTop","type":"string","label":"Top label","default":"git log --stat"},
+{"id":"bottomUrl","type":"string","label":"Bottom capture","default":"assets/captures/C3-changes.jpg"},
+{"id":"camBottom","type":"string","label":"Bottom camera keys (JSON)","default":"[{\"t\":0,\"cx\":0.3,\"cy\":0.15,\"w\":0.4}]"},
+{"id":"labelBottom","type":"string","label":"Bottom label","default":"the flow"},
+{"id":"rings","type":"string","label":"Rings on the bottom picture (JSON)","default":"[]"},
+{"id":"revealAt","type":"number","label":"Reveal time (s)","default":8},
+{"id":"duration","type":"number","label":"Scene length (s)","default":16},
+{"id":"loop","type":"number","label":"Loop-back length (s)","default":2}
+]'>
+<body>
+<template id="tpl-b-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#b-q { font-size: 84px; }
+		#b-top { left: var(--px); top: 450px; width: var(--pw); height: 395px; }
+		#b-bot { left: var(--px); top: 880px; width: var(--pw); height: 410px; }
+		.b-lab { position: absolute; right: 22px; bottom: 20px; background: rgba(12, 16, 32, .92); }
+		#b-slot { position: absolute; left: var(--px); top: 880px; width: var(--pw); height: 410px; border: 4px dashed var(--rule); border-radius: 28px; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-weight: 700; font-size: 150px; color: var(--ink-2); }
+	</style>
+	<div id="root" data-composition-id="tpl-b" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="b-q" class="q hl"></div>
+		<div id="b-top" class="panel">
+			<div id="b-camt" class="cam" data-layout-allow-overflow><img data-var-src="topUrl" src="assets/blank.png#top" alt=""></div>
+			<span class="chip b-lab amber" data-var-text="labelTop">git log --stat</span>
+		</div>
+		<div id="b-slot" data-layout-allow-occlusion>?</div>
+		<div id="b-bot" class="panel" data-layout-allow-overflow data-layout-allow-occlusion>
+			<div id="b-camb" class="cam" data-layout-allow-overflow><img data-var-src="bottomUrl" src="assets/blank.png#bottom" alt=""></div>
+			<span class="chip b-lab" data-var-text="labelBottom">the flow</span>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('tpl-b'), S = Shorts
+			var dur = V.duration, loop = V.loop, cut = dur - loop
+			var tl = gsap.timeline({ paused: true })
+			S.lines(document.getElementById('b-q'), V.question, 'b-q')
+			function ride(sel, keysJson, ph) {
+				var keys = S.json(keysJson, [])
+				var last = keys[keys.length - 1]
+				keys.push({ t: cut, cx: last.cx, cy: last.cy, w: last.w })
+				keys.push({ t: dur - 0.05, cx: keys[0].cx, cy: keys[0].cy, w: keys[0].w })
+				S.camera(tl, sel, keys, 972, ph)
+			}
+			ride('#b-camt', V.camTop, 395)
+			ride('#b-camb', V.camBottom, 410)
+			S.rings(tl, document.getElementById('b-camb'), S.json(V.rings, []))
+			// The second picture arrives through the bottom edge of the frame, and leaves the same way into the loop.
+			tl.fromTo('#b-bot', { y: 1100 }, { y: 0, duration: 0.6, ease: 'power3.out' }, V.revealAt)
+			tl.to('#b-bot', { y: 1100, duration: 0.5, ease: 'power2.in' }, cut - 0.2)
+			window.__timelines['tpl-b'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>
