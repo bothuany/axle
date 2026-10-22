@@ -65,6 +65,7 @@ Next to the copies, `import-report.txt` lists what was added, what was kept, wha
 ## Limits
 
 - Settings, keybindings and snippets are written to Insilode's default profile.
+- In a window connected to a remote machine (SSH, WSL, a container), the import runs where the workspace's extensions run: it reads that machine's home folder.
 - A settings key from an extension Open VSX does not have is still imported (it does nothing until such an extension is installed). VS Code's Settings editor may mark it as unknown.
 - Settings Sync, Copilot sign-in, workspace (`.vscode/settings.json`) settings and other editors' profiles are not imported. Workspace settings travel with the project anyway.
 - In `npm run web` (a development mode), the source is read on the machine that runs the server and the settings are written to the browser's user data, as every setting in that mode is. That mode has no extension gallery (the web client only gets one when `product.json` has a `resourceUrlTemplate`), so extensions are not installed there: the report says so and lists them, and the rest of the import works.
