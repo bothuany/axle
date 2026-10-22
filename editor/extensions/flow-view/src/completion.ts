@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: what a card completion is made of besides the language server's answer. No `vscode` import, so
+ *  Insilode: what a card completion is made of besides the language server's answer. No `vscode` import, so
  *  it can be tested on its own.
  *
  *  Completion in a card must never be worse than plain Monaco: whatever the language server says (nothing,

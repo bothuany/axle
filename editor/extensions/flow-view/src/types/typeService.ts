@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle type model: the extension-host service. Gathers the C# analyzer's types and the code
+ *  Insilode type model: the extension-host service. Gathers the C# analyzer's types and the code
  *  index's facts into one TypeGraph, caches it, drops it when either source refreshes, and
  *  serves the boards and the type tree of the chips from it. Works with only the index (no C#
  *  solution) and with only the analyzer. It never starts the analyzer (that may ask which

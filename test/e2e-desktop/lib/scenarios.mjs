@@ -1,4 +1,4 @@
-// The scenarios that run against a started Axle (an installed build, or a source checkout). Each returns
+// The scenarios that run against a started Insilode (an installed build, or a source checkout). Each returns
 // `{ status: 'pass' | 'skip', detail, shots }` or throws; run.mjs records it, retrying a throw once from a fresh app.
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -12,7 +12,7 @@ const pass = (detail, shots = []) => ({ status: 'pass', detail, shots })
 export function tourFile(folder) {
 	const file = join(folder, 'e2e.tour.json')
 	writeFileSync(file, JSON.stringify({
-		axleTour: 1,
+		insilodeTour: 1,
 		id: 'e2e',
 		title: 'E2E tour',
 		flow: { http: 'POST /api/orders' },
@@ -24,10 +24,10 @@ export function tourFile(folder) {
 	return file
 }
 
-/** Branding and onboarding: the window says Axle, nothing says Code - OSS, and no Welcome or Get Started page opened itself. */
+/** Branding and onboarding: the window says Insilode, nothing says Code - OSS, and no Welcome or Get Started page opened itself. */
 export async function branding(ctx) {
 	const page = await ctx.app.workbench()
-	await until('the window title to say Axle', async () => /Axle/.test(await page.title()), { ms: 30000 })
+	await until('the window title to say Insilode', async () => /Insilode/.test(await page.title()), { ms: 30000 })
 	const title = await page.title()
 	if (/Code - OSS|Visual Studio Code/.test(title)) {
 		throw new Error(`The window title still carries another product's name: "${title}"`)
@@ -37,7 +37,7 @@ export async function branding(ctx) {
 	const tabs = await tabTitles(page)
 	const picture = await shot(page, ctx.results, 'branding')
 	if (await welcomeDialog(page)) {
-		throw new Error(`VS Code's first-run Welcome dialog ("Welcome to VS Code", sign in to use GitHub Copilot) opens over Axle: ${picture}`)
+		throw new Error(`VS Code's first-run Welcome dialog ("Welcome to VS Code", sign in to use GitHub Copilot) opens over Insilode: ${picture}`)
 	}
 	const onboarding = tabs.filter(t => /welcome|get started|walkthrough/i.test(t))
 	if (onboarding.length || await page.locator('.gettingStartedContainer').count()) {
@@ -51,10 +51,23 @@ export async function canvasTour(ctx) {
 	const page = await ctx.app.workbench()
 	await dismissWelcome(page)
 	const file = tourFile(ctx.folder)
-	await runCommand(page, 'Axle: Play Tour from File')
-	// With a tour file in the workspace the command lists it; the file we wrote is the only one.
-	await until('the tour file to be offered', async () => (await page.locator('.quick-input-list .monaco-list-row').count()) > 0, { ms: 20000 })
-	await page.keyboard.press('Enter')
+	// The command exists once the extension has started and the flow needs the code index: until then it fails quietly, so ask again
+	// (each attempt is the whole gesture: palette, pick the file) until a flow tab is there.
+	await until('a flow tab after "Play Tour from File"', async () => {
+		if ((await tabTitles(page)).some(t => /^Flow:/.test(t))) {
+			return true
+		}
+		await runCommand(page, 'Insilode: Play Tour from File').catch(() => page.keyboard.press('Escape'))
+		// The picker lists the tour file we wrote; the palette's own rows must not be taken for it.
+		const row = page.locator('.quick-input-list .monaco-list-row', { hasText: 'e2e.tour.json' })
+		if (await row.first().waitFor({ timeout: 6000 }).then(() => true, () => false)) {
+			await row.first().click()
+		} else {
+			await page.keyboard.press('Escape')
+		}
+		await sleep(8000)
+		return (await tabTitles(page)).some(t => /^Flow:/.test(t))
+	}, { ms: 120000, every: 2000 })
 	const canvas = await until('the flow canvas', () => findCanvas(page), { ms: 90000, every: 1000 })
 	await until('a card on the canvas', async () => (await canvas.locator('.react-flow__node').count()) > 0, { ms: 60000, every: 1000 })
 	const caption = await until('the tour caption', async () => {
@@ -69,7 +82,7 @@ export async function canvasTour(ctx) {
 	return pass(`${asTab ? 'canvas opened as an editor tab' : 'canvas opened beside the editor (not an editor tab in this build)'}; caption: "${caption.slice(0, 60)}"`, [await shot(page, ctx.results, 'canvas-tour')])
 }
 
-const OVERLAY_TITLE = 'Axle Agents'
+const OVERLAY_TITLE = 'Insilode Agents'
 const overlayInfo = ctx => ctx.app.main(({ BrowserWindow }, title) => {
 	const w = BrowserWindow.getAllWindows().find(x => x.getTitle() === title && !x.isDestroyed())
 	return w ? { visible: w.isVisible(), bounds: w.getBounds() } : null
@@ -81,7 +94,7 @@ async function saveOverlayShot(ctx, overlay, name) {
 	return file
 }
 
-/** The status island: it appears with the fake agents, and (where this build has the controls) minimizes, drags, closes and hides while Axle is focused. */
+/** The status island: it appears with the fake agents, and (where this build has the controls) minimizes, drags, closes and hides while Insilode is focused. */
 export async function island(ctx) {
 	const page = await ctx.app.workbench()
 	await dismissWelcome(page)
@@ -121,13 +134,15 @@ export async function island(ctx) {
 		if (movePointer(sx, sy)) {
 			const box = await overlay.locator('.box').boundingBox()
 			const [px, py] = [box.x + box.width / 2, box.y + box.height / 2]
+			// The island follows the pointer, so in the page's own coordinates the pointer stays where it is while the real cursor moves.
 			await overlay.mouse.move(px, py)
 			await overlay.mouse.down()
 			for (let i = 1; i <= 8; i++) {
 				movePointer(sx + i * 20, sy + i * 12)
-				await overlay.mouse.move(px + i * 20, py + i * 12)
+				await overlay.mouse.move(px + (i % 2), py)
 				await sleep(60)
 			}
+			await overlay.mouse.move(px, py)
 			await overlay.mouse.up()
 			await sleep(500)
 			const after = (await overlayInfo(ctx)).bounds
@@ -140,21 +155,27 @@ export async function island(ctx) {
 		}
 	}
 
-	// Hidden while Axle is focused: the setting is live, and a window has to be focused for real.
+	// Hidden while Insilode is focused: the setting is live, and a window has to be focused for real.
 	if (direct) {
-		ctx.setSettings({ 'flow.agents.desktop.overlay.autoHide': { noAgents: true, axleFocused: true } })
+		ctx.setSettings({ 'flow.agents.desktop.overlay.autoHide': { noAgents: true, insilodeFocused: true } })
 		const focused = await ctx.app.main(({ BrowserWindow }, title) => {
 			BrowserWindow.getAllWindows().find(x => x.getTitle() !== title && !x.isDestroyed())?.focus()
 			return !!BrowserWindow.getFocusedWindow()
 		}, OVERLAY_TITLE)
 		if (focused) {
-			await until('the island to hide while Axle is focused', async () => !(await overlayInfo(ctx))?.visible, { ms: 15000 })
+			await until('the island to hide while Insilode is focused', async () => !(await overlayInfo(ctx))?.visible, { ms: 15000 })
 			steps.push('hidden while focused')
 		} else {
 			steps.push('hide-while-focused skipped (this OS gave the window no focus)')
 		}
-		ctx.setSettings({ 'flow.agents.desktop.overlay.autoHide': { noAgents: true, axleFocused: false } })
-		await until('the island to come back', async () => (await overlayInfo(ctx))?.visible, { ms: 15000 })
+		// VS Code can miss a settings file written right after the last write: let that one land, and write again while waiting.
+		await sleep(3000)
+		let n = 0
+		await until('the island to come back', async () => {
+			ctx.setSettings({ 'flow.agents.desktop.overlay.autoHide': { noAgents: true, insilodeFocused: false }, 'flow.e2e.nonce': ++n })
+			await sleep(2000)
+			return (await overlayInfo(ctx))?.visible
+		}, { ms: 40000, every: 500 })
 	}
 
 	// Close: the x turns the island off in the settings.
@@ -167,7 +188,7 @@ export async function island(ctx) {
 }
 
 export const APP_SCENARIOS = [
-	{ id: 'branding', title: 'Starts with Axle branding, no VS Code onboarding', run: branding },
+	{ id: 'branding', title: 'Starts with Insilode branding, no VS Code onboarding', run: branding },
 	{ id: 'canvas-tour', title: 'Flow canvas opens and a tour plays', run: canvasTour },
 	{ id: 'island', title: 'Status island: shows, minimizes, drags, hides, closes', run: island },
 ]

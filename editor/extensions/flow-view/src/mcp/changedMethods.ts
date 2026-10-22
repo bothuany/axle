@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle agent bridge: which methods of a file an agent's edit landed in. The turn impact used to count
+ *  Insilode agent bridge: which methods of a file an agent's edit landed in. The turn impact used to count
  *  every function of an edited file; with the edit's line ranges it can name the methods it changed,
  *  and only the flows that reach those. An edit outside every method (imports, a field, a constant)
  *  may change any of them, so then the whole file counts, as before.

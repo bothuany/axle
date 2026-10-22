@@ -12,7 +12,7 @@ AI writes so much code that developers lose the know-how of their own system. Sk
 
 1. **Variant A order.** After a plan is approved, the agent draws the target design (class or ER) with `draw_board`. The developer then writes the skeleton in the editor: types, entities, interfaces, signatures, empty bodies.
 2. **The diagram is corrected by talking.** "Make DiscountPolicy an interface", "remove the repository": the agent redraws the same board. This repeats until the developer accepts it. Nothing is edited by dragging.
-3. **An on/off switch, never imposed, per agent.** Each agent row in the dock has one "Skeleton" button (pressed when on), explained in its tooltip, and nothing else. The setting `axle.skeletonFirst.enabled` (default off) is only the starting value for an agent nobody has switched. When it is on for an agent, the mode is offered only when the plan adds or changes types, entities or interfaces. "Just do it" is always one sentence to the agent. Turning it off takes effect at once.
+3. **An on/off switch, never imposed, per agent.** Each agent row in the dock has one "Skeleton" button (pressed when on), explained in its tooltip, and nothing else. The setting `insilode.skeletonFirst.enabled` (default off) is only the starting value for an agent nobody has switched. When it is on for an agent, the mode is offered only when the plan adds or changes types, entities or interfaces. "Just do it" is always one sentence to the agent. Turning it off takes effect at once.
 4. **Live plan vs actual.** While the developer writes, the board is recomputed from the real type index on every save. Each type and member is marked **matches**, **missing** or **differs**; a type or member that was already in the code when the design was drawn is **existing** (neutral). The diagram is the plan and the code is the truth; nothing round-trips.
 5. **Check.** The developer says "check"; the MCP tool `check_skeleton` returns the structured diff. The agent explains each difference with a reason and does not fix the code. When the developer answers "mine is better", the agent argues its case or updates the plan.
 6. **Hand over.** The agent fills the bodies. There is **no lock, only a warning**: if the agent changes a signature, a name or a relation the developer wrote, a passive warning shows on the board and in the agent's own reply, with the before and after text; keep or revert is the developer's call.
@@ -23,7 +23,7 @@ The council's main objection: in variant A the developer types out a design they
 
 ## The gate: an MCP handshake before the first edit, in any mode
 
-Claude Code keeps working in the same turn after the user approves `ExitPlanMode`. Axle's hooks only observe, so `PostToolUse ExitPlanMode` fires after the agent is already on its way to its first edit. The dock cannot type into a working session either. A dock-only gate would therefore come too late. Hooking `ExitPlanMode` is also version-dependent, and Codex has no such tool. And many requests never go through plan mode at all.
+Claude Code keeps working in the same turn after the user approves `ExitPlanMode`. Insilode's hooks only observe, so `PostToolUse ExitPlanMode` fires after the agent is already on its way to its first edit. The dock cannot type into a working session either. A dock-only gate would therefore come too late. Hooking `ExitPlanMode` is also version-dependent, and Codex has no such tool. And many requests never go through plan mode at all.
 
 So the gate is something the agent does **before its first edit**, plan mode or not: it calls `check_skeleton`.
 
@@ -62,7 +62,7 @@ Per agent session, held in the window's memory (`src/skeleton/sessions.ts`). A w
 | `handover` | Step `handover` (the developer said "hand over") | The diff, numbered warnings, "fill the bodies, keep the signatures, report each warning, close with a tour" |
 
 - Step `just` drops the stage ("implement as usual"); step `finish` drops it at the end.
-- Turning an agent's switch off ends its stage at once (the board loses its colours); other agents keep theirs. `check_skeleton` asks the dock for that agent's switch (`flow.agents.skeletonOn`); an agent Axle did not start has no switch and follows the setting.
+- Turning an agent's switch off ends its stage at once (the board loses its colours); other agents keep theirs. `check_skeleton` asks the dock for that agent's switch (`flow.agents.skeletonOn`); an agent Insilode did not start has no switch and follows the setting.
 
 ## Plan vs actual: the matcher
 
@@ -109,7 +109,7 @@ The developer says "hand over"; the agent calls `check_skeleton` with step `hand
   - **on the board**, as an amber mark on the member, its tooltip naming the change and how to put it back;
   - **in the agent's reply**: after filling, the agent calls `check_skeleton` again, which lists the numbered warnings, and tells the developer each one, before → after, and why.
 - The developer answers in the chat. "Keep it" → step `accept` with the warning number (the new header becomes the recorded one). "Revert" → the agent puts the recorded header back, keeping the body.
-- **Revert without the agent:** the command **Axle: Revert an Agent's Change to Your Declaration** lists the warnings. It writes the recorded header back over the current declaration lines only, never the whole file, and refuses a file with unsaved changes or one that moved on since the warning. It is a command the developer runs, never an MCP tool, because tools write nothing.
+- **Revert without the agent:** the command **Insilode: Revert an Agent's Change to Your Declaration** lists the warnings. It writes the recorded header back over the current declaration lines only, never the whole file, and refuses a file with unsaved changes or one that moved on since the warning. It is a command the developer runs, never an MCP tool, because tools write nothing.
 
 ## The closing tour
 
@@ -175,7 +175,7 @@ At the user's request the dock row has a single "Skeleton" button and nothing el
 ## Chat-driven flow: trust and probe (2026-10-20)
 
 - **Steps rest on the agent's honesty.** A step from the agent (`handover`, `just`, `accept`, `finish`) is taken on the agent's word that the developer asked for it. Every step is logged with the session. A keep (`accept`) never disappears silently: the board still marks it, as "Kept (the agent was told to keep it)".
-- **Agents Axle did not start** have no switch: they may check, but their steps are refused.
+- **Agents Insilode did not start** have no switch: they may check, but their steps are refused.
 - **Probe**, Haiku 5.5 in auto mode, outside plan mode:
   - The button rendered off, on hover and on.
   - Turned on, "add loyalty points": the agent called `check_skeleton`, drew the design and stopped. The board was already comparing the design with the code, and the agent told the developer in the chat what to say next.
@@ -221,7 +221,7 @@ A developer used it on a CRM (analytics-service) and had to ask the agent which 
 - **A file written outside the editor** (IntelliJ, a formatter, git, the shell) fires no save in this window. The index's own watcher did catch it, but only after it re-listed every entry point, and the file never counted as "written since the design" (which the rename rule and the choice between same-named types depend on). The skeleton host now watches code files itself (create, change, delete), marks them as written, re-reads them and recolours, about a second after the write.
 - **Nothing happened while typing.** The index read only the disk. A new worker op, `overlay`, reads an editor buffer as the file's content until the next save (its mtime never equals a file's, so it is never cached); the host sends the buffers of the files being typed in after a 500 ms pause (`ChangeBatcher`, `src/skeleton/changes.ts`). Closing a file without saving reads the disk again.
 
-Probe (web mode, Claude Code 2.1.306, Haiku 5.5 from the demo copy's `.claude/settings.json`, auto mode; a copy of the two-service CRM fixture; screenshots in `docs/design/skeleton-paths/`):
+Probe (web mode, Claude Code 2.1.306, Haiku 5.5 from the demo copy's `.claude/settings.json`, auto mode; a copy of the two-service CRM fixture):
 - The request "a bill + user report in analytics-service" through the dock (Skeleton on): the agent called `check_skeleton`, drew four new types and stopped. Every node shows `＋ …/controller/BillUserReportController.java` and so on (1).
 - A click on the controller offers "Create file" or "Copy path" (2); "Create file" wrote the package line and an empty class and opened it.
 - A write from the shell, as another tool would (3): the members of the controller ticked within two seconds; the DTO written the same way turned MATCHES (4, "1 matches · 3 missing").

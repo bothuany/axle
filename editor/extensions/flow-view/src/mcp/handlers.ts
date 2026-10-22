@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle agent bridge: what the tools do inside the window. Everything here reads, opens or draws:
+ *  Insilode agent bridge: what the tools do inside the window. Everything here reads, opens or draws:
  *  no file is written and no agent-chosen command is run (the diff view reads git state through the Git extension, and
  *  asks `git config --list` about a repository's config before opening a repository the Git extension has not found itself). Paths must be inside a workspace folder; the board is
  *  validated here (the MCP process is not the trust boundary). Nothing starts the analyzer in a way
@@ -71,13 +71,13 @@ export interface ToolDeps {
 
 /** What a bridge call says about who made it. */
 export interface CallContext {
-	/** The agent session (AXLE_SESSION of the MCP server's environment), when the agent was started by Axle. */
+	/** The agent session (INSILODE_SESSION of the MCP server's environment), when the agent was started by Insilode. */
 	session?: string;
 }
 
 /** What the tour tools need of the canvas (the flow panel): play a tour, where the reader is, move them, close it. */
 export interface TourPlayer {
-	/** `session`: the agent session that made it, when it said (AXLE_SESSION): the reader's questions go back to it. */
+	/** `session`: the agent session that made it, when it said (INSILODE_SESSION): the reader's questions go back to it. */
 	play(tour: Tour, session?: string): Promise<void>;
 	state(): { id: string; steps: number; index: number | undefined; paused: boolean; asking: boolean; session?: string } | undefined;
 	go(index: number): Promise<void>;
@@ -133,8 +133,8 @@ function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 }
 
 const ROSLYN_WAIT = {
-	loading: 'Axle is loading the C# solution (the first load takes a while). Try again in about 20 seconds.',
-	choose: 'There are several C# solutions and none is chosen: ask the user to pick one ("Axle: Choose Solution…"), then try again.',
+	loading: 'Insilode is loading the C# solution (the first load takes a while). Try again in about 20 seconds.',
+	choose: 'There are several C# solutions and none is chosen: ask the user to pick one ("Insilode: Choose Solution…"), then try again.',
 };
 
 interface Resolved { target: FlowTarget; label: string; source: Source | 'lsp'; id?: string; file?: string }
@@ -319,11 +319,11 @@ export class AgentTools {
 			const none = only ? 'No changes in the given files' : `No ${since ? `changes since ${since}` : 'uncommitted changes'} in ${repos} git repositor${repos === 1 ? 'y' : 'ies'} of this workspace`;
 			return text([`${none}.`, ...notes].join('\n'));
 		}
-		const title = typeof a.title === 'string' && a.title.trim() ? a.title.trim().slice(0, 80) : `Axle: ${since ? `Changes since ${since}` : 'Changes'} (${list.length} file${list.length === 1 ? '' : 's'})`;
+		const title = typeof a.title === 'string' && a.title.trim() ? a.title.trim().slice(0, 80) : `Insilode: ${since ? `Changes since ${since}` : 'Changes'} (${list.length} file${list.length === 1 ? '' : 's'})`;
 		await this.openChanges(changes, title);
 		const multi = new Set(list.map(r => r.repo)).size > 1;
 		const out = [
-			`Opened the diff of ${list.length} file${list.length === 1 ? '' : 's'} in Axle (working tree against ${since ?? 'HEAD'}; A new, M modified, D deleted, R renamed):`,
+			`Opened the diff of ${list.length} file${list.length === 1 ? '' : 's'} in Insilode (working tree against ${since ?? 'HEAD'}; A new, M modified, D deleted, R renamed):`,
 			...list.slice(0, 60).map(r => `${r.mark} ${this.rel(r.uri.fsPath)}${multi ? `  [${r.repo}]` : ''}`),
 			list.length > 60 ? `... and ${list.length - 60} more` : '',
 			...notes,
@@ -347,7 +347,7 @@ export class AgentTools {
 	}
 
 	/**
-	 * The changes of an agent worktree flow-agent made (`<repo>/.axle/worktrees/<slug>`) since its branch left `base`. Only a
+	 * The changes of an agent worktree flow-agent made (`<repo>/.insilode/worktrees/<slug>`) since its branch left `base`. Only a
 	 * linked worktree of a repository the Git extension already has open for this window is accepted: its git folder must be
 	 * `<that repo's .git>/worktrees/<name>`, so it shares that repository's config (already trusted by opening it) and
 	 * opening it cannot run anything new. `base` is a branch name, checked here and resolved to a commit before use.
@@ -806,7 +806,7 @@ export class AgentTools {
 		const root = await within(this.d.providerFor(r.target).graph(r.target), 120_000, 'the flow');
 		const t = flowToText(root, { depth: num(a.depth, 6, 12), rel: f => this.rel(f) });
 		return text([
-			open ? `Opened the flow of ${r.label} in Axle.` : `Flow of ${r.label}:`,
+			open ? `Opened the flow of ${r.label} in Insilode.` : `Flow of ${r.label}:`,
 			'Format: "-> L<n>" is the line in the caller where the call is made; [db] marks a table; ~table after a [db] line means the table name is a guess (a naming default or raw SQL, not ORM metadata).',
 			'',
 			t.text,
@@ -820,7 +820,7 @@ export class AgentTools {
 		if (!found) {
 			const known = await this.d.tables.known().catch(() => [] as string[]);
 			return text([
-				`No entity or table named "${name}" is known to Axle's code index or, when it is loaded, the C# analyzer.`,
+				`No entity or table named "${name}" is known to Insilode's code index or, when it is loaded, the C# analyzer.`,
 				known.length ? `Tables it knows (${known.length}): ${known.slice(0, 40).join(', ')}${known.length > 40 ? ', ...' : ''}.` : 'It knows no tables yet: the index may still be building, or the project has no ORM entities in a language with schema cards.',
 				`Not checked: ${NOT_CHECKED}.`,
 			].join('\n'));
@@ -986,7 +986,7 @@ export class AgentTools {
 		})), 8000, 'listing the methods').catch(() => undefined);
 		const look = ctx.session ? await this.d.describeAgent(ctx.session).catch(() => undefined) : undefined;
 		const { tour, flow, notes } = parseTourArgs(a, { roots, readText: readTextIn(roots), methodsIn: f => methods.get(f) }, look?.label ?? 'Agent tour');
-		// The cursor is the agent's: its name and colour from the dock. An agent Axle did not start has a plain pointer.
+		// The cursor is the agent's: its name and colour from the dock. An agent Insilode did not start has a plain pointer.
 		if (look) {
 			tour.agent = look;
 		}
@@ -1057,7 +1057,7 @@ export class AgentTools {
 
 	private async checkSkeleton(a: Record<string, unknown>, ctx: CallContext): Promise<string> {
 		if (!this.d.skeleton) {
-			return 'Skeleton first is not available in this Axle window: implement the plan as usual.';
+			return 'Skeleton first is not available in this Insilode window: implement the plan as usual.';
 		}
 		const step = a.step === undefined ? undefined : (SKELETON_STEPS as readonly unknown[]).includes(a.step) ? a.step as SkeletonStep : undefined;
 		if (a.step !== undefined && !step) {
@@ -1133,7 +1133,7 @@ export class AgentTools {
 		}
 		const layout = spec.kind === 'sequence' ? '' : `, ${lint.visible} visible, ~${lint.crossings} crossing${lint.crossings === 1 ? '' : 's'}`;
 		return text([
-			`Board "${id}" ${replaced ? 'replaced' : 'drawn'} and shown to the user in Axle: ${spec.kind}, ${spec.nodes.length} nodes, ${spec.edges.length} edges${layout}.`,
+			`Board "${id}" ${replaced ? 'replaced' : 'drawn'} and shown to the user in Insilode: ${spec.kind}, ${spec.nodes.length} nodes, ${spec.edges.length} edges${layout}.`,
 			spec.kind === 'plan' ? `Tick steps off with update_board (id "${id}", nodeId one of: ${spec.nodes.slice(0, 20).map(n => n.id).join(', ')}).` : `Use id "${id}" again to replace it.`,
 			...formatLint(notes, found, lint),
 			...(skeleton ? ['', skeleton] : []),
@@ -1265,7 +1265,7 @@ export class AgentTools {
 
 	/** Migration files of the workspace (SQL, Flyway, Liquibase, Alembic, Django, TypeORM, Rails): read, never run. EF Core migrations need the analyzer and are not read here. */
 	private async migrations(): Promise<Migration[]> {
-		const found = await vscode.workspace.findFiles('**/{migrations,Migrations,migrate,changelog,versions,db}/**/*.{sql,py,rb,ts,js,xml,yaml,yml,json}', '**/{node_modules,out,dist,build,target,.git,.axle}/**', 300);
+		const found = await vscode.workspace.findFiles('**/{migrations,Migrations,migrate,changelog,versions,db}/**/*.{sql,py,rb,ts,js,xml,yaml,yml,json}', '**/{node_modules,out,dist,build,target,.git,.insilode}/**', 300);
 		const out: Migration[] = [];
 		for (const uri of found) {
 			if (!isMigrationPath(uri.fsPath)) {
@@ -1358,7 +1358,7 @@ export class AgentTools {
 		const id = await this.d.boards.set(board as unknown as Parameters<BoardStore['set']>[0], { id: wanted, origin: 'agent' });
 		const nodes = board.nodes.slice(0, 40).map(n => `${n.id}${n.symbol ? ` = ${n.symbol}` : ''}${n.file ? ` (${this.rel(n.file)}${n.line ? `:${n.line}` : ''})` : ''}`);
 		return text([
-			`Board "${id}" ${replaced ? 'replaced' : 'generated from the code and shown'} in Axle: ${board.kind}${board.level ? ` (${board.level})` : ''}, ${board.nodes.length} nodes, ${board.edges.length} edges.`,
+			`Board "${id}" ${replaced ? 'replaced' : 'generated from the code and shown'} in Insilode: ${board.kind}${board.level ? ` (${board.level})` : ''}, ${board.nodes.length} nodes, ${board.edges.length} edges.`,
 			'Every node and relation was read from the code index. Add titles and notes by calling again with the same id and `notes`: [{node, text}]; relations cannot be added here. To draw something the code does not show, use draw_board.',
 			...out.notes.map(n => `- ${n}`),
 			...warnings,

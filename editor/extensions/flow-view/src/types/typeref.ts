@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle type model: reading a declared type as written (`Map<String, List<UserDto>>`,
+ *  Insilode type model: reading a declared type as written (`Map<String, List<UserDto>>`,
  *  `string[]`, `Optional[User]`, `User | null`) and unwrapping it to the workspace types it is
  *  made of, with how many of them it holds. Collections, optionals, response wrappers and
  *  framework generics are seen through; types that do not resolve to the workspace are dropped.

@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the steps of merging, removing and letting go of an agent's worktree, with the dialogs
+ *  Insilode: the steps of merging, removing and letting go of an agent's worktree, with the dialogs
  *  and git behind small interfaces, so the order of the checks (ask first, look again after the
  *  answer, a second yes before uncommitted work is lost) is tested in node (test/worktreeFlow).
  *  worktreeActions.ts runs them with VS Code's dialogs and the real git.
@@ -41,36 +41,36 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 export async function mergeFlow(a: FlowAgent, wt: Worktree, ui: FlowUi, git: FlowGit): Promise<'merged' | 'cancelled' | 'refused' | 'nothing' | 'failed'> {
 	const plan = await git.planMerge(wt);
 	if (plan.kind === 'refuse') {
-		ui.error(`Axle: not merging ${wt.branch} into ${wt.base}: ${plan.reason}`);
+		ui.error(`Insilode: not merging ${wt.branch} into ${wt.base}: ${plan.reason}`);
 		return 'refused';
 	}
 	if (plan.kind === 'nothing') {
-		ui.info(`Axle: ${wt.branch} has no commits that ${wt.base} does not have.${(await git.changedFiles(wt.path))?.length ? ' Its changes are not committed yet.' : ''}`);
+		ui.info(`Insilode: ${wt.branch} has no commits that ${wt.base} does not have.${(await git.changedFiles(wt.path))?.length ? ' Its changes are not committed yet.' : ''}`);
 		return 'nothing';
 	}
 	const how = plan.kind === 'fast-forward' ? `fast-forward ${wt.base} to it` : `make a merge commit on ${wt.base}`;
 	const n = plan.uncommitted;
 	const warn = n ? `\n\n${plural(n, 'uncommitted file')} ${n === 1 ? 'stays' : 'stay'} in the worktree and ${n === 1 ? 'is' : 'are'} not merged: ask ${a.name} to commit first if ${n === 1 ? 'it belongs' : 'they belong'} in.` : '';
-	const ok = await ui.choose(`Merge ${wt.branch} into ${wt.base}?`, `${plural(plan.ahead, 'commit')} from ${a.name}'s worktree. Axle will ${how} in ${wt.root}.${warn}`, ['Merge']);
+	const ok = await ui.choose(`Merge ${wt.branch} into ${wt.base}?`, `${plural(plan.ahead, 'commit')} from ${a.name}'s worktree. Insilode will ${how} in ${wt.root}.${warn}`, ['Merge']);
 	if (ok !== 'Merge') {
 		return 'cancelled';
 	}
 	const now = await git.planMerge(wt);
 	if (now.kind === 'refuse' || now.kind === 'nothing') {
-		ui.error(`Axle: not merging ${wt.branch} into ${wt.base} after all: ${now.kind === 'refuse' ? now.reason : `${wt.base} has its commits already`}`);
+		ui.error(`Insilode: not merging ${wt.branch} into ${wt.base} after all: ${now.kind === 'refuse' ? now.reason : `${wt.base} has its commits already`}`);
 		return now.kind === 'refuse' ? 'refused' : 'nothing';
 	}
 	if (now.kind !== plan.kind) {
 		// A fast-forward that became a merge commit (base moved on) is a different change from the one agreed to.
-		ui.error(`Axle: ${wt.base} changed while you were deciding: the merge would now ${now.kind === 'merge' ? 'make a merge commit' : 'be a fast-forward'}. Try Merge again.`);
+		ui.error(`Insilode: ${wt.base} changed while you were deciding: the merge would now ${now.kind === 'merge' ? 'make a merge commit' : 'be a fast-forward'}. Try Merge again.`);
 		return 'cancelled';
 	}
 	const r = await git.merge(wt, now.kind);
 	if (r.ok) {
-		ui.info(`Axle: merged ${wt.branch} into ${wt.base}.`);
+		ui.info(`Insilode: merged ${wt.branch} into ${wt.base}.`);
 		return 'merged';
 	}
-	ui.error(`Axle: the merge of ${wt.branch} failed: ${r.reason}`);
+	ui.error(`Insilode: the merge of ${wt.branch} failed: ${r.reason}`);
 	return 'failed';
 }
 
@@ -88,7 +88,7 @@ export async function removeFlow(a: FlowAgent, wt: Worktree, ui: FlowUi, git: Fl
 	if (dirty === undefined || dirty.length) {
 		const files = dirty ?? [];
 		const again = await ui.choose(
-			dirty === undefined ? `Axle could not read the worktree's status. Remove it anyway?` : `${plural(files.length, 'uncommitted change')} in the worktree will be lost.`,
+			dirty === undefined ? `Insilode could not read the worktree's status. Remove it anyway?` : `${plural(files.length, 'uncommitted change')} in the worktree will be lost.`,
 			files.slice(0, 12).join('\n') + (files.length > 12 ? `\n… and ${files.length - 12} more` : ''),
 			['Remove and Lose Changes'],
 		);
@@ -108,10 +108,10 @@ export async function removeFlow(a: FlowAgent, wt: Worktree, ui: FlowUi, git: Fl
 		r = await git.removeWorktree(wt, force);
 	}
 	if (!r.ok) {
-		ui.error(`Axle: could not remove the worktree: ${r.reason}`);
+		ui.error(`Insilode: could not remove the worktree: ${r.reason}`);
 		return 'failed';
 	}
-	ui.info(`Axle: removed the worktree. The branch ${wt.branch} is still there.`);
+	ui.info(`Insilode: removed the worktree. The branch ${wt.branch} is still there.`);
 	return 'removed';
 }
 

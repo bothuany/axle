@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: what an agent changed, per card. flow-agent calls `flow.agentWillEdit` right before a
+ *  Insilode: what an agent changed, per card. flow-agent calls `flow.agentWillEdit` right before a
  *  write is allowed; we keep the file as it was ("baseline") until the user keeps or undoes it.
  *--------------------------------------------------------------------------------------------*/
 
@@ -262,7 +262,7 @@ export class AgentChanges implements vscode.Disposable {
 		this.changed.fire();
 	}
 
-	/** Edits from a CLI Axle did not start come without prompts: group those arriving close together into one step. */
+	/** Edits from a CLI Insilode did not start come without prompts: group those arriving close together into one step. */
 	ensureTurn(label: string, agent: string) {
 		const last = this.turns.at(-1);
 		if (!last || last.agent !== agent || (!last.prompted && Date.now() - last.lastActivity > 3 * 60_000)) {
@@ -404,7 +404,7 @@ export class AgentChanges implements vscode.Disposable {
 		}
 		const committed = this.turns.slice(i).find(t => t.base);
 		if (committed) {
-			return { ok: false, message: `"${committed.prompt}" includes committed work; Axle does not undo commits. Use git (revert or reset) for that.` };
+			return { ok: false, message: `"${committed.prompt}" includes committed work; Insilode does not undo commits. Use git (revert or reset) for that.` };
 		}
 		const restore = new Map<string, string>();
 		for (const t of this.turns.slice(i)) {
@@ -565,7 +565,7 @@ export class AgentChanges implements vscode.Disposable {
 		file = fileKey(file);
 		// Checked here, not only by the canvas hiding the button: the baseline is committed work, and Undo would write it back.
 		if (this.committed.has(file)) {
-			return { ok: false, message: `This change is measured against ${this.committed.get(file)} and includes committed work; Axle does not undo commits.` };
+			return { ok: false, message: `This change is measured against ${this.committed.get(file)} and includes committed work; Insilode does not undo commits.` };
 		}
 		const hunks = (await this.hunks(file)).filter(h => {
 			const from = h.newLines ? h.newStart : h.newStart + 1;

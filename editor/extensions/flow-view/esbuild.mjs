@@ -1,14 +1,17 @@
-// Bundles the extension, the polyglot index worker and the `axle` MCP server (a plain Node script, no `vscode`). The tree-sitter runtime and grammars are
+// Bundles the extension, the polyglot index worker and the `insilode` MCP server (a plain Node script, no `vscode`). The tree-sitter runtime and grammars are
 // copied next to them (never fetched at runtime): Java, Python, JavaScript, TypeScript, TSX, Go, PHP, Ruby, Rust.
 import { build } from 'esbuild'
-import { cpSync, existsSync, mkdirSync, statSync } from 'fs'
+import { cpSync, existsSync, mkdirSync, statSync, writeFileSync } from 'fs'
 import { createRequire } from 'module'
 import { dirname, join } from 'path'
 
 const common = { bundle: true, platform: 'node', format: 'cjs', target: 'node22', external: ['vscode', 'bufferutil', 'utf-8-validate'], sourcemap: true, logLevel: 'info' }
 await build({ ...common, entryPoints: ['src/extension.ts'], outfile: 'out/extension.js' })
 await build({ ...common, entryPoints: ['src/poly/worker.ts'], outfile: 'out/polyWorker.js' })
-await build({ ...common, entryPoints: ['mcp/axle-mcp.ts'], outfile: 'out/axle-mcp.js' })
+await build({ ...common, entryPoints: ['mcp/insilode-mcp.ts'], outfile: 'out/insilode-mcp.js' })
+// Before the rename Claude Code's user configuration registered `node .../out/axle-mcp.js`. That file keeps working, as the same server, until the
+// registration is moved to `insilode` (src/mcp/register.ts offers it); remove it in 0.6.
+writeFileSync('out/axle-mcp.js', "require('./insilode-mcp.js').main();\n")
 
 const wasm = join(dirname(createRequire(import.meta.url).resolve('@vscode/tree-sitter-wasm/package.json')), 'wasm')
 mkdirSync('out/wasm', { recursive: true })

@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: how an endpoint is shown in a list. A developer reads the route first; the handler and
+ *  Insilode: how an endpoint is shown in a list. A developer reads the route first; the handler and
  *  where it lives come second. The handler names the index builds are made for matching, not for
  *  reading: `Order.place` (class shortened, easy to take for the `Order` entity), `main.create_invoice`
  *  (every Python service has a `main`), `server./bff/checkout` (an inline handler). Pure (no vscode).

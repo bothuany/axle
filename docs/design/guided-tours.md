@@ -4,7 +4,7 @@ Status: design plan, nothing built yet. Written 2026-10-19 against `main` at 4a8
 
 ## The problem
 
-An agent writes more code than a person can read line by line. Axle already draws the code as a call flow, and the agent can already open things through the `axle` MCP server: `show_flow`, `open`, `open_diff` and `draw_board`. What is missing is reading the code *together*. The agent should be able to point at the canvas and say "this is where it starts, this is the part I changed, this is why". The user should be able to point back and ask.
+An agent writes more code than a person can read line by line. Insilode already draws the code as a call flow, and the agent can already open things through the `insilode` MCP server: `show_flow`, `open`, `open_diff` and `draw_board`. What is missing is reading the code *together*. The agent should be able to point at the canvas and say "this is where it starts, this is the part I changed, this is why". The user should be able to point back and ask.
 
 There are three features, and all of them build on one player on the flow canvas:
 
@@ -31,7 +31,7 @@ There are three features, and all of them build on one player on the flow canvas
 
 ## Decisions that shape everything else
 
-1. **MCP tools stay read/display-only.** `tour` never writes `.axle/tours/*.json`, and the agent cannot pin a note to disk. The window writes a tour file only when the **user** clicks Save on the canvas. That rule comes from the add-mcp-tool skill: "a tool writes no files and runs no commands". Until the user saves, a tour lives in window memory, the way boards do. Whether the agent may save without a click is open question Q2.
+1. **MCP tools stay read/display-only.** `tour` never writes `.insilode/tours/*.json`, and the agent cannot pin a note to disk. The window writes a tour file only when the **user** clicks Save on the canvas. That rule comes from the add-mcp-tool skill: "a tool writes no files and runs no commands". Until the user saves, a tour lives in window memory, the way boards do. Whether the agent may save without a click is open question Q2.
 2. **No card keys in schemas or files.** Poly card keys are positional (`p${key++}`, `poly/graph.ts:1270`), and the change set re-prefixes them (`rekey`). Entry ids are not stable either: a poly id is `file#Owner.name@line` (`java.ts:191`, `python.ts:227`…), so it changes when a line above it moves. Targets are **anchors**: file, qualified symbol, a line hint and a text anchor. Resolution happens twice. The host maps the anchor to the current file and range, and the canvas maps that file+line to the innermost drawn card.
 3. **`tour` returns at once.** It cannot block until the user is done. Anything the user does later (asks a question, exits) reaches the agent as a **new prompt** through `flow.agents.ask`. The agent reacts with `tour_control`.
 4. **One player.** The existing review tour, agent tours, saved tours, a gaze-trail replay and point-and-ask answers all play through the same `TourPlayer` in `webview.tsx`.
@@ -46,7 +46,7 @@ The agent sends a tour, and the window resolves it, shows it and answers with a 
 ```jsonc
 {
   "name": "tour",
-  "description": "Play a narrated walkthrough on Axle's flow canvas: a cursor moves from card to card, dims the rest, highlights lines and shows your caption. Use it when the user asks you to explain, walk through or show code, after finishing work (\"explain what you changed\"), or to answer a question about code by SHOWING it. Get file:line from flow_text or find_symbol first. 3–12 steps, one idea each, in the order the code runs. The tool returns at once with each step marked ok / moved / missing: fix missing steps by calling tour again with the same id. The user steps through it; questions they ask come back to you as a new message.",
+  "description": "Play a narrated walkthrough on Insilode's flow canvas: a cursor moves from card to card, dims the rest, highlights lines and shows your caption. Use it when the user asks you to explain, walk through or show code, after finishing work (\"explain what you changed\"), or to answer a question about code by SHOWING it. Get file:line from flow_text or find_symbol first. 3–12 steps, one idea each, in the order the code runs. The tool returns at once with each step marked ok / moved / missing: fix missing steps by calling tour again with the same id. The user steps through it; questions they ask come back to you as a new message.",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -54,7 +54,7 @@ The agent sends a tour, and the window resolves it, shows it and answers with a 
       "title": { "type": "string", "maxLength": 120 },
       "flow": {
         "type": "object",
-        "description": "The canvas to play on. Omit to stay on the canvas the user has open, or to let Axle pick the flow of the first step. Use {\"changes\": true} for the current change set.",
+        "description": "The canvas to play on. Omit to stay on the canvas the user has open, or to let Insilode pick the flow of the first step. Use {\"changes\": true} for the current change set.",
         "properties": {
           "id": { "type": "string", "description": "Entry point id from find_entry_points." },
           "file": { "type": "string" }, "method": { "type": "string" }, "line": { "type": "integer", "minimum": 1 },
@@ -88,7 +88,7 @@ The agent sends a tour, and the window resolves it, shows it and answers with a 
     "required": ["title", "steps"],
     "additionalProperties": false
   },
-  "annotations": { "title": "Play a tour in Axle", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
+  "annotations": { "title": "Play a tour in Insilode", "readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false }
 }
 ```
 
@@ -300,15 +300,15 @@ All keys keep today's `editingRef` guard: while a card is being edited in Monaco
 - The prompt goes to **that same session**, through the existing "send to a running session" path of `flow.agents.ask`, because the author explains its own change. While the agent is still working, the button is disabled.
 - If there is no `s.impact` (Codex without hooks, or the impact timed out), the button still works and the prompt says "the files you edited this turn: …".
 - **v1 explains the latest turn only.** `s.impact` is cleared on `UserPromptSubmit` (`agents.ts:1051`), so older turns have no impact on the session. Older turns can be explained from the canvas timeline instead: the per-turn data that `timeline` / `undoFrom` already have in `agentDiff.ts` (prompt, files, line ranges). A timeline entry gets an "Explain" action that builds the same prompt from that turn's files and ranges. This is phase 5 work, and it is Q10.
-- The same prompt ships as an **MCP prompt**, `explain_change` (today `prompts/list` returns `[]`). In Claude Code that gives the user `/mcp__axle__explain_change` from the terminal too.
+- The same prompt ships as an **MCP prompt**, `explain_change` (today `prompts/list` returns `[]`). In Claude Code that gives the user `/mcp__insilode__explain_change` from the terminal too.
 
 ## 5. Tour files and replay
 
-Location: `.axle/tours/<id>.tour.json`. It is written **only** by the window, on the user's Save click (see Decision 1). Whether the folder is committed or ignored is Q3.
+Location: `.insilode/tours/<id>.tour.json`. It is written **only** by the window, on the user's Save click (see Decision 1). Whether the folder is committed or ignored is Q3.
 
 ```jsonc
 {
-  "axleTour": 1,
+  "insilodeTour": 1,
   "id": "place-order",
   "title": "How an order is placed",
   "description": "Optional.",
@@ -334,19 +334,19 @@ Location: `.axle/tours/<id>.tour.json`. It is written **only** by the window, on
 
 - The file reuses the `tour` step schema and adds `anchor`, `hash` and `notes`. That way a saved tour can be **pasted back into `tour`** by an agent, and `tour` accepts the extra fields when they come from a file. The anchors are what make replay work after edits (1.3).
 - **No `commands`, no URIs, no HTML.** CodeTour has step `commands` and arbitrary `uri` steps. These are deliberately absent, and unknown fields are dropped on load.
-- **Replay:** use the command "Axle: Play Tour…" (a quick pick over `.axle/tours`), or a "▶ Tours" chip on the canvas when the current flow has saved tours that touch it.
-- **CodeTour interop** comes later (phase 5). The importer reads `.tours/*.tour` steps that have `file`/`line`/`description`/`pattern`, and skips the rest. Check the current CodeTour schema before building it. The exporter writes the reverse, so people without Axle can still follow a tour in VS Code.
-- **PR attachment** comes later (phase 5). "Copy tour as Markdown" writes a numbered list of `file:line` links with captions for the PR body. A committed tour file travels with the PR, and Axle replays it on checkout. Saving a tour never pushes or posts anything.
+- **Replay:** use the command "Insilode: Play Tour…" (a quick pick over `.insilode/tours`), or a "▶ Tours" chip on the canvas when the current flow has saved tours that touch it.
+- **CodeTour interop** comes later (phase 5). The importer reads `.tours/*.tour` steps that have `file`/`line`/`description`/`pattern`, and skips the rest. Check the current CodeTour schema before building it. The exporter writes the reverse, so people without Insilode can still follow a tour in VS Code.
+- **PR attachment** comes later (phase 5). "Copy tour as Markdown" writes a numbered list of `file:line` links with captions for the PR body. A committed tour file travels with the PR, and Insilode replays it on checkout. Saving a tour never pushes or posts anything.
 - **A tour file from someone else's PR is untrusted input.** It goes through the same validation as an MCP call: workspace-only paths, limits, plain-text captions. A file that fails validation is listed as broken with the reason and is not played.
 
 ## 6. Point-and-ask
 
 1. **Point.** On any card, the header's "Ask…" action (or `Alt+click` a card, or select lines in a card's code view and press `?`) opens an inline ask box anchored to the card. A line selection is shown as a band, the same style as highlights.
 2. **Send.** The canvas posts `pointAsk { file, startLine, endLine, label, question }`. The host validates the file with `workspaceFile()` and checks the line numbers. It builds:
-   > The user points at OrderService.Place, lines 71-76 of src/Orders/OrderService.cs, on the flow "POST /orders", and asks: "…". Answer by showing: call `mcp__axle__tour` with 1–5 steps starting at that code (flow: the same entry point), captions answering the question; then a one-paragraph answer in chat.
+   > The user points at OrderService.Place, lines 71-76 of src/Orders/OrderService.cs, on the flow "POST /orders", and asks: "…". Answer by showing: call `mcp__insilode__tour` with 1–5 steps starting at that code (flow: the same entry point), captions answering the question; then a one-paragraph answer in chat.
 3. The host sends it with `askInDock(prompt, true, 'canvas', [file])`, to the agent the user picked. The existing picker and remembered-target logic in flow-agent `ask.ts` / `askTarget.ts` stays unchanged.
 4. **Show.** The agent's `tour` call plays on the same canvas, so the user watches the answer where they asked. The question is kept as the tour's first note.
-5. A chat-only agent with no `axle` MCP (the chat panel, or the clipboard target) still answers in text. The prompt says "if you cannot call mcp__axle__tour, answer in text".
+5. A chat-only agent with no `insilode` MCP (the chat panel, or the clipboard target) still answers in text. The prompt says "if you cannot call mcp__insilode__tour, answer in text".
 
 "Ask about this flow" (the existing toolbar button) gets the same "answer by showing" sentence added to its prompt.
 
@@ -411,13 +411,13 @@ The full guide ships as an MCP prompt, `tour_guide`, and is summarised in the `t
 
 ### 8.3 Who asked: knowing which agent made a tour
 
-Today flow-agent writes **one shared** `axle-mcp.json` with only `AXLE_WORKSPACE` (`agents.ts` `mcpConfig()`), so the window cannot tell which session called `tour`. The proposal:
+Today flow-agent writes **one shared** `insilode-mcp.json` with only `INSILODE_WORKSPACE` (`agents.ts` `mcpConfig()`), so the window cannot tell which session called `tour`. The proposal:
 
-- `mcpConfig(cwd)` takes the session id and writes `axle-mcp-<session>.json` with `AXLE_SESSION=<id>`.
+- `mcpConfig(cwd)` takes the session id and writes `insilode-mcp-<session>.json` with `INSILODE_SESSION=<id>`.
 - `stdio.ts` passes it as a header on the bridge call (`http.ts`).
 - `handlers.ts` stores it on the tour as its `origin`.
 
-Tour questions then go back to the author with `flow.agents.ask`, using a "to session" option. Sessions started outside Axle (`claude mcp add` by hand) have no id, and fall back to the ask picker. This is Q5.
+Tour questions then go back to the author with `flow.agents.ask`, using a "to session" option. Sessions started outside Insilode (`claude mcp add` by hand) have no id, and fall back to the ask picker. This is Q5.
 
 ## 9. Security
 
@@ -425,7 +425,7 @@ Tour questions then go back to the author with `flow.agents.ask`, using a "to se
 | --- | --- |
 | Model text in the webview (captions, notes, titles) | Titles are plain text. Captions and notes are Markdown parsed to a tree and rendered as React elements: no HTML, links limited to http(s)/mailto. Control characters (not line breaks) are stripped and lengths capped on the host. |
 | Paths from MCP calls, tour files, canvas messages | `safeFile()` / `workspaceFile()`: inside a workspace folder or dropped. The canvas never gets file content for a path the host has not resolved itself. |
-| Command ids | None in the tool schemas, the tour file or any canvas message. Every action of the new canvas messages is a fixed `type` the host switches on, so `axle-command-id-not-allowlisted` stays satisfied. Its fixture gains the `tourAsk`/`pointAsk` handlers as `ok:` cases. |
+| Command ids | None in the tool schemas, the tour file or any canvas message. Every action of the new canvas messages is a fixed `type` the host switches on, so `insilode-command-id-not-allowlisted` stays satisfied. Its fixture gains the `tourAsk`/`pointAsk` handlers as `ok:` cases. |
 | Dock "Explain this" | The page sends a row index; flow-agent looks the session up itself (as with `data-flow`). |
 | CSP | Unchanged: the cursor is inline SVG, and there are no new fonts, images or frames. |
 | Tours from a PR | Untrusted, and validated exactly like MCP input (5). No auto-play on open: the user starts a saved tour. |
@@ -458,12 +458,12 @@ Each phase ships on its own, and each phase is demoable.
 
 | Phase | Builds | Demo |
 | --- | --- | --- |
-| **0. Player** | Wire types; `ui/src/tour/*`; the review tour rewritten onto it; cursor, spotlight, caption, bar, keys, reduced-motion; host `playTour(tour)` with a dev command "Axle: Play Tour from File…" that reads a hand-written JSON | "Review 3 changes" now has a gliding cursor and captions; a hand-written tour plays on POST /orders. |
+| **0. Player** | Wire types; `ui/src/tour/*`; the review tour rewritten onto it; cursor, spotlight, caption, bar, keys, reduced-motion; host `playTour(tour)` with a dev command "Insilode: Play Tour from File…" that reads a hand-written JSON | "Review 3 changes" now has a gliding cursor and captions; a hand-written tour plays on POST /orders. |
 | **1. MCP `tour`** | `tour` + `tour_control` (go/end), `src/tour/resolve.ts`, handler and limits, instructions, the `tour_guide` prompt, docs/agent-tools.md, register.ts list | In Claude Code: "walk me through how an order is placed" → the canvas opens beside the editor and plays 6 steps; the agent fixes a `missing` step by itself. |
 | **2. Explain this** | The dock button, the prompt from `s.impact`, the `explain_change` MCP prompt, change-set flow targets | After an agent edit: click **Explain this** → a tour of the change set, with risks as the last step. |
-| **3. Ask during a tour + point-and-ask** | The ask box, `tourAsk` / `pointAsk`, `tour_control note/resume`, notes in the bubble, the AXLE_SESSION routing (8.3) | Mid-tour: "why is this not in a transaction?" → the note appears on the card and the tour resumes. Select 3 lines → ask → the answer is played as a 2-step tour. |
+| **3. Ask during a tour + point-and-ask** | The ask box, `tourAsk` / `pointAsk`, `tour_control note/resume`, notes in the bubble, the INSILODE_SESSION routing (8.3) | Mid-tour: "why is this not in a transaction?" → the note appears on the card and the tour resumes. Select 3 lines → ask → the answer is played as a 2-step tour. |
 | **4. Gaze** (independent of 1–3; it can run in parallel after 0) | flow-agent `gaze.ts`, `flow.agent.gaze`, GazeLog, marker, trail, "elsewhere" list, toggle, setting, Replay trail | With the canvas open, give Claude a task: watch its dot move over the cards it reads, then replay its path. |
-| **5. Files and sharing** | Save on the canvas, `.axle/tours`, "Play Tour…", the "▶ Tours" chip, anchors and hash, drift badge, Markdown export, CodeTour import/export | Save a tour, edit the code above it, replay: steps show `moved` and `drift` correctly. Paste the Markdown into a PR. |
+| **5. Files and sharing** | Save on the canvas, `.insilode/tours`, "Play Tour…", the "▶ Tours" chip, anchors and hash, drift badge, Markdown export, CodeTour import/export | Save a tour, edit the code above it, replay: steps show `moved` and `drift` correctly. Paste the Markdown into a PR. |
 | **6. Playground** | A canned tour (see 12) | The site shows "the agent explains its change" as a live tile. |
 
 ## 12. The browser playground
@@ -481,15 +481,15 @@ The playground already runs the real `ui/src/webview.tsx` on a fake host (`playg
 
 1. **Pacing.** Should tours step by hand by default (recommended), or autoplay with a timer?
 2. **Saving.** Only by the user's Save click (recommended, and it keeps the MCP rule "tools write no files"), or may the agent save a tour (`save: true`) without a click?
-3. **Tour files in git.** Should `.axle/tours/` be committed and travel with the PR (recommended), or be local only and gitignored? For the PR: a Markdown list in the PR body, the committed file, or both?
-4. **Gaze default.** On by default for agents started in Axle (recommended), or opt-in? Should a search (Grep) show *which folder* only (recommended), or also the search text?
+3. **Tour files in git.** Should `.insilode/tours/` be committed and travel with the PR (recommended), or be local only and gitignored? For the PR: a Markdown list in the PR body, the committed file, or both?
+4. **Gaze default.** On by default for agents started in Insilode (recommended), or opt-in? Should a search (Grep) show *which folder* only (recommended), or also the search text?
 5. **Who answers a tour question.** The agent that made the tour (needs per-session MCP config, see 8.3; recommended), or always the ask picker?
 6. **Peek cards vs switching flows.** A step not on the drawn flow shows a peek card (recommended). Should the tour instead switch the canvas to that method's flow?
 7. **Boards and the editor.** Tours on the flow canvas only (recommended for v1), or also on `draw_board` boards and as editor decorations (a CodeTour-like comment in the file)?
 8. **Ghost cursor look.** The agent's dock avatar and colour (recommended), or a plain pointer?
-9. **Narration language.** Should captions follow the user's language automatically (recommended: the guide says so), or follow an Axle setting?
+9. **Narration language.** Should captions follow the user's language automatically (recommended: the guide says so), or follow an Insilode setting?
 10. **Older turns.** v1's "Explain this" covers only the agent's latest turn. Should explaining older turns from the canvas timeline come in phase 5 (recommended), or is it needed sooner?
 
 ## 14. Answers (2026-10-19)
 
-The user took the recommended option for every open question: tours step by hand; only the user's Save click writes a tour, and `.axle/tours/` is committed and travels with the PR (Markdown in the PR body as well); gaze is on by default for agents started in Axle, and a search shows its folder only; a question during a tour goes to the agent that made it; a step off the drawn flow opens a peek card; tours play on the flow canvas only in v1; the ghost cursor uses the agent's dock avatar and colour; captions follow the user's language; older turns come in phase 5. Build order: phase 0 first, then phases 1-3 in one session and phase 4 (gaze) in another, in parallel.
+The user took the recommended option for every open question: tours step by hand; only the user's Save click writes a tour, and `.insilode/tours/` is committed and travels with the PR (Markdown in the PR body as well); gaze is on by default for agents started in Insilode, and a search shows its folder only; a question during a tour goes to the agent that made it; a step off the drawn flow opens a peek card; tours play on the flow canvas only in v1; the ghost cursor uses the agent's dock avatar and colour; captions follow the user's language; older turns come in phase 5. Build order: phase 0 first, then phases 1-3 in one session and phase 4 (gaze) in another, in parallel.

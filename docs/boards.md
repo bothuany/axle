@@ -1,6 +1,6 @@
 # Boards: the diagram format agents draw
 
-An agent draws a board with the `draw_board` tool of the `axle` MCP server (`editor/extensions/flow-view/src/mcp`). The board is JSON, checked by `parseBoard` (`src/board/spec.ts`, mirrored byte for byte in `ui/src/board/spec.ts`), laid out automatically (agents never send coordinates) and drawn by the board canvas (`ui/src/board`). The research behind the design is `docs/research/agent-diagrams.md`.
+An agent draws a board with the `draw_board` tool of the `insilode` MCP server (`editor/extensions/flow-view/src/mcp`). The board is JSON, checked by `parseBoard` (`src/board/spec.ts`, mirrored byte for byte in `ui/src/board/spec.ts`), laid out automatically (agents never send coordinates) and drawn by the board canvas (`ui/src/board`). The research behind the design is `docs/research/agent-diagrams.md`.
 
 `version: 1` stays: every field below is optional and old boards parse unchanged.
 
@@ -91,4 +91,3 @@ The `diagram_guide` MCP prompt (`src/mcp/prompts.ts`) holds the full advice an a
 
 A node's `symbol` is looked up in the methods of the node's own `file` (the code index, the C# analyzer or a language server, so it works while the workspace symbol search is still loading) and in the workspace symbol search (3 seconds, and not asked again once it fails to answer; at most 25 symbols per board and 10 seconds in all). A hit fills `file` and `line` when the node has none; a miss lists the closest symbols (`find_symbol` style) in the lint. If the search did not answer at all, the lint says symbols were checked against the named files only.
 
-Screenshots of each kind in the real editor (web mode, drawn through the MCP handler): `docs/media/boards/`.

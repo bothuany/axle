@@ -1,19 +1,19 @@
 #!/usr/bin/env node
-// Runs Axle's desktop end-to-end scenarios, or one probe script, inside a Docker container: Axle from source on a virtual display
+// Runs Insilode's desktop end-to-end scenarios, or one probe script, inside a Docker container: Insilode from source on a virtual display
 // (xvfb), so nothing opens on your screen, takes your pointer or shares your network ports.
 //   npm run docker:e2e                                   the desktop scenarios (test/e2e-desktop) on the working tree
 //   npm run docker:e2e -- --scenario island,canvas-tour  only these
 //   npm run docker:e2e -- --probe my-probe.mjs [args]    a Playwright script: see test/e2e-desktop/lib/probe.mjs
-//   options: --out <dir>  --reset-volume (throw the VS Code build away)  --rebuild-image
+//   options: --out <dir>  --reset-volume (throw the VS Code build away)  --rebuild-image  --volume <name> (another build volume, e.g. to measure a cold run)
 // The first run builds the image and the VS Code checkout (20 to 40 minutes); the checkout lives in the named volume
-// axle-e2e-work, so later runs take minutes. Screenshots, results.json and logs go to the output folder, which is printed.
+// insilode-e2e-work, so later runs take minutes. Screenshots, results.json and logs go to the output folder, which is printed.
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { ROOT } from './lib.mjs'
-import { WORK_VOLUME, dockerMissingMessage, dockerRunArgs, imageTag } from './docker-config.mjs'
+import { WORK_VOLUME, changedFiles, dockerMissingMessage, dockerRunArgs, imageTag } from './docker-config.mjs'
 import { summarize } from './sandbox-config.mjs'
 
 const DOCKER_DIR = join(ROOT, 'test', 'e2e-desktop', 'docker')
@@ -35,6 +35,16 @@ export function sourceFiles(root = ROOT) {
 	return r.stdout.split('\0').filter(f => f && existsSync(join(root, f)))
 }
 
+/** What the last run copied into the volume, per volume (its creation time too: a recreated volume starts empty). */
+const STATE = join(tmpdir(), 'insilode-docker-e2e-state.json')
+const readState = () => {
+	try {
+		return JSON.parse(readFileSync(STATE, 'utf8'))
+	} catch {
+		return {}
+	}
+}
+
 function parse(argv) {
 	const o = {}
 	for (let i = 0; i < argv.length; i++) {
@@ -48,6 +58,8 @@ function parse(argv) {
 			o.scenario = argv[++i]
 		} else if (a === '--out') {
 			o.out = argv[++i]
+		} else if (a === '--volume') {
+			o.volume = argv[++i]
 		} else if (a === '--reset-volume' || a === '--rebuild-image') {
 			o[a.slice(2)] = true
 		} else {
@@ -79,30 +91,48 @@ async function main() {
 		}
 	}
 	if (o['reset-volume']) {
-		docker(['volume', 'rm', '-f', WORK_VOLUME])
+		docker(['volume', 'rm', '-f', o.volume ?? WORK_VOLUME])
 	}
 
-	const work = mkdtempSync(join(tmpdir(), 'axle-docker-e2e-'))
+	const volume = o.volume ?? WORK_VOLUME
+	const work = mkdtempSync(join(tmpdir(), 'insilode-docker-e2e-'))
 	const ctl = join(work, 'ctl')
 	mkdirSync(ctl)
-	writeFileSync(join(ctl, 'files'), sourceFiles().join('\0'))
+	// Only what changed since the last run goes into the volume (all of it for a new volume): stat-ing every file through the bind mount is slow.
+	const created = docker(['volume', 'inspect', '--format', '{{.CreatedAt}}', volume])
+	const now = Object.fromEntries(sourceFiles().map(f => {
+		const st = statSync(join(ROOT, f))
+		return [f, `${st.mtimeMs}:${st.size}`]
+	}))
+	const state = readState()
+	const todo = changedFiles(now, state[`${ROOT}|${volume}|${created.status === 0 ? created.stdout.trim() : 'new'}`])
+	writeFileSync(join(ctl, 'files'), todo.join('\0'))
+	console.log(`${todo.length} of ${Object.keys(now).length} files changed since the last run`)
 	const out = resolve(o.out ?? join(work, 'out'))
 	mkdirSync(out, { recursive: true })
 
 	const modeArgs = o.probe ? [basename(o.probe), ...o.rest] : o.scenario ? ['--only', o.scenario] : []
 	const args = dockerRunArgs({
-		image, name: `axle-e2e-${Date.now()}`, repo: ROOT, ctl, out, mode: o.probe ? 'probe' : 'run', modeArgs,
+		image, name: `insilode-e2e-${Date.now()}`, repo: ROOT, ctl, out, mode: o.probe ? 'probe' : 'run', modeArgs, volume: o.volume,
 		probeDir: o.probe ? dirname(resolve(o.probe)) : undefined,
 	})
 	console.log(`Running in Docker (no ports, display or input shared with this machine)\n  output  ${out}`)
+	const t0 = Date.now()
 	const child = spawn('docker', args, { stdio: 'inherit' })
 	const code = await new Promise(done => child.on('exit', c => done(c ?? 1)))
+
+	if (code < 125 || code > 127) {
+		// The container got as far as copying: the volume now holds this tree.
+		const after = docker(['volume', 'inspect', '--format', '{{.CreatedAt}}', volume])
+		state[`${ROOT}|${volume}|${after.stdout.trim()}`] = now
+		writeFileSync(STATE, JSON.stringify(state))
+	}
 
 	const results = join(out, 'results.json')
 	if (existsSync(results)) {
 		console.log(`\n${summarize(JSON.parse(readFileSync(results, 'utf8')), out)}`)
 	}
-	console.log(`\nEverything is in ${out}`)
+	console.log(`\nEverything is in ${out} (the container ran for ${Math.round((Date.now() - t0) / 1000)} s)`)
 	process.exit(code)
 }
 

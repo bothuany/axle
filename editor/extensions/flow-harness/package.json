@@ -1,6 +1,6 @@
 {
   "name": "flow-harness",
-  "displayName": "Axle Harness",
+  "displayName": "Insilode Harness",
   "description": "Harness engineering in the editor: one map of instructions, rules, skills, hooks, MCP and permissions, with a health score, the context budget and X-ray, live usage, a \"why?\" view with a permission simulator, a hook studio and a friction inbox.",
   "version": "0.1.0",
   "publisher": "flow",

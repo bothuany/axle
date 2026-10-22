@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the Agents dock. One row per agent terminal: its avatar (working, waiting for you,
+ *  Insilode: the Agents dock. One row per agent terminal: its avatar (working, waiting for you,
  *  done; src/avatars.ts), the prompt it is on, what it is doing this second, its to-do progress and its context.
  *  Whatever needs you rises to the top, so you never hunt for the stuck one.
  *--------------------------------------------------------------------------------------------*/
@@ -23,7 +23,7 @@ export class AgentsDock implements vscode.WebviewViewProvider, vscode.Disposable
 		this.changes = [
 			agents.onDidChange(() => this.post()),
 			...(worktrees ? [worktrees.onDidChange(() => this.post())] : []),
-			vscode.workspace.onDidChangeConfiguration(e => (e.affectsConfiguration('flow.agents.avatar') || e.affectsConfiguration('axle.skeletonFirst')) && this.post()),
+			vscode.workspace.onDidChangeConfiguration(e => (e.affectsConfiguration('flow.agents.avatar') || e.affectsConfiguration('insilode.skeletonFirst')) && this.post()),
 		];
 	}
 

@@ -1,0 +1,32 @@
+{
+  "_comment": "The guided tours of the website, written by hand. scripts/site-data.mjs turns each step into a canvas tour step: `card` names the card by its label on the endpoint's flow, `lines` names the lines to light by text they contain. The file and line numbers come from the index, so an edit to the demo cannot leave a step pointing at the wrong place (the script fails instead).",
+  "tours": [
+    {
+      "id": "order",
+      "title": "How an order is placed",
+      "entry": "POST /orders",
+      "steps": [
+        { "card": "OrderController.place", "lines": ["service.place"], "title": "The request comes in", "caption": "POST /orders lands in the controller, which passes the order straight to the service. Nothing is checked on the way in." },
+        { "card": "OrderService.place", "lines": ["orders.save", "billing.createInvoice", "announce(saved)"], "title": "Three things, in this order", "caption": "The service saves the order, asks billing for an invoice, then announces the order. Each call is a card to the right." },
+        { "card": "orders", "table": "orders", "title": "What gets stored", "caption": "The save writes the `orders` table. The columns are read from the entity, so you see what is stored without opening `Order.java`." },
+        { "card": "BillingClient.createInvoice", "lines": ["postForObject"], "title": "Out to another service", "caption": "Billing is a separate service, written in Python. This is an HTTP POST to `/api/invoices`, and the flow follows it there." },
+        { "card": "create_invoice", "title": "Where the POST arrives", "caption": "The billing route that call reaches. The link was matched by its path, so the canvas draws it dashed: a guess, not a certainty." },
+        { "card": "InvoiceService.issue", "lines": ["session.add", "self.notify"], "title": "The invoice", "caption": "Billing stores the invoice, then hands the receipt to a background task." },
+        { "card": "OrderService.announce", "lines": ["kafka.send"], "title": "Back in orders", "caption": "The order goes out on the Kafka topic `order.placed`. Anyone listening on it is part of this flow too." },
+        { "card": "OrderEvents.onOrderPlaced", "lines": ["shipments.schedule"], "title": "Shipping hears about it", "caption": "The shipping service listens on that topic and schedules a shipment. One request: three services and three tables." }
+      ]
+    },
+    {
+      "id": "invoice",
+      "title": "How an invoice is fetched",
+      "entry": "GET /orders/{id}/invoice",
+      "steps": [
+        { "card": "OrderController.invoice", "lines": ["service.invoiceFor"], "title": "A Java endpoint", "caption": "The orders service has a route for an order's invoice, but it does not keep invoices itself." },
+        { "card": "BillingClient.findInvoice", "lines": ["getForObject"], "title": "It asks billing", "caption": "It asks the billing service over HTTP, with the order id in the path." },
+        { "card": "get_invoice", "title": "Into Python", "caption": "The flow continues in the billing service, in another language. The dashed edge says the route was matched by path." },
+        { "card": "InvoiceService.find", "lines": ["session.query"], "title": "The query", "caption": "Billing looks the invoice up by order id." },
+        { "card": "invoices", "table": "invoices", "title": "The table it reads", "caption": "The `invoices` table, read from billing's own models. Two services and two languages, on one canvas." }
+      ]
+    }
+  ]
+}

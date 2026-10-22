@@ -34,13 +34,16 @@ tools/sonarqube/.token
 .scannerwork/
 .sonarqube/
 
-# Agent worktrees Axle creates (flow-agent/src/worktrees.ts); user repositories get the same line in .git/info/exclude
+# Agent worktrees Insilode creates (flow-agent/src/worktrees.ts); user repositories get the same line in .git/info/exclude
+.insilode/
+# Worktrees made before the rename (Axle)
 .axle/
 
-# The playground: demo data is generated from the real index, the site is built from it
-/playground/public/data/
-/playground/public/pages/
-/playground/src/generated/
-/playground/dist/
+# The website: demo data is generated from the real index, the site is built from it
+/site/public/data/
+/site/public/pages/
+/site/src/generated/
+/site/dist/
+/site/docs/
 # The demo project's own MCP config is a fixture (fictional servers), not a developer's local file.
-!/playground/demo/base/.mcp.json
+!/site/demo/base/.mcp.json

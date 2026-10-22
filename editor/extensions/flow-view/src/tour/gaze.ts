@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the agent's gaze on the host. flow-agent sends batches of looks (`flow.agent.gaze`);
+ *  Insilode: the agent's gaze on the host. flow-agent sends batches of looks (`flow.agent.gaze`);
  *  each look is checked (a workspace path, whole line numbers, a colour literal) and becomes a
  *  GazeEvent. The GazeLog keeps the last events of every session in memory only, for a canvas
  *  that opens later and for "Replay trail", which turns a session's latest turn into a Tour.

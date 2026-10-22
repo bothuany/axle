@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle boards generated from code: a traced flow as a sequence diagram. Participants are the classes (or services) the flow
+ *  Insilode boards generated from code: a traced flow as a sequence diagram. Participants are the classes (or services) the flow
  *  passes through, messages are the calls in the order the code makes them (line order inside a method, depth first), numbered
  *  by edge `order`. Calls the index linked by name, an HTTP route, a topic or a mediator are drawn dotted and marked with a
  *  "?": they are guesses. Returns are not drawn: the index does not know what a call returns. Pure: no `vscode`.

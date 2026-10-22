@@ -26,13 +26,13 @@ test('settings: defaults are the badge on and the overlay off', () => {
 	assert.equal(s.badge, true)
 	assert.equal(s.overlay, false)
 	assert.equal(s.position, 'top-center')
-	assert.equal(s.display, 'axle')
+	assert.equal(s.display, 'insilode')
 	assert.equal(s.style, 'pill')
 	assert.equal(s.theme, 'black')
 	assert.equal(s.opacity, 0.95)
 	assert.equal(s.details, false)
 	assert.deepEqual(s.show, d.DEFAULT_SHOW)
-	assert.deepEqual(s.autoHide, { noAgents: true, axleFocused: true })
+	assert.deepEqual(s.autoHide, { noAgents: true, insilodeFocused: true })
 })
 
 test('settings: badge and overlay switch on and off independently', () => {
@@ -45,7 +45,7 @@ test('settings: badge and overlay switch on and off independently', () => {
 })
 
 test('settings: malformed values fall back, opacity is clamped, partial objects merge with the defaults', () => {
-	const s = settings({ badge: 'yes', 'overlay.position': 'middle', 'overlay.style': 'list', 'overlay.opacity': 0.05, 'overlay.show': { idle: true, cost: 'no', elapsed: false }, 'overlay.autoHide': { axleFocused: true } })
+	const s = settings({ badge: 'yes', 'overlay.position': 'middle', 'overlay.style': 'list', 'overlay.opacity': 0.05, 'overlay.show': { idle: true, cost: 'no', elapsed: false }, 'overlay.autoHide': { insilodeFocused: true } })
 	assert.equal(s.badge, true)
 	assert.equal(s.position, 'top-center')
 	assert.equal(s.style, 'list')
@@ -54,7 +54,7 @@ test('settings: malformed values fall back, opacity is clamped, partial objects 
 	assert.equal(s.show.cost, false)
 	assert.equal(s.show.elapsed, false)
 	assert.equal(s.show.working, true)
-	assert.deepEqual(s.autoHide, { noAgents: true, axleFocused: true })
+	assert.deepEqual(s.autoHide, { noAgents: true, insilodeFocused: true })
 	assert.equal(settings({ 'overlay.opacity': 7 }).opacity, 1)
 	assert.equal(settings({ 'overlay.opacity': Number.NaN }).opacity, 0.95)
 })
@@ -77,7 +77,7 @@ test('badge count: approvals, questions, unread errors and unread finished turns
 test('activity: only the verb unless details are on', () => {
 	assert.equal(d.overlayActivity('Running npm test -- --secret', false), 'Running')
 	assert.equal(d.overlayActivity('Editing payroll.ts', false), 'Editing')
-	assert.equal(d.overlayActivity('Searching the web axle notch', false), 'Searching the web')
+	assert.equal(d.overlayActivity('Searching the web insilode notch', false), 'Searching the web')
 	assert.equal(d.overlayActivity('Thinking', false), 'Thinking')
 	assert.equal(d.overlayActivity('Wants to: Running rm -rf build', false), 'Wants approval')
 	// A question, an MCP tool line or a message can quote anything: dropped.

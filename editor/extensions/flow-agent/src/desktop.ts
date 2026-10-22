@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: agent status outside the window. Sends the number of agents that need you to the app
+ *  Insilode: agent status outside the window. Sends the number of agents that need you to the app
  *  badge (Dock, taskbar overlay icon, launcher) and, when turned on, a small model of the live
  *  agents to the status overlay. Both are drawn by core (editor/patches/flow-desktop.patch), which
  *  registers the `flow.desktop.*` commands in the desktop app only: in the browser they do not
@@ -37,7 +37,7 @@ export class DesktopStatus implements vscode.Disposable {
 	private readonly restore = vscode.window.createStatusBarItem('flow.agents.island', vscode.StatusBarAlignment.Right, 90);
 
 	constructor(private readonly agents: Agents, private readonly log: vscode.LogOutputChannel) {
-		this.restore.name = 'Axle Agent Status Island';
+		this.restore.name = 'Insilode Agent Status Island';
 		this.restore.text = '$(eye) Agent island';
 		this.restore.tooltip = 'The agent status island is hidden. Click to show it again.';
 		this.restore.command = 'flow.agents.desktop.showOverlay';

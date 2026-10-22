@@ -1,8 +1,8 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle agent bridge: the MCP side of the `axle` server. Newline-delimited JSON-RPC over a pair of
+ *  Insilode agent bridge: the MCP side of the `insilode` server. Newline-delimited JSON-RPC over a pair of
  *  streams (stdio in the real server, in-memory streams in tests). Nothing but JSON-RPC is ever
  *  written to the output; diagnostics go to `log`. `initialize` and `tools/list` always succeed:
- *  a problem with the Axle window is a tool result with isError, which the model can read and act on.
+ *  a problem with the Insilode window is a tool result with isError, which the model can read and act on.
  *--------------------------------------------------------------------------------------------*/
 
 import { createInterface } from 'readline';
@@ -15,18 +15,18 @@ export interface ToolResult {
 	isError?: boolean;
 }
 
-/** Runs a tool somewhere (the Axle window) and answers; throwing is the same as an error result. */
+/** Runs a tool somewhere (the Insilode window) and answers; throwing is the same as an error result. */
 export type Forward = (tool: string, args: Record<string, unknown>) => Promise<ToolResult>;
 
 export const SERVER_VERSION = '0.1.0';
 const DEFAULT_PROTOCOL = '2025-06-18';
 
 export const INSTRUCTIONS = [
-	"Axle is the user's code editor. These tools act on the Axle window that has the current folder open.",
+	"Insilode is the user's code editor. These tools act on the Insilode window that has the current folder open.",
 	'WHEN THE USER ASKS HOW SOMETHING WORKS, to be walked through it, or for an explanation of code ("walk me through how an order is placed", "how does X work", "explain this flow", "anlat", "nasıl çalışıyor", in any language), do not read files and write a text answer: find the entry with `find_entry_points`, get the call chain with `flow_text`, then SHOW it with `tour` and keep your own message to a line. If these tools are listed but not loaded, load `find_entry_points`, `flow_text` and `tour` first (ToolSearch). 3-12 steps in the order the code runs, one idea per step, captions that say why and not what, in the language the user writes in (the `tour_guide` prompt has the advice). Questions the user asks during a tour come back to you; answer them through `tour_control`.',
 	'To open a file or place in the editor use `open`. To open the flow of a feature for the user use `find_entry_points` then `show_flow`; `flow_text` is the same call chain as text, to understand code without reading many files.',
 	'SKELETON FIRST: before your first edit for a request or an approved plan that adds or changes types, entities or interfaces (in any mode, plan mode or not), call `check_skeleton` once (load it with ToolSearch if it is listed but not loaded). It answers at once: off means implement as usual; on means the developer writes the skeleton themselves and it says what to do (draw the design with `draw_board`, every new or changed type with the members to write as `{"text": "name(param: Type): Return"}` objects, then stop). The developer then drives it by chat ("check", "hand over", "just do it", "done"): pass their reply to `check_skeleton` as its `step`. The `skeleton_first` prompt has the whole flow.',
-	'Use `impact` before changing shared code (or, with `table` or `entity`, a table or its entity), `get_context` to see what the user is looking at, and `draw_board` (kinds: flow, plan, class, er, sequence, architecture, state) to show the user a flow or plan you designed; tick plan steps with `update_board`. After drawing a board, EXPLAIN it with the `steps` of the board (3-10, a caption each, they play like a tour) instead of a paragraph in chat, and fix what the LINT in the answer names by drawing again with the same id (the `diagram_guide` prompt has the rules). For a sequence, ER, architecture or state diagram of EXISTING code use `board_from_code` instead of drawing it: Axle reads every node and relation from the index, so none is invented; you only choose the scope and may add notes.',
+	'Use `impact` before changing shared code (or, with `table` or `entity`, a table or its entity), `get_context` to see what the user is looking at, and `draw_board` (kinds: flow, plan, class, er, sequence, architecture, state) to show the user a flow or plan you designed; tick plan steps with `update_board`. After drawing a board, EXPLAIN it with the `steps` of the board (3-10, a caption each, they play like a tour) instead of a paragraph in chat, and fix what the LINT in the answer names by drawing again with the same id (the `diagram_guide` prompt has the rules). For a sequence, ER, architecture or state diagram of EXISTING code use `board_from_code` instead of drawing it: Insilode reads every node and relation from the index, so none is invented; you only choose the scope and may add notes.',
 ].join('\n');
 
 export const errorResult = (text: string): ToolResult => ({ content: [{ type: 'text', text }], isError: true });
@@ -74,7 +74,7 @@ export class McpServer {
 					// Echo the client's version: Claude Code is newer than any version written down here.
 					protocolVersion: typeof params.protocolVersion === 'string' ? params.protocolVersion : DEFAULT_PROTOCOL,
 					capabilities: { tools: {}, prompts: {} },
-					serverInfo: { name: 'axle', version: SERVER_VERSION },
+					serverInfo: { name: 'insilode', version: SERVER_VERSION },
 					instructions: INSTRUCTIONS,
 				});
 			case 'ping':

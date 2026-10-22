@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index + language server: the VS Code side of `Lsp` (see lspResolve.ts).
+ *  Insilode polyglot index + language server: the VS Code side of `Lsp` (see lspResolve.ts).
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
@@ -38,7 +38,7 @@ function places(list: Result[] | undefined): Place[] {
 export class VsLsp implements Lsp {
 	private query(command: 'vscode.executeDefinitionProvider' | 'vscode.executeImplementationProvider', file: string, line: number, character: number) {
 		// The id can only be one of the two literals in the parameter type.
-		return within(vscode.commands.executeCommand<Result[]>(command, vscode.Uri.file(file), new vscode.Position(line - 1, character)), undefined); // nosemgrep: axle-command-id-not-allowlisted
+		return within(vscode.commands.executeCommand<Result[]>(command, vscode.Uri.file(file), new vscode.Position(line - 1, character)), undefined); // nosemgrep: insilode-command-id-not-allowlisted
 	}
 
 	async definitions(file: string, line: number, character: number) {

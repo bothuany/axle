@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the harness lint. Mistakes agents never report, found without an LLM: `paths:`
+ *  Insilode Harness: the harness lint. Mistakes agents never report, found without an LLM: `paths:`
  *  globs that match no file, frontmatter a YAML parser rejects (Claude Code then loads the rule
  *  for every file), lines duplicated or contradicted across CLAUDE.md / AGENTS.md / rules /
  *  .cursor/rules / copilot-instructions, hooks whose event or matcher can never fire, and
@@ -220,7 +220,7 @@ function lintGlobs(f: LintFile, input: LintInput, out: Finding[]) {
 		if (!input.projectFiles.some(p => globMatch(glob, p))) {
 			out.push({
 				file: f.file, line, severity: input.projectFilesTruncated ? 'info' : 'warning', code: 'dead-glob',
-				message: `${glob} matches no file in the project${input.projectFilesTruncated ? ' among the files Axle listed' : ''}: the rule never loads`,
+				message: `${glob} matches no file in the project${input.projectFilesTruncated ? ' among the files Insilode listed' : ''}: the rule never loads`,
 				fix: 'Point the glob at the folder you meant (globs are relative to the project root), or delete the rule',
 			});
 		}

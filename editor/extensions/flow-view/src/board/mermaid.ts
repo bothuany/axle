@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle boards as mermaid text: the stand-in renderer until the canvas draws boards itself.
+ *  Insilode boards as mermaid text: the stand-in renderer until the canvas draws boards itself.
  *  flow, plan and architecture boards become a flowchart; class → classDiagram; er → erDiagram;
  *  sequence → sequenceDiagram. Node ids are renamed n0, n1, ... (agents' ids may contain anything)
  *  and every label is quoted and escaped, so no text from a board can break out of the diagram.

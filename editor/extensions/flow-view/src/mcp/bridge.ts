@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle agent bridge, window side: a local HTTP server (127.0.0.1, random port, random token) that
- *  runs the `axle` MCP server's tool calls, advertised in ~/.axle/bridge/<pid>.json while the window
+ *  Insilode agent bridge, window side: a local HTTP server (127.0.0.1, random port, random token) that
+ *  runs the `insilode` MCP server's tool calls, advertised in ~/.insilode/bridge/<pid>.json while the window
  *  lives. The file is removed when the window closes; files of windows that were killed are cleaned
  *  up by whoever starts next. Claude's /ide lock files (~/.claude/ide) are not touched.
  *--------------------------------------------------------------------------------------------*/
@@ -42,14 +42,14 @@ export class AgentBridge implements vscode.Disposable {
 		const tools = this.tools;
 		try {
 			const changes = await tools.worktreeChanges(root, base);
-			await tools.openChanges(changes, `Axle: ${changes.since ? `Changes since ${changes.since}` : 'Changes'}`);
+			await tools.openChanges(changes, `Insilode: ${changes.since ? `Changes since ${changes.since}` : 'Changes'}`);
 			return await tools.changesInFlow(changes);
 		} catch (e) {
 			return { ok: false, opened: false, message: (e as Error).message };
 		}
 	}
 
-	/** A failure (no port, an unwritable home folder) is logged and leaves Axle working without the bridge. */
+	/** A failure (no port, an unwritable home folder) is logged and leaves Insilode working without the bridge. */
 	async start() {
 		try {
 			const server = await startBridgeServer((tool, args, ctx) => this.tools.call(tool, args, ctx), { log: m => this.log.warn(m), info: () => ({ pid: process.pid }) });

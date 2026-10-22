@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: how an agent looks on the flow canvas: the name of its row in the dock and the colour of its avatar, for the ghost cursor
+ *  Insilode: how an agent looks on the flow canvas: the name of its row in the dock and the colour of its avatar, for the ghost cursor
  *  of a tour it made. The colours are the avatar's (src/avatars.ts keeps its own table: that file is copied byte for byte into the
  *  core patch, so it is not imported from here). Pure: no vscode.
  *--------------------------------------------------------------------------------------------*/

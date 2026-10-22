@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the harness at runtime. flow-agent forwards each hook event of the agents it
+ *  Insilode Harness: the harness at runtime. flow-agent forwards each hook event of the agents it
  *  runs (`flowHarness.recordEvent`); this counts what they used, reads their transcripts for what
  *  no hook reports, and on first run reads the last 30 days of this project's Claude Code
  *  transcripts so "never used" is not a guess on day one. Counts, prompts and failures are kept
@@ -213,7 +213,7 @@ export class Live implements vscode.Disposable {
 	}
 
 	/**
-	 * Reads what is new in a transcript. For a session Axle's hooks reported (`live`), tool calls, prompts and failures
+	 * Reads what is new in a transcript. For a session Insilode's hooks reported (`live`), tool calls, prompts and failures
 	 * came as events already; for a past one they come from here.
 	 */
 	ingest(file: string, live: boolean): Promise<void> {

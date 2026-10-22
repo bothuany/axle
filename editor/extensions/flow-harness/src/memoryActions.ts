@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: what you can do with an agent's memory from the map. Open it; delete it (to the
+ *  Insilode Harness: what you can do with an agent's memory from the map. Open it; delete it (to the
  *  trash, after a confirm, with its MEMORY.md line); promote it to CLAUDE.md as an edit you review
  *  (the memory stays unless you delete it too). And the staleness check: the paths and code names
  *  a memory mentions are looked up, files on disk and names in flow-view's index, and a memory

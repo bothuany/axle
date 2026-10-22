@@ -1,12 +1,12 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: which agent a question goes to. Home's prompt, "Ask about this flow" and anything else
+ *  Insilode: which agent a question goes to. Home's prompt, "Ask about this flow" and anything else
  *  that hands text to "the agent" ask flow-agent, and this decides where it lands: a running
  *  session, a new one of some CLI, the chat panel or the clipboard. The choice is remembered per
  *  workspace, so the user picks once; the setting flow.agents.askTarget can fix it or always ask.
  *  Kept free of vscode so the rules can be tested in node (test/askTarget.test.mjs).
  *--------------------------------------------------------------------------------------------*/
 
-/** claude and codex report through hooks (codex once its hooks are trusted); custom CLIs are plain terminals Axle only lists. */
+/** claude and codex report through hooks (codex once its hooks are trusted); custom CLIs are plain terminals Insilode only lists. */
 export type AgentCli = 'claude' | 'codex' | 'custom';
 /** working: busy · blocked: waiting for you · done: finished a turn · idle: started, no prompt yet · unknown: no reports (custom CLIs, untrusted Codex hooks) · ended: the CLI exited. */
 export type AgentState = 'starting' | 'working' | 'blocked' | 'done' | 'idle' | 'unknown' | 'ended';
@@ -210,7 +210,7 @@ export function notReady(s: Pick<SessionInfo, 'name' | 'cli' | 'state'>): string
 		case 'blocked': return `${s.name} is waiting for you`;
 		default:
 			// Codex reports nothing until its hooks are trusted, which looks the same as a session that never got going.
-			return s.cli === 'codex' ? `${s.name} has not said it is at its prompt (if this lasts, trust Axle's hooks with /hooks in Codex)` : `${s.name} has not said it is at its prompt yet`;
+			return s.cli === 'codex' ? `${s.name} has not said it is at its prompt (if this lasts, trust Insilode's hooks with /hooks in Codex)` : `${s.name} has not said it is at its prompt yet`;
 	}
 }
 
@@ -219,7 +219,7 @@ export type Resolution = { use: AskTarget; why?: string } | { pick: true; why?: 
 
 /**
  * Decides where a question goes without asking, when it can. A remembered session that is gone falls back to the
- * newest ready session of the same CLI, else a new one (what Axle did for Claude before there was a choice); one that
+ * newest ready session of the same CLI, else a new one (what Insilode did for Claude before there was a choice); one that
  * is busy or waiting on a permission prompt is not typed into, so the picker comes up. A target that cannot be used
  * here any more (chat with no provider, a custom CLI removed from the settings) asks again.
  */

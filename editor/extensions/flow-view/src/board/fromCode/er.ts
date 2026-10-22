@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle boards generated from code: tables as an ER diagram. Tables, columns, primary keys and the entity behind each come
+ *  Insilode boards generated from code: tables as an ER diagram. Tables, columns, primary keys and the entity behind each come
  *  from the entity readers (JPA, SQLAlchemy/Django, TypeORM, Prisma); the relations and their cardinality come from the
  *  relation fields of the entities (a to-many field is 0..*, a nullable to-one is 0..1). A table that only a migration
  *  declares is drawn from the migration (column names only) and says so. C# entities, which the analyzer reads without
@@ -134,7 +134,7 @@ export function erFromTables(input: ErInput, scope: ErScope = {}, opts: ErOption
 		}
 	}
 	if (!tables.length) {
-		return skip('Axle found no entity, ORM model or migration that declares a table in this workspace (it reads JPA, SQLAlchemy, Django, TypeORM, Prisma, EF Core and SQL/Flyway/Alembic/Liquibase migrations). Nothing to draw an ER diagram of.');
+		return skip('Insilode found no entity, ORM model or migration that declares a table in this workspace (it reads JPA, SQLAlchemy, Django, TypeORM, Prisma, EF Core and SQL/Flyway/Alembic/Liquibase migrations). Nothing to draw an ER diagram of.');
 	}
 
 	// Relations from the relation fields: a field of a schema'd entity named in `relations`, or any field that refers to another table's entity.

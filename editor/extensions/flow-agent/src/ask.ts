@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: sending a question to the agent of the user's choice. flow.agents.ask is what Home, "Ask
+ *  Insilode: sending a question to the agent of the user's choice. flow.agents.ask is what Home, "Ask
  *  about this flow" and the other extensions call; the first time (or when the remembered target
  *  is gone) a picker asks where it goes, and later questions go there without asking. A short
  *  status bar note after each send says where it went and opens the picker to change it. The
@@ -24,7 +24,7 @@ export class AskRouter implements vscode.Disposable {
 	private noteTimer: NodeJS.Timeout | undefined;
 
 	constructor(private readonly context: vscode.ExtensionContext, private readonly agents: Agents) {
-		this.note.name = 'Axle: where questions go';
+		this.note.name = 'Insilode: where questions go';
 		this.note.command = 'flow.agents.chooseAskTarget';
 	}
 
@@ -117,7 +117,7 @@ export class AskRouter implements vscode.Disposable {
 				? { label: '$(question) Ask every time', detail: 'Sets flow.agents.askTarget to "ask" for this workspace', act: 'ask' }
 				: { label: '$(pin) Remember my choice', detail: 'Sets flow.agents.askTarget to "remember" for this workspace', act: 'remember' });
 		}
-		const placeHolder = o.why ? `${o.why}. Choose where to send it; later questions go there too.` : 'Later questions go to the same place; change it with "Axle: Change Agent for Questions…".';
+		const placeHolder = o.why ? `${o.why}. Choose where to send it; later questions go there too.` : 'Later questions go to the same place; change it with "Insilode: Change Agent for Questions…".';
 		const pick = await vscode.window.showQuickPick(items, { title: o.title, placeHolder, ignoreFocusOut: true });
 		if (pick?.act) {
 			await vscode.workspace.getConfiguration('flow.agents').update('askTarget', pick.act, vscode.ConfigurationTarget.Workspace);
@@ -174,7 +174,7 @@ export class AskRouter implements vscode.Disposable {
 
 	private async toClipboard(line: string, files: string[], why: string) {
 		await vscode.env.clipboard.writeText(withFiles(line, files));
-		void vscode.window.showInformationMessage(`Axle: ${why}. Your question is on the clipboard: paste it into its prompt.`, 'Change Agent…')
+		void vscode.window.showInformationMessage(`Insilode: ${why}. Your question is on the clipboard: paste it into its prompt.`, 'Change Agent…')
 			.then(c => c && vscode.commands.executeCommand('flow.agents.chooseAskTarget'));
 	}
 
@@ -198,8 +198,8 @@ function icon(t: AskTarget): string {
 }
 
 /**
- * Whether the chat panel has something behind it: Axle's ACP chat sessions (flow.agents.showChat), or a language model
- * from another extension (Copilot, a local model). Axle's own placeholder models (vendor `flow`, models.ts) answer
+ * Whether the chat panel has something behind it: Insilode's ACP chat sessions (flow.agents.showChat), or a language model
+ * from another extension (Copilot, a local model). Insilode's own placeholder models (vendor `flow`, models.ts) answer
  * nothing on their own, so they do not count.
  */
 async function chatAvailable(): Promise<boolean> {

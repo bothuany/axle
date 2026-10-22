@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the friction inbox view. Corrections you keep typing, tool calls that keep
+ *  Insilode Harness: the friction inbox view. Corrections you keep typing, tool calls that keep
  *  failing the same way, and permissions you keep granting, each with its evidence and a fix.
  *  A fix is applied only on a click, as a diff of every file it changes (instruction lines,
  *  hook scripts, settings), written when you say yes.

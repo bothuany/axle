@@ -1,18 +1,19 @@
 #!/usr/bin/env node
-// Desktop end-to-end run: starts Axle for real (Electron, driven by Playwright) and records what a person would see.
+// Desktop end-to-end run: starts Insilode for real (Electron, driven by Playwright) and records what a person would see.
 //   node run.mjs --label linux --out out --source ../../editor/vscode             a source checkout (Linux, under xvfb)
-//   node run.mjs --label windows --out out --installer ../../dist/Axle-Setup-x.y.z-x64.exe   install, scenarios, update, uninstall
-//   node run.mjs --label windows --out out --exe "C:\...\Axle.exe"                  an app that is already installed
-// Opens windows and moves the pointer, so it only runs where AXLE_E2E_ISOLATED=1 (Docker, Windows Sandbox): lib/isolation.mjs.
+//   node run.mjs --label windows --out out --installer ../../dist/Insilode-Setup-x.y.z-x64.exe   install, scenarios, update, uninstall
+//   node run.mjs --label windows --out out --exe "C:\...\Insilode.exe"                  an app that is already installed
+// Opens windows and moves the pointer, so it only runs where INSILODE_E2E_ISOLATED=1 (Docker, Windows Sandbox): lib/isolation.mjs.
 // Writes <out>/results.json and <out>/shots/*.png; exits 1 when a scenario failed.
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { launchAxle, withRetries } from './lib/app.mjs'
+import { launchInsilode, withRetries } from './lib/app.mjs'
 import { refusal } from './lib/isolation.mjs'
 import { install, uninstall, updateFlow } from './lib/installer.mjs'
+import { upgradeFromAxle } from './lib/upgrade.mjs'
 import { Results } from './lib/results.mjs'
 import { APP_SCENARIOS } from './lib/scenarios.mjs'
 
@@ -61,12 +62,12 @@ async function main() {
 	const out = resolve(String(o.out ?? 'e2e-out'))
 	const only = o.only ? String(o.only).split(',') : undefined
 	const results = new Results(label, out)
-	const work = realpathSync.native(mkdtempSync(join(tmpdir(), 'axle-e2e-work-')))
+	const work = realpathSync.native(mkdtempSync(join(tmpdir(), 'insilode-e2e-work-')))
 	const folder = join(work, 'demo-shop')
 	execFileSync(process.execPath, [join(ROOT, '.claude', 'skills', 'probe', 'scripts', 'demo-workspace.mjs'), folder], { stdio: 'inherit' })
 
 	const driver = join(HERE, 'driver')
-	const settings = { 'flow.agents.desktop.overlay.enabled': true, 'flow.agents.desktop.overlay.autoHide': { noAgents: true, axleFocused: false } }
+	const settings = { 'flow.agents.desktop.overlay.enabled': true, 'flow.agents.desktop.overlay.autoHide': { noAgents: true, insilodeFocused: false } }
 	let exe, args, cwd, env
 	let installDir
 	/** The window as it was when a scenario failed, for the comment's gallery. */
@@ -81,11 +82,21 @@ async function main() {
 		}
 	}
 
+	// First, on a machine with nothing installed: an Axle Setup, then this Setup over it (lib/upgrade.mjs). It shares the installer id with every
+	// later install, so it has to be gone (uninstalled at its end) before the plain install below.
+	if (o['old-installer'] && o.installer && (!only || only.includes('upgrade'))) {
+		await timed('upgrade', 'Windows installer: an Axle install is upgraded in place, its data copied on the first start', () => upgradeFromAxle({ oldSetup: resolve(String(o['old-installer'])), setup: resolve(String(o.installer)), out }))
+		if (only && only.length === 1) {
+			console.log(`\n${results.scenarios.filter(s => s.status === 'pass').length} passed, ${results.scenarios.filter(s => s.status === 'fail').length} failed`)
+			process.exit(results.failed ? 1 : 0)
+		}
+	}
+
 	if (o.installer) {
-		installDir = join(work, 'Axle')
+		installDir = join(work, 'Insilode')
 		await timed('install', 'Windows installer: silent install', async () => {
 			exe = install(resolve(String(o.installer)), installDir, join(out, 'setup.log'))
-			return { status: 'pass', detail: `Axle.exe in ${installDir}`, shots: [] }
+			return { status: 'pass', detail: `Insilode.exe in ${installDir}`, shots: [] }
 		})
 	} else if (o.exe) {
 		exe = resolve(String(o.exe))
@@ -97,7 +108,7 @@ async function main() {
 		cwd = vscode
 		env = { NODE_ENV: 'development', VSCODE_DEV: '1', VSCODE_CLI: '1' }
 	} else {
-		throw new Error('Say what to run: --installer <Setup.exe>, --exe <Axle.exe> or --source <editor/vscode>')
+		throw new Error('Say what to run: --installer <Setup.exe>, --exe <Insilode.exe> or --source <editor/vscode>')
 	}
 
 	if (exe) {
@@ -106,7 +117,7 @@ async function main() {
 				continue
 			}
 			await timed(s.id, s.title, () => withRetries(2, async attempt => {
-				const app = await launchAxle({ exe, args, cwd, env, out, folder, settings, extensions: [driver] })
+				const app = await launchInsilode({ exe, args, cwd, env, out, folder, settings, extensions: [driver] })
 				const ctx = { app, results, folder, setSettings: p => app.setSettings(p) }
 				try {
 					return await s.run(ctx)
@@ -124,7 +135,7 @@ async function main() {
 	}
 
 	if (installDir && exe && (!only || only.includes('update'))) {
-		await timed('update', 'Windows installer: in-app update through AXLE_UPDATE_URL', () => withRetries(2, async attempt => {
+		await timed('update', 'Windows installer: in-app update through INSILODE_UPDATE_URL', () => withRetries(2, async attempt => {
 			if (attempt > 1) {
 				// A half-applied update is not a state to retry on: start from a clean install.
 				await uninstall(installDir).catch(() => undefined)
@@ -138,7 +149,7 @@ async function main() {
 	if (installDir && existsSync(installDir) && (!only || only.includes('uninstall'))) {
 		await timed('uninstall', 'Windows installer: silent uninstall', async () => {
 			await uninstall(installDir)
-			return { status: 'pass', detail: 'Axle.exe removed', shots: [] }
+			return { status: 'pass', detail: 'Insilode.exe removed', shots: [] }
 		})
 	}
 

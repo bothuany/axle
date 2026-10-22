@@ -34,7 +34,7 @@ montage. The change set on the canvas is not one of the three: it is the turn it
 **Truthfulness.** Every product frame is the app's own rendering, by its own code and CSS, captured
 headless at 2x: the canvas (`ui/`), its tour, the Agents dock page and the status island page, run on
 Harbor Goods (the playground's demo project: orders and shipping in Java, billing in Python) through
-the playground's host (`playground/canvas.html`, `scripts/playground-data.mjs`), and the workbench in
+the playground's host (`site/canvas.html`, `scripts/site-data.mjs`), and the workbench in
 web mode for the frames that need the whole window. The film adds only framing, camera moves, rings,
 captions and type. The agent's change is a real commit for the film (`demo/changed/`, 14 files,
 +112 −16), so the count, the diff and the green/red lines are real. The tour's steps are scripted, and the dock and the island are the app's own pages fed the playground's

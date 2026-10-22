@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: permission inbox. Every permission an agent asked for, in one list, with what
+ *  Insilode Harness: permission inbox. Every permission an agent asked for, in one list, with what
  *  was answered; any of them can become a standing rule so it is never asked again.
  *--------------------------------------------------------------------------------------------*/
 

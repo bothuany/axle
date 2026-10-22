@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: what a session has cost so far, in tokens and, where the CLI says, in US dollars. Nothing
+ *  Insilode: what a session has cost so far, in tokens and, where the CLI says, in US dollars. Nothing
  *  here prices tokens itself: there is no price table to go stale. The dollars are the ones Claude
  *  Code's status line reports (`cost.total_cost_usd`, its own API-price estimate since the CLI
  *  started, also on a subscription plan), so the dock labels them "est.". Codex reports no dollars,
@@ -38,7 +38,7 @@ export interface Spend {
 /** What the dock shows: the session so far and the prompt it is on (or last finished). */
 export interface SessionCost {
 	session: Spend;
-	/** Absent when the prompt started before Axle was watching (a reloaded window): its share is unknown. */
+	/** Absent when the prompt started before Insilode was watching (a reloaded window): its share is unknown. */
 	prompt?: Spend;
 	/** Where the dollars come from, for the tooltip; absent when there are none. */
 	usdSource?: string;

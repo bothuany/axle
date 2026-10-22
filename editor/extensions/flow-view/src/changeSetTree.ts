@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: one canvas for a whole change set. The flows of the endpoints a change reaches, and the changed
+ *  Insilode: one canvas for a whole change set. The flows of the endpoints a change reaches, and the changed
  *  methods no endpoint reaches, hang under one root; each is cut down to the paths that lead to a changed
  *  card, so what changed is visible without unfolding anything. No `vscode` here: tested on its own.
  *--------------------------------------------------------------------------------------------*/

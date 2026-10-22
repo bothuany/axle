@@ -22,7 +22,7 @@ const session = (id, name, root, files, methods = {}, flows = {}) => ({ id, name
 
 test('keys: relative to the checkout, forward slashes, case-folded on Windows', () => {
 	assert.equal(c.key('C:\\Repo\\src\\Orders.cs', 'c:\\repo', 'win32'), 'src/orders.cs')
-	assert.equal(c.key('C:/Repo/.axle/worktrees/x/src/Orders.cs', 'C:\\Repo\\.axle\\worktrees\\x', 'win32'), 'src/orders.cs')
+	assert.equal(c.key('C:/Repo/.insilode/worktrees/x/src/Orders.cs', 'C:\\Repo\\.insilode\\worktrees\\x', 'win32'), 'src/orders.cs')
 	assert.equal(c.key('src/Orders.cs', 'C:\\Repo', 'win32'), 'src/orders.cs')
 	assert.equal(c.key('D:\\elsewhere\\a.cs', 'C:\\Repo', 'win32'), undefined)
 	assert.equal(c.key('/home/me/repo/src/Orders.cs', '/home/me/repo', 'linux'), 'src/Orders.cs')
@@ -36,7 +36,7 @@ test('two sessions in one checkout on one method: both rows, the shared checkout
 	const m = c.findConflicts([
 		session('a', 'Claude', 'C:\\repo', ['src/orders.cs', 'src/a.cs'], { 'src/orders.cs#OrderService.Place': 'OrderService.Place' }, { 'e1': 'POST /orders' }),
 		session('b', 'Claude 2', 'c:\\Repo', ['src/orders.cs'], { 'src/orders.cs#OrderService.Place': 'OrderService.Place', 'src/orders.cs#OrderService.Cancel': 'OrderService.Cancel' }, { 'e1': 'POST /orders' }),
-		session('c', 'Codex', 'C:\\repo\\.axle\\worktrees\\codex-1', ['src/other.cs']),
+		session('c', 'Codex', 'C:\\repo\\.insilode\\worktrees\\codex-1', ['src/other.cs']),
 	], 'win32')
 	assert.deepEqual([...m.keys()].sort(), ['a', 'b'])
 	const [onA] = m.get('a')
@@ -48,7 +48,7 @@ test('two sessions in one checkout on one method: both rows, the shared checkout
 test('a worktree and the main checkout on one file: a conflict, not the same checkout', () => {
 	const m = c.findConflicts([
 		session('a', 'Claude', '/r', ['src/Orders.ts']),
-		session('b', 'Codex', '/r/.axle/worktrees/codex-1', ['src/Orders.ts', 'README.md']),
+		session('b', 'Codex', '/r/.insilode/worktrees/codex-1', ['src/Orders.ts', 'README.md']),
 	], 'linux')
 	const [x] = m.get('b')
 	assert.equal(x.sameCheckout, false)
@@ -71,7 +71,7 @@ test('three sessions: each row lists every other it overlaps with', () => {
 	const m = c.findConflicts([
 		session('a', 'A', '/r', ['f']),
 		session('b', 'B', '/r', ['f']),
-		session('c', 'C', '/r/.axle/worktrees/c', ['f']),
+		session('c', 'C', '/r/.insilode/worktrees/c', ['f']),
 	], 'linux')
 	assert.deepEqual(m.get('a').map(x => [x.id, x.sameCheckout]), [['b', true], ['c', false]])
 	assert.deepEqual(m.get('c').map(x => x.id), ['a', 'b'])

@@ -1,6 +1,6 @@
 {
 	"$schema": "vscode://schemas/color-theme",
-	"name": "Axle Light",
+	"name": "Insilode Light",
 	"type": "light",
 	"include": "./light_plus.json",
 	"semanticHighlighting": true,

@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the endpoints of the solution, controller by controller. Each row leads with its HTTP
+ *  Insilode: the endpoints of the solution, controller by controller. Each row leads with its HTTP
  *  verb in the verb's own colour, so a list of a hundred routes reads at a glance; a filter at
  *  the top narrows by name, verb or controller. Opening one draws its flow.
  *--------------------------------------------------------------------------------------------*/
@@ -129,7 +129,7 @@ function render() {
 			+ items.map(e => '<button class="row' + (e.id === data.current ? ' current' : '') + '" data-id="' + esc(e.id) + '" data-source="' + esc(e.source) + '" data-label="' + esc(g.name + '.' + e.action) + '" title="' + esc(e.verb + ' ' + (e.route || '') + '\\n' + e.file + ':' + e.line) + '"><span class="verb ' + (VERBS.includes(e.verb) ? e.verb : 'other') + '">' + esc(e.verb) + '</span><span class="action">' + hl(e.action, verbOnly ? '' : q) + '</span></button>').join('')
 			+ '</details>';
 	}).join('');
-	document.getElementById('list').innerHTML = html || (total ? '<p class="empty">No endpoint matches.</p>' : '<p class="empty">No endpoints found yet. Axle lists routes from Spring, JAX-RS, ASP.NET, FastAPI, Flask, Django, Express, NestJS and more. For a .NET project you can <button id="pick">choose a solution</button>.</p>');
+	document.getElementById('list').innerHTML = html || (total ? '<p class="empty">No endpoint matches.</p>' : '<p class="empty">No endpoints found yet. Insilode lists routes from Spring, JAX-RS, ASP.NET, FastAPI, Flask, Django, Express, NestJS and more. For a .NET project you can <button id="pick">choose a solution</button>.</p>');
 	document.getElementById('count').textContent = total ? (q ? shown + ' of ' + total : total + ' endpoints') : '';
 	document.querySelectorAll('details.group').forEach(d => d.addEventListener('toggle', () => { if (!q) { state.open[d.dataset.name] = d.open; vscode.setState(state); } }));
 	document.querySelectorAll('.row').forEach(b => b.onclick = () => { data.current = b.dataset.id; vscode.postMessage({ type: 'open', id: b.dataset.id, label: b.dataset.label, source: b.dataset.source }); render(); });

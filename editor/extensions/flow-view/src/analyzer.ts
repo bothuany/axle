@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the Roslyn analyzer (custom-ide/analyzer) as a child process of the extension host.
+ *  Insilode: the Roslyn analyzer (custom-ide/analyzer) as a child process of the extension host.
  *--------------------------------------------------------------------------------------------*/
 
 import { spawn, type ChildProcess } from 'child_process';
@@ -124,7 +124,7 @@ export class Analyzer implements vscode.Disposable {
 		return this.context.workspaceState.get<EntryPoint[]>(ENTRIES_KEY) ?? [];
 	}
 
-	/** The published analyzer of an installed Axle, else analyzer/ at the repository root, built by `npm run setup` (Debug, or Release when only that exists). */
+	/** The published analyzer of an installed Insilode, else analyzer/ at the repository root, built by `npm run setup` (Debug, or Release when only that exists). */
 	private get dll() {
 		const published = path.join(flowRoot(this.context.extensionPath), 'analyzer', 'FlowAnalyzer.dll');
 		if (existsSync(published)) {
@@ -144,7 +144,7 @@ export class Analyzer implements vscode.Disposable {
 			return;
 		}
 		this.dotnetAdvised = true;
-		void vscode.window.showWarningMessage('Axle reads C# solutions with the .NET 10 SDK, and could not find it on this PC. Install it, then restart Axle.', 'Get .NET 10')
+		void vscode.window.showWarningMessage('Insilode reads C# solutions with the .NET 10 SDK, and could not find it on this PC. Install it, then restart Insilode.', 'Get .NET 10')
 			.then(pick => pick && vscode.env.openExternal(vscode.Uri.parse('https://dotnet.microsoft.com/download/dotnet/10.0')));
 	}
 
@@ -194,7 +194,7 @@ export class Analyzer implements vscode.Disposable {
 				.map(u => ({ label: path.basename(u.fsPath), description: vscode.workspace.asRelativePath(path.dirname(u.fsPath)), uri: u }))
 				.sort((a, b) => a.description.length - b.description.length);
 			const what = /\.(sln|slnx)$/i.test(found[0].fsPath) ? 'solution' : 'project';
-			const chosen = await vscode.window.showQuickPick(items, { title: `Axle: which ${what} should the flow come from?`, ignoreFocusOut: true, matchOnDescription: true });
+			const chosen = await vscode.window.showQuickPick(items, { title: `Insilode: which ${what} should the flow come from?`, ignoreFocusOut: true, matchOnDescription: true });
 			if (!chosen) {
 				throw new Error(`No ${what} chosen`);
 			}
@@ -247,7 +247,7 @@ export class Analyzer implements vscode.Disposable {
 	}
 
 	private async launch(sln: string): Promise<number> {
-		this.setStatus('$(loading~spin) Axle', `Axle: loading ${path.basename(sln)}`);
+		this.setStatus('$(loading~spin) Insilode', `Insilode: loading ${path.basename(sln)}`);
 		const port = await freePort();
 		this.log.info(`starting analyzer for ${sln} on ${port}`);
 		const startedAt = Date.now();
@@ -271,17 +271,17 @@ export class Analyzer implements vscode.Disposable {
 				this.child = undefined;
 				this.ready = undefined;
 				this.isReady = false;
-				this.setStatus('$(warning) Axle', 'Axle analyzer stopped — click to restart');
+				this.setStatus('$(warning) Insilode', 'Insilode analyzer stopped — click to restart');
 			}
 		});
-		const loaded = vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: `Axle: loading ${path.basename(sln)}` }, async () => {
+		const loaded = vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: `Insilode: loading ${path.basename(sln)}` }, async () => {
 			const deadline = Date.now() + 180_000;
 			while (Date.now() < deadline) {
 				if (aborted) {
 					throw new Error('Analyzer start was cancelled');
 				}
 				if (await this.probe(port)) {
-					this.setStatus('$(type-hierarchy-sub) Axle', `Axle: ${path.basename(sln)} ready — click for endpoints`);
+					this.setStatus('$(type-hierarchy-sub) Insilode', `Insilode: ${path.basename(sln)} ready — click for endpoints`);
 					this.isReady = true;
 					this.becameReady.fire();
 					this.seed = undefined; // only the listeners that ran just now may use it
@@ -292,7 +292,7 @@ export class Analyzer implements vscode.Disposable {
 					if (/You must install or update \.NET|Framework: 'Microsoft\./.test(stderr)) {
 						throw new Error('.NET 10 is required: install the .NET 10 SDK');
 					}
-					const message = 'Analyzer exited while loading the solution (see Output → Axle)';
+					const message = 'Analyzer exited while loading the solution (see Output → Insilode)';
 					throw Date.now() - startedAt < 5_000 ? new EarlyExit(message) : new Error(message);
 				}
 				await new Promise(r => setTimeout(r, 400));
@@ -312,7 +312,7 @@ export class Analyzer implements vscode.Disposable {
 				this.child = undefined;
 				this.ready = undefined;
 				this.isReady = false;
-				this.setStatus('$(warning) Axle', e instanceof Error && /dotnet was not found|\.NET 10 is required|failed to start/.test(e.message) ? 'Axle analyzer could not start' : 'Axle analyzer stopped — click to restart');
+				this.setStatus('$(warning) Insilode', e instanceof Error && /dotnet was not found|\.NET 10 is required|failed to start/.test(e.message) ? 'Insilode analyzer could not start' : 'Insilode analyzer stopped — click to restart');
 			}
 			throw e;
 		}

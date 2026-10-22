@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle skeleton first: where each agent session is in the flow (design → skeleton → handover) and what `check_skeleton` answers at
+ *  Insilode skeleton first: where each agent session is in the flow (design → skeleton → handover) and what `check_skeleton` answers at
  *  each stage. The developer drives the flow by talking to the agent, so every answer also says what to tell them next and which step
  *  their reply maps to. Held in the window's memory only: a reload starts over. Pure: no vscode.
  *--------------------------------------------------------------------------------------------*/
@@ -25,7 +25,7 @@ export interface SkeletonTools {
 }
 
 export interface SkeletonSession {
-	/** The Axle agent session (AXLE_SESSION); '' for an agent Axle did not start. */
+	/** The Insilode agent session (INSILODE_SESSION); '' for an agent Insilode did not start. */
 	session: string;
 	stage: Stage;
 	/** The board the design is drawn on. */
@@ -88,15 +88,15 @@ const emptyTypes = (diff: SkeletonDiff | undefined): string[] => {
 /** What `check_skeleton` answers. `enabled` is this agent's switch; `s` is its stage, when it has one. */
 export function toolAnswer(enabled: boolean, s: SkeletonSession | undefined, rel: (file: string) => string = f => f): string {
 	if (!enabled) {
-		return 'Skeleton first is off for you in Axle: implement the plan as usual. Do not call check_skeleton again for this plan.';
+		return 'Skeleton first is off for you in Insilode: implement the plan as usual. Do not call check_skeleton again for this plan.';
 	}
 	if (!s || (s.stage === 'design' && !s.plan)) {
 		const id = s?.boardId ?? 'skeleton';
 		return [
-			'Skeleton first is ON in Axle: the developer writes the skeleton of this change (types, entities, interfaces, signatures, empty bodies) themselves, and you fill the bodies later.',
+			'Skeleton first is ON in Insilode: the developer writes the skeleton of this change (types, entities, interfaces, signatures, empty bodies) themselves, and you fill the bodies later.',
 			'1. If the request or plan does NOT add or change types, entities or interfaces (a bug fix, a rename, a small edit), ignore this and do it as usual.',
 			`2. Otherwise draw your target design now with draw_board: id "${id}", kind "class" (or "er" for tables), one node per type with kind interface / class / service / repository / entity / dto / enum and a "label" (its name), ${SIGNATURES}. Add edges for extends / implements / has / has-many / uses. Only the types this change adds or changes, and the ones they connect to.`,
-			`3. Then STOP: do not create or edit any file. draw_board answers which types are new and which existing types get which members; in a few short lines ${TELL}, that the design is on the board in Axle and they can ask you to change it, that they now write those types and signatures with empty bodies (the board colours them as they save), and that they say "check" for a review, "hand over" when you should fill the bodies, or "just do it" to have you write it all.`,
+			`3. Then STOP: do not create or edit any file. draw_board answers which types are new and which existing types get which members; in a few short lines ${TELL}, that the design is on the board in Insilode and they can ask you to change it, that they now write those types and signatures with empty bodies (the board colours them as they save), and that they say "check" for a review, "hand over" when you should fill the bodies, or "just do it" to have you write it all.`,
 			`4. If they ask for a change ("make X an interface", "remove the repository"), redraw with draw_board and the same id "${id}", then stop again.`,
 		].join('\n');
 	}
@@ -118,7 +118,7 @@ export function toolAnswer(enabled: boolean, s: SkeletonSession | undefined, rel
 				s.warnings.length ? `\nSignatures that changed after the hand-over:\n${s.warnings.map(w => `- warning ${w.id}: ${warningText(w)}`).join('\n')}` : '',
 				'',
 				'The developer handed the skeleton over: fill in the method bodies. Keep every type, signature, name and relation they wrote.',
-				'When you have filled them, call check_skeleton once more. For every warning it lists, tell the developer in your reply what changed and why, before → after, and ask whether to keep it. If they say keep it, call check_skeleton with step "accept" and that warning number. If they say revert, put their declaration back exactly as it was before (the text before the arrow), keeping the body; they can also run "Axle: Revert an Agent\'s Change to Your Declaration" themselves.',
+				'When you have filled them, call check_skeleton once more. For every warning it lists, tell the developer in your reply what changed and why, before → after, and ask whether to keep it. If they say keep it, call check_skeleton with step "accept" and that warning number. If they say revert, put their declaration back exactly as it was before (the text before the arrow), keeping the body; they can also run "Insilode: Revert an Agent\'s Change to Your Declaration" themselves.',
 				'Then play a closing tour with the tour tool, flow {"changes": true}: one step per method you filled, and a last caption-only step on what you did not test. When the developer says they are done, call check_skeleton with step "finish".',
 			].filter(Boolean).join('\n');
 	}

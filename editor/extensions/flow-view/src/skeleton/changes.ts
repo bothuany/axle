@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle skeleton first: file changes come in bursts (typing, a save, a formatter, an agent writing several files), and the board
+ *  Insilode skeleton first: file changes come in bursts (typing, a save, a formatter, an agent writing several files), and the board
  *  should follow within a second without re-reading on every keystroke. This keeps the latest item per file and hands the batch over
  *  once nothing new has come for `delay` ms. Pure: no vscode, no fs.
  *--------------------------------------------------------------------------------------------*/

@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: where a flow comes from. One provider per kind of target; the canvas only sees FlowNode.
+ *  Insilode: where a flow comes from. One provider per kind of target; the canvas only sees FlowNode.
  *--------------------------------------------------------------------------------------------*/
 
 import type { FlowNode } from '../../../../protocol/flow';

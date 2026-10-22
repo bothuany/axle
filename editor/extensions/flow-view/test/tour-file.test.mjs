@@ -20,14 +20,14 @@ before(async () => {
 })
 after(() => rmSync(tmp, { recursive: true, force: true }))
 
-const work = resolve(tmpdir(), 'axle-tour-work')
+const work = resolve(tmpdir(), 'insilode-tour-work')
 /** A workspace of two files, read from a table. */
 const files = new Map([
 	[join(work, 'src', 'a.js'), Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n')],
 	[join(work, 'b.py'), 'def f():\r\n    return 1\r\n'],
 ])
 const host = { roots: [work], readText: f => files.get(f) }
-const file = (extra = {}) => ({ axleTour: 1, id: 't1', title: 'A tour', steps: [{ caption: 'Hello' }], ...extra })
+const file = (extra = {}) => ({ insilodeTour: 1, id: 't1', title: 'A tour', steps: [{ caption: 'Hello' }], ...extra })
 const parse = (raw, h = host) => v.parseTourFile(raw, h)
 const fails = (raw, pattern, h = host) => assert.throws(() => parse(raw, h), e => e instanceof v.TourFileError && pattern.test(e.message), String(pattern))
 
@@ -105,8 +105,10 @@ test('limits name the bad field: 31 steps, a long caption, a long title, no capt
 })
 
 test('the header: a version, an id that is a plain name, a title', () => {
-	fails({ ...file(), axleTour: 2 }, /"axleTour": 1 is missing/)
-	fails({ ...file(), axleTour: undefined }, /"axleTour": 1 is missing/)
+	fails({ ...file(), insilodeTour: 2 }, /"insilodeTour": 1 is missing/)
+	fails({ ...file(), insilodeTour: undefined }, /"insilodeTour": 1 is missing/)
+	// A file saved before the rename still loads.
+	assert.equal(parse({ ...file(), insilodeTour: undefined, axleTour: 1 }).tour.title, 'A tour')
 	fails(file({ id: '../x' }), /"id"/)
 	fails(file({ id: '' }), /"id"/)
 	fails(file({ title: '' }), /"title" is missing/)

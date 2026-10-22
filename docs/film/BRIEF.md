@@ -28,7 +28,7 @@ Made fresh: the earlier video, poster and brag outputs are not reference materia
   at 2x. No mock UI. What the capture cannot move is rebuilt from Axle's own pages, never drawn
   from memory.
 - The status island cannot be shown on a desktop here; use the island page Axle itself ships
-  (cut from `editor/patches/flow-desktop.patch` by `scripts/playground-data.mjs`), captured headless.
+  (cut from `editor/patches/flow-desktop.patch` by `scripts/site-data.mjs`), captured headless.
 - Voiceover from a local open model on this machine (RTX 5080), licence allowing commercial use.
 - Deliverables: the 60-90 s film; a silent 15 s loop for the README and the site hero; 1:1 and
   9:16 cuts from the same project; a poster frame; per-feature clips in `docs/media/film/clips/`
@@ -39,4 +39,4 @@ Made fresh: the earlier video, poster and brag outputs are not reference materia
 
 - Logo: `editor/branding/icon.png` (used in the build, never committed again).
 - Palette: Axle's canvas theme (`ui/src/styles.css`).
-- Demo project: Harbor Goods (`playground/demo/base`), with a real change authored for the film.
+- Demo project: Harbor Goods (`site/demo/base`), with a real change authored for the film.

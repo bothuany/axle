@@ -1,4 +1,4 @@
-// The rules around the agents' numbers (src/usage.ts): Axle's status-line script and its /status forward, when Compact
+// The rules around the agents' numbers (src/usage.ts): Insilode's status-line script and its /status forward, when Compact
 // may type, stale reports after a session ends, the user's own status line, the limits de-duplication, Codex details.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
@@ -68,7 +68,7 @@ test('the status-line script prints its line and forwards to /status only when t
 		await run(status) // the same numbers: printed, not forwarded
 		assert.equal(got.length, 1)
 		const more = { ...status, context_window: { ...status.context_window, total_input_tokens: 70_000 } }
-		reply = 500 // Axle did not take it: the next run must try again
+		reply = 500 // Insilode did not take it: the next run must try again
 		await run(more)
 		reply = 200
 		await run(more)

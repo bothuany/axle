@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: the worker. Walks the workspace, parses Java, Python and JS/TS with
+ *  Insilode polyglot index: the worker. Walks the workspace, parses Java, Python and JS/TS with
  *  tree-sitter, keeps per-file facts (cached on disk by mtime) and answers the extension host.
  *  Runs off the extension host's thread: a first index of a large repo takes seconds.
  *--------------------------------------------------------------------------------------------*/

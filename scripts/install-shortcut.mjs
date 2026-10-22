@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Windows: puts a "Axle" shortcut on the Desktop and in the Start menu. It runs `node scripts/start.mjs` minimised.
+// Windows: puts a "Insilode" shortcut on the Desktop and in the Start menu. It runs `node scripts/start.mjs` minimised.
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,14 +16,14 @@ const script = `
 $w = New-Object -ComObject WScript.Shell
 $dirs = @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs'))
 foreach ($dir in $dirs) {
-  $s = $w.CreateShortcut((Join-Path $dir 'Axle.lnk'))
+  $s = $w.CreateShortcut((Join-Path $dir 'Insilode.lnk'))
   $s.TargetPath = ${q(process.execPath)}
   $s.Arguments = ${q(`"${join(ROOT, 'scripts', 'start.mjs')}"`)}
   $s.WorkingDirectory = ${q(ROOT)}
   $s.IconLocation = ${q(join(ROOT, 'editor', 'branding', 'icon.ico'))}
   $s.WindowStyle = 7
   $s.Save()
-  Write-Host ('Created ' + (Join-Path $dir 'Axle.lnk'))
+  Write-Host ('Created ' + (Join-Path $dir 'Insilode.lnk'))
 }`
 const dir = mkdtempSync(join(tmpdir(), 'flow-'))
 try {

@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the page of the Agents dock (HTML, CSS and the script that draws the rows). No `vscode` here, so the
- *  page can be rendered outside the editor too: the browser playground puts it in an iframe and sends it the
+ *  Insilode: the page of the Agents dock (HTML, CSS and the script that draws the rows). No `vscode` here, so the
+ *  page can be rendered outside the editor too: the website (site/) puts it in an iframe and sends it the
  *  same `data` messages the dock sends it. dock.ts gives it to the webview and answers what it asks for.
  *--------------------------------------------------------------------------------------------*/
 
@@ -144,7 +144,7 @@ const LABEL = { working: 'Working', blocked: 'Needs you', done: 'Done', idle: 'R
 function avatar(s, pct) {
 	const st = avState(s);
 	const key = [s.id, data.avatar, s.cli, st, pct ?? ''].join('|');
-	return '<span class="av" data-k="' + esc(key) + '">' + window.axleAvatar(data.avatar, s.cli, st, pct, 24) + '</span>';
+	return '<span class="av" data-k="' + esc(key) + '">' + window.insilodeAvatar(data.avatar, s.cli, st, pct, 24) + '</span>';
 }
 // Skeleton first: one toggle button per agent; what it does is in its tooltip. The stages are talked through with the agent, so
 // the row shows nothing else. The page sends only the row and the state it asks for.

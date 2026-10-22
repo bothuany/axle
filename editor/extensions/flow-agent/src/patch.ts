@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the files a Codex `apply_patch` touches. Codex hooks report the edit as
+ *  Insilode: the files a Codex `apply_patch` touches. Codex hooks report the edit as
  *  `tool_name: "apply_patch"` with the whole patch in `tool_input.command`, never a `file_path`,
  *  so the files come from the patch's own headers:
  *

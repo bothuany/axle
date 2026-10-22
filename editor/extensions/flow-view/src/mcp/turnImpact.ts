@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle agent bridge: which flows an agent's turn touched. Given the files edited in a turn, finds the
+ *  Insilode agent bridge: which flows an agent's turn touched. Given the files edited in a turn, finds the
  *  entry points (endpoints, jobs) that reach the methods the turn changed, using only backends that are
  *  ready (nothing is started or asked). With the turn's line ranges (`rangesOf`) only the methods an edit
  *  landed in count, and each flow says which of them it goes through; an edit outside every method, or a

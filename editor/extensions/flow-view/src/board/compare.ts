@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle board compare: what changed between two versions of a design. The new board comes back with `change` set on every node and
+ *  Insilode board compare: what changed between two versions of a design. The new board comes back with `change` set on every node and
  *  edge that is added or changed, and what the old one had and the new one lacks drawn again as removed (a ghost), so the canvas only
  *  has to colour by `change`. Used for a board with a `base` and for "what changed since the last draw". Pure: no `vscode`.
  *--------------------------------------------------------------------------------------------*/

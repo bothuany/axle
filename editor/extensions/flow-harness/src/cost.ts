@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: what each harness file costs, and how that changed. A file's cost is split in
+ *  Insilode Harness: what each harness file costs, and how that changed. A file's cost is split in
  *  two: always-on (read before the first prompt, in every session: CLAUDE.md, rules without
  *  paths, skill and subagent descriptions) and on demand (read only when the agent works where
  *  it applies or uses it: a folder's CLAUDE.md, a path-scoped rule, a skill's body). The costs

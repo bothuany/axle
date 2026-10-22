@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: `flow.index.resolveNames`, for other extensions. Given code names (`UserService`,
+ *  Insilode: `flow.index.resolveNames`, for other extensions. Given code names (`UserService`,
  *  `Project.callers`, `buildIndex()`), says which still exist: from the polyglot index first,
  *  then from the language servers' workspace symbols for languages the index does not read
  *  (C#, say). A name nobody can answer for (the index still loading, no language server) is

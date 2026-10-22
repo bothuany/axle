@@ -54,7 +54,7 @@ const byLabel = (diff, label) => diff.nodes.find(n => n.label === label)
 
 /** A copy of the CRM fixture in a temp folder, its index, and the way to build a graph from it: what the developer's folder is while they write. */
 async function project() {
-	const root = mkdtempSync(join(tmpdir(), 'axle-skeleton-'))
+	const root = mkdtempSync(join(tmpdir(), 'insilode-skeleton-'))
 	temps.push(root)
 	cpSync(join(FIXTURES, 'skeleton-crm'), root, { recursive: true })
 	const index = new Index(root)

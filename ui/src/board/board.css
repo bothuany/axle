@@ -1,4 +1,4 @@
-/* Axle board webview. Same variables and conventions as webview.css: neutral surfaces follow the editor theme,
+/* Insilode board webview. Same variables and conventions as webview.css: neutral surfaces follow the editor theme,
    colour means something (the kind of a node, a line style, the selected card). */
 :root {
   --fl-canvas: var(--vscode-editor-background, #181818);

@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the pull request of the branch an agent works on, and its CI. Asked of the GitHub CLI
+ *  Insilode: the pull request of the branch an agent works on, and its CI. Asked of the GitHub CLI
  *  (`gh pr view --json ...` in the agent's folder, an argument array, no shell), cached per folder
  *  and branch and asked again at most every couple of minutes. Without `gh`, signed out, outside a
  *  git repository or on a branch with no PR, a row simply shows nothing.

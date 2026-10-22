@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle agent bridge: a flow as compact indented text, so a model can understand a feature without
+ *  Insilode agent bridge: a flow as compact indented text, so a model can understand a feature without
  *  reading dozens of files. Each line is one step: `-> L18 Class.method  path:start-end`, where L18
  *  is the line in the caller that makes the call. Database nodes read `[db] table`. Pure: no `vscode`.
  *--------------------------------------------------------------------------------------------*/

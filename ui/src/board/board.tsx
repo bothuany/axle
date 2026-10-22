@@ -1,4 +1,4 @@
-// Axle board webview: draws a BoardSpec (DTO relations, architecture, plans) on a pan/zoom canvas. The host
+// Insilode board webview: draws a BoardSpec (DTO relations, architecture, plans) on a pan/zoom canvas. The host
 // (flow-view/src/boardPanel.ts) sends the spec and recomputes it when the user changes focus, search or filters:
 // those controls only post a 'rebuild' with the new options, so big graphs stay a host-side computation.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'

@@ -1,6 +1,6 @@
 {
   "name": "flow-view",
-  "displayName": "Axle View",
+  "displayName": "Insilode View",
   "description": "See code as a flow: callers on the left, the method in the middle, everything it calls on the right.",
   "version": "0.1.0",
   "publisher": "flow",
@@ -27,170 +27,170 @@
       {
         "command": "flow.showAtCursor",
         "title": "Show Flow at Cursor",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(type-hierarchy-sub)"
       },
       {
         "command": "flow.pickEndpoint",
         "title": "Open Endpoint Flow…",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.pickSolution",
         "title": "Choose Solution or Project…",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(folder-library)"
       },
       {
         "command": "flow.tour.playFile",
         "title": "Play Tour from File…",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.diff.showInFlow",
         "title": "Show Git Changes in Flow",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(type-hierarchy-sub)"
       },
       {
         "command": "flow.showTarget",
         "title": "Show Flow",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.agentWillEdit",
         "title": "Agent Will Edit",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.agentDidEdit",
         "title": "Agent Did Edit",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.askAgent",
         "title": "Ask Agent About This Flow",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.showMethod",
         "title": "Show Method Flow",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.showEntry",
         "title": "Show Entry Flow",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.agentTurn",
         "title": "Agent Turn",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.agentProposes",
         "title": "Agent Proposes Edit",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.agentProposalDone",
         "title": "Agent Proposal Done",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.home",
         "title": "Home",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(home)"
       },
       {
         "command": "flow.ide.accept",
         "title": "Accept Claude's Change",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(check)"
       },
       {
         "command": "flow.ide.reject",
         "title": "Reject Claude's Change",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(close)"
       },
       {
         "command": "flow.ide.mention",
         "title": "Mention Selection in Claude Code",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.selection.ask",
         "title": "Ask Agent About Selection…",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.selection.explain",
         "title": "Explain Selection with a Tour",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.selection.edit",
         "title": "Edit Selection with Agent…",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.ide.howTo",
         "title": "Connect Claude Code",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.mcp.connect",
         "title": "Connect Claude Code Tools (MCP)",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.mcp.disconnect",
         "title": "Disconnect Claude Code Tools (MCP)",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.board.show",
         "title": "Show Board…",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.skeleton.revert",
         "title": "Revert an Agent's Change to Your Declaration",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.board.pinFlow",
         "title": "Pin Flow as Board",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.board.fromCode",
         "title": "Board from Code…",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.types.showDtoDiagram",
         "title": "Show DTO Diagram",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(symbol-structure)"
       },
       {
         "command": "flow.types.showArchitecture",
         "title": "Show Architecture Diagram",
-        "category": "Axle",
+        "category": "Insilode",
         "icon": "$(type-hierarchy)"
       },
       {
         "command": "flow.types.exportMermaid",
         "title": "Copy Diagram as Mermaid",
-        "category": "Axle"
+        "category": "Insilode"
       },
       {
         "command": "flow.types.focusType",
         "title": "Show Type in DTO Diagram",
-        "category": "Axle"
+        "category": "Insilode"
       }
     ],
     "keybindings": [
@@ -268,22 +268,22 @@
         {
           "command": "flow.selection.edit",
           "when": "editorHasSelection && resourceScheme == file",
-          "group": "9_axle@1"
+          "group": "9_insilode@1"
         },
         {
           "command": "flow.selection.ask",
           "when": "editorHasSelection && resourceScheme == file",
-          "group": "9_axle@2"
+          "group": "9_insilode@2"
         },
         {
           "command": "flow.selection.explain",
           "when": "editorHasSelection && resourceScheme == file",
-          "group": "9_axle@3"
+          "group": "9_insilode@3"
         },
         {
           "command": "flow.ide.mention",
           "when": "editorHasSelection && resourceScheme == file",
-          "group": "9_axle@4"
+          "group": "9_insilode@4"
         }
       ],
       "commandPalette": [
@@ -358,12 +358,12 @@
       ]
     },
     "configuration": {
-      "title": "Axle",
+      "title": "Insilode",
       "properties": {
         "flow.codeLens": {
           "type": "boolean",
           "default": true,
-          "description": "Show a \"Axle\" link above every method."
+          "description": "Show a \"Insilode\" link above every method."
         },
         "flow.lspResolution": {
           "type": "boolean",
@@ -373,7 +373,7 @@
         "flow.ide.enabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Let Claude Code in a terminal connect to Axle: its diffs open here and your selection is shared. Starts a local WebSocket server (127.0.0.1) and a lock file in `~/.claude/ide`. Takes effect after a window reload."
+          "markdownDescription": "Let Claude Code in a terminal connect to Insilode: its diffs open here and your selection is shared. Starts a local WebSocket server (127.0.0.1) and a lock file in `~/.claude/ide`. Takes effect after a window reload."
         },
         "flow.showTests": {
           "type": "boolean",
@@ -437,7 +437,7 @@
       "activitybar": [
         {
           "id": "flow",
-          "title": "Axle",
+          "title": "Insilode",
           "icon": "media/flow.svg"
         }
       ]

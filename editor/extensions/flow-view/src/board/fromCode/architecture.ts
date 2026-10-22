@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle boards generated from code: the dependencies between modules (services) or packages as an architecture diagram. A
+ *  Insilode boards generated from code: the dependencies between modules (services) or packages as an architecture diagram. A
  *  box is a module or a package, an edge is "some type of this box refers to a type of that box" (a field, a parameter, a
  *  constructor injection, a base type) or "calls it" (from the flow index), counted. With two or more modules the board is
  *  the C4 container level (one boundary around the system); one module, or a module asked for, is the component level

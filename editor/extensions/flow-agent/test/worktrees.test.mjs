@@ -22,8 +22,8 @@ after(() => rmSync(tmp, { recursive: true, force: true }))
 test('slugs and branch names are safe to pass to git', () => {
 	assert.equal(w.worktreeSlug('claude', '3F9A'), 'claude-3f9a')
 	assert.equal(w.slugify('  Fix the Orders/Place bug!  '), 'fix-the-orders-place-bug')
-	assert.equal(w.branchFor('claude-3f9a'), 'axle/claude-3f9a')
-	for (const ok of ['main', 'feature/x', 'axle/claude-3f9a', 'release-1.2']) {
+	assert.equal(w.branchFor('claude-3f9a'), 'insilode/claude-3f9a')
+	for (const ok of ['main', 'feature/x', 'insilode/claude-3f9a', 'release-1.2']) {
 		assert.ok(w.validBranch(ok), ok)
 	}
 	for (const bad of ['-x', '--upload-pack=evil', 'a..b', 'a b', '.hidden', 'x/.y', 'x.lock', 'x/', '', 'a;b', 'a$(b)']) {
@@ -32,15 +32,15 @@ test('slugs and branch names are safe to pass to git', () => {
 })
 
 test('argument arrays', () => {
-	const dir = join('C:', 'repo', '.axle', 'worktrees', 'claude-1')
-	assert.deepEqual(w.addArgs(dir, 'axle/claude-1', 'main'), ['worktree', 'add', '-b', 'axle/claude-1', dir, 'main'])
+	const dir = join('C:', 'repo', '.insilode', 'worktrees', 'claude-1')
+	assert.deepEqual(w.addArgs(dir, 'insilode/claude-1', 'main'), ['worktree', 'add', '-b', 'insilode/claude-1', dir, 'main'])
 	assert.deepEqual(w.removeArgs(dir, false), ['worktree', 'remove', dir])
 	assert.deepEqual(w.removeArgs(dir, true), ['worktree', 'remove', '--force', dir])
 	assert.deepEqual(w.aheadBehindArgs('main'), ['rev-list', '--left-right', '--count', 'main...HEAD'])
-	assert.deepEqual(w.aheadBehindArgs('main', 'axle/x'), ['rev-list', '--left-right', '--count', 'main...axle/x'])
-	assert.deepEqual(w.fastForwardArgs('axle/x'), ['merge', '--ff-only', 'axle/x'])
-	assert.deepEqual(w.mergeArgs('axle/x', 'msg'), ['merge', '--no-ff', '--no-edit', '-m', 'msg', 'axle/x'])
-	assert.deepEqual(w.mergeTreeArgs('main', 'axle/x'), ['merge-tree', '--write-tree', '--name-only', '--no-messages', 'main', 'axle/x'])
+	assert.deepEqual(w.aheadBehindArgs('main', 'insilode/x'), ['rev-list', '--left-right', '--count', 'main...insilode/x'])
+	assert.deepEqual(w.fastForwardArgs('insilode/x'), ['merge', '--ff-only', 'insilode/x'])
+	assert.deepEqual(w.mergeArgs('insilode/x', 'msg'), ['merge', '--no-ff', '--no-edit', '-m', 'msg', 'insilode/x'])
+	assert.deepEqual(w.mergeTreeArgs('main', 'insilode/x'), ['merge-tree', '--write-tree', '--name-only', '--no-messages', 'main', 'insilode/x'])
 	assert.throws(() => w.addArgs(dir, '--force', 'main'))
 	assert.throws(() => w.mergeArgs('-oops', 'msg'))
 	assert.equal(w.worktreePath(join('C:', 'repo'), 'claude-1'), dir)
@@ -58,20 +58,20 @@ test('status, merge-tree and worktree list output', () => {
 	assert.deepEqual(w.parseMergeTree(0, 'abc123\n'), { clean: true, conflicts: [] })
 	assert.deepEqual(w.parseMergeTree(1, 'abc123\nsrc/a.ts\nsrc/a.ts\nb.ts\n'), { clean: false, conflicts: ['src/a.ts', 'b.ts'] })
 	assert.equal(w.parseMergeTree(129, 'usage: ...'), undefined)
-	const list = w.parseWorktreeList('worktree C:/repo\r\nHEAD aaa\r\nbranch refs/heads/main\r\n\r\nworktree C:/repo/.axle/worktrees/x\r\nHEAD bbb\r\nbranch refs/heads/axle/x\r\n\r\nworktree /d\r\nHEAD ccc\r\ndetached\r\n')
+	const list = w.parseWorktreeList('worktree C:/repo\r\nHEAD aaa\r\nbranch refs/heads/main\r\n\r\nworktree C:/repo/.insilode/worktrees/x\r\nHEAD bbb\r\nbranch refs/heads/insilode/x\r\n\r\nworktree /d\r\nHEAD ccc\r\ndetached\r\n')
 	assert.deepEqual(list, [
 		{ path: 'C:/repo', head: 'aaa', branch: 'main' },
-		{ path: 'C:/repo/.axle/worktrees/x', head: 'bbb', branch: 'axle/x' },
+		{ path: 'C:/repo/.insilode/worktrees/x', head: 'bbb', branch: 'insilode/x' },
 		{ path: '/d', head: 'ccc', detached: true },
 	])
 })
 
 test('the exclude line is added once, never twice', () => {
 	const once = w.withExclude('# git ls-files --others --exclude-from=.git/info/exclude\n*.tmp')
-	assert.match(once, /\*\.tmp\n# Axle.*\n\/\.axle\/\n$/)
+	assert.match(once, /\*\.tmp\n# Insilode.*\n\/\.insilode\/\n$/)
 	assert.equal(w.withExclude(once), undefined)
-	assert.equal(w.withExclude('.axle/\n'), undefined)
-	assert.equal(w.withExclude(''), '# Axle: agent worktrees (see flow-agent/src/worktrees.ts)\n/.axle/\n')
+	assert.equal(w.withExclude('.insilode/\n'), undefined)
+	assert.equal(w.withExclude(''), '# Insilode: agent worktrees (see flow-agent/src/worktrees.ts)\n/.insilode/\n')
 })
 
 // ── A real repository: create, count, merge, refuse on a conflict, remove ─────────────────────────
@@ -80,8 +80,8 @@ const run = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8',
 function repo() {
 	const dir = mkdtempSync(join(tmp, 'repo-'))
 	run(dir, 'init', '-q', '-b', 'main')
-	run(dir, 'config', 'user.email', 'axle@example.com')
-	run(dir, 'config', 'user.name', 'Axle Test')
+	run(dir, 'config', 'user.email', 'insilode@example.com')
+	run(dir, 'config', 'user.name', 'Insilode Test')
 	run(dir, 'config', 'commit.gpgsign', 'false')
 	run(dir, 'config', 'core.autocrlf', 'false')
 	writeFileSync(join(dir, 'a.txt'), 'one\ntwo\nthree\n')
@@ -98,13 +98,13 @@ const commit = (cwd, file, text, msg) => {
 test('create a worktree, count ahead and behind, fast-forward back, remove', async () => {
 	const dir = repo()
 	const wt = await w.createWorktree(dir, 'claude-1')
-	assert.equal(wt.branch, 'axle/claude-1')
+	assert.equal(wt.branch, 'insilode/claude-1')
 	assert.equal(wt.base, 'main')
 	assert.ok(existsSync(join(wt.path, 'a.txt')))
 	// By real path: the temp folder may be a short 8.3 name (Windows CI) or a link (/var on macOS), git prints the long one.
-	assert.equal(realpathSync.native(wt.path), realpathSync.native(resolve(dir, '.axle', 'worktrees', 'claude-1')))
+	assert.equal(realpathSync.native(wt.path), realpathSync.native(resolve(dir, '.insilode', 'worktrees', 'claude-1')))
 	// Ignored through the shared exclude file: the main checkout stays clean.
-	assert.match(readFileSync(join(dir, '.git', 'info', 'exclude'), 'utf8'), /^\/\.axle\/$/m)
+	assert.match(readFileSync(join(dir, '.git', 'info', 'exclude'), 'utf8'), /^\/\.insilode\/$/m)
 	assert.equal(run(dir, 'status', '--porcelain'), '')
 
 	commit(wt.path, 'b.txt', 'b\n', 'agent work')
@@ -128,7 +128,7 @@ test('create a worktree, count ahead and behind, fast-forward back, remove', asy
 	assert.deepEqual(await w.removeWorktree(wt, true), { ok: true })
 	assert.ok(!existsSync(wt.path))
 	// The branch stays.
-	assert.match(run(dir, 'branch', '--list', 'axle/claude-1'), /axle\/claude-1/)
+	assert.match(run(dir, 'branch', '--list', 'insilode/claude-1'), /insilode\/claude-1/)
 })
 
 test('fast-forward when the base has not moved', async () => {
@@ -139,7 +139,7 @@ test('fast-forward when the base has not moved', async () => {
 	const plan = await w.planMerge(wt)
 	assert.deepEqual(plan, { kind: 'fast-forward', ahead: 1, uncommitted: 1 })
 	assert.deepEqual(await w.merge(wt, 'fast-forward'), { ok: true })
-	assert.equal(run(dir, 'rev-parse', 'main'), run(dir, 'rev-parse', 'axle/codex-2'))
+	assert.equal(run(dir, 'rev-parse', 'main'), run(dir, 'rev-parse', 'insilode/codex-2'))
 })
 
 test('a conflict is refused before anything changes, and so is a dirty or switched main checkout', async () => {

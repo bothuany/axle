@@ -68,7 +68,7 @@ test('a second guard for the same command keeps one settings entry', () => {
 	f.addGuardHook(s, cmd)
 	f.addGuardHook(s, cmd)
 	assert.equal(s.hooks.PreToolUse.length, 1)
-	assert.deepEqual(s.hooks.PreToolUse[0], { matcher: 'Bash', hooks: [{ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/axle-guard-npm-test.mjs"', timeout: 10 }] })
+	assert.deepEqual(s.hooks.PreToolUse[0], { matcher: 'Bash', hooks: [{ type: 'command', command: 'node "$CLAUDE_PROJECT_DIR/.claude/hooks/insilode-guard-npm-test.mjs"', timeout: 10 }] })
 	f.addGuardHook(s, f.guardCommand(f.guardFileName('git push')))
 	assert.equal(s.hooks.PreToolUse.length, 2)
 	const other = { hooks: { PreToolUse: [{ matcher: 'Edit', hooks: [{ type: 'command', command: 'x' }] }], Stop: [] } }

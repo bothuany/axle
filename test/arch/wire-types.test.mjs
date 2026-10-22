@@ -21,7 +21,7 @@ const extensions = join(repo, 'editor', 'extensions');
 const roots = [
 	...readdirSync(extensions).flatMap(name => [join(extensions, name, 'src'), join(extensions, name, 'mcp')]),
 	join(repo, 'ui', 'src'),
-	join(repo, 'playground', 'src'),
+	join(repo, 'site', 'src'),
 ].filter(dir => existsSync(dir));
 const files = roots.flatMap(sources).map(path => ({ path: relative(repo, path).split(sep).join('/'), text: readFileSync(path, 'utf8') }));
 

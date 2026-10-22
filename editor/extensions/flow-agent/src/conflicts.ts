@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: two agents on the same code. Each live session collects what it has edited (files from
+ *  Insilode: two agents on the same code. Each live session collects what it has edited (files from
  *  its edit hooks, the methods and endpoint flows from flow-view's turn impact); when two sessions
  *  share a file, a method or a flow, both rows say so. Paths are compared relative to each
  *  session's own checkout, so an agent in a worktree and one in the main checkout that edit

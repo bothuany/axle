@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: the pure parts of completion and go-to-definition in a card. What stands before
+ *  Insilode polyglot index: the pure parts of completion and go-to-definition in a card. What stands before
  *  the cursor (`this.repo.find`, `$this->repo->`, `Foo::`, `get_repo().`), the word under it, and how a
  *  function is shown as a signature. No vscode, no index: the project resolves the names (graph.ts).
  *--------------------------------------------------------------------------------------------*/

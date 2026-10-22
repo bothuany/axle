@@ -1,5 +1,5 @@
 // The desktop status island's own rules: where it may sit and when it shows. The code lives in the core patch
-// (src/vs/platform/axleDesktop/common/axleIsland.ts has no imports), so this reads it from the added lines of
+// (src/vs/platform/insilodeDesktop/common/insilodeIsland.ts has no imports), so this reads it from the added lines of
 // editor/patches/flow-desktop.patch and runs exactly that.
 import { test, before } from 'node:test'
 import assert from 'node:assert/strict'
@@ -9,7 +9,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const PATCH = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'patches', 'flow-desktop.patch')
-const FILE = 'src/vs/platform/axleDesktop/common/axleIsland.ts'
+const FILE = 'src/vs/platform/insilodeDesktop/common/insilodeIsland.ts'
 
 let i
 before(async () => {
@@ -22,7 +22,7 @@ before(async () => {
 			lines.push(line.slice(1))
 		}
 	}
-	assert.ok(lines.length > 50, 'the patch holds axleIsland.ts')
+	assert.ok(lines.length > 50, 'the patch holds insilodeIsland.ts')
 	const { code } = await transform(lines.join('\n'), { loader: 'ts', format: 'esm' })
 	i = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
 })
@@ -81,13 +81,13 @@ test('displays: a rectangle belongs to the display that holds most of it', () =>
 	assert.equal(i.displayForRect({ x: 0, y: 0, width: 10, height: 10 }, []), undefined)
 })
 
-test('visibility: no agents hides, an Axle window with focus hides, each by its setting', () => {
-	const on = { noAgents: true, axleFocused: true }
-	assert.equal(i.islandVisible({ hasAgents: true, autoHide: on, axleFocused: false }), true)
-	assert.equal(i.islandVisible({ hasAgents: true, autoHide: on, axleFocused: true }), false)
-	assert.equal(i.islandVisible({ hasAgents: false, autoHide: on, axleFocused: false }), false)
-	assert.equal(i.islandVisible({ hasAgents: true, autoHide: { noAgents: true, axleFocused: false }, axleFocused: true }), true)
-	assert.equal(i.islandVisible({ hasAgents: false, autoHide: { noAgents: false, axleFocused: true }, axleFocused: false }), true)
+test('visibility: no agents hides, an Insilode window with focus hides, each by its setting', () => {
+	const on = { noAgents: true, insilodeFocused: true }
+	assert.equal(i.islandVisible({ hasAgents: true, autoHide: on, insilodeFocused: false }), true)
+	assert.equal(i.islandVisible({ hasAgents: true, autoHide: on, insilodeFocused: true }), false)
+	assert.equal(i.islandVisible({ hasAgents: false, autoHide: on, insilodeFocused: false }), false)
+	assert.equal(i.islandVisible({ hasAgents: true, autoHide: { noAgents: true, insilodeFocused: false }, insilodeFocused: true }), true)
+	assert.equal(i.islandVisible({ hasAgents: false, autoHide: { noAgents: false, insilodeFocused: true }, insilodeFocused: false }), true)
 })
 
 /** Drives the gate like the main process: events at times, and a settle at each moment something is due. */
@@ -114,15 +114,15 @@ function run(events, delays = i.FOCUS_DELAYS) {
 	return { gate, shown }
 }
 
-test('focus: focusing Axle hides after the short delay, leaving it shows after the longer one', () => {
+test('focus: focusing Insilode hides after the short delay, leaving it shows after the longer one', () => {
 	const { gate, shown } = run([[0, true], [1000, false]])
 	assert.deepEqual(shown.filter(([, f], k, a) => k === 0 || f !== a[k - 1][1]), [[0, false], [120, true], [1400, false]])
 	assert.equal(gate.focused, false)
 	assert.equal(gate.pending, undefined)
 })
 
-test('focus: alt-tabbing through Axle does not flicker', () => {
-	// Away from Axle (settled), then focus lands on Axle for 60 ms and goes again: it never hides.
+test('focus: alt-tabbing through Insilode does not flicker', () => {
+	// Away from Insilode (settled), then focus lands on Insilode for 60 ms and goes again: it never hides.
 	let gate = i.settleFocus(i.observeFocus(i.INITIAL_GATE, false, 0), 0)
 	gate = i.observeFocus(gate, true, 1000)
 	assert.equal(gate.focused, false)
@@ -131,7 +131,7 @@ test('focus: alt-tabbing through Axle does not flicker', () => {
 	gate = i.observeFocus(gate, false, 1060)
 	assert.equal(gate.pending, undefined, 'the blip is forgotten')
 	assert.equal(i.focusWait(gate, 1060), undefined)
-	// And the other way: Axle is focused, a switcher blurs it for 200 ms, it comes back: the island stays hidden.
+	// And the other way: Insilode is focused, a switcher blurs it for 200 ms, it comes back: the island stays hidden.
 	const focused = { focused: true }
 	let g = i.observeFocus(focused, false, 5000)
 	g = i.settleFocus(g, 5200)
@@ -140,7 +140,7 @@ test('focus: alt-tabbing through Axle does not flicker', () => {
 	assert.deepEqual(g, focused)
 })
 
-test('focus: a blur then a focus on another Axle window is one unbroken focus', () => {
+test('focus: a blur then a focus on another Insilode window is one unbroken focus', () => {
 	// Blur at 0 and focus at 30 ms: the settled value never moved.
 	let g = i.observeFocus({ focused: true }, false, 0)
 	g = i.observeFocus(g, true, 30)

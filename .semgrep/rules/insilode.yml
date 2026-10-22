@@ -1,0 +1,100 @@
+# Insilode's own Semgrep rules. Run with the registry rulesets by `npm run semgrep`; tested by `npm run semgrep:test`
+# (each rule has a fixture in .semgrep/rules/insilode.ts with `ruleid:` / `ok:` annotations).
+rules:
+  - id: insilode-command-id-not-allowlisted
+    message: >-
+      This runs a command whose id is computed (not a string literal or a constant such as Command.showEntry), and no
+      allowlist check on that same value guards it. If the id comes from a webview message, the page (or anything that
+      can post to it) could run any command in the editor. Check it against a fixed set first, as home.ts does with
+      HOME_COMMANDS.
+    severity: ERROR
+    languages: [typescript, javascript]
+    patterns:
+      - pattern-either:
+          # m.command!, cmd!: the guard checks the value without the `!`
+          - patterns:
+              - pattern: $C.executeCommand($V!, ...)
+              - pattern-not-inside: '$S.has(<... $V ...>) ? $A : $B'
+              - pattern-not-inside: 'if ($S.has(<... $V ...>)) { ... }'
+              - pattern-not-inside: 'if (!$S.has(<... $V ...>)) { return ...; } ...'
+          # m.command, m.payload.command, m[key], or a variable destructured from the message
+          - patterns:
+              - pattern: $C.executeCommand($V, ...)
+              - pattern-not: $C.executeCommand($X!, ...)
+              - pattern-not-inside: '$S.has(<... $V ...>) ? $A : $B'
+              - pattern-not-inside: 'if ($S.has(<... $V ...>)) { ... }'
+              - pattern-not-inside: 'if (!$S.has(<... $V ...>)) { return ...; } ...'
+      # Literals ('flow.x', `flow.${kind}`) and constants (Command.showEntry, FOCUS_TYPE) start otherwise.
+      - metavariable-regex:
+          metavariable: $V
+          regex: '^[a-z_$]'
+      # vscode.commands.executeCommand, or commands.executeCommand after `import { commands } from 'vscode'`
+      - metavariable-regex:
+          metavariable: $C
+          regex: '^(.*\.)?commands$'
+    metadata:
+      category: security
+      cwe: 'CWE-749: Exposed Dangerous Method or Function'
+
+  - id: insilode-shell-true
+    message: >-
+      This starts a process through a shell (`shell: true`, or exec/execSync, which always use one), so quoting and
+      metacharacters anywhere in the command line are interpreted by cmd.exe / sh. Pass the program and an argument
+      array to spawn/execFile instead; where a shell is the point (a user's own hook command), say so in a
+      `nosemgrep: insilode-shell-true` comment.
+    severity: WARNING
+    languages: [typescript, javascript]
+    options:
+      symbolic_propagation: true
+    pattern-either:
+      # spawn/execFile/fork with shell: true, called bare or through the module object (cp.spawnSync), with the options
+      # inline or in a variable (symbolic propagation)
+      - patterns:
+          - pattern: '$F(..., {..., shell: true, ...}, ...)'
+          - metavariable-regex:
+              metavariable: $F
+              regex: '^(.*\.)?(spawn|spawnSync|execFile|execFileSync|fork)$'
+      # exec/execSync from child_process
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import { ..., exec, ... } from 'child_process';
+                  ...
+              - pattern-inside: |
+                  import { ..., execSync, ... } from 'child_process';
+                  ...
+          - pattern-either:
+              - pattern: exec(...)
+              - pattern: execSync(...)
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  import * as $CP from 'child_process';
+                  ...
+              - pattern-inside: |
+                  import $CP from 'child_process';
+                  ...
+              - pattern-inside: |
+                  const $CP = require('child_process');
+                  ...
+          - pattern-either:
+              - pattern: $CP.exec(...)
+              - pattern: $CP.execSync(...)
+    metadata:
+      category: security
+      cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command"
+
+  - id: insilode-vscode-in-headless-module
+    message: >-
+      This module runs in the polyglot worker or the insilode MCP server, where there is no `vscode` module; importing it
+      crashes them at load. Move the host call into poly/client.ts or mcp/handlers.ts. (dependency-cruiser checks the
+      transitive case: `npm run arch`.)
+    severity: ERROR
+    languages: [typescript]
+    paths:
+      include: ['/editor/extensions/flow-view/src/poly/worker.ts', '/editor/extensions/flow-view/src/mcp/stdio.ts', '/editor/extensions/flow-view/mcp/*.ts', '/.semgrep/rules/insilode.ts']
+    pattern-either:
+      - pattern: import $X from 'vscode'
+      - pattern: import * as $X from 'vscode'
+      - pattern: import { ... } from 'vscode'
+      - pattern: require('vscode')

@@ -1,12 +1,12 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: language features for the card editor (completion, signature help, hover) and go-to-definition
+ *  Insilode: language features for the card editor (completion, signature help, hover) and go-to-definition
  *  from the canvas. Who answers depends on the file (see `routeOf`):
  *    C#                             Roslyn, in the analyzer, on the card's text put into the solution in memory
  *    Java, Python, Go, PHP, Ruby, Rust  the polyglot index (types, members, parameters, locals, imports)
  *    TypeScript, JavaScript, others the editor's language servers (the card's text is first put into the real
  *                                   document, see overlay.ts), and the index when they say nothing
  *  Under every answer is the floor: the identifiers of the card and of its file, so completion is never worse than
- *  plain words. Every request leaves one line in the Axle output channel (route, what came back, how long).
+ *  plain words. Every request leaves one line in the Insilode output channel (route, what came back, how long).
  *--------------------------------------------------------------------------------------------*/
 
 import { promises as fs } from 'fs';

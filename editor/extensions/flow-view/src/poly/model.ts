@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: what each source file declares, in one shape for every language. The
+ *  Insilode polyglot index: what each source file declares, in one shape for every language. The
  *  extractors (java.ts, python.ts, js.ts) fill it from tree-sitter trees; graph.ts resolves it.
  *--------------------------------------------------------------------------------------------*/
 
@@ -239,9 +239,9 @@ export const EXCLUDED_DIRS = new Set([
 	'node_modules', '.git', 'dist', '.venv', 'venv', '__pycache__',
 	'.next', '.nuxt', 'coverage', 'bower_components', 'third_party',
 	'.idea', '.vscode', '.gradle', '.mvn', '.claude', 'site-packages', '.tox', '.mypy_cache', '.pytest_cache',
-	// Axle's own folder: the agents' worktrees live in .axle/worktrees, each a second copy of the project. It is excluded
+	// Insilode's own folder: the agents' worktrees live in .insilode/worktrees, each a second copy of the project. It is excluded
 	// through .git/info/exclude, which the index reads once at start, so a worktree made later would be indexed.
-	'.axle',
+	'.insilode', '.axle',
 ]);
 
 /**

@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle board lint: what draw_board tells the agent about a board it just sent, so it can fix the board by
+ *  Insilode board lint: what draw_board tells the agent about a board it just sent, so it can fix the board by
  *  calling again with the same id. Pure: no `vscode` (checks that need the workspace, such as a file or a
  *  symbol, are done by the tool handler and join this list). The crossing count is an estimate with the
  *  same idea as the canvas layout (layers, barycenter sweeps), not the canvas's own number: the canvas lives
@@ -287,7 +287,7 @@ export function lintBoard(spec: BoardSpec): LintResult {
 		}
 	}
 	if (spec.kind !== 'plan' && spec.kind !== 'er' && !spec.nodes.some(n => n.symbol || n.file)) {
-		add('info', 'no node links to code: give real code a `symbol` (from find_symbol or flow_text) so a click opens it and Axle can tell when it goes stale.');
+		add('info', 'no node links to code: give real code a `symbol` (from find_symbol or flow_text) so a click opens it and Insilode can tell when it goes stale.');
 	}
 	if (!spec.steps && spec.nodes.length > 6) {
 		add('info', 'this board has no `steps`: add 3-10 with a caption each so the user is walked through it instead of reading a paragraph in chat.');

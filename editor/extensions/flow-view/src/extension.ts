@@ -22,6 +22,7 @@ import { Command } from './commands';
 import { EndpointsView } from './endpoints';
 import { FlowHome } from './home';
 import { ClaudeIdeBridge } from './ide';
+import { legacySettingUpdates } from './legacySettings';
 import { PolyLenses, RoslynLenses } from './lenses';
 import { LspLenses, LspProvider } from './lsp';
 import { AgentBridge } from './mcp/bridge';
@@ -68,7 +69,7 @@ const timer = (context: vscode.ExtensionContext, fn: () => void, ms: number) => 
 };
 
 export function activate(context: vscode.ExtensionContext) {
-	const log = vscode.window.createOutputChannel('Axle', { log: true });
+	const log = vscode.window.createOutputChannel('Insilode', { log: true });
 	const analyzer = new Analyzer(context, log);
 	const poly = new PolyIndex(context, log);
 	// For the harness map: whether the code names an agent's memory mentions still exist.
@@ -111,7 +112,7 @@ export function activate(context: vscode.ExtensionContext) {
 			await panel.show({ kind: 'poly', id }, label);
 		},
 		showEntry: (id, label, source) => source === 'poly' ? flow.showPoly(id, label) : flow.showRoslyn(id, label),
-		fail: e => void vscode.window.showErrorMessage(`Axle: ${(e as Error)?.message ?? e}`),
+		fail: e => void vscode.window.showErrorMessage(`Insilode: ${(e as Error)?.message ?? e}`),
 	};
 
 	analyzer.warmUp();
@@ -124,7 +125,7 @@ export function activate(context: vscode.ExtensionContext) {
 	wireAgentBridge(flow);
 	watchSources(flow);
 	// A window with nothing open starts on Home instead of an empty editor; so does a folder just trusted (opened in
-	// Restricted Mode, Axle had nothing to show yet), once the trust tab is closed.
+	// Restricted Mode, Insilode had nothing to show yet), once the trust tab is closed.
 	const homeIfEmpty = () => {
 		if (!vscode.window.tabGroups.all.some(g => g.tabs.length)) {
 			void home.show();
@@ -207,7 +208,7 @@ function registerCommands(flow: Flow) {
 			try {
 				const hit = innermost(await analyzer.methods(document.uri.fsPath), pos.line + 1);
 				if (!hit) {
-					void vscode.window.showInformationMessage('Axle: put the cursor inside a method.');
+					void vscode.window.showInformationMessage('Insilode: put the cursor inside a method.');
 					return;
 				}
 				await flow.showRoslyn(hit.id, hit.name);
@@ -219,7 +220,7 @@ function registerCommands(flow: Flow) {
 		vscode.commands.registerCommand('flow.pickEndpoint', async () => {
 			// Show the cached list at once; swap in the fresh one when the backends answer.
 			const qp = vscode.window.createQuickPick<vscode.QuickPickItem & { e: Entry }>();
-			qp.title = 'Axle: open an endpoint';
+			qp.title = 'Insilode: open an endpoint';
 			qp.matchOnDescription = true;
 			qp.matchOnDetail = true;
 			// The route first, as a developer reads it; the service and handler after it, the file on the second line.
@@ -314,7 +315,7 @@ function registerLenses({ context, analyzer, poly }: Flow) {
 	);
 }
 
-/** Claude Code in a terminal connects to Axle with /ide: its diffs open here and on the canvas. */
+/** Claude Code in a terminal connects to Insilode with /ide: its diffs open here and on the canvas. */
 function wireClaudeCode({ context, log, panel, changes }: Flow) {
 	const bridge = new ClaudeIdeBridge(context, {
 		propose: p => panel.proposeSpans(p),
@@ -340,10 +341,10 @@ function wireClaudeCode({ context, log, panel, changes }: Flow) {
 		}),
 		vscode.commands.registerCommand('flow.ide.howTo', async () => {
 			const pick = await vscode.window.showQuickPick([
-				{ label: '$(terminal) Run claude in an Axle terminal', detail: 'Connects automatically: diffs open in Axle, your selection is shared', run: 'term' },
-				{ label: '$(plug) Already running claude elsewhere?', detail: 'Type /ide in it and pick "Axle"', run: '' },
-				{ label: '$(tools) Give every claude the Axle tools (MCP)', detail: 'So it can open files and flows here and draw diagrams. Asks before changing anything', run: 'mcp' },
-			], { title: bridge.isConnected ? 'Claude Code is connected' : 'Connect Claude Code to Axle' });
+				{ label: '$(terminal) Run claude in an Insilode terminal', detail: 'Connects automatically: diffs open in Insilode, your selection is shared', run: 'term' },
+				{ label: '$(plug) Already running claude elsewhere?', detail: 'Type /ide in it and pick "Insilode"', run: '' },
+				{ label: '$(tools) Give every claude the Insilode tools (MCP)', detail: 'So it can open files and flows here and draw diagrams. Asks before changing anything', run: 'mcp' },
+			], { title: bridge.isConnected ? 'Claude Code is connected' : 'Connect Claude Code to Insilode' });
 			if (pick?.run === 'mcp') {
 				void vscode.commands.executeCommand('flow.mcp.connect');
 			} else if (pick?.run === 'term') {
@@ -357,8 +358,8 @@ function wireClaudeCode({ context, log, panel, changes }: Flow) {
 }
 
 /**
- * Agents act on Axle through the `axle` MCP server (tools: open, find_entry_points, show_flow, flow_text, impact,
- * get_context, draw_board, update_board): this window serves them on a local port and lists itself in ~/.axle/bridge.
+ * Agents act on Insilode through the `insilode` MCP server (tools: open, find_entry_points, show_flow, flow_text, impact,
+ * get_context, draw_board, update_board): this window serves them on a local port and lists itself in ~/.insilode/bridge.
  * Boards (diagrams and plans an agent drew) are held by a store and shown by a stand-in Markdown viewer.
  */
 function wireAgentBridge(flow: Flow) {
@@ -432,7 +433,7 @@ function wireAgentBridge(flow: Flow) {
 		vscode.commands.registerCommand('flow.board.pinFlow', async () => {
 			const shown = flow.panel.shown;
 			if (!shown) {
-				void vscode.window.showInformationMessage('Axle: open a flow first (Open Endpoint Flow… or Show Flow at Cursor), then pin it.');
+				void vscode.window.showInformationMessage('Insilode: open a flow first (Open Endpoint Flow… or Show Flow at Cursor), then pin it.');
 				return;
 			}
 			try {
@@ -442,14 +443,14 @@ function wireAgentBridge(flow: Flow) {
 				flow.fail(e);
 			}
 		}),
-		// The canvas action for board_from_code: the user picks the kind and the scope, Axle draws the board from the index.
+		// The canvas action for board_from_code: the user picks the kind and the scope, Insilode draws the board from the index.
 		vscode.commands.registerCommand('flow.board.fromCode', async () => {
 			const pick = await vscode.window.showQuickPick([
 				{ label: 'Sequence', description: 'the calls of the flow on the canvas, in order', board: 'sequence' },
 				{ label: 'Tables (ER)', description: 'columns, keys and relations', board: 'er' },
 				{ label: 'Architecture', description: 'modules or packages and their dependencies', board: 'architecture' },
 				{ label: 'States', description: 'an enum and its transitions', board: 'state' },
-			], { title: 'Axle: Board from Code', placeHolder: 'Which diagram, drawn from the code?' });
+			], { title: 'Insilode: Board from Code', placeHolder: 'Which diagram, drawn from the code?' });
 			if (!pick) {
 				return;
 			}
@@ -457,13 +458,13 @@ function wireAgentBridge(flow: Flow) {
 			if (pick.board === 'sequence') {
 				const target = flow.panel.shown?.target;
 				if (!target || target.kind === 'lsp') {
-					void vscode.window.showInformationMessage('Axle: open a flow first (Open Endpoint Flow… or Show Flow at Cursor), then draw its sequence.');
+					void vscode.window.showInformationMessage('Insilode: open a flow first (Open Endpoint Flow… or Show Flow at Cursor), then draw its sequence.');
 					return;
 				}
 				scope = { id: target.id };
 			} else {
 				const key = { er: 'tables', architecture: 'module', state: 'enum' }[pick.board]!;
-				const typed = await vscode.window.showInputBox({ title: `Axle: ${pick.label} from Code`, prompt: { er: 'Table or entity names, separated by commas (empty: all tables)', architecture: 'A module or package name (empty: the whole workspace)', state: 'An enum, "OrderStatus" or "Order.status" (empty: look for one)' }[pick.board] });
+				const typed = await vscode.window.showInputBox({ title: `Insilode: ${pick.label} from Code`, prompt: { er: 'Table or entity names, separated by commas (empty: all tables)', architecture: 'A module or package name (empty: the whole workspace)', state: 'An enum, "OrderStatus" or "Order.status" (empty: look for one)' }[pick.board] });
 				if (typed === undefined) {
 					return;
 				}
@@ -474,7 +475,7 @@ function wireAgentBridge(flow: Flow) {
 			}
 			const answer = await bridge.boardFromCode({ kind: pick.board, scope });
 			if (!answer.ok || /^No \w+ board was drawn/.test(answer.message)) {
-				void vscode.window.showWarningMessage(`Axle: ${answer.message.split('\n')[0]}`);
+				void vscode.window.showWarningMessage(`Insilode: ${answer.message.split('\n')[0]}`);
 			}
 		}),
 		vscode.commands.registerCommand('flow.agent.edited', async (session: string, files: string[], phase: 'before' | 'after') => {
@@ -516,7 +517,7 @@ function wireAgentBridge(flow: Flow) {
 			}
 			const r = await bridge.showChangesInFlow(only, pick.base);
 			if (!r.opened) {
-				void vscode.window.showInformationMessage(`Axle: ${r.message}`);
+				void vscode.window.showInformationMessage(`Insilode: ${r.message}`);
 			}
 		}),
 		// flow-agent's dock, on an agent worktree's row: its branch since it left `base`, as a diff and on the flow canvas.
@@ -526,12 +527,27 @@ function wireAgentBridge(flow: Flow) {
 			}
 			const r = await bridge.showWorktreeInFlow(root, base);
 			if (!r.opened) {
-				void vscode.window.showInformationMessage(`Axle: ${r.message}`);
+				void vscode.window.showInformationMessage(`Insilode: ${r.message}`);
 			}
 		}),
 	);
 	registerMcpCommands(context, log);
+	void migrateLegacySettings(log);
 	void bridge.start();
+}
+
+/** Moves settings written under the old name (Axle) to the new ones, in the scope they were set in (see legacySettings.ts). */
+async function migrateLegacySettings(log: vscode.LogOutputChannel) {
+	const targets = { global: vscode.ConfigurationTarget.Global, workspace: vscode.ConfigurationTarget.Workspace, folder: vscode.ConfigurationTarget.WorkspaceFolder };
+	const config = vscode.workspace.getConfiguration();
+	for (const u of legacySettingUpdates(key => config.inspect(key))) {
+		try {
+			await config.update(u.key, u.value, targets[u.scope]);
+			log.info(`Moved the setting ${u.key} (${u.scope}) from its name before the rename.`);
+		} catch (e) {
+			log.warn(`Could not move the setting ${u.key} (${u.scope}): ${(e as Error).message}`);
+		}
+	}
 }
 
 /** Any change on disk (editor save, agent edit, git checkout) re-draws the open flow. */

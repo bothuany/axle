@@ -19,7 +19,7 @@ before(async () => {
 })
 after(() => rmSync(tmp, { recursive: true, force: true }))
 
-const WT = { path: '/r/.axle/worktrees/claude-1', root: '/r', branch: 'axle/claude-1', base: 'main' }
+const WT = { path: '/r/.insilode/worktrees/claude-1', root: '/r', branch: 'insilode/claude-1', base: 'main' }
 const AGENT = { name: 'Claude 2', live: false }
 
 /** Dialogs that answer from a script, in order, and remember what was asked and said. */
@@ -53,8 +53,8 @@ test('merge: asks, looks again after the yes, then merges', async () => {
 	const u = ui('Merge')
 	const g = git()
 	assert.equal(await w.mergeFlow(AGENT, WT, u, g), 'merged')
-	assert.match(u.asked[0].message, /Merge axle\/claude-1 into main\?/)
-	assert.match(u.asked[0].detail, /1 commit from Claude 2's worktree. Axle will fast-forward main/)
+	assert.match(u.asked[0].message, /Merge insilode\/claude-1 into main\?/)
+	assert.match(u.asked[0].detail, /1 commit from Claude 2's worktree. Insilode will fast-forward main/)
 	assert.deepEqual(g.done, [['merge', 'fast-forward']])
 })
 

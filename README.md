@@ -1,21 +1,21 @@
 <p align="center">
-  <img src="editor/branding/icon.png" width="112" alt="Axle icon">
+  <img src="editor/branding/icon.png" width="112" alt="Insilode icon">
 </p>
 
-<h1 align="center">Axle</h1>
+<h1 align="center">Insilode</h1>
 
 <p align="center">
   <b>A harness-first code editor.</b><br>
-  Every editor shows where code is stored. Axle shows how it <b>runs</b>.
+  Every editor shows where code is stored. Insilode shows how it <b>runs</b>.
 </p>
 
 <p align="center">
-  <a href="https://github.com/bothuany/axle/releases/latest"><img src="https://img.shields.io/badge/download-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-6f86ff" alt="Download for Windows, macOS and Linux"></a>
+  <a href="https://github.com/bothuany/insilode/releases/latest"><img src="https://img.shields.io/badge/download-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-6f86ff" alt="Download for Windows, macOS and Linux"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6f86ff" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20any%20CLI-6f86ff" alt="Agents: Claude Code, Codex and any CLI">
 </p>
 
-<p align="center"><b><a href="https://bothuany.github.io/axle/">Try it in your browser</a></b>: open an endpoint, watch an agent change it, and see exactly what it touched. Nothing to install.</p>
+<p align="center"><b><a href="https://insilode.dev/try/">Try it in your browser</a></b>: follow a request across services, review what an agent changed, and answer an agent waiting for you. Nothing to install.</p>
 
 [![Launch film, 80 s: see what your agent changed, on how your code runs](docs/media/film/launch-film-poster.jpg)](docs/media/film/launch-film.mp4)
 
@@ -29,7 +29,7 @@ Ask the agent to "show what you did in flow", or run **Show Git Changes in Flow*
 
 ## Run agents side by side, and know when they need you
 
-Claude Code, Codex and any CLI you add run as their real tools, in terminals. The Agents dock shows each one at a glance and ranks what needs you first: an approval with its text, a question, an error, a finished turn you have not read. Each row carries the model and how full its context window really is, tokens and estimated cost, and the PR and CI state of its branch. Start an agent in its own git worktree, merge it back with one click, and get warned when two agents edit the same file, method or flow. Questions from Home or the canvas go to the agent you pick, and Axle remembers the choice. The status bar shows what is left of your 5-hour and weekly limits.
+Claude Code, Codex and any CLI you add run as their real tools, in terminals. The Agents dock shows each one at a glance and ranks what needs you first: an approval with its text, a question, an error, a finished turn you have not read. Each row carries the model and how full its context window really is, tokens and estimated cost, and the PR and CI state of its branch. Start an agent in its own git worktree, merge it back with one click, and get warned when two agents edit the same file, method or flow. Questions from Home or the canvas go to the agent you pick, and Insilode remembers the choice. The status bar shows what is left of your 5-hour and weekly limits.
 
 Outside the editor, an optional app badge counts the agents waiting for you, and an optional status island at the top of the screen (or any corner) shows every agent's state at a glance with an avatar per agent, on macOS and Windows. It never takes focus.
 
@@ -46,14 +46,14 @@ One map of what shapes your agents: `CLAUDE.md` and `AGENTS.md`, rules, skills, 
 
 ## Works with your stack
 
-C# / .NET · Java · Python · JavaScript / TypeScript · Go · PHP · Ruby · Rust, from ASP.NET and Spring to FastAPI, NestJS, Rails and axum. [Full support table →](docs/languages.md) · Agent tools and the `axle` MCP server: [docs/agent-tools.md](docs/agent-tools.md)
+C# / .NET · Java · Python · JavaScript / TypeScript · Go · PHP · Ruby · Rust, from ASP.NET and Spring to FastAPI, NestJS, Rails and axum. [Full support table →](docs/languages.md) · Agent tools and the `insilode` MCP server: [docs/agent-tools.md](docs/agent-tools.md)
 
 ## Updates
 
-A running Axle checks the latest GitHub release and shows **Update available** (on the gear and under Help, Check for Updates). On Windows it downloads and installs the update and offers **Restart to Update**; on macOS and Linux the notification's button opens the release page. Set `update.mode` to `manual` or `none` to turn the automatic check down or off. [How it works →](packaging/README.md#updates)
+A running Insilode checks the latest GitHub release and shows **Update available** (on the gear and under Help, Check for Updates). On Windows it downloads and installs the update and offers **Restart to Update**; on macOS and Linux the notification's button opens the release page. Set `update.mode` to `manual` or `none` to turn the automatic check down or off. [How it works →](packaging/README.md#updates)
 
 ## Contributing
 
 Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately ([SECURITY.md](SECURITY.md)).
 
-MIT licensed; contributors sign a short [CLA](CLA.md). The Axle name and logo have their own [policy](TRADEMARKS.md). Axle builds on [VS Code](https://github.com/microsoft/vscode); the Claude and Codex marks belong to their owners.
+MIT licensed; contributors sign a short [CLA](CLA.md). The Insilode name and logo have their own [policy](TRADEMARKS.md). Insilode builds on [VS Code](https://github.com/microsoft/vscode); the Claude and Codex marks belong to their owners.

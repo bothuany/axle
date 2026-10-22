@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the agent's gaze. An agent's Read, Edit and search tool calls (hook events from a
+ *  Insilode: the agent's gaze. An agent's Read, Edit and search tool calls (hook events from a
  *  terminal agent, tool calls from an ACP session) become `AgentLook`s: a file and lines,
  *  never content, search text or commands. They are throttled per session and handed to
  *  flow-view (`flow.agent.gaze`), which paints them on a flow canvas that is already open.

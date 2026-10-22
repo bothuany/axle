@@ -2,12 +2,12 @@
 // test/e2e-desktop/unit tests the promise that matters: nothing of the host's screen, network or input is shared with the container.
 import { createHash } from 'node:crypto'
 
-/** The named volume that holds the copy of Axle and the VS Code build between runs. */
-export const WORK_VOLUME = 'axle-e2e-work'
+/** The named volume that holds the copy of Insilode and the VS Code build between runs. */
+export const WORK_VOLUME = 'insilode-e2e-work'
 
 /** The image's tag: it changes with the Dockerfile and the entrypoint, so an edit to either rebuilds it. */
 export function imageTag(dockerfile, entrypoint) {
-	return `axle-e2e:${createHash('sha256').update(dockerfile).update(entrypoint).digest('hex').slice(0, 12)}`
+	return `insilode-e2e:${createHash('sha256').update(dockerfile).update(entrypoint).digest('hex').slice(0, 12)}`
 }
 
 /**
@@ -18,7 +18,7 @@ export function dockerRunArgs({ image, name, repo, ctl, out, probeDir, mode, mod
 	return [
 		'run', '--rm', '--name', name,
 		'--shm-size', '2g', '--memory', memory,
-		'-v', `${volume}:/work/axle`,
+		'-v', `${volume ?? WORK_VOLUME}:/work/insilode`,
 		'-v', `${repo}:/src:ro`,
 		'-v', `${ctl}:/ctl:ro`,
 		'-v', `${out}:/out`,
@@ -34,4 +34,13 @@ export function dockerMissingMessage(detail) {
 		'Install and start Docker Desktop (Linux containers), then run this again. Desktop tests never run on your own desktop.',
 		'On Windows, the Windows-only scenarios can run in Windows Sandbox instead (npm run sandbox:e2e).',
 	].join('\n')
+}
+
+/**
+ * The files whose size or modification time differ from what the last run copied. Copying only those keeps a run on an unchanged
+ * tree from stat-ing every file through the container's bind mount (a minute on Docker Desktop). `previous` and `now` map a path
+ * to "<mtimeMs>:<size>".
+ */
+export function changedFiles(now, previous) {
+	return Object.keys(now).filter(file => previous?.[file] !== now[file])
 }

@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-// Runs Axle's desktop end-to-end scenarios (test/e2e-desktop) inside Windows Sandbox, so no Axle window ever opens on your
-// own desktop and nothing touches your Axle install or profile.
-//   npm run sandbox:e2e                           the newest dist/Axle-Setup-*.exe (npm run installer builds it)
+// Runs Insilode's desktop end-to-end scenarios (test/e2e-desktop) inside Windows Sandbox, so no Insilode window ever opens on your
+// own desktop and nothing touches your Insilode install or profile.
+//   npm run sandbox:e2e                           the newest dist/Insilode-Setup-*.exe (npm run installer builds it)
 //   npm run sandbox:e2e -- --installer <exe>      another Setup
+//   npm run sandbox:e2e -- --old-installer <Axle-Setup-x.exe> [--only upgrade]   also: an Axle install is upgraded by this Setup (lib/upgrade.mjs)
 //   npm run sandbox:e2e -- --stage <dir>          only stage the folder the sandbox maps
 // What it does: stages the installer, node.exe and the test code into a temp folder, writes a .wsb that maps that folder read-only
 // and an output folder read-write (no network), starts Windows Sandbox minimized, waits for <out>/done.json, and prints the
-// results and the screenshot paths. Turn Windows Sandbox on once: docs/building.md "Desktop end-to-end tests".
+// results and the screenshot paths. Turn Windows Sandbox on once: docs/building.md "Probing and testing the app without taking over your screen".
 import { spawn, spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -28,16 +29,24 @@ export function newestInstaller(dist = join(ROOT, 'dist')) {
 	if (!existsSync(dist)) {
 		return undefined
 	}
-	const newest = readdirSync(dist).filter(n => /^Axle-Setup-.*-x64\.exe$/.test(n)).map(n => ({ n, t: statSync(join(dist, n)).mtimeMs })).sort((a, b) => b.t - a.t)[0]
+	const newest = readdirSync(dist).filter(n => /^Insilode-Setup-.*-x64\.exe$/.test(n)).map(n => ({ n, t: statSync(join(dist, n)).mtimeMs })).sort((a, b) => b.t - a.t)[0]
 	return newest && join(dist, newest.n)
 }
 
 /** Lays out the folder the sandbox maps: installer, node.exe and the test code. */
-export function stage(dir, installer) {
+export function stage(dir, installer, oldInstaller, only) {
 	rmSync(dir, { recursive: true, force: true })
 	mkdirSync(join(dir, 'installer'), { recursive: true })
 	mkdirSync(join(dir, 'node'), { recursive: true })
 	cpSync(installer, join(dir, 'installer', installer.split(/[\\/]/).pop()))
+	if (oldInstaller) {
+		mkdirSync(join(dir, 'installer-old'), { recursive: true })
+		cpSync(oldInstaller, join(dir, 'installer-old', oldInstaller.split(/[\\/]/).pop()))
+	}
+	if (only) {
+		writeFileSync(join(dir, 'only.txt'), `${only}
+`)
+	}
 	// The sandbox has no Node: bring the one running this script (a single exe on Windows).
 	cpSync(process.execPath, join(dir, 'node', 'node.exe'))
 	const repo = join(dir, 'repo')
@@ -63,10 +72,14 @@ async function main() {
 	}
 	const installer = flag('--installer') ? resolve(flag('--installer')) : newestInstaller()
 	if (!installer || !existsSync(installer)) {
-		fail('No Axle-Setup-*-x64.exe found. Build one with `npm run installer`, or pass --installer <path>.')
+		fail('No Insilode-Setup-*-x64.exe found. Build one with `npm run installer`, or pass --installer <path>.')
+	}
+	const oldInstaller = flag('--old-installer') ? resolve(flag('--old-installer')) : undefined
+	if (oldInstaller && !existsSync(oldInstaller)) {
+		fail(`--old-installer ${oldInstaller} does not exist.`)
 	}
 	if (flag('--stage')) {
-		console.log(`Staged ${stage(resolve(flag('--stage')), installer)}`)
+		console.log(`Staged ${stage(resolve(flag('--stage')), installer, oldInstaller, flag('--only'))}`)
 		return
 	}
 	const exe = sandboxExe()
@@ -78,11 +91,11 @@ async function main() {
 		fail('A Windows Sandbox is already running (Windows allows one at a time). Close it, then run this again.')
 	}
 
-	const work = mkdtempSync(join(tmpdir(), 'axle-sandbox-'))
-	const input = stage(join(work, 'in'), installer)
+	const work = mkdtempSync(join(tmpdir(), 'insilode-sandbox-'))
+	const input = stage(join(work, 'in'), installer, oldInstaller, flag('--only'))
 	const output = join(work, 'out')
 	mkdirSync(output, { recursive: true })
-	const wsb = join(work, 'axle-e2e.wsb')
+	const wsb = join(work, 'insilode-e2e.wsb')
 	writeFileSync(wsb, buildWsb({ inputDir: input, outputDir: output }))
 	console.log(`Starting Windows Sandbox (minimized) with ${installer}\n  config  ${wsb}\n  output  ${output}\nThe run takes 10 to 20 minutes; the sandbox closes itself when it is done.`)
 

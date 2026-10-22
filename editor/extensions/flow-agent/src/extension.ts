@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: Claude Code and Codex. Terminal-first: each agent is its real CLI in a terminal and the
+ *  Insilode: Claude Code and Codex. Terminal-first: each agent is its real CLI in a terminal and the
  *  Agents dock shows their status. The chat-panel session types stay available behind a setting.
  *--------------------------------------------------------------------------------------------*/
 
@@ -19,7 +19,7 @@ import { AgentSessionType } from './sessionType';
 import { WorktreeRows } from './worktreeActions';
 
 export function activate(context: vscode.ExtensionContext) {
-	const log = vscode.window.createOutputChannel('Axle Agents', { log: true });
+	const log = vscode.window.createOutputChannel('Insilode Agents', { log: true });
 	context.subscriptions.push(log, registerPlaceholderModels());
 	// The chat session types are contributed only while flow.agents.showChat is on (their `when` in package.json), and VS Code
 	// refuses a chat participant that is not contributed: registering them regardless logged two errors on every start.
@@ -69,7 +69,7 @@ export function activate(context: vscode.ExtensionContext) {
 			: false),
 		// Called by flow-view when an agent asks check_skeleton: on or off for that agent; nothing for a session this window does not know.
 		vscode.commands.registerCommand('flow.agents.skeletonOn', (id: unknown) => typeof id === 'string' && agents.sessions.has(id) ? agents.skeletonOn(id) : undefined),
-		// Called by flow-view when an agent's tour arrives with the session it came from (AXLE_SESSION): the name and colour the ghost
+		// Called by flow-view when an agent's tour arrives with the session it came from (INSILODE_SESSION): the name and colour the ghost
 		// cursor takes. Only a session this window knows; nothing for any other id.
 		vscode.commands.registerCommand('flow.agent.describe', (id: unknown) => {
 			const s = typeof id === 'string' ? agents.sessions.get(id) : undefined;
@@ -91,12 +91,12 @@ export function activate(context: vscode.ExtensionContext) {
 			? agents.slash(id, kind, check === true)
 			: 'unknown'),
 	);
-	// The dock is where Axle's agents live: on the first start, show it rather than the chat panel (which needs ACP to reach them).
+	// The dock is where Insilode's agents live: on the first start, show it rather than the chat panel (which needs ACP to reach them).
 	if (!showChat() && !context.globalState.get<boolean>('flow.agents.dockShown')) {
 		void context.globalState.update('flow.agents.dockShown', true);
 		void vscode.commands.executeCommand('workbench.view.extension.flowAgents');
 	}
-	log.info('Axle agents registered');
+	log.info('Insilode agents registered');
 }
 
 export function deactivate() { }

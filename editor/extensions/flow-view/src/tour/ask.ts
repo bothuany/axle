@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the reader's questions. During a tour the reader may ask about the step they are on (`tourAsk`), and on any card they may
+ *  Insilode: the reader's questions. During a tour the reader may ask about the step they are on (`tourAsk`), and on any card they may
  *  point at some code and ask about it (`pointAsk`). The canvas is not trusted: each message is checked here (the tour must be the
  *  one this host sent, the lines whole numbers, the file inside the workspace, the question short plain text), and the prompt that
  *  goes to the agent is built here, from the host's own record of the tour, with the question quoted as the user's own words.
@@ -77,7 +77,7 @@ export const place = (file: string, startLine: number, endLine: number) => `${fi
 export function tourAskPrompt(tour: { id: string; title: string }, step: number, steps: number, what: { label: string; where?: string }, question: string): string {
 	return [
 		`The user is on step ${step} of ${steps} of your tour "${oneLine(tour.id, 80)}" (${oneLine(what.label, MAX_LABEL)}${what.where ? `, ${oneLine(what.where, MAX_LABEL)}` : ''}) and asks, in their own words: ${JSON.stringify(question)}.`,
-		`Answer with the axle tool \`tour_control\`: action "note" for id "${oneLine(tour.id, 80)}" step ${step} (and action "go" with the step that answers it better, if there is one), then action "resume".`,
+		`Answer with the insilode tool \`tour_control\`: action "note" for id "${oneLine(tour.id, 80)}" step ${step} (and action "go" with the step that answers it better, if there is one), then action "resume".`,
 		'Keep the note short; if the answer needs more than a note, start a new tour with `tour`.',
 	].join(' ');
 }
@@ -86,8 +86,8 @@ export function tourAskPrompt(tour: { id: string; title: string }, step: number,
 export function pointAskPrompt(p: { label: string; where: string; flow?: string; question: string }): string {
 	return [
 		`The user points at ${oneLine(p.label, MAX_LABEL)} (${oneLine(p.where, MAX_LABEL)})${p.flow ? ` on the flow "${oneLine(p.flow, MAX_LABEL)}"` : ''} and asks, in their own words: ${JSON.stringify(p.question)}.`,
-		'Answer by showing: call the axle tool `tour` with 1 to 5 steps starting at that code (leave `flow` out: the canvas already shows it), captions that answer the question; then a one-paragraph answer here.',
-		'If you cannot call mcp__axle__tour, answer in text.',
+		'Answer by showing: call the insilode tool `tour` with 1 to 5 steps starting at that code (leave `flow` out: the canvas already shows it), captions that answer the question; then a one-paragraph answer here.',
+		'If you cannot call mcp__insilode__tour, answer in text.',
 	].join(' ');
 }
 
@@ -108,8 +108,8 @@ export const noteText = (v: unknown) => prose(v, MAX_NOTE);
 export function explainPrompt(p: { label: string; where: string; flow?: string }): string {
 	return [
 		`The user selected ${oneLine(p.label, MAX_LABEL)} (${oneLine(p.where, MAX_LABEL)})${p.flow ? ` on the flow "${oneLine(p.flow, MAX_LABEL)}"` : ''} and asks you to explain it: what it does and why it is written this way.`,
-		'Answer by showing: call the axle tool `tour` with 1 to 5 steps starting at that code (leave `flow` out), captions that say why and not what; then a one-paragraph answer here.',
-		'If you cannot call mcp__axle__tour, answer in text.',
+		'Answer by showing: call the insilode tool `tour` with 1 to 5 steps starting at that code (leave `flow` out), captions that say why and not what; then a one-paragraph answer here.',
+		'If you cannot call mcp__insilode__tour, answer in text.',
 	].join(' ');
 }
 
@@ -117,7 +117,7 @@ export function explainPrompt(p: { label: string; where: string; flow?: string }
 export function editPrompt(p: { label: string; where: string; instruction: string }): string {
 	return [
 		`The user selected ${oneLine(p.label, MAX_LABEL)} (${oneLine(p.where, MAX_LABEL)}) and asks you to change it, in their own words: ${JSON.stringify(p.instruction)}.`,
-		'Edit only those lines of that file, with your normal edit tools, and leave everything else as it is; Axle shows the change to the user as a diff to keep or undo.',
+		'Edit only those lines of that file, with your normal edit tools, and leave everything else as it is; Insilode shows the change to the user as a diff to keep or undo.',
 		'Do not run other commands. Say in one sentence what you changed.',
 	].join(' ');
 }

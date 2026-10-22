@@ -1,4 +1,4 @@
-// Starts Axle with a throwaway profile and hands back its windows. Playwright's `_electron` API first (it also gives the
+// Starts Insilode with a throwaway profile and hands back its windows. Playwright's `_electron` API first (it also gives the
 // main process, which the island checks use); a packaged build can have Electron's inspector fuse off, and then `_electron`
 // cannot attach, so the app is started with a remote debugging port and Playwright connects to that instead (no main process).
 import { spawn } from 'node:child_process'
@@ -48,7 +48,7 @@ export const isOverlay = url => url.startsWith('data:text/html')
 
 /**
  * @param {object} o
- * @param {string} o.exe          Electron or Axle executable
+ * @param {string} o.exe          Electron or Insilode executable
  * @param {string[]} [o.args]     arguments before ours (`.` plus flags for a source checkout)
  * @param {string} [o.cwd]
  * @param {string} o.out          where logs go
@@ -59,14 +59,14 @@ export const isOverlay = url => url.startsWith('data:text/html')
  * @param {boolean} [o.updates]    leave the update service on (default: off)
  * @param {string[]} [o.extensions]  folders loaded with --extensionDevelopmentPath
  */
-export async function launchAxle(o) {
+export async function launchInsilode(o) {
 	const why = refusal()
 	if (why) {
 		throw new Error(why)
 	}
 	// Loaded here so that the helpers of this folder (and their unit tests) work without the dependency installed.
 	const { _electron, chromium } = await import('playwright-core')
-	const profile = mkdtempSync(join(tmpdir(), 'axle-e2e-'))
+	const profile = mkdtempSync(join(tmpdir(), 'insilode-e2e-'))
 	const userData = join(profile, 'user-data')
 	mkdirSync(join(userData, 'User'), { recursive: true })
 	const settings = { 'security.workspace.trust.enabled': false, 'telemetry.telemetryLevel': 'off', 'window.restoreWindows': 'none', 'window.confirmBeforeClose': 'never', ...o.settings }
@@ -76,7 +76,8 @@ export async function launchAxle(o) {
 		'--user-data-dir', userData,
 		'--extensions-dir', join(profile, 'extensions'),
 		'--disable-workspace-trust', '--skip-release-notes',
-		'--disable-gpu', '--no-sandbox', ...(o.updates ? [] : ['--disable-updates']),
+		// --disable-dev-shm-usage: in a container (Docker's /dev/shm is small) Chromium otherwise fails a few percent of the module loads, and the workbench never starts.
+		'--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', ...(o.updates ? [] : ['--disable-updates']),
 		...(o.extensions ?? []).map(e => `--extensionDevelopmentPath=${e}`),
 		...(o.folder ? [o.folder] : []),
 	]
@@ -88,6 +89,10 @@ export async function launchAxle(o) {
 	let browser
 	try {
 		app = await _electron.launch({ executablePath: o.exe, args, cwd: o.cwd, env, timeout: 60000 })
+		// Electron's own log (crashes, GPU and sandbox problems, files it could not read) is what explains an empty window.
+		const log = createWriteStream(join(o.out, 'app.log'), { flags: 'a' })
+		app.process().stdout?.pipe(log)
+		app.process().stderr?.pipe(log)
 	} catch (e) {
 		mode = 'cdp'
 		console.log(`  _electron could not attach (${String(e.message).split('\n')[0]}); using a remote debugging port`)
@@ -106,7 +111,7 @@ export async function launchAxle(o) {
 		pages,
 		/** The editor window: waits for the workbench to exist, not just for a window. */
 		async workbench(ms = 90000) {
-			const page = await until('the Axle window', () => pages().find(p => isWorkbench(p.url())), { ms })
+			const page = await until('the Insilode window', () => pages().find(p => isWorkbench(p.url())), { ms })
 			await page.waitForSelector('.monaco-workbench', { timeout: ms })
 			return page
 		},

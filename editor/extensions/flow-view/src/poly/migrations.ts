@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: migrations. What a migration file does to which tables, read from the file's text: plain SQL
+ *  Insilode polyglot index: migrations. What a migration file does to which tables, read from the file's text: plain SQL
  *  (Flyway, Prisma's migration.sql, hand-written DDL), Liquibase (XML, YAML, JSON), Alembic, Django, TypeORM and Rails.
  *  EF Core migrations are C#: Migrations.cs in the analyzer reads them, and `fromEfFact` gives them the same shape.
  *  Only the forward direction is read (upgrade, Up, up, change, operations), never the rollback. Pure: no `vscode`.

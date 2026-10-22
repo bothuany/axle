@@ -95,13 +95,13 @@ test('mcp-flowtext: callers read upwards', () => {
 })
 
 test('mcp-command: the claude mcp add line puts the name first and quotes paths with spaces', () => {
-	const withNode = command.mcpAddCommand('C:\\Program Files\\Axle\\out\\axle-mcp.js', { pathNode: 'C:\\nvm4w\\nodejs\\node.exe', execPath: 'C:\\Axle\\Axle.exe' })
-	assert.deepEqual(withNode.args, ['mcp', 'add', 'axle', '--scope', 'user', '--', 'C:\\nvm4w\\nodejs\\node.exe', 'C:\\Program Files\\Axle\\out\\axle-mcp.js'])
+	const withNode = command.mcpAddCommand('C:\\Program Files\\Insilode\\out\\insilode-mcp.js', { pathNode: 'C:\\nvm4w\\nodejs\\node.exe', execPath: 'C:\\Insilode\\Insilode.exe' })
+	assert.deepEqual(withNode.args, ['mcp', 'add', 'insilode', '--scope', 'user', '--', 'C:\\nvm4w\\nodejs\\node.exe', 'C:\\Program Files\\Insilode\\out\\insilode-mcp.js'])
 	assert.equal(withNode.electron, false)
-	assert.equal(command.commandLine(withNode.args, 'win32'), 'claude mcp add axle --scope user -- "C:\\nvm4w\\nodejs\\node.exe" "C:\\Program Files\\Axle\\out\\axle-mcp.js"')
-	const bare = command.mcpAddCommand('/opt/axle/out/axle-mcp.js', { execPath: '/opt/axle/axle' })
-	assert.deepEqual(bare.args, ['mcp', 'add', 'axle', '--scope', 'user', '-e', 'ELECTRON_RUN_AS_NODE=1', '--', '/opt/axle/axle', '/opt/axle/out/axle-mcp.js'])
-	assert.ok(bare.args.indexOf('axle') < bare.args.indexOf('-e'), 'the variadic -e must not swallow the server name')
+	assert.equal(command.commandLine(withNode.args, 'win32'), 'claude mcp add insilode --scope user -- "C:\\nvm4w\\nodejs\\node.exe" "C:\\Program Files\\Insilode\\out\\insilode-mcp.js"')
+	const bare = command.mcpAddCommand('/opt/insilode/out/insilode-mcp.js', { execPath: '/opt/insilode/insilode' })
+	assert.deepEqual(bare.args, ['mcp', 'add', 'insilode', '--scope', 'user', '-e', 'ELECTRON_RUN_AS_NODE=1', '--', '/opt/insilode/insilode', '/opt/insilode/out/insilode-mcp.js'])
+	assert.ok(bare.args.indexOf('insilode') < bare.args.indexOf('-e'), 'the variadic -e must not swallow the server name')
 	assert.equal(command.shellQuote("it's here", 'linux'), "'it'\\''s here'")
 })
 
@@ -112,10 +112,10 @@ test('mcp-command: PATH lookup finds node, honouring PATHEXT on Windows', () => 
 	assert.equal(command.findOnPath('node', { PATH: '/bin' }, 'linux', () => false), undefined)
 })
 
-test('mcp-command: the --mcp-config file declares the axle server with its workspace', () => {
-	const c = command.mcpConfig('/ext/out/axle-mcp.js', { execPath: '/axle', electron: true, workspace: '/w' })
-	assert.deepEqual(c, { mcpServers: { axle: { command: '/axle', args: ['/ext/out/axle-mcp.js'], env: { ELECTRON_RUN_AS_NODE: '1', AXLE_WORKSPACE: '/w' } } } })
-	assert.deepEqual(command.mcpConfig('/s.js', { execPath: '/usr/bin/node', electron: false }).mcpServers.axle.env, {})
+test('mcp-command: the --mcp-config file declares the insilode server with its workspace', () => {
+	const c = command.mcpConfig('/ext/out/insilode-mcp.js', { execPath: '/insilode', electron: true, workspace: '/w' })
+	assert.deepEqual(c, { mcpServers: { insilode: { command: '/insilode', args: ['/ext/out/insilode-mcp.js'], env: { ELECTRON_RUN_AS_NODE: '1', INSILODE_WORKSPACE: '/w' } } } })
+	assert.deepEqual(command.mcpConfig('/s.js', { execPath: '/usr/bin/node', electron: false }).mcpServers.insilode.env, {})
 })
 
 test('mcp-impact: an impact line is matched to the entry it names', () => {

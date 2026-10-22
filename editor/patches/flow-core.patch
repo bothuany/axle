@@ -8,13 +8,13 @@ index 64e1c4d2..12b78386 100644
 -	"nameLong": "Code - OSS",
 -	"applicationName": "code-oss",
 -	"dataFolderName": ".vscode-oss",
-+	"nameShort": "Axle",
-+	"nameLong": "Axle",
-+	"applicationName": "axle",
-+	"dataFolderName": ".axle",
++	"nameShort": "Insilode",
++	"nameLong": "Insilode",
++	"applicationName": "insilode",
++	"dataFolderName": ".insilode",
  	"sharedDataFolderName": ".vscode-oss-shared",
 -	"win32MutexName": "vscodeoss",
-+	"win32MutexName": "axle",
++	"win32MutexName": "insilode",
  	"licenseName": "MIT",
  	"licenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
  	"serverLicenseUrl": "https://github.com/microsoft/vscode/blob/main/LICENSE.txt",
@@ -22,7 +22,7 @@ index 64e1c4d2..12b78386 100644
  	"serverLicense": [],
  	"serverLicensePrompt": "",
 -	"serverApplicationName": "code-server-oss",
-+	"serverApplicationName": "axle-server",
++	"serverApplicationName": "insilode-server",
  	"serverDataFolderName": ".vscode-server-oss",
 -	"tunnelApplicationName": "code-tunnel-oss",
 -	"win32DirName": "Microsoft Code OSS",
@@ -41,31 +41,31 @@ index 64e1c4d2..12b78386 100644
 -	"darwinProfilePayloadUUID": "CF808BE7-53F3-46C6-A7E2-7EDB98A5E959",
 -	"linuxDesktopName": "com.visualstudio.CodeOSS",
 -	"linuxIconName": "code-oss",
-+	"tunnelApplicationName": "axle-tunnel",
-+	"win32DirName": "Axle",
-+	"win32NameVersion": "Axle",
-+	"win32RegValueName": "Axle",
++	"tunnelApplicationName": "insilode-tunnel",
++	"win32DirName": "Insilode",
++	"win32NameVersion": "Insilode",
++	"win32RegValueName": "Insilode",
 +	"win32x64AppId": "{{787DE9F7-839A-43FD-9F19-6D8D03BE6F8A}",
 +	"win32arm64AppId": "{{055A015C-53A9-4803-A324-8A0AB372F588}",
 +	"win32x64UserAppId": "{{9AC14A02-7196-4110-BF80-CFF0243083BC}",
 +	"win32arm64UserAppId": "{{1F17C996-DD58-42BA-9B07-7FFCCC9AA8CE}",
-+	"win32AppUserModelId": "Axle.Axle",
-+	"win32ShellNameShort": "A&xle",
-+	"win32TunnelServiceMutex": "axle-tunnelservice",
-+	"win32TunnelMutex": "axle-tunnel",
-+	"darwinBundleIdentifier": "io.github.bothuany.axle",
++	"win32AppUserModelId": "Insilode.Insilode",
++	"win32ShellNameShort": "I&nsilode",
++	"win32TunnelServiceMutex": "insilode-tunnelservice",
++	"win32TunnelMutex": "insilode-tunnel",
++	"darwinBundleIdentifier": "dev.insilode.Insilode",
 +	"darwinProfileUUID": "1CA2F027-C8C7-4FDD-A9BF-44BAF36F3646",
 +	"darwinProfilePayloadUUID": "327D19B2-ED28-45E2-9567-C542F33BFA18",
-+	"linuxDesktopName": "io.github.bothuany.Axle",
-+	"linuxIconName": "axle",
++	"linuxDesktopName": "dev.insilode.insilode",
++	"linuxIconName": "insilode",
  	"licenseFileName": "LICENSE.txt",
  	"reportIssueUrl": "https://github.com/microsoft/vscode/issues/new",
  	"nodejsArtifactFeed": "",
  	"electronArtifactFeed": "",
 -	"urlProtocol": "code-oss",
-+	"urlProtocol": "axle",
-+	"quality": "axle",
-+	"updateUrl": "https://github.com/bothuany/axle/releases/latest/download",
++	"urlProtocol": "insilode",
++	"quality": "insilode",
++	"updateUrl": "https://github.com/bothuany/insilode/releases/latest/download",
  	"agentsTelemetryAppName": "agents",
  	"webviewContentExternalBaseUrlTemplate": "https://{{uuid}}.vscode-cdn.net/insider/ef65ac1ba57f57f2a3961bfe94aa20481caca4c6/out/vs/workbench/contrib/webview/browser/pre/",
  	"builtInExtensions": [
@@ -299,11 +299,11 @@ index 00000000..867bc7df
 +++ b/src/vs/workbench/browser/media/flow.css
 @@ -0,0 +1,518 @@
 +/*---------------------------------------------------------------------------------------------
-+ *  Flow: workbench touches on top of the Modern UI. Colours live in the Axle Dark theme; this
++ *  Flow: workbench touches on top of the Modern UI. Colours live in the Insilode Dark theme; this
 + *  file only holds what a theme cannot express.
 + *--------------------------------------------------------------------------------------------*/
 +
-+/* The empty editor shows Axle's mark: an entry point, then a method frame holding what it calls. */
++/* The empty editor shows Insilode's mark: an entry point, then a method frame holding what it calls. */
 +.monaco-workbench .part.editor > .content .editor-group-container .editor-group-watermark .letterpress {
 +	background-image: url('./flow-mark.svg') !important;
 +	background-size: contain;
@@ -856,7 +856,7 @@ index 1f0f2d9e..c439cde1 100644
  			RawVersion: pkg.version.replace(/-\w+$/, ''),
  			Commit: commit,
 -			NameVersion: product.win32NameVersion + (target === 'user' ? ' (User)' : ''),
-+			// Axle: the per-user install is the normal one, so Apps & Features shows plain "Axle", not "Axle (User)".
++			// Insilode: the per-user install is the normal one, so Apps & Features shows plain "Insilode", not "Insilode (User)".
 +			NameVersion: product.win32NameVersion,
  			ExeBasename: product.nameShort,
  			RegValueName: product.win32RegValueName,
@@ -871,7 +871,7 @@ index 3a3c7fa6..15b8ebcc 100644
  OpenWithCodeContextMenu=Mit %1 öffnen
 -UpdatingVisualStudioCode=Visual Studio Code wird aktualisiert...
 \ No newline at end of file
-+UpdatingVisualStudioCode=Axle wird aktualisiert...
++UpdatingVisualStudioCode=Insilode wird aktualisiert...
 \ No newline at end of file
 diff --git a/build/win32/i18n/messages.en.isl b/build/win32/i18n/messages.en.isl
 index 6255123d..ed53f216 100644
@@ -882,7 +882,7 @@ index 6255123d..ed53f216 100644
  SourceFile=%1 Source File
  OpenWithCodeContextMenu=Open w&ith %1
 -UpdatingVisualStudioCode=Updating Visual Studio Code...
-+UpdatingVisualStudioCode=Updating Axle...
++UpdatingVisualStudioCode=Updating Insilode...
 diff --git a/build/win32/i18n/messages.es.isl b/build/win32/i18n/messages.es.isl
 index 7f6f1bd0..d1e1f46d 100644
 --- a/build/win32/i18n/messages.es.isl
@@ -893,7 +893,7 @@ index 7f6f1bd0..d1e1f46d 100644
  OpenWithCodeContextMenu=Abrir &con %1
 -UpdatingVisualStudioCode=Actualizando Visual Studio Code...
 \ No newline at end of file
-+UpdatingVisualStudioCode=Actualizando Axle...
++UpdatingVisualStudioCode=Actualizando Insilode...
 \ No newline at end of file
 diff --git a/build/win32/i18n/messages.fr.isl b/build/win32/i18n/messages.fr.isl
 index 65ad8f19..580c102e 100644
@@ -905,7 +905,7 @@ index 65ad8f19..580c102e 100644
  OpenWithCodeContextMenu=Ouvrir avec %1
 -UpdatingVisualStudioCode=Mise à jour de Visual Studio Code...
 \ No newline at end of file
-+UpdatingVisualStudioCode=Mise à jour d'Axle...
++UpdatingVisualStudioCode=Mise à jour d'Insilode...
 \ No newline at end of file
 diff --git a/build/win32/i18n/messages.hu.isl b/build/win32/i18n/messages.hu.isl
 index 87487f60..11d56488 100644
@@ -917,7 +917,7 @@ index 87487f60..11d56488 100644
  OpenWithCodeContextMenu=Megnyitás a következővel: %1
 -UpdatingVisualStudioCode=A Visual Studio Code frissítése...
 \ No newline at end of file
-+UpdatingVisualStudioCode=Az Axle frissítése...
++UpdatingVisualStudioCode=Az Insilode frissítése...
 \ No newline at end of file
 diff --git a/build/win32/i18n/messages.it.isl b/build/win32/i18n/messages.it.isl
 index ac64aae7..5e9553a9 100644
@@ -929,7 +929,7 @@ index ac64aae7..5e9553a9 100644
  OpenWithCodeContextMenu=Apri con %1
 -UpdatingVisualStudioCode=Aggiornamento di Visual Studio Code...
 \ No newline at end of file
-+UpdatingVisualStudioCode=Aggiornamento di Axle...
++UpdatingVisualStudioCode=Aggiornamento di Insilode...
 \ No newline at end of file
 diff --git a/build/win32/i18n/messages.ja.isl b/build/win32/i18n/messages.ja.isl
 index 76e634fd..9248371c 100644
@@ -941,7 +941,7 @@ index 76e634fd..9248371c 100644
  OpenWithCodeContextMenu=%1 で開く
 -UpdatingVisualStudioCode=Visual Studio Code を更新しています...
 \ No newline at end of file
-+UpdatingVisualStudioCode=Axle を更新しています...
++UpdatingVisualStudioCode=Insilode を更新しています...
 \ No newline at end of file
 diff --git a/build/win32/i18n/messages.ko.isl b/build/win32/i18n/messages.ko.isl
 index 40abfafa..779a69dc 100644
@@ -953,7 +953,7 @@ index 40abfafa..779a69dc 100644
  OpenWithCodeContextMenu=%1(으)로 열기
 -UpdatingVisualStudioCode=Visual Studio Code 업데이트 중...
 \ No newline at end of file
-+UpdatingVisualStudioCode=Axle 업데이트 중...
++UpdatingVisualStudioCode=Insilode 업데이트 중...
 \ No newline at end of file
 diff --git a/build/win32/i18n/messages.pt-br.isl b/build/win32/i18n/messages.pt-br.isl
 index 08c77290..a97f831b 100644
@@ -965,7 +965,7 @@ index 08c77290..a97f831b 100644
  OpenWithCodeContextMenu=Abrir com %1
 -UpdatingVisualStudioCode=Atualizando o Visual Studio Code...
 \ No newline at end of file
-+UpdatingVisualStudioCode=Atualizando o Axle...
++UpdatingVisualStudioCode=Atualizando o Insilode...
 \ No newline at end of file
 diff --git a/build/win32/i18n/messages.ru.isl b/build/win32/i18n/messages.ru.isl
 index d4f427a1..f5a4b17a 100644
@@ -977,7 +977,7 @@ index d4f427a1..f5a4b17a 100644
  OpenWithCodeContextMenu=Открыть с помощью %1
 -UpdatingVisualStudioCode=Обновление Visual Studio Code...
 \ No newline at end of file
-+UpdatingVisualStudioCode=Обновление Axle...
++UpdatingVisualStudioCode=Обновление Insilode...
 \ No newline at end of file
 diff --git a/build/win32/i18n/messages.tr.isl b/build/win32/i18n/messages.tr.isl
 index 7cc65864..4306d769 100644
@@ -989,7 +989,7 @@ index 7cc65864..4306d769 100644
  OpenWithCodeContextMenu=%1 İle Aç
 -UpdatingVisualStudioCode=Visual Studio Code güncelleniyor...
 \ No newline at end of file
-+UpdatingVisualStudioCode=Axle güncelleniyor...
++UpdatingVisualStudioCode=Insilode güncelleniyor...
 \ No newline at end of file
 diff --git a/build/win32/i18n/messages.zh-cn.isl b/build/win32/i18n/messages.zh-cn.isl
 index 79e9cdbb..dce9816c 100644
@@ -1001,7 +1001,7 @@ index 79e9cdbb..dce9816c 100644
  OpenWithCodeContextMenu=通过 %1 打开
 -UpdatingVisualStudioCode=正在更新 Visual Studio Code...
 \ No newline at end of file
-+UpdatingVisualStudioCode=正在更新 Axle...
++UpdatingVisualStudioCode=正在更新 Insilode...
 \ No newline at end of file
 diff --git a/build/win32/i18n/messages.zh-tw.isl b/build/win32/i18n/messages.zh-tw.isl
 index d7a95a94..181a8892 100644
@@ -1013,7 +1013,7 @@ index d7a95a94..181a8892 100644
  OpenWithCodeContextMenu=以 %1 開啟
 -UpdatingVisualStudioCode=正在更新 Visual Studio Code...
 \ No newline at end of file
-+UpdatingVisualStudioCode=正在更新 Axle...
++UpdatingVisualStudioCode=正在更新 Insilode...
 \ No newline at end of file
 diff --git a/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts b/src/vs/workbench/contrib/welcomeOnboarding/browser/onboardingVariationA.ts
 index ff993368..6c484caf 100644
@@ -1055,13 +1055,13 @@ index 067580a4..ab885bd0 100644
  			scope: ConfigurationScope.APPLICATION,
  			type: 'boolean',
 -			default: true,
-+			// Axle: its first run must not show VS Code's GitHub Copilot sign-in page; Axle has no Copilot.
++			// Insilode: its first run must not show VS Code's GitHub Copilot sign-in page; Insilode has no Copilot.
 +			default: false,
  			tags: ['experimental'],
  			description: localize('workbench.welcomePage.experimentalOnboarding', "When enabled, show the new onboarding experience instead of the classic walkthrough on first launch."),
  			experiment: {
 diff --git a/build/win32/code.iss b/build/win32/code.iss
-index 5b430614..955dde1f 100644
+index 5b43061..1bef915 100644
 --- a/build/win32/code.iss
 +++ b/build/win32/code.iss
 @@ -8,10 +8,10 @@
@@ -1073,21 +1073,59 @@ index 5b430614..955dde1f 100644
 -AppSupportURL=https://code.visualstudio.com/
 -AppUpdatesURL=https://code.visualstudio.com/
 +AppPublisher=Recep Batuhan Dikmen
-+AppPublisherURL=https://github.com/bothuany/axle
-+AppSupportURL=https://github.com/bothuany/axle/issues
-+AppUpdatesURL=https://github.com/bothuany/axle/releases
++AppPublisherURL=https://github.com/bothuany/insilode
++AppSupportURL=https://github.com/bothuany/insilode/issues
++AppUpdatesURL=https://github.com/bothuany/insilode/releases
  DefaultGroupName={#NameLong}
  AllowNoIcons=yes
  OutputDir={#OutputDir}
-@@ -1382,7 +1382,7 @@ begin
+@@ -67,6 +67,14 @@ Name: "hungarian"; MessagesFile: "{#RepoDir}\build\win32\i18n\Default.hu.isl,{#R
+ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl,{#RepoDir}\build\win32\i18n\messages.tr.isl" {#LocalizedLanguageFile("trk")}
+ 
+ [InstallDelete]
++; Insilode was called Axle until 0.4.x and keeps its installer identity (AppId), so this Setup upgrades an Axle install in place. What carried the old name goes.
++Type: files; Name: "{app}\Axle.exe"
++Type: files; Name: "{app}\Axle.VisualElementsManifest.xml"
++Type: files; Name: "{app}\bin\axle"
++Type: files; Name: "{app}\bin\axle.cmd"
++Type: files; Name: "{group}\Axle.lnk"
++Type: files; Name: "{autodesktop}\Axle.lnk"
++Type: files; Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\Axle.lnk"
+ Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\out"; Check: IsNotBackgroundUpdate
+ Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\plugins"; Check: IsNotBackgroundUpdate
+ Type: filesandordirs; Name: "{app}\{#VersionedResourcesFolder}\resources\app\extensions"; Check: IsNotBackgroundUpdate
+@@ -125,6 +133,12 @@ Filename: "{app}\{#ExeBasename}.exe"; Description: "{cm:LaunchProgram,{#NameLong
+ #define SoftwareClassesRootKey "HKLM"
+ #endif
+ 
++; The "Open with Axle" entries of an install from before the rename.
++Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\*\shell\Axle"; ValueType: none; Flags: deletekey
++Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\directory\shell\Axle"; ValueType: none; Flags: deletekey
++Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\directory\background\shell\Axle"; ValueType: none; Flags: deletekey
++Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\Drive\shell\Axle"; ValueType: none; Flags: deletekey
++
+ Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\.ascx\OpenWithProgids"; ValueType: none; ValueName: "{#RegValueName}"; Flags: deletevalue uninsdeletevalue; Tasks: associatewithfiles
+ Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\.ascx\OpenWithProgids"; ValueType: string; ValueName: "{#RegValueName}.ascx"; ValueData: ""; Flags: uninsdeletevalue; Tasks: associatewithfiles
+ Root: {#SoftwareClassesRootKey}; Subkey: "Software\Classes\{#RegValueName}.ascx"; ValueType: string; ValueName: ""; ValueData: "{cm:SourceFile,ASCX}"; Flags: uninsdeletekey; Tasks: associatewithfiles
+@@ -1382,7 +1396,7 @@ begin
  
    #if "user" == InstallTarget
      if not WizardSilent() and IsAdmin() then begin
 -      if MsgBox('This User Installer is not meant to be run as an Administrator. If you would like to install VS Code for all users in this system, download the System Installer instead from https://code.visualstudio.com. Are you sure you want to continue?', mbError, MB_OKCANCEL) = IDCANCEL then begin
-+      if MsgBox('This User Installer is not meant to be run as an Administrator. If you would like to install {#NameShort} for all users in this system, download the System Installer instead from https://github.com/bothuany/axle/releases. Are you sure you want to continue?', mbError, MB_OKCANCEL) = IDCANCEL then begin
++      if MsgBox('This User Installer is not meant to be run as an Administrator. If you would like to install {#NameShort} for all users in this system, download the System Installer instead from https://github.com/bothuany/insilode/releases. Are you sure you want to continue?', mbError, MB_OKCANCEL) = IDCANCEL then begin
          Result := False;
        end;
      end;
+@@ -1636,7 +1650,8 @@ begin
+   if IsBackgroundUpdate() then
+     Result := ''
+   else
+-    Result := '{#AppMutex}';
++    // Also the mutex of an Axle that is still running (0.4.x), so Setup waits for it as it would for Insilode.
++    Result := '{#AppMutex},axle';
+ end;
+ 
+ function GetSetupMutex(Value: string): string;
 diff --git a/build/lib/electron.ts b/build/lib/electron.ts
 index 27151cc4..aae0fa00 100644
 --- a/build/lib/electron.ts

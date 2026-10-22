@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the MCP server manager. One page lists every server Claude Code and Codex would load
+ *  Insilode Harness: the MCP server manager. One page lists every server Claude Code and Codex would load
  *  for this folder (mcpconfig.ts), with where it comes from, whether it is on, how often the agents
  *  called it, and, after a "Check" click and never before, whether it starts and what its tools cost.
  *  Adding, editing, turning off and removing go through native inputs and one confirmation that
@@ -242,7 +242,7 @@ export class McpManager implements vscode.Disposable {
 		// only in a trusted folder, and only once the user saw exactly what.
 		const repo = list.filter(s => s.scope === 'project');
 		if (repo.length && !vscode.workspace.isTrusted) {
-			void vscode.window.showWarningMessage('This folder is not trusted: Axle does not start or contact the servers its .mcp.json or .codex/config.toml names. Trust the folder first.');
+			void vscode.window.showWarningMessage('This folder is not trusted: Insilode does not start or contact the servers its .mcp.json or .codex/config.toml names. Trust the folder first.');
 			list = list.filter(s => !repo.includes(s));
 		} else if (repo.length && !confirmed) {
 			const ok = await vscode.window.showWarningMessage(`${repo[0].transport === 'stdio' ? 'Run' : 'Contact'} ${repo[0].name} to check it?`, { modal: true, detail: `It comes from this repository (${path.basename(repo[0].file)}), so the repository chose what runs or where it goes:\n\n${this.explain(repo[0])}\n\nIt is checked once and stopped.` }, 'Check');
@@ -288,7 +288,7 @@ export class McpManager implements vscode.Disposable {
 			}
 			// The agent starts it in the folder; in an untrusted folder the home folder, so nothing in the folder gets to run.
 			const r = await checkStdio({ command: s.command, args: s.args, env: s.env, cwd: s.cwd }, { cwd: vscode.workspace.isTrusted ? root : os.homedir(), isFile });
-			// Claude Code starts a .cmd shim itself; Axle does not start cmd.exe, so Claude Code's own check answers for it.
+			// Claude Code starts a .cmd shim itself; Insilode does not start cmd.exe, so Claude Code's own check answers for it.
 			return r.needsShell ? (await viaClaude()) ?? { ...r, status: `${r.status}: check it from ${s.harness === 'Codex' ? 'Codex' : 'Claude Code'}` } : r;
 		}
 		if (s.transport === 'http') {
@@ -723,7 +723,7 @@ function row(s, cli, trusted) {
 		...s.issues.map(i => el('div', { class: 'issue ' + i.severity }, i.message)),
 		c ? el('div', { class: 'status ' + (c.ok ? 'on' : 'off') },
 			(c.ok ? '✓ ' : '✗ ') + c.status,
-			el('span', { class: 'muted' }, ' · ' + (c.how === 'handshake' ? 'Axle handshake' : c.how) + ', ' + ago(c.at) + (c.ms ? ', ' + (c.ms / 1000).toFixed(1) + ' s' : ''))) : null,
+			el('span', { class: 'muted' }, ' · ' + (c.how === 'handshake' ? 'Insilode handshake' : c.how) + ', ' + ago(c.at) + (c.ms ? ', ' + (c.ms / 1000).toFixed(1) + ' s' : ''))) : null,
 		c && c.tools && c.tools.length ? el('div', { class: 'tools mono' }, c.tools.slice(0, 40).join(', ') + (c.tools.length > 40 ? ' …' : '')) : null);
 }
 window.addEventListener('message', e => {

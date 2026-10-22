@@ -43,7 +43,7 @@ test('Grep and Glob: the folder only, never the pattern; Bash, web and MCP tools
 	const none = [
 		g.looksFromHook('Bash', { command: 'cat s3cret.txt' }, { stdout: 's3cret' }, ws, roots),
 		g.looksFromHook('WebFetch', { url: 'https://example.com/s3cret' }, {}, ws, roots),
-		g.looksFromHook('mcp__axle__open', { file: at('a.ts') }, {}, ws, roots),
+		g.looksFromHook('mcp__insilode__open', { file: at('a.ts') }, {}, ws, roots),
 	]
 	assert.deepEqual(none, [[], [], []])
 	assert.ok(!JSON.stringify([grep, none]).includes('s3cret'), 'no search text or command leaves the normaliser')

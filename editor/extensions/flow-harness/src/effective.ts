@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the effective configuration for one file. Which instruction files and
+ *  Insilode Harness: the effective configuration for one file. Which instruction files and
  *  path-scoped rules an agent working on it reads, in the order they stack, and which value of
  *  each setting wins across managed / local / project / user. Instructions never override one
  *  another: they are all read, the more specific later. Scalar settings do override (managed,
@@ -94,7 +94,7 @@ const WHEN_ORDER = { always: 0, 'on-demand': 1, 'not-loaded': 2 } as const;
 
 /**
  * What an agent working on `file` reads, per agent, in the order it stacks (widest first: a later file is read later
- * and is the more specific). `root` is where the agent was started (Axle starts agents at the workspace root).
+ * and is the more specific). `root` is where the agent was started (Insilode starts agents at the workspace root).
  */
 export function instructionsFor<T extends InstructionLike>(file: string, root: string, items: readonly T[]): Applied<T>[] {
 	const out: Applied<T>[] = [];
@@ -112,7 +112,7 @@ export function instructionsFor<T extends InstructionLike>(file: string, root: s
 					}
 				} else if (under(file, dir)) {
 					// Codex merges AGENTS.md from the project root down to the folder it was started in, not the folder of a file it opens.
-					out.push({ item, agent, when: 'not-loaded', why: `Codex reads this only when started in ${rel(dir, root) || '.'}/ (Axle starts it at the root)` });
+					out.push({ item, agent, when: 'not-loaded', why: `Codex reads this only when started in ${rel(dir, root) || '.'}/ (Insilode starts it at the root)` });
 				}
 			} else if (item.kind === 'rules') {
 				const globs = item.paths?.filter(Boolean) ?? [];

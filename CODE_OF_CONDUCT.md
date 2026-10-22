@@ -1,6 +1,6 @@
 # Code of conduct
 
-Axle is a small project that works best when people feel safe asking questions, reporting problems and sharing ideas. This code of conduct says what we expect from everyone who takes part: in issues, pull requests, discussions and anywhere else the project is represented. It is inspired by the [Contributor Covenant](https://www.contributor-covenant.org/).
+Insilode is a small project that works best when people feel safe asking questions, reporting problems and sharing ideas. This code of conduct says what we expect from everyone who takes part: in issues, pull requests, discussions and anywhere else the project is represented. It is inspired by the [Contributor Covenant](https://www.contributor-covenant.org/).
 
 ## What we expect
 

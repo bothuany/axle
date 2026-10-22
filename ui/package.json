@@ -22,5 +22,5 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.4"
   },
-  "description": "The Axle call-flow canvas, built into one script the Axle editor extension inlines."
+  "description": "The Insilode call-flow canvas, built into one script the Insilode editor extension inlines."
 }

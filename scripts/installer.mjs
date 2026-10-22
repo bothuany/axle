@@ -1,19 +1,19 @@
 #!/usr/bin/env node
-// Builds Axle's Windows installer: dist/Axle-Setup-<version>-x64.exe, one file an end user runs to install Axle
+// Builds Insilode's Windows installer: dist/Insilode-Setup-<version>-x64.exe, one file an end user runs to install Insilode
 // (no repository, Node or Visual Studio build tools needed on their PC).
 //   npm run installer                 per-user installer (no admin rights)
-//   npm run installer -- --system     also the system-wide one (dist/Axle-Setup-<version>-x64-system.exe)
+//   npm run installer -- --system     also the system-wide one (dist/Insilode-Setup-<version>-x64-system.exe)
 //   npm run installer -- --system-only
 //   npm run installer -- --fast       reuse editor/VSCode-win32-x64 from the last full build, if nothing it was built from has
-//                                     changed (VS Code's version, Axle's core patch, product.json, the icon: a stamp says so).
-//                                     Only Axle's own parts and the Inno Setup step are redone: minutes, not half an hour.
+//                                     changed (VS Code's version, Insilode's core patch, product.json, the icon: a stamp says so).
+//                                     Only Insilode's own parts and the Inno Setup step are redone: minutes, not half an hour.
 //                                     Without a matching stamp it says so and does the full build.
 //   npm run installer -- --full       the full build, whatever the stamp says (this is also the default)
 // What it does:
 //   1. checks that `npm run setup` was done,
-//   2. builds the Axle extensions, the canvas and the C# analyzer (a framework-dependent Release publish),
+//   2. builds the Insilode extensions, the canvas and the C# analyzer (a framework-dependent Release publish),
 //   3. runs VS Code's own production build (gulp vscode-win32-x64-min) into editor/VSCode-win32-x64,
-//   4. replaces the Axle extensions in that app by real, trimmed copies and puts the analyzer and the canvas next to
+//   4. replaces the Insilode extensions in that app by real, trimmed copies and puts the analyzer and the canvas next to
 //      flow-view's code (extensions/flow-view/analyzer, extensions/flow-view/ui/dist-webview: where flowRoot() finds them),
 //   5. runs VS Code's Inno Setup step on the result and copies the installer to dist/.
 // It needs what `npm run setup` needs (Windows: Python 3, Visual Studio Build Tools with the Spectre-mitigated libs), plus
@@ -77,11 +77,11 @@ if (major !== needMajor || minor < needMinor) {
 	fail(`Node ${process.versions.node} will not do: the VS Code build needs Node ${needMajor}.${needMinor} or a newer ${needMajor}.x (switch with nvm or fnm, then run this again).`)
 }
 if (!existsSync(join(VSCODE, 'node_modules', '.package-lock.json'))) {
-	fail('Axle is not set up yet: run `npm run setup` first (it fetches and builds VS Code, which the installer packages).')
+	fail('Insilode is not set up yet: run `npm run setup` first (it fetches and builds VS Code, which the installer packages).')
 }
 const patched = ['flow-core.patch', 'flow-update.patch'].every(patch => launchSync('git', ['apply', '--reverse', '--check', join(ROOT, 'editor', 'patches', patch)], { cwd: VSCODE, stdio: 'ignore' }).status === 0)
 if (!patched) {
-	fail('editor/vscode does not carry Axle\'s patches (or has other changes to the same files): run `npm run setup`, or delete editor/vscode and run it again.')
+	fail('editor/vscode does not carry Insilode\'s patches (or has other changes to the same files): run `npm run setup`, or delete editor/vscode and run it again.')
 }
 const product = readJson(join(VSCODE, 'product.json'))
 if (product.win32VersionedUpdate) {
@@ -114,7 +114,7 @@ function withSigntool(env) {
 	return { ...env, [key]: `${dir};${env[key] ?? ''}` }
 }
 const buildEnv = withSigntool(process.env)
-console.log(`  node ${process.versions.node} · .NET SDK ✓ · Inno Setup ✓ · Axle ${version}${args.has('--fast') ? ' · --fast' : ''}`)
+console.log(`  node ${process.versions.node} · .NET SDK ✓ · Inno Setup ✓ · Insilode ${version}${args.has('--fast') ? ' · --fast' : ''}`)
 
 /** `gulp <task>` of the VS Code checkout, with the heap its build asks for (what `npm run gulp` runs). */
 function gulp(task) {
@@ -130,8 +130,8 @@ function installDependencies(dir) {
 	}
 }
 
-// ── Axle's own parts ─────────────────────────────────────────────────────────
-step('Building the Axle extensions')
+// ── Insilode's own parts ─────────────────────────────────────────────────────────
+step('Building the Insilode extensions')
 for (const name of buildableExtensions()) {
 	const dir = join(EXTENSIONS, name)
 	installDependencies(dir)
@@ -150,7 +150,7 @@ step('Publishing the C# analyzer (framework-dependent, Release)')
 const analyzerOut = join(STAGE, 'analyzer')
 rmSync(analyzerOut, { recursive: true, force: true })
 // No apphost and no symbols: the extension starts it as `dotnet FlowAnalyzer.dll`. English resources only: Roslyn's
-// satellite assemblies for a dozen languages would add megabytes for messages Axle never shows.
+// satellite assemblies for a dozen languages would add megabytes for messages Insilode never shows.
 run('dotnet', ['publish', join(ROOT, 'analyzer', 'FlowAnalyzer.csproj'), '-c', 'Release', '-o', analyzerOut, '--no-self-contained',
 	'-p:UseAppHost=false', '-p:DebugType=None', '-p:DebugSymbols=false', '-p:SatelliteResourceLanguages=en', '-nologo', '-v', 'q'])
 if (!existsSync(join(analyzerOut, 'FlowAnalyzer.dll'))) {
@@ -158,15 +158,15 @@ if (!existsSync(join(analyzerOut, 'FlowAnalyzer.dll'))) {
 }
 
 // ── VS Code ──────────────────────────────────────────────────────────────────
-step('Applying the Axle app icon')
-// The installer, the exe and the uninstaller read their icon from VS Code's resources/win32/code.ico; setup copied Axle's there.
+step('Applying the Insilode app icon')
+// The installer, the exe and the uninstaller read their icon from VS Code's resources/win32/code.ico; setup copied Insilode's there.
 const icon = join(ROOT, 'editor', 'branding', 'icon.ico')
 const iconTarget = join(VSCODE, 'resources', 'win32', 'code.ico')
 if (existsSync(icon) && !readFileSync(icon).equals(readFileSync(iconTarget))) {
 	copyFileSync(icon, iconTarget)
 	console.log('  resources/win32/code.ico: refreshed from editor/branding/icon.ico')
 } else {
-	console.log('  resources/win32/code.ico: Axle\'s')
+	console.log('  resources/win32/code.ico: Insilode\'s')
 }
 
 /** What the production build is made from: when none of it changed, the app of the last full build is still right. */
@@ -184,7 +184,7 @@ const stamp = appStamp()
 let reuse = false
 if (args.has('--fast')) {
 	const last = existsSync(STAMP) ? readFileSync(STAMP, 'utf8').trim() : ''
-	if (!existsSync(join(APP, 'Axle.exe'))) {
+	if (!existsSync(join(APP, 'Insilode.exe'))) {
 		console.log(`  --fast: ${relative(ROOT, APP)} has no earlier build: doing the full build.`)
 	} else if (last !== stamp) {
 		console.log(`  --fast: ${last ? 'VS Code, the core patch, product.json or the icon changed since the last full build' : 'no record of the last full build (dist/app-build.stamp)'}: doing the full build.`)
@@ -200,7 +200,7 @@ if (reuse) {
 	step('Building VS Code for production (gulp vscode-win32-x64-min: 15 to 40 minutes)')
 	// VS Code's packager lists an extension's files with vsce, which sees nothing through the junctions that `npm start` uses
 	// (and then fails reading the folder itself). The links are taken away for the build, and put back when this script ends,
-	// however it ends; Axle's extensions are added to the app afterwards from editor/extensions.
+	// however it ends; Insilode's extensions are added to the app afterwards from editor/extensions.
 	const linked = readdirSync(join(VSCODE, 'extensions')).filter(n => n.startsWith('flow-') && lstatSync(join(VSCODE, 'extensions', n)).isSymbolicLink())
 	const relink = () => {
 		for (const name of readdirSync(EXTENSIONS).filter(n => n.startsWith('flow-') && existsSync(join(EXTENSIONS, n, 'package.json')))) {
@@ -227,8 +227,8 @@ if (!existsSync(join(appDir, 'product.json'))) {
 	fail(`${relative(ROOT, appDir)} has no product.json: the production build did not finish.`)
 }
 
-step('Putting Axle into the app')
-// Axle's extensions are linked into editor/vscode/extensions for development. VS Code's packager follows that link
+step('Putting Insilode into the app')
+// Insilode's extensions are linked into editor/vscode/extensions for development. VS Code's packager follows that link
 // (and, as these extensions are not built by gulp, ships whatever vsce lists: sources, dev dependencies): they are
 // replaced by copies of exactly what the extension host loads.
 /** What stays out of the copies: sources, tests, tooling and, at the top only, node_modules (flow-agent's come back below). */
@@ -278,12 +278,12 @@ console.log('  flow-view/analyzer, flow-view/ui/dist-webview')
 // A broken app is cheaper to find here than after a 15 minute Inno Setup run.
 const problems = []
 const productJson = readJson(join(appDir, 'product.json'))
-// The app's own version is VS Code's (product.json "version"); the update check compares Axle's with the release's.
-if (productJson.axleVersion !== version) {
-	productJson.axleVersion = version
+// The app's own version is VS Code's (product.json "version"); the update check compares Insilode's with the release's.
+if (productJson.insilodeVersion !== version) {
+	productJson.insilodeVersion = version
 	writeFileSync(join(appDir, 'product.json'), JSON.stringify(productJson, null, '\t') + '\n')
 }
-for (const [key, want] of [['applicationName', 'axle'], ['dataFolderName', '.axle'], ['nameShort', 'Axle']]) {
+for (const [key, want] of [['applicationName', 'insilode'], ['dataFolderName', '.insilode'], ['nameShort', 'Insilode']]) {
 	if (productJson[key] !== want) {
 		problems.push(`product.json: ${key} is ${JSON.stringify(productJson[key])}, not ${JSON.stringify(want)}`)
 	}
@@ -298,21 +298,21 @@ for (const name of flowExtensions) {
 		problems.push(`extensions/${name}: ${main} is missing (the extension was not built)`)
 	}
 }
-for (const file of ['extensions/flow-view/analyzer/FlowAnalyzer.dll', 'extensions/flow-view/ui/dist-webview/webview.js', 'extensions/flow-view/ui/dist-webview/board.js', 'extensions/flow-view/out/axle-mcp.js']) {
+for (const file of ['extensions/flow-view/analyzer/FlowAnalyzer.dll', 'extensions/flow-view/ui/dist-webview/webview.js', 'extensions/flow-view/ui/dist-webview/board.js', 'extensions/flow-view/out/insilode-mcp.js', 'extensions/flow-view/out/axle-mcp.js']) {
 	if (!existsSync(join(appDir, file))) {
 		problems.push(`${file} is missing`)
 	}
 }
-if (!existsSync(join(APP, 'Axle.exe'))) {
-	problems.push('Axle.exe is missing')
+if (!existsSync(join(APP, 'Insilode.exe'))) {
+	problems.push('Insilode.exe is missing')
 }
 if (problems.length) {
 	fail(`The app in ${relative(ROOT, APP)} is not right:\n  - ${problems.join('\n  - ')}`)
 }
 
 // ── Inno Setup ───────────────────────────────────────────────────────────────
-step('Axle images for the installer and the Start tile')
-// Inno shows resources/win32/inno-*.bmp on its pages (VS Code's are blue): Axle's come from editor/installer (made by
+step('Insilode images for the installer and the Start tile')
+// Inno shows resources/win32/inno-*.bmp on its pages (VS Code's are blue): Insilode's come from editor/installer (made by
 // scripts/make-installer-images.py). They are read only by the Inno step, so they are not part of the --fast stamp.
 const images = join(ROOT, 'editor', 'installer')
 for (const name of existsSync(images) ? readdirSync(images).filter(n => /^inno-(big|small)-\d+\.bmp$/.test(n)) : []) {
@@ -321,7 +321,7 @@ for (const name of existsSync(images) ? readdirSync(images).filter(n => /^inno-(
 // The tile of a Start entry takes its name and colour from this manifest (VS Code's says "Code - OSS").
 const tile = join(APP, `${readJson(join(appDir, 'product.json')).nameShort}.VisualElementsManifest.xml`)
 if (existsSync(tile)) {
-	writeFileSync(tile, readFileSync(tile, 'utf8').replace(/ShortDisplayName="[^"]*"/, 'ShortDisplayName="Axle"').replace(/BackgroundColor="[^"]*"/, 'BackgroundColor="#161A2A"'))
+	writeFileSync(tile, readFileSync(tile, 'utf8').replace(/ShortDisplayName="[^"]*"/, 'ShortDisplayName="Insilode"').replace(/BackgroundColor="[^"]*"/, 'BackgroundColor="#161A2A"'))
 }
 // ...and so do its two logos, which are VS Code's blue icon unless replaced.
 for (const logo of ['code_70x70.png', 'code_150x150.png']) {
@@ -342,7 +342,7 @@ for (const target of targets) {
 	if (!existsSync(made)) {
 		fail(`Inno Setup did not write ${relative(ROOT, made)}.`)
 	}
-	const out = join(DIST, `Axle-Setup-${version}-${ARCH}${target === 'system' ? '-system' : ''}.exe`)
+	const out = join(DIST, `Insilode-Setup-${version}-${ARCH}${target === 'system' ? '-system' : ''}.exe`)
 	copyFileSync(made, out)
 	built.push(out)
 }

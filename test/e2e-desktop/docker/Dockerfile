@@ -1,4 +1,4 @@
-# The Linux toolchain the desktop e2e run needs, and nothing of Axle: the sources and the VS Code build live in a volume
+# The Linux toolchain the desktop e2e run needs, and nothing of Insilode: the sources and the VS Code build live in a volume
 # (scripts/docker-e2e.mjs), so this image is built once and a run after the first takes minutes.
 # 22.04 and clang, as release.yml: the native modules do not compile with 22.04's GCC.
 FROM ubuntu:22.04
@@ -22,8 +22,8 @@ RUN curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh \
 ENV CC=clang-15 CXX=clang++-15 DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 npm_config_update_notifier=false
 
 # A checkout on Windows may have turned the script's line ends into CRLF.
-COPY entrypoint.sh /usr/local/bin/axle-e2e
-RUN sed -i 's/\r$//' /usr/local/bin/axle-e2e && chmod +x /usr/local/bin/axle-e2e
+COPY entrypoint.sh /usr/local/bin/insilode-e2e
+RUN sed -i 's/\r$//' /usr/local/bin/insilode-e2e && chmod +x /usr/local/bin/insilode-e2e
 
-WORKDIR /work/axle
-ENTRYPOINT ["/usr/local/bin/axle-e2e"]
+WORKDIR /work/insilode
+ENTRYPOINT ["/usr/local/bin/insilode-e2e"]
