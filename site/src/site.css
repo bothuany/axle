@@ -352,6 +352,169 @@ h3 {
   margin: 14px 0 0;
 }
 
+/* The headline names the category ("code editor"), so it runs longer than the old one: a wider measure keeps it to three lines. */
+.hero h1 {
+  max-width: 16ch;
+  font-size: clamp(40px, 5.4vw, 74px);
+}
+
+.hero .lede {
+  max-width: 46ch;
+}
+
+/* The editor window: a capture of the real workbench, the first thing that says "this is an editor". It is a link to the live demo. */
+.shot {
+  position: relative;
+  margin: 56px 0 0;
+}
+
+.shot::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--gutter) + 23px);
+  top: 64px;
+  width: calc(var(--gutter) - 23px);
+  height: 2px;
+  background: var(--signal);
+}
+
+.shot-window {
+  position: relative;
+  display: block;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f8f8f8;
+  text-decoration: none;
+  box-shadow: 0 0 0 1px rgba(21, 27, 59, 0.14), 0 30px 60px -30px rgba(21, 27, 59, 0.55);
+  transition: box-shadow 200ms, transform 200ms;
+}
+
+.shot-window img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.shot-window:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 1.5px var(--signal), 0 36px 70px -30px rgba(21, 27, 59, 0.6);
+}
+
+.shot-cta {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: #fff;
+  font-weight: 600;
+  font-size: 16px;
+  box-shadow: 0 10px 30px rgba(21, 27, 59, 0.35);
+}
+
+.shot-cta .arrow {
+  transition: transform 200ms;
+}
+
+.shot-window:hover .shot-cta {
+  background: var(--signal);
+}
+
+.shot-window:hover .shot-cta .arrow {
+  transform: translateX(3px);
+}
+
+/* ---- built on VS Code --------------------------------------------------------------------------------------------------------- */
+
+.vscode {
+  padding: 120px 0 0;
+}
+
+.vscode-head .lede {
+  max-width: 52ch;
+}
+
+.carry {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px;
+  margin: 44px 0 0;
+  padding: 32px 0 0;
+  list-style: none;
+  border-top: 2px solid var(--ink);
+  counter-reset: carry;
+}
+
+.carry li {
+  counter-increment: carry;
+}
+
+/* Each claim is numbered like a line in the canvas's code cards: a small mono gutter number. */
+.carry h3::before {
+  content: counter(carry, decimal-leading-zero);
+  display: block;
+  margin-bottom: 10px;
+  font: 500 13px/1 var(--mono);
+  color: var(--signal);
+  letter-spacing: 0.04em;
+}
+
+.carry p {
+  margin: 10px 0 0;
+  color: var(--ink-2);
+}
+
+.carry b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.everything {
+  margin: 56px 0 0;
+  padding: 28px 32px;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 1px var(--rule);
+}
+
+.everything-title {
+  margin: 0;
+  font-weight: 650;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips li {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--film);
+  font: 500 14px/1.3 var(--mono);
+  color: var(--ink);
+}
+
+.everything .quiet {
+  margin: 18px 0 0;
+  max-width: 80ch;
+}
+
+/* ---- what it adds: the live canvas --------------------------------------------------------------------------------------------- */
+
+.adds {
+  padding: 136px 0 0;
+}
+
 .stage-wrap {
   position: relative;
   margin: 56px 0 0;
@@ -1080,6 +1243,7 @@ figcaption {
   }
 
   .with-grid,
+  .carry,
   .dl-list {
     grid-template-columns: 1fr;
     gap: 28px;
@@ -1159,10 +1323,37 @@ figcaption {
     width: 100%;
   }
 
-  .stage-wrap::before {
+  .stage-wrap::before,
+  .shot::before {
     left: calc(-1 * var(--gutter) + 7px);
     width: calc(var(--gutter) - 7px);
     top: 48px;
+  }
+
+  .hero h1 {
+    font-size: 36px;
+  }
+
+  .shot {
+    margin-top: 40px;
+  }
+
+  /* On a phone the button sits under the window, not on it: the window is small enough that it would hide the terminal. */
+  .shot-cta {
+    position: static;
+    display: flex;
+    justify-content: center;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .vscode,
+  .adds {
+    padding-top: 96px;
+  }
+
+  .everything {
+    padding: 22px 18px;
   }
 
   .stage {
@@ -1236,7 +1427,13 @@ figcaption {
     animation: none;
   }
 
-  .stage-poster {
+  .stage-poster,
+  .shot-window,
+  .shot-cta .arrow {
     transition: none;
+  }
+
+  .shot-window:hover {
+    transform: none;
   }
 }

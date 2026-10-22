@@ -5,8 +5,8 @@
 <h1 align="center">Insilode</h1>
 
 <p align="center">
-  <b>A harness-first code editor.</b><br>
-  Every editor shows where code is stored. Insilode shows how it <b>runs</b>.
+  <b>The code editor that shows how your code runs.</b><br>
+  Built on VS Code, so your extensions, themes and keybindings work. Plus a live canvas of every request, a review of what your agents changed, and a dock that runs Claude Code and Codex side by side.
 </p>
 
 <p align="center">
@@ -15,9 +15,20 @@
   <img src="https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20any%20CLI-6f86ff" alt="Agents: Claude Code, Codex and any CLI">
 </p>
 
+[![The Insilode editor: the file explorer, a Java file, the flow of POST /orders on the canvas, Claude Code in the terminal and the Agents dock](docs/media/insilode-editor.webp)](https://insilode.dev/try/)
+
 <p align="center"><b><a href="https://insilode.dev/try/">Try it in your browser</a></b>: follow a request across services, review what an agent changed, and answer an agent waiting for you. Nothing to install.</p>
 
 [![Launch film, 80 s: see what your agent changed, on how your code runs](docs/media/film/launch-film-poster.jpg)](docs/media/film/launch-film.mp4)
+
+## Coming from VS Code
+
+Insilode is a fork of VS Code (Code - OSS, the open-source core of VS Code), so the editor you know is all there: Git, the terminal, the debugger, language servers, IntelliSense, search, tasks, multi-root workspaces, profiles. Insilode adds to it.
+
+- **Extensions** install from [Open VSX](https://open-vsx.org/), the open registry VS Code forks use. A few of Microsoft's own extensions (Pylance, C# Dev Kit, the Remote - SSH / WSL / Dev Containers family, GitHub Copilot) are licensed for Microsoft's builds only and are not there; open alternatives are.
+- **Themes, keybindings and settings** work the same: the same commands, shortcuts and `settings.json`.
+- **Bring your setup:** in VS Code, run **Profiles: Export Profile…** to save your settings, keybindings, snippets and extension list to a file; in Insilode, choose **Import Profile…** in **Preferences: Open Profiles (UI)**.
+<!-- TODO(import-from-vscode): the one-click "Import from VS Code" is in PR #28, not released. When it ships, replace the line above with: "Import your settings, keybindings, snippets and theme from VS Code or Cursor; extensions available on Open VSX are installed, the rest are listed." Never "all your extensions". Same in site/index.html and docs/design/messaging.md. -->
 
 ## See how your code runs
 
@@ -56,4 +67,4 @@ A running Insilode checks the latest GitHub release and shows **Update available
 
 Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately ([SECURITY.md](SECURITY.md)).
 
-MIT licensed; contributors sign a short [CLA](CLA.md). The Insilode name and logo have their own [policy](TRADEMARKS.md). Insilode builds on [VS Code](https://github.com/microsoft/vscode); the Claude and Codex marks belong to their owners.
+MIT licensed; contributors sign a short [CLA](CLA.md). The Insilode name and logo have their own [policy](TRADEMARKS.md). Insilode is built on [VS Code](https://github.com/microsoft/vscode) (Code - OSS) and is not affiliated with Microsoft; the Claude and Codex marks belong to their owners.
