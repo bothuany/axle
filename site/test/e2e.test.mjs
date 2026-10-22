@@ -231,7 +231,11 @@ test('home: the harness section is the real scan of the demo project, with its o
 test('home on a phone: no canvas until asked, then full screen; the page has no sideways scroll', { skip }, async () => {
 	const { page, problems } = await open('', { viewport: { width: 375, height: 812, isMobile: true, hasTouch: true }, agent: PHONE })
 	assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 375)
-	assert.ok(await page.$eval('.shot', s => s.getBoundingClientRect().top < innerHeight - 120), 'the hero loop shows in the first screen of a phone')
+	// Most of the hero loop is in the first screen of a 375x812 phone: at least 300 px of it above the fold (the loop is about 357 px tall).
+	await page.evaluate(() => document.fonts.ready)
+	const fold = await page.$eval('.shot video', v => ({ top: Math.round(v.getBoundingClientRect().top + scrollY), screen: innerHeight }))
+	assert.equal(fold.screen, 812)
+	assert.ok(fold.top + 300 <= fold.screen, `the hero loop starts at ${fold.top} px: too low for the first screen of a phone`)
 	assert.equal(await page.$eval('.shot video', v => v.poster.split('/').pop()), 'hero-loop-narrow-poster.jpg', 'a phone gets the crop of the window')
 	await wait(1500)
 	assert.equal(await page.$('.stage-frame'), null, 'the phone loads no canvas by itself')

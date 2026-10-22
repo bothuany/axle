@@ -1453,8 +1453,8 @@ figcaption {
 
   .nav {
     gap: 14px;
-    padding-top: 16px;
-    padding-bottom: 16px;
+    padding-top: 10px;
+    padding-bottom: 10px;
   }
 
   .nav-links {
@@ -1479,15 +1479,36 @@ figcaption {
   }
 
   .hero {
-    padding-top: 28px;
+    padding-top: 12px;
   }
 
   .ctas .btn {
     width: 100%;
   }
 
+  /* The first screen of a phone holds the slogan, the buttons and the top of the hero loop: the film is a compact row. */
+  .hero .ctas {
+    gap: 10px;
+  }
+
+  .hero .ctas .btn {
+    min-height: 48px;
+  }
+
   .film-open {
-    min-height: 44px;
+    min-height: 40px;
+    font-size: 16px;
+  }
+
+  .film-open svg {
+    width: 26px;
+    height: 26px;
+    padding: 8px 7px 8px 9px;
+  }
+
+  .hero [data-platforms] {
+    margin-top: 4px;
+    font-size: 14px;
   }
 
   .stage-wrap::before {
@@ -1497,19 +1518,20 @@ figcaption {
   }
 
   .hero h1 {
-    font-size: 32px;
+    font-size: 30px;
   }
 
   .hero .lede {
-    margin-top: 16px;
+    margin-top: 12px;
+    font-size: 18px;
   }
 
   .hero .ctas {
-    margin-top: 24px;
+    margin-top: 20px;
   }
 
   .shot {
-    margin: 28px 0 0;
+    margin: 20px 0 0;
   }
 
   .shot-video {
