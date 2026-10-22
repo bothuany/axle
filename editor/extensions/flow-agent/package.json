@@ -4,7 +4,7 @@
   "description": "Agents in terminals (Claude Code, Codex or any agent CLI) with the Agents dock, using each repo's own harness; the chat panel over ACP behind a setting.",
   "version": "0.1.0",
   "publisher": "flow",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "private": true,
   "engines": {
     "vscode": "^1.100.0"

@@ -172,6 +172,26 @@ jobs:
       - name: Set up Insilode
         run: npm run setup
 
+      # VS Code's deb step fetches Chromium's dpkg-shlibdeps.pl from raw.githubusercontent.com with a plain `curl`, and
+      # anonymous requests from runners get "429: Too Many Requests", saved as the script. A curl earlier on PATH sends this
+      # job's token to that host only, retries, and fails on an error page instead of saving it; every other URL is untouched.
+      - name: Authenticated downloads from raw.githubusercontent.com
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p "$RUNNER_TEMP/curl-shim"
+          cat > "$RUNNER_TEMP/curl-shim/curl" <<'SHIM'
+          #!/usr/bin/env bash
+          for arg in "$@"; do
+          	case "$arg" in
+          	https://raw.githubusercontent.com/*)
+          		exec /usr/bin/curl --fail --location --retry 5 --retry-delay 15 --retry-all-errors -H "Authorization: Bearer $GITHUB_TOKEN" "$@" ;;
+          	esac
+          done
+          exec /usr/bin/curl "$@"
+          SHIM
+          chmod +x "$RUNNER_TEMP/curl-shim/curl"
+          echo "$RUNNER_TEMP/curl-shim" >> "$GITHUB_PATH"
+
       - name: Build the packages
         run: npm run package -- --arch ${{ matrix.arch }}
 

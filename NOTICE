@@ -1,0 +1,12 @@
+Insilode
+Copyright (c) 2026 Recep Batuhan Dikmen
+
+Insilode is licensed under the GNU Affero General Public License, version 3 only (see LICENSE).
+Versions before 0.5.0 were released under the MIT License and keep it.
+
+Insilode is built on Code - OSS, the open-source core of Visual Studio Code:
+https://github.com/microsoft/vscode
+Copyright (c) Microsoft Corporation. Code - OSS is licensed under the MIT License;
+its licence and its third-party notices ship with every Insilode build
+(LICENSE.txt and ThirdPartyNotices.txt in the application folder).
+Insilode is not affiliated with or endorsed by Microsoft.

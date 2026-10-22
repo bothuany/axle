@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/bothuany/insilode/releases/latest"><img src="https://img.shields.io/badge/download-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-6f86ff" alt="Download for Windows, macOS and Linux"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6f86ff" alt="License: MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-6f86ff" alt="License: AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/agents-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20any%20CLI-6f86ff" alt="Agents: Claude Code, Codex and any CLI">
 </p>
 
@@ -67,4 +67,4 @@ A running Insilode checks the latest GitHub release and shows **Update available
 
 Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately ([SECURITY.md](SECURITY.md)).
 
-MIT licensed; contributors sign a short [CLA](CLA.md). Insilode™ and its logo are trademarks of Recep Batuhan Dikmen; see the [trademark policy](TRADEMARKS.md). Insilode is built on [VS Code](https://github.com/microsoft/vscode) (Code - OSS) and is not affiliated with Microsoft; the Claude and Codex marks belong to their owners.
+Open source under the [GNU AGPL v3](LICENSE) (versions before 0.5.0: MIT); contributors sign a short [CLA](CLA.md). Insilode™ and its logo are trademarks of Recep Batuhan Dikmen; see the [trademark policy](TRADEMARKS.md). Insilode is built on [VS Code](https://github.com/microsoft/vscode) (Code - OSS) and is not affiliated with Microsoft; the Claude and Codex marks belong to their owners.

@@ -20,6 +20,6 @@ By signing (commenting the sentence the CLA bot asks for on your pull request), 
 
 7. **Telling us about changes.** If you learn that any of the above stops being true, you tell the Maintainer.
 
-The Contribution stays available to everyone under the project's open source licence (today the [MIT License](LICENSE)) for the versions it was released in.
+The Contribution stays available to everyone under the project's open source licence (today the [GNU Affero General Public License v3](LICENSE)) for the versions it was released in.
 
 _This text is a plain-language agreement written for this project. It is not legal advice; if you or your employer need certainty, have it checked by a lawyer._
