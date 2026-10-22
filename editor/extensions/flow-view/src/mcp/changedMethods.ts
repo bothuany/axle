@@ -48,9 +48,79 @@ export function spansMatch(methods: MethodSpan[], text: string): boolean {
  * no context) gives `newStart` as the line right after it, so the gap lies between that line and the one before.
  */
 export function rangesFromHunks(hunks: HunkLike[]): LineRange[] {
-	return hunks.map(h => h.newLines > 0
+	return hunks.map(rangeOfHunk);
+}
+
+/** One hunk's lines in the current file (see `rangesFromHunks`). */
+export function rangeOfHunk(h: HunkLike): LineRange {
+	return h.newLines > 0
 		? { start: h.newStart, end: h.newStart + h.newLines - 1 }
-		: { start: h.newStart - 1, end: h.newStart, gap: true });
+		: { start: h.newStart - 1, end: h.newStart, gap: true };
+}
+
+/**
+ * Whether an edit at `r` belongs to the lines `start`..`end` (a method's span). Changed lines count when they overlap it;
+ * a gap only when both its sides are inside: lines removed just above a method are not an edit of that method.
+ */
+export function rangeTouches(r: LineRange, start: number, end: number): boolean {
+	return r.gap ? start <= r.start && r.end <= end : start <= r.end && r.start <= end;
+}
+
+/** The diff a card shows: lines added inside it (current, 1-based) and removed lines placed after a current line (0 = above the first). */
+export interface SpanDiff {
+	added: number[];
+	removed: { after: number; lines: string[] }[];
+	plus: number;
+	minus: number;
+}
+
+/** The part of `hunks` that falls in the lines `start`..`end`, or undefined when none does. */
+export function spanDiff(hunks: (HunkLike & { lines: string[] })[], start: number, end: number): SpanDiff | undefined {
+	const d: SpanDiff = { added: [], removed: [], plus: 0, minus: 0 };
+	for (const h of hunks) {
+		if (!rangeTouches(rangeOfHunk(h), start, end)) {
+			continue;
+		}
+		// The current line the next added line will be; removed lines before it sit after the line above it.
+		let line = h.newStart;
+		let pendingRemoved: string[] = [];
+		for (const l of h.lines) {
+			if (l.startsWith('-')) {
+				pendingRemoved.push(l.slice(1));
+				d.minus++;
+			} else if (l.startsWith('+')) {
+				if (pendingRemoved.length) {
+					d.removed.push({ after: line - 1, lines: pendingRemoved });
+					pendingRemoved = [];
+				}
+				if (line >= start && line <= end) {
+					d.added.push(line);
+				}
+				d.plus++;
+				line++;
+			}
+		}
+		if (pendingRemoved.length) {
+			d.removed.push({ after: line - 1, lines: pendingRemoved });
+		}
+	}
+	return d.plus || d.minus ? d : undefined;
+}
+
+/** What Undo writes for one hunk: 0-based lines `from` up to (not including) `to` of the current file become `lines`. */
+export interface LineEdit {
+	from: number;
+	to: number;
+	lines: string[];
+}
+
+/**
+ * The edits that put a hunk's old lines back. The current lines of the hunk start at `newStart` (1-based), which for a pure
+ * deletion is the line right after the gap: the old lines go in before it, at 0-based line `newStart - 1`.
+ */
+export function undoEdit(h: HunkLike & { lines: string[] }): LineEdit {
+	const from = h.newStart - 1;
+	return { from, to: from + h.newLines, lines: h.lines.filter(l => l.startsWith('-')).map(l => l.slice(1)) };
 }
 
 /**
@@ -63,7 +133,7 @@ export function methodsTouched<M extends MethodSpan>(methods: M[], ranges: LineR
 	let wholeFile = false;
 	for (const r of ranges) {
 		// A gap is in a method only when both its sides are: removing a whole method between two others is not an edit of either.
-		const inside = methods.filter(m => r.gap ? m.startLine <= r.start && r.end <= m.endLine : m.startLine <= r.end && r.start <= m.endLine);
+		const inside = methods.filter(m => rangeTouches(r, m.startLine, m.endLine));
 		if (!inside.length) {
 			wholeFile = true;
 		}

@@ -36,6 +36,7 @@ import { RoslynProvider, type FlowProvider, type FlowTarget } from './providers'
 import { registerResolveNames } from './resolveNames';
 import { registerSelectionActions } from './selectionAi';
 import { playTourFile } from './tourFile';
+import { parseFlowAsk } from './tour/ask';
 import { FlowTrail } from './trail';
 
 /** Everything the commands need, built once in `activate`. */
@@ -285,7 +286,13 @@ function registerAgentCommands({ context, panel, changes }: Flow) {
 
 		// "Ask the agent about this flow": the flow as a markdown file handed to the chosen agent, so it reads
 		// exact file:line spans instead of searching for them.
-		vscode.commands.registerCommand(Command.askAgent, async (label: string, flowText: string) => {
+		vscode.commands.registerCommand(Command.askAgent, async (rawLabel: unknown, rawText: unknown) => {
+			// Checked again here: any extension can run this command, and the label becomes a file name.
+			const ask = parseFlowAsk(rawLabel, rawText);
+			if (!ask) {
+				return;
+			}
+			const { label, text: flowText } = ask;
 			const dir = vscode.Uri.joinPath(context.globalStorageUri, 'flows');
 			await vscode.workspace.fs.createDirectory(dir);
 			const file = vscode.Uri.joinPath(dir, `${label.replace(/[^\w.-]+/g, '_')}.flow.md`);

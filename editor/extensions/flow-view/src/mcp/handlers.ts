@@ -15,13 +15,14 @@ import { innermost, type Analyzer } from '../analyzer';
 import { entryName, type Endpoints, type Entry, type Source } from '../backends';
 import { formatLint, lintBoard } from '../board/lint';
 import { importMermaid } from '../board/mermaidImport';
-import { parseBoard, parseBoardWithNotes, type BoardHighlight, type BoardSpec } from '../board/spec';
+import { parseBoardWithNotes, type BoardHighlight, type BoardSpec } from '../board/spec';
 import { describeCandidate, matchSymbols, symbolQuery, type SymbolCandidate } from '../board/symbols';
 import { annotate, architectureFromGraph, checkScope, erFromTables, sequenceFromFlow, stateFromEnum, strings, type Generated } from '../board/fromCode';
 import { cleanBoardId, type BoardStore } from '../board/store';
 import type { ChangeSet, ChangeSetTrace } from '../changeSet';
 import { POLY_LANGUAGES, type PolyIndex } from '../poly/client';
 import type { FlowProvider, FlowTarget } from '../providers';
+import { changeMark, diffOpening, GitStatus, statusesByFile } from './changes';
 import { flowToText } from './flowtext';
 import { errorResult, type ToolResult } from './protocol';
 import { resolveInWorkspace } from './registry';
@@ -118,7 +119,6 @@ const LFS_FILTER: Record<string, (v: string) => boolean> = {
 	process: v => v === 'git-lfs filter-process',
 	required: v => v === 'true',
 };
-const GitStatus = { IndexAdded: 1, IndexDeleted: 2, IndexRenamed: 3, Deleted: 6, Untracked: 7, IntentToAdd: 9, IntentToRename: 10 } as const;
 const SKIP_DIRS = new Set(['node_modules', 'bin', 'obj', 'dist', 'out', 'build', 'target', 'vendor', 'packages', '__pycache__', 'venv']);
 
 const execFileP = promisify(execFile);
@@ -178,7 +178,7 @@ export class AgentTools {
 	}
 
 	/** A file the agent named, inside the workspace (also after symbolic links), spelled the way VS Code spells it. */
-	private async safeFile(input: unknown, mustExist = true): Promise<string> {
+	private async safeFile(input: unknown, mustExist = true, realRoots?: string[]): Promise<string> {
 		if (typeof input !== 'string' || !input.trim()) {
 			throw new Error('A file path is required.');
 		}
@@ -188,7 +188,7 @@ export class AgentTools {
 		}
 		try {
 			const real = await fs.realpath(lexical);
-			const roots = await Promise.all(this.folders.map(f => fs.realpath(f).catch(() => f)));
+			const roots = realRoots ?? await this.realRoots();
 			if (!roots.some(r => resolveInWorkspace(real, [r]))) {
 				throw new Error(`"${input}" resolves outside this workspace.`);
 			}
@@ -320,7 +320,7 @@ export class AgentTools {
 			return text([`${none}.`, ...notes].join('\n'));
 		}
 		const title = typeof a.title === 'string' && a.title.trim() ? a.title.trim().slice(0, 80) : `Insilode: ${since ? `Changes since ${since}` : 'Changes'} (${list.length} file${list.length === 1 ? '' : 's'})`;
-		await this.openChanges(changes, title);
+		await this.openChanges(changes, title, { preserveFocus: true });
 		const multi = new Set(list.map(r => r.repo)).size > 1;
 		const out = [
 			`Opened the diff of ${list.length} file${list.length === 1 ? '' : 's'} in Insilode (working tree against ${since ?? 'HEAD'}; A new, M modified, D deleted, R renamed):`,
@@ -340,8 +340,17 @@ export class AgentTools {
 	}
 
 	/** The changes in VS Code's multi-file diff editor (nothing opens when there are none). */
-	async openChanges(changes: Changes, title: string) {
-		if (changes.list.length) {
+	async openChanges(changes: Changes, title: string, opts: { preserveFocus?: boolean } = {}) {
+		// An agent's open_diff must not pull the keyboard out of the terminal the user types in. VS Code's multi-file diff editor
+		// (`vscode.changes`) always takes focus and has no option against it; the two-sided diff editor does, so one changed
+		// file opens there. Several files still open in the multi-file editor (a core change would be needed to keep focus).
+		const how = diffOpening(changes.list, opts.preserveFocus === true);
+		if (how === 'diff') {
+			const [one] = changes.list;
+			await vscode.commands.executeCommand('vscode.diff', one.original, one.modified, title, { preserveFocus: true, preview: true });
+			return;
+		}
+		if (how === 'changes') {
 			await vscode.commands.executeCommand('vscode.changes', title, changes.list.map(r => [r.uri, r.original, r.modified]));
 		}
 	}
@@ -425,6 +434,7 @@ export class AgentTools {
 		const rows = new Map<string, ChangeRow>();
 		const notes: string[] = [];
 		const names = new Set<string>();
+		const roots = await this.realRoots();
 		for (const repo of repos.values()) {
 			const root = repo.rootUri.fsPath;
 			// A repository that belongs to this window: inside a workspace folder, or one that contains it.
@@ -453,6 +463,7 @@ export class AgentTools {
 				}
 				all = [...diff, ...(repo.state.untrackedChanges ?? []), ...repo.state.workingTreeChanges.filter(c => c.status === GitStatus.Untracked)];
 			}
+			const kindsOf = statusesByFile(all);
 			for (const c of all) {
 				const file = c.uri.fsPath;
 				// A submodule shows up as a changed "file" in its superproject: it is a folder with a repository of its own.
@@ -463,18 +474,15 @@ export class AgentTools {
 					continue;
 				}
 				// A symbolic link inside the workspace can point anywhere: the file is read below, so it must be inside by its real path too.
-				if (!await this.inside(c.uri)) {
+				if (!await this.inside(c.uri, roots)) {
 					continue;
 				}
-				const kinds = all.filter(x => x.uri.fsPath === file).map(x => x.status);
-				const added = kinds.some(k => k === GitStatus.IndexAdded || k === GitStatus.Untracked || k === GitStatus.IntentToAdd);
-				const deleted = !added && kinds.every(k => k === GitStatus.IndexDeleted || k === GitStatus.Deleted);
-				const renamed = kinds.includes(GitStatus.IndexRenamed) || kinds.includes(GitStatus.IntentToRename);
+				const { added, deleted, renamed, mark } = changeMark(kindsOf.get(file) ?? [c.status]);
 				rows.set(file, {
 					uri: c.uri,
 					original: added ? undefined : api.toGitUri(renamed ? c.originalUri : c.uri, ref),
 					modified: deleted ? undefined : c.uri,
-					mark: added ? 'A' : deleted ? 'D' : renamed ? 'R' : 'M',
+					mark,
 					repo: path.basename(root),
 				});
 			}
@@ -558,8 +566,9 @@ export class AgentTools {
 		const limit = num(a.limit, 30, 100);
 		const found = await within(Promise.resolve(vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', query)), 20_000, 'the symbol search') ?? [];
 		const inside: vscode.SymbolInformation[] = [];
+		const roots = await this.realRoots();
 		for (const sym of found) {
-			if (await this.inside(sym.location.uri)) {
+			if (await this.inside(sym.location.uri, roots)) {
 				inside.push(sym);
 			}
 		}
@@ -594,8 +603,13 @@ export class AgentTools {
 	}
 
 	/** Whether a file is inside the workspace by the same test `safeFile` applies (symbolic links resolved). */
-	private async inside(uri: vscode.Uri): Promise<boolean> {
-		return uri.scheme === 'file' && await this.safeFile(uri.fsPath).then(() => true, () => false);
+	private async inside(uri: vscode.Uri, realRoots?: string[]): Promise<boolean> {
+		return uri.scheme === 'file' && await this.safeFile(uri.fsPath, true, realRoots).then(() => true, () => false);
+	}
+
+	/** The workspace folders by their real paths. A loop over many files asks once and passes them to `inside`, not once per file. */
+	private realRoots(): Promise<string[]> {
+		return Promise.all(this.folders.map(f => fs.realpath(f).catch(() => f)));
 	}
 
 	private where(l: vscode.Location | vscode.LocationLink) {
@@ -638,8 +652,9 @@ export class AgentTools {
 		const limit = num(a.limit, 40, 150);
 		const refs = await within(Promise.resolve(vscode.commands.executeCommand<vscode.Location[]>('vscode.executeReferenceProvider', doc.uri, position)), 30_000, 'the reference search') ?? [];
 		const inside: vscode.Location[] = [];
+		const roots = await this.realRoots();
 		for (const r of refs) {
-			if (await this.inside(r.uri)) {
+			if (await this.inside(r.uri, roots)) {
 				inside.push(r);
 			}
 		}
@@ -1253,8 +1268,9 @@ export class AgentTools {
 	private async symbolCandidates(query: string): Promise<SymbolCandidate[]> {
 		const symbols = await Promise.resolve(vscode.commands.executeCommand<vscode.SymbolInformation[]>('vscode.executeWorkspaceSymbolProvider', query)).catch(() => undefined) ?? [];
 		const out: SymbolCandidate[] = [];
+		const roots = await this.realRoots();
 		for (const s of symbols.slice(0, 200)) {
-			if (await this.inside(s.location.uri)) {
+			if (await this.inside(s.location.uri, roots)) {
 				out.push({ name: s.name, container: s.containerName || undefined, kind: vscode.SymbolKind[s.kind].toLowerCase(), file: s.location.uri.fsPath, line: s.location.range.start.line + 1 });
 			}
 		}

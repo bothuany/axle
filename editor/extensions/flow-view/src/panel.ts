@@ -16,7 +16,7 @@ import { CardLanguage, cardQuery } from './language';
 import { CardOverlays } from './overlay';
 import type { FlowNode, FlowProvider, FlowTarget } from './providers';
 import { flowRoot } from './root';
-import { MAX_NOTES, noteText, parsePointAsk, parseTourAsk, place, selectionPrompt, tourAskPrompt } from './tour/ask';
+import { MAX_NOTES, noteText, parseFlowAsk, parsePointAsk, parseTourAsk, place, selectionPrompt, tourAskPrompt } from './tour/ask';
 import { readTextIn } from './tour/files';
 import { GazeLog, gazeTour, parseGaze } from './tour/gaze';
 import { tourReport } from './tour/validate';
@@ -452,7 +452,11 @@ export class FlowPanel implements vscode.Disposable {
 			return;
 		}
 		if (m.type === 'ask') {
-			await vscode.commands.executeCommand(Command.askAgent, m.label, m.context);
+			// The canvas is not trusted with what reaches the agent: text only, a short label, a bounded flow (tour/ask.ts).
+			const ask = parseFlowAsk(m.label, m.context);
+			if (ask) {
+				await vscode.commands.executeCommand(Command.askAgent, ask.label, ask.text);
+			}
 			return;
 		}
 		if (m.type !== 'request') {
