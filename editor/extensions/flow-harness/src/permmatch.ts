@@ -315,10 +315,64 @@ export function substitutions(command: string, powershell = false): { bodies: st
 	return { bodies: bodies.map(b => b.trim()).filter(Boolean), ok: !quote };
 }
 
-/** Every command nested in `command`, at any depth, each split at its operators: what deny and ask rules must reach. */
+/** The `$( )` and backtick substitutions in a here-document's body, as written: everything else in it is text. */
+function bodySubstitutions(body: string): string[] {
+	const out: string[] = [];
+	for (let i = 0; i < body.length; i++) {
+		if (body[i] === '\\') {
+			i++;
+		} else if (body[i] === '$' && body[i + 1] === '(') {
+			const end = closingParen(body, i + 1, false);
+			out.push(body.slice(i, end < 0 ? body.length : end + 1) + (end < 0 ? ')' : ''));
+			i = end < 0 ? body.length : end;
+		} else if (body[i] === '`') {
+			const end = body.indexOf('`', i + 1);
+			out.push(body.slice(i, end < 0 ? body.length : end + 1) + (end < 0 ? '`' : ''));
+			i = end < 0 ? body.length : end;
+		}
+	}
+	return out;
+}
+
+/**
+ * A command with its here-document bodies taken out: they are data, not commands (Claude Code writes every commit
+ * message as `git commit -m "$(cat <<'EOF' … EOF)"`), so their lines, quotes and parentheses must not be read as shell.
+ * A body under a quoted delimiter (`<<'EOF'`, `<<"EOF"`, `<<\EOF`) expands nothing and is dropped; under a bare one
+ * its substitutions still run, so they are kept, on the line that opened the here-document.
+ */
+export function stripHeredocs(command: string): string {
+	if (!command.includes('<<')) {
+		return command;
+	}
+	const lines = command.split('\n');
+	const out: string[] = [];
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+		const kept: string[] = [];
+		for (const m of line.matchAll(/<<(?!<)(-?)[ \t]*(?:'([^'\n]+)'|"([^"\n]+)"|(\\?)([A-Za-z_][\w.-]*))/g)) {
+			const word = m[2] ?? m[3] ?? m[5];
+			const quoted = m[2] !== undefined || m[3] !== undefined || m[4] === '\\';
+			const body: string[] = [];
+			for (i++; i < lines.length && (m[1] ? lines[i].replace(/^\t+/, '') : lines[i]) !== word; i++) {
+				body.push(lines[i]);
+			}
+			if (!quoted) {
+				kept.push(...bodySubstitutions(body.join('\n')));
+			}
+		}
+		out.push(kept.length ? `${line} ${kept.join(' ')}` : line);
+	}
+	return out.join('\n');
+}
+
+/**
+ * Every command nested in `command`, at any depth, each split at its operators: what deny and ask rules must reach. Each
+ * level is read past its keywords and wrappers first, so `time (git push)` and `$(if (git push); then …)` are reached.
+ */
 function allNested(command: string, powershell: boolean): string[] {
 	const out: string[] = [];
-	for (const body of substitutions(command, powershell).bodies) {
+	const cmd = stripWrappers(commandOfPart(command) ?? command, false).command;
+	for (const body of substitutions(cmd, powershell).bodies) {
 		for (const part of splitCompound(body) ?? [body]) {
 			out.push(part, ...allNested(part, powershell));
 		}
@@ -458,7 +512,8 @@ const GIT_READ_ONLY = new Set(['status', 'diff', 'log', 'show', 'blame', 'rev-pa
 const FIND_ACTIONS = /\s-(?:exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls|files0-from)\b/;
 
 /** Claude Code's built-in read-only set (approximated): these run without a prompt when no rule says otherwise. */
-export function isReadOnlyCommand(command: string): boolean {
+export function isReadOnlyCommand(text: string): boolean {
+	const command = stripHeredocs(text);
 	const w = words(command);
 	const program = (w[0] ?? '').replace(/^.*\//, '');
 	// A redirect writes a file: the Edit rules decide that, so it is not read-only on its own.
@@ -1082,11 +1137,13 @@ const programOf = (command: string) => (words(command)[0] ?? '').replace(/^.*\//
 
 function simulateBash(call: Call, rules: Rule[], ctx: SimContext, notes: string[]): Verdict {
 	const tool = call.tool;
-	const split = splitCompound(call.arg);
+	// Here-document bodies are data: their lines are not commands (PowerShell has none).
+	const text = tool === 'Bash' ? stripHeredocs(call.arg) : call.arg;
+	const split = splitCompound(text);
 	// The parts that run something, loop and conditional keywords taken off; a loop header or `done` runs nothing.
-	const parts = (split ?? [call.arg.trim()]).map(commandOfPart).filter((x): x is string => !!x);
+	const parts = (split ?? [text.trim()]).map(commandOfPart).filter((x): x is string => !!x);
 	if (!parts.length) {
-		parts.push(call.arg.trim());
+		parts.push(text.trim());
 	}
 	const bashRules = rules.filter(r => {
 		const p = parseRule(r.pattern);
@@ -1155,7 +1212,8 @@ function simulateBash(call: Call, rules: Rule[], ctx: SimContext, notes: string[
 		// A part that runs nested commands is approved only by an allow rule for the part itself, and only when every nested
 		// command is allowed on its own: each one goes through the whole decision (rules, safety checks, read-only set,
 		// mode), and the most restrictive answer wins. The read-only set and acceptEdits never cover such a part.
-		const subs = substitutions(part, powershell);
+		// Read past wrappers and keywords, so `time (npm publish)` counts as running a subshell.
+		const subs = substitutions(stripWrappers(part, false).command, powershell);
 		const hasNested = !subs.ok || subs.bodies.length > 0;
 		let nestedOk = subs.ok;
 		for (const body of subs.bodies) {

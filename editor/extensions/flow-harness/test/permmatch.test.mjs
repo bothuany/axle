@@ -347,6 +347,16 @@ const NESTED_AND_REDIRECTS = [
 	['echo $(git status)', [rule('Bash(echo *)')], 'allow', 'rule', 'the outer rule and a read-only nested command'],
 	['diff <(ls a) <(ls b)', [rule('Bash(diff *)'), rule('Bash(ls *)')], 'allow', 'rule'],
 	['echo $(npm test)', [rule('Bash(echo *)'), rule('Bash(npm test)')], 'allow', 'rule'],
+	// Deny and ask reach a subshell behind a wrapper, and one behind a keyword inside a substitution.
+	['time (git push --force)', [rule('Bash(git push *)', 'deny')], 'deny', 'rule'],
+	['echo $(if (git push -f); then :; fi)', [rule('Bash(git push *)', 'deny')], 'deny', 'rule'],
+	['time (npm publish)', [rule('Bash(time *)')], 'ask', 'mode', 'a prefix rule does not approve the subshell behind the wrapper'],
+	// Here-document bodies are data; under a bare delimiter their substitutions still run.
+	["git commit -m \"$(cat <<'EOF'\nDon't (really) break it\n1) first\nEOF\n)\"", [rule('Bash(git commit *)')], 'allow', 'rule', 'the commit message form Claude Code uses'],
+	["git commit -m \"$(cat <<'EOF'\nDon't (really) break it\n1) first\nEOF\n)\"", [], 'ask', 'mode'],
+	['cat <<EOF\n$(rm -rf /)\nEOF', [], 'ask', 'safety'],
+	["cat <<'EOF'\n$(rm -rf /)\nEOF", [], 'allow', 'builtin'],
+	['cat <<-EOF\n\tplain text; with (parens)\n\tEOF', [], 'allow', 'builtin'],
 	// Quoted and escaped text is literal: nothing nested runs.
 	["echo '$(rm -rf /)'", [], 'allow', 'builtin'],
 	['echo \\$(x)', [], 'allow', 'builtin'],
