@@ -5,6 +5,7 @@
 //   - the two pages that sit around the canvas in the real app: the Agents dock page (flow-agent's dockPage.ts) and the desktop
 //     status overlay (the page inside editor/patches/flow-desktop.patch), each with a small shim so it runs in an iframe.
 //   node scripts/site-data.mjs      writes site/public/data/demo.json and site/public/pages/
+//   DEMO_CHANGED=<dir>               lays <dir> over base instead of site/demo/changed (the launch film's change)
 // Needs `npm ci && node esbuild.mjs` in editor/extensions/flow-view first (the worker and the tree-sitter grammars live in its out/).
 import { Worker } from 'node:worker_threads'
 import { createRequire } from 'node:module'
@@ -17,6 +18,7 @@ import { EXTENSIONS, ROOT, launchSync } from './lib.mjs'
 const FLOW_VIEW = join(EXTENSIONS, 'flow-view')
 const FLOW_AGENT = join(EXTENSIONS, 'flow-agent')
 const DEMO = join(ROOT, 'site', 'demo')
+const CHANGED = process.env.DEMO_CHANGED || join(DEMO, 'changed')
 const PUBLIC = join(ROOT, 'site', 'public')
 const OUT = join(PUBLIC, 'data', 'demo.json')
 /** The same data as a TypeScript literal that must satisfy the site's types: `npm run typecheck` in site/ then fails when the data and protocol/flow.ts disagree. */
@@ -71,7 +73,7 @@ function assemble() {
 	git(before, 'commit', '-q', '-m', 'Orders, billing and shipping services')
 	const after = realpathSync.native(mkdtempSync(join(tmpdir(), 'insilode-site-')))
 	cpSync(before, after, { recursive: true })
-	cpSync(join(DEMO, 'changed'), after, { recursive: true })
+	cpSync(CHANGED, after, { recursive: true })
 	lf(after)
 	git(after, 'add', '-A')
 	git(after, 'commit', '-q', '-m', 'Add discount codes to orders')
@@ -397,7 +399,9 @@ try {
 
 	// The change set: what the second commit changed, drawn by the same code the editor uses for "show the changes in flow".
 	const files = git(dir, 'diff', '--name-only', 'HEAD~1', 'HEAD').split('\n').filter(Boolean).map(f => join(dir, f))
-	const was = new Map(files.map(f => [f, git(dir, 'show', `HEAD~1:${f.slice(dir.length + 1).split(sep).join('/')}`)]))
+	// A file the change added has no earlier version: every line of it is new.
+	const added = new Set(git(dir, 'diff', '--name-only', '--diff-filter=A', 'HEAD~1', 'HEAD').split('\n').filter(Boolean).map(f => join(dir, f)))
+	const was = new Map(files.map(f => [f, added.has(f) ? '' : git(dir, 'show', `HEAD~1:${f.slice(dir.length + 1).split(sep).join('/')}`)]))
 	const hunks = new Map(files.map(f => [f, hunksOf(was.get(f), readFileSync(f, 'utf8'))]))
 	const sameFile = (a, b) => a.split(sep).join('/') === b.split(sep).join('/')
 	const annotate = async root => {

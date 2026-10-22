@@ -1,0 +1,60 @@
+{
+  "voice": "kokoro-82m bm_george (the user pick); Chatterbox takes stay available with tools/vo.py",
+  "lines": [
+    {
+      "id": "01a",
+      "text": "Your agent just changed fourteen files."
+    },
+    {
+      "id": "01b",
+      "text": "Where?",
+      "say": "But where?",
+      "keepFrom": "where"
+    },
+    {
+      "id": "02",
+      "text": "A diff tells you which lines. Not what they reach.",
+      "speed": 0.9
+    },
+    {
+      "id": "03",
+      "text": "Now see the change on how your code runs: every endpoint it touches, cut down to the methods that changed."
+    },
+    {
+      "id": "04",
+      "text": "Across services and languages. From the controller, over HTTP and Kafka, to the table it writes."
+    },
+    {
+      "id": "05",
+      "text": "Ask how something works, and the agent walks you through it, on the real code, step by step."
+    },
+    {
+      "id": "06a",
+      "text": "Run Claude Code and Codex side by side. See which one needs you, and why."
+    },
+    {
+      "id": "06c",
+      "text": "Or switch them to pixel pets."
+    },
+    {
+      "id": "06b",
+      "text": "Even when the editor is in the background."
+    },
+    {
+      "id": "07",
+      "text": "Sequence, ER and architecture diagrams, read straight from the code. Nothing invented."
+    },
+    {
+      "id": "08",
+      "text": "Draw the skeleton, write it yourself, and hand it over. Your harness, scored."
+    },
+    {
+      "id": "09",
+      "text": "See how your code runs."
+    },
+    {
+      "id": "10",
+      "text": "{spokenName}. Free and open source."
+    }
+  ]
+}

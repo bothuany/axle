@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Launch film · storyboard v2</title>
+<style>
+@font-face { font-family: "Instrument Sans"; font-weight: 500; src: url(assets/fonts/instrument-sans-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 600; src: url(assets/fonts/instrument-sans-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Sans"; font-weight: 700; src: url(assets/fonts/instrument-sans-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; src: url(assets/fonts/jetbrains-mono-latin-400-normal.woff2) format("woff2"); }
+/* Colours sampled from Insilode's own rendering (Insilode Dark): editor #0f0f0f, canvas #1a1a1b, signal #6f86ff, button #5b72ff. */
+:root {
+  --ground: #0f0f0f; --canvas: #1a1a1b; --text: #e8e8ea; --muted: #8a8a90; --signal: #6f86ff; --add: #5fe0a1; --del: #ff6b7d; --warn: #f0a33a;
+  --sheet: #e9e7e2; --sheet-ink: #1c1f26; --sheet-muted: #6a6f7a;
+  --sans: "Instrument Sans", system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--sheet); color: var(--sheet-ink); font-family: var(--sans); padding: 48px 40px 80px; }
+header { display: flex; align-items: baseline; gap: 24px; flex-wrap: wrap; margin-bottom: 12px; }
+header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
+header p { color: var(--sheet-muted); font-size: 17px; flex: 1; min-width: 300px; }
+.lede { font-size: 15px; color: var(--sheet-muted); margin-bottom: 30px; max-width: 1100px; line-height: 1.5; }
+.tag { font-family: var(--mono); font-size: 13px; border: 1px solid #c9c6bf; border-radius: 4px; padding: 4px 8px; }
+.act { grid-column: 1 / -1; font-size: 14px; font-weight: 600; color: var(--sheet-muted); border-top: 1px solid #cfccc5; padding-top: 10px; margin-top: 8px; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 24px; }
+@media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+figure { display: flex; flex-direction: column; gap: 8px; }
+.label { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12px; color: var(--sheet-muted); }
+.label b { color: var(--sheet-ink); font-weight: 600; }
+.note { font-size: 14px; line-height: 1.45; }
+.src { font-size: 12px; color: var(--sheet-muted); }
+.chip-seam { align-self: flex-start; font-size: 12px; border-radius: 20px; padding: 2px 10px; background: #d9d6cf; }
+
+/* A frame: 1cqw = 19.2 px of the 1920 px film frame. Captures are placed and scaled (the camera); only type, rings and captions are added. */
+.f { position: relative; aspect-ratio: 16 / 9; container-type: inline-size; background: var(--ground); color: var(--text); overflow: hidden; border-radius: 6px; }
+.f img { position: absolute; display: block; }
+.dim { filter: brightness(.35); }
+.stmt { position: absolute; font-family: var(--sans); font-weight: 700; letter-spacing: -0.03em; line-height: 1.02; color: #f4f4f6; }
+.cap { position: absolute; left: 50%; transform: translateX(-50%); bottom: 5.5cqw; text-align: center; white-space: nowrap; padding: .5cqw 1.4cqw; border-radius: .6cqw; background: rgba(15,15,15,.78); font-family: var(--sans); font-weight: 500; font-size: 2.3cqw; color: #f4f4f6; text-shadow: 0 .1cqw .8cqw rgba(0,0,0,.9); }
+.ring { position: absolute; border: .2cqw solid var(--signal); border-radius: .8cqw; box-shadow: 0 0 0 100cqw rgba(0,0,0,.28); }
+.ring.amber { border-color: var(--warn); }
+.mono { font-family: var(--mono); }
+.pre > div { white-space: pre; }
+.pending { position: absolute; display: flex; flex-direction: column; gap: .6cqw; align-items: center; justify-content: center; text-align: center; border: .1cqw dashed #4a4a50; border-radius: .6cqw; color: var(--muted); font-size: 1.1cqw; padding: 1cqw; }
+.pending b { color: var(--text); font-size: 1.4cqw; }
+.badge { position: absolute; left: 1.2cqw; top: 1.2cqw; font-family: var(--mono); font-size: .9cqw; padding: .2cqw .6cqw; border-radius: .3cqw; background: rgba(240,163,58,.18); color: var(--warn); }
+.name::after { content: "Insilode"; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Launch film · storyboard v2</h1>
+  <p>Your agent changed the code. The editor shows you where, on how it runs.</p>
+  <span class="tag">1920×1080 · 80 s · 10 beats · VO + captions</span>
+</header>
+<p class="lede">v2: every product frame is a real capture of the app, rendered by its own code and CSS (the canvas, its tour, the Agents dock and the status island, on the Harbor Goods demo with a real 14-file change). The film only adds framing, camera moves, rings, captions and type. Frames 07 and 08 still need their captures (marked). The product name is one token (<span class="mono">brand.json</span>); "Insilode" below is its current value.</p>
+
+<div class="grid">
+<div class="act">Act 1 · the problem (no music)</div>
+
+<!-- 01 -->
+<figure>
+  <div class="f" id="frame-01">
+    <img class="dim" src="storyboard/captures/dock.jpg" alt="" style="right:4cqw;top:6cqw;width:30cqw">
+    <img src="storyboard/captures/dock.jpg" alt="" style="right:4cqw;top:6cqw;width:30cqw;clip-path:inset(11% 0 46% 0)">
+    <div class="ring amber" style="right:3.6cqw;top:9.2cqw;width:30.8cqw;height:17.2cqw;box-shadow:none"></div>
+    <div class="stmt" style="left:6cqw;top:20cqw;font-size:5.6cqw;width:54cqw">Your agent just changed 14 files.</div>
+    <div class="stmt" style="left:6cqw;top:38cqw;font-size:4.4cqw;color:var(--muted)">Where?</div>
+  </div>
+  <div class="label"><b>01 · HOOK</b><span>frame-01 · 0.0–6.0</span></div>
+  <p class="note"><b>The dock row turns amber first (0.1 s):</b> Claude asks to edit main.py, models.py, service.py and … The statement enters word by word on the VO; "Where?" holds alone. No music, no logo.</p>
+  <p class="src">Real: Agents dock page (flow-agent dockPage.ts), scripted session.</p>
+  <span class="chip-seam">hard cut</span>
+</figure>
+
+<!-- 02 -->
+<figure>
+  <div class="f" id="frame-02">
+    <div class="mono pre" style="position:absolute;left:5cqw;top:5cqw;font-size:1.45cqw;line-height:1.6;color:#cfcfd4">
+<div>$ git diff --stat HEAD~1</div>
+<div> billing-service/app/main.py                        |  2 <span style="color:var(--add)">+</span><span style="color:var(--del)">-</span></div>
+<div> billing-service/app/models.py                      |  2 <span style="color:var(--add)">++</span></div>
+<div> billing-service/app/service.py                     | 10 <span style="color:var(--add)">+++++++</span><span style="color:var(--del)">---</span></div>
+<div> billing-service/app/tasks.py                       |  5 <span style="color:var(--add)">+++</span><span style="color:var(--del)">--</span></div>
+<div> .../java/com/harborgoods/orders/BillingClient.java |  4 <span style="color:var(--add)">+++</span><span style="color:var(--del)">-</span></div>
+<div> .../java/com/harborgoods/orders/DiscountCode.java  | 29 <span style="color:var(--add)">++++++++++++++++++++++++++++</span></div>
+<div style="filter:blur(.1cqw)"> .../com/harborgoods/orders/DiscountRepository.java |  8 <span style="color:var(--add)">++++++++</span></div>
+<div style="filter:blur(.2cqw)"> .../main/java/com/harborgoods/orders/Order.java    | 21 <span style="color:var(--add)">++++++++++++++++++</span><span style="color:var(--del)">--</span></div>
+<div style="filter:blur(.3cqw)"> .../com/harborgoods/orders/OrderController.java    |  9 <span style="color:var(--add)">++++++++</span><span style="color:var(--del)">-</span></div>
+<div style="filter:blur(.4cqw)"> .../com/harborgoods/orders/OrderRepository.java    |  2 <span style="color:var(--add)">++</span></div>
+<div style="filter:blur(.5cqw)"> .../java/com/harborgoods/orders/OrderService.java  | 21 <span style="color:var(--add)">++++++++++++++++++</span><span style="color:var(--del)">---</span></div>
+<div style="filter:blur(.6cqw);opacity:.8"> .../java/com/harborgoods/shipping/OrderEvents.java |  3 <span style="color:var(--add)">++</span><span style="color:var(--del)">-</span></div>
+<div style="filter:blur(.7cqw);opacity:.6"> 14 files changed, 112 insertions(+), 16 deletions(-)</div>
+    </div>
+    <div class="cap">A diff tells you which lines. Not what they reach.</div>
+  </div>
+  <div class="label"><b>02 · DIFF WALL</b><span>frame-02 · 6.0–12.0</span></div>
+  <p class="note"><b>A tick per path as it lands.</b> The camera drifts down the list and it loses focus. At 11 s the paths fold away and the canvas comes in.</p>
+  <p class="src">Real command output: <span class="mono">git diff --stat</span> of the film's commit (14 files, +112 −16).</p>
+  <span class="chip-seam">cut on the downbeat</span>
+</figure>
+
+<div class="act">Act 2 · the turn (music enters at 12.0)</div>
+
+<!-- 03 -->
+<figure>
+  <div class="f" id="frame-03">
+    <img src="storyboard/captures/changes.jpg" alt="" style="left:-1cqw;top:0;width:167cqw">
+    <div class="ring" style="left:1.6cqw;top:6.2cqw;width:19.8cqw;height:3.6cqw"></div>
+    <div class="ring" style="left:29cqw;top:.5cqw;width:12.2cqw;height:2.4cqw;box-shadow:none"></div>
+    <div class="cap">The editor draws the change on how your code runs.</div>
+  </div>
+  <div class="label"><b>03 · THE TURN</b><span>frame-03 · 12.0–22.0</span></div>
+  <p class="note"><b>The canvas fades up on the downbeat, already moving:</b> a slow push from the change set's root ("14 changed files · 9 endpoints", "Affects 9 endpoints") across the tables the change touches, then down to the green and red cards.</p>
+  <p class="src">Real: the canvas (ui/) showing the 14-file change set, flow-view's own changeSet code.</p>
+  <span class="chip-seam">push in → 04</span>
+</figure>
+
+<!-- 04 -->
+<figure>
+  <div class="f" id="frame-04">
+    <img src="storyboard/captures/order-after.jpg" alt="" style="left:-126cqw;top:-76.4cqw;width:238cqw">
+    <div class="ring" style="left:80.2cqw;top:23.2cqw;width:12.2cqw;height:3cqw"></div>
+    <div class="cap">Across services and languages, to the table it writes.</div>
+  </div>
+  <div class="label"><b>04 · ACROSS SERVICES</b><span>frame-04 · 22.0–30.0</span></div>
+  <p class="note"><b>The camera keeps moving down the order flow:</b> applyDiscount in green, then BillingClient's red and green lines with the "+ create_invoice" link into the Python service, then announce's "+ onOrderPlaced" Kafka link. A ring follows each link as the VO names it.</p>
+  <p class="src">Real: POST /orders flow after the change.</p>
+  <span class="chip-seam">tour starts in place</span>
+</figure>
+
+<div class="act">Act 3 · three proofs</div>
+
+<!-- 05 -->
+<figure>
+  <div class="f" id="frame-05">
+    <img src="storyboard/captures/tour-3500.jpg" alt="" style="left:-54cqw;top:-33.8cqw;width:200cqw">
+    <div class="cap">Ask how something works. It walks you through it.</div>
+  </div>
+  <div class="label"><b>05 · GUIDED TOUR</b><span>frame-05 · 30.0–40.0</span></div>
+  <p class="note"><b>The ghost cursor glides first;</b> the camera follows with a slight lag. The tour's own caption ("Agent edit: 2 lines added, 1 removed"), its step bar (1 / 3) and the dimmed cards around the lit one.</p>
+  <p class="src">Real: the canvas's own "Review 3 changes" tour (ui/src/tour). In the build: the ask-and-answer tour from the point-and-ask box.</p>
+  <span class="chip-seam">window recedes</span>
+</figure>
+
+<!-- 06 -->
+<figure>
+  <div class="f" id="frame-06">
+    <img class="dim" src="storyboard/captures/changes.jpg" alt="" style="left:0;top:0;width:100cqw">
+    <img src="storyboard/captures/island.jpg" alt="" style="left:31cqw;top:1.5cqw;width:38cqw">
+    <img src="storyboard/captures/dock.jpg" alt="" style="right:5cqw;top:11cqw;width:26cqw;border-radius:.6cqw">
+    <div class="cap">It tells you which agent needs you, and why.</div>
+  </div>
+  <div class="label"><b>06 · AGENTS + ISLAND</b><span>frame-06 · 40.0–54.0</span></div>
+  <p class="note"><b>A: the dock slides in and its row turns amber "Needs you";</b> push in on the APPROVAL line. <b>B (50 s):</b> the window darkens and the status island drops from the top edge.</p>
+  <p class="src">Real: dock page and the island page cut from flow-desktop.patch, fed the playground's scripted session.</p>
+  <span class="chip-seam">cut on the downbeat</span>
+</figure>
+
+<!-- 07 -->
+<figure>
+  <div class="f" id="frame-07">
+    <img src="storyboard/captures/ref-board-sequence.jpg" alt="" style="left:12cqw;top:0;width:76cqw">
+    <span class="badge">reference · recapture on Harbor Goods</span>
+    <div class="cap">Diagrams read straight from the code. Nothing invented.</div>
+  </div>
+  <div class="label"><b>07 · DIAGRAMS FROM CODE</b><span>frame-07 · 54.0–62.0</span></div>
+  <p class="note"><b>Edges draw one by one.</b> Sequence of POST /orders, then the ER of orders, discount_codes and shipments.</p>
+  <p class="src">Real board (docs/media/boards), shown as a reference; the build captures the board of Harbor Goods.</p>
+  <span class="chip-seam">hard cut</span>
+</figure>
+
+<div class="act">Act 4 · credibility and lockup</div>
+
+<!-- 08 -->
+<figure>
+  <div class="f" id="frame-08">
+    <div class="pending" style="left:2cqw;top:6cqw;width:30cqw;height:34cqw"><b>Skeleton first</b>board: "write these members"<br>capture pending</div>
+    <div class="pending" style="left:35cqw;top:6cqw;width:30cqw;height:34cqw"><b>Harness map</b>health score 96 on Harbor Goods<br>capture pending</div>
+    <div class="pending" style="left:68cqw;top:6cqw;width:30cqw;height:34cqw"><b>Update available</b>Restart to Update<br>capture pending</div>
+    <div class="cap">Design the skeleton first. Keep your harness healthy. Update in place.</div>
+  </div>
+  <div class="label"><b>08 · MONTAGE</b><span>frame-08 · 62.0–68.0</span></div>
+  <p class="note"><b>Three hard cuts, one per downbeat,</b> each a push-in on one control. Captures pending: the web workbench comes up in the light default when driven headless here (the Insilode Dark theme does not load), which is being fixed before capture.</p>
+  <p class="src">Will be real: workbench in web mode on Harbor Goods.</p>
+  <span class="chip-seam">cut back to the 03 framing</span>
+</figure>
+
+<!-- 09 -->
+<figure>
+  <div class="f" id="frame-09">
+    <img src="storyboard/captures/changes.jpg" alt="" style="left:0;top:0;width:100cqw;filter:brightness(.7)">
+    <div class="stmt" style="left:6cqw;top:42cqw;font-size:4.2cqw;font-weight:600;text-shadow:0 .2cqw 1.2cqw rgba(0,0,0,.9)">See how your code runs.</div>
+  </div>
+  <div class="label"><b>09 · HELD FRAME</b><span>frame-09 · 68.0–72.0</span></div>
+  <p class="note"><b>Nothing moves.</b> The 03 canvas, wide, every changed card in view; the line lands at lower left. Callback to 03.</p>
+  <p class="src">Real: the same change-set canvas.</p>
+  <span class="chip-seam">continuous</span>
+</figure>
+
+<!-- 10 -->
+<figure>
+  <div class="f" id="frame-10">
+    <img src="storyboard/captures/changes.jpg" alt="" style="left:0;top:0;width:100cqw;filter:brightness(.18) blur(.3cqw)">
+    <img src="../../editor/branding/icon.png" alt="" style="left:calc(50cqw - 4.7cqw);top:10cqw;width:9.4cqw;height:9.4cqw">
+    <div class="stmt name" style="left:0;right:0;top:21.5cqw;text-align:center;font-size:5cqw"></div>
+    <div style="position:absolute;left:0;right:0;top:28cqw;text-align:center;font-size:1.7cqw;color:var(--muted);font-weight:500">A harness-first code editor. Free and open source.</div>
+    <div style="position:absolute;left:0;right:0;top:33.6cqw;text-align:center;font-size:1.5cqw;font-weight:600">Download for Windows · macOS · Linux</div>
+    <div class="mono" style="position:absolute;left:0;right:0;top:37cqw;text-align:center;font-size:1.4cqw;color:var(--signal)">github.com/bothuany/insilode</div>
+  </div>
+  <div class="label"><b>10 · LOCKUP + CTA</b><span>frame-10 · 72.0–80.0</span></div>
+  <p class="note"><b>The canvas keeps drifting behind;</b> the mark lands at 74.0 on a low hit, then the download line and the URL. Name, tagline, download line and URL come from <span class="mono">brand.json</span>.</p>
+  <p class="src">Real: the canvas behind; the logo from editor/branding.</p>
+  <span class="chip-seam">end</span>
+</figure>
+
+<!-- seams -->
+<figure>
+  <div class="f"><div style="padding:2cqw;font-size:1.5cqw;line-height:1.9">
+    <div style="font-weight:600;margin-bottom:.6cqw">Seam map · one world: the canvas</div>
+    <div class="mono" style="font-size:1.2cqw;line-height:1.6">01 ─cut→ 02 ─cut→ 03 ─push→ 04 ─tour in place→ 05 ─recede→ 06 ─cut→ 07 ─cut→ 08 ─cut back→ 09 ─continuous→ 10</div>
+    <div style="margin-top:1cqw;color:var(--muted)">Bar = 2 s at 120 BPM. Cuts on bars: 6 · 12 · 22 · 30 · 40 · 54 · 62 · 68 · 72.</div>
+    <div style="color:var(--muted)">Music enters at 12.0, the first frame of the canvas.</div>
+    <div style="color:var(--muted)">Film adds only framing, camera, rings, captions and type.</div>
+  </div></div>
+  <div class="label"><b>SEAMS</b><span>whole film</span></div>
+</figure>
+</div>
+</body>
+</html>
