@@ -114,18 +114,32 @@ test('home: the hero canvas loads on its own, a plain wheel scrolls the page pas
 	await until(() => page.evaluate(() => document.querySelector('[data-stage]').classList.contains('is-live')), 'the poster to give way to the canvas')
 	assert.equal(await page.evaluate(() => document.querySelector('.stage-frame').tabIndex), -1, 'the hero canvas is not in the tab order')
 
-	// The wheel over the canvas scrolls the page, not the canvas.
+	// The editor window comes first, the live canvas under it: bring the canvas on screen. A wheel over it scrolls the page, not the canvas.
+	await page.evaluate(() => document.querySelector('[data-stage]').scrollIntoView({ block: 'center' }))
+	await wait(300)
+	const top = await page.evaluate(() => scrollY)
 	const box = await (await page.$('.stage-frame')).boundingBox()
 	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
 	const zoom = () => canvas.evaluate(() => getComputedStyle(document.querySelector('.react-flow__viewport')).transform)
 	const before = await zoom()
 	await page.mouse.wheel({ deltaY: 400 })
-	await until(() => page.evaluate(() => scrollY > 200), 'the page to scroll')
+	await until(() => page.evaluate(top => scrollY > top + 200, top), 'the page to scroll')
 	assert.equal(await zoom(), before, 'the canvas did not zoom')
-	await page.evaluate(() => scrollTo(0, 0))
+	await page.evaluate(() => document.querySelector('[data-stage]').scrollIntoView({ block: 'center' }))
 
 	await page.click('[data-play="order"]')
 	await walk(canvas, tours.find(t => t.id === 'order'))
+	assert.deepEqual(problems, [])
+	await page.close()
+})
+
+test('home: the first screen says it is a code editor built on VS Code, and the editor window leads to the demo', { skip }, async () => {
+	const { page, problems } = await open()
+	assert.match(await page.$eval('h1', h => h.textContent), /code editor/)
+	assert.match(await page.$eval('.hero .lede', p => p.textContent), /Built on VS Code/)
+	assert.equal(await page.$eval('.shot-window', a => new URL(a.href).pathname), '/try/')
+	assert.equal(await page.$eval('.shot img', i => i.complete && i.naturalWidth > 0), true, 'the editor capture loads')
+	assert.match(await page.$eval('#vscode', s => s.textContent), /fork of VS Code.*Open VSX/s)
 	assert.deepEqual(problems, [])
 	await page.close()
 })

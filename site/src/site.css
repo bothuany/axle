@@ -1,5 +1,7 @@
-/* The site's look (direction A, "Light table", docs/site/direction): a cool pale page with the dark canvas as the one lit window on
-   it, and one trace down the left gutter that branches into each section the way a call branches into the next card. */
+/* The site's look (direction A, "Light table", docs/site/direction), on a dark table: a deep ink-blue page, the editor and the canvas
+   as windows on it, and one trace down the left gutter that branches into each section the way a call branches into the next card.
+   Dark is the only theme: every marketing visual is dark (docs/design/messaging.md). Contrast on the page: --ink 16:1, --ink-2 8.8:1,
+   --link 8.5:1, white on the --signal button 6.4:1 (WCAG AA wants 4.5:1 for body text). */
 
 @font-face {
   font-family: Archivo;
@@ -12,16 +14,22 @@
 }
 
 :root {
-  --film: #e4e8ef;
-  --film-2: #d9dee8;
-  --ink: #151b3b;
-  --ink-2: #474f72;
+  --film: #0c1020;
+  --film-2: #182036;
+  --surface: #121830;
+  --ink: #e9ecf5;
+  --ink-2: #a9b1c9;
+  /* The brand blue, for fills (buttons, the trace); text in blue is --link, which reads on the dark page. */
   --signal: #3f52c9;
+  --signal-hover: #5165e0;
   --signal-ink: #ffffff;
-  --entry: #a86a0a;
+  --link: #9aa8ff;
+  --entry: #e3a23b;
   --window: #161616;
-  --rule: #c2c8d6;
-  --warn: #8a5300;
+  --window-edge: rgba(255, 255, 255, 0.09);
+  --rule: #2a3352;
+  --warn: #f2b65c;
+  --shadow: rgba(0, 0, 0, 0.6);
 
   --gutter: 72px;
   --pad: 40px;
@@ -30,7 +38,7 @@
 
   --display: 650 1rem/1.04 Archivo, system-ui, sans-serif;
   --mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 *,
@@ -56,12 +64,12 @@ body.is-locked {
 }
 
 a {
-  color: var(--signal);
+  color: var(--link);
   text-underline-offset: 0.18em;
 }
 
 :focus-visible {
-  outline: 2px solid var(--signal);
+  outline: 2px solid var(--link);
   outline-offset: 3px;
   border-radius: 4px;
 }
@@ -85,8 +93,8 @@ code {
   left: 16px;
   top: -60px;
   z-index: 50;
-  background: var(--ink);
-  color: #fff;
+  background: var(--signal);
+  color: var(--signal-ink);
   padding: 10px 14px;
   border-radius: 8px;
 }
@@ -120,6 +128,9 @@ code {
 .brand img {
   width: 30px;
   height: 30px;
+  /* The icon is a dark tile: a thin ring keeps its edge on the dark page. */
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
 .nav nav {
@@ -314,7 +325,7 @@ h3 {
 }
 
 .btn-primary:hover {
-  background: #3445b0;
+  background: var(--signal-hover);
 }
 
 .btn-secondary {
@@ -324,12 +335,12 @@ h3 {
 }
 
 .btn-secondary:hover {
-  background: rgba(21, 27, 59, 0.06);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .btn-light {
   background: #fff;
-  color: var(--ink);
+  color: #151b3b;
 }
 
 .btn svg {
@@ -350,6 +361,169 @@ h3 {
 
 .hero .quiet {
   margin: 14px 0 0;
+}
+
+/* The headline names the category ("code editor"), so it runs longer than the old one: a wider measure keeps it to three lines. */
+.hero h1 {
+  max-width: 16ch;
+  font-size: clamp(40px, 5.4vw, 74px);
+}
+
+.hero .lede {
+  max-width: 46ch;
+}
+
+/* The editor window: a capture of the real workbench, the first thing that says "this is an editor". It is a link to the live demo. */
+.shot {
+  position: relative;
+  margin: 56px 0 0;
+}
+
+.shot::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--gutter) + 23px);
+  top: 64px;
+  width: calc(var(--gutter) - 23px);
+  height: 2px;
+  background: var(--signal);
+}
+
+.shot-window {
+  position: relative;
+  display: block;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1f1f1f;
+  text-decoration: none;
+  box-shadow: 0 0 0 1px var(--window-edge), 0 30px 70px -30px var(--shadow);
+  transition: box-shadow 200ms, transform 200ms;
+}
+
+.shot-window img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.shot-window:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 0 1.5px var(--link), 0 36px 80px -30px var(--shadow);
+}
+
+.shot-cta {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--radius);
+  background: var(--signal);
+  color: var(--signal-ink);
+  font-weight: 600;
+  font-size: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.shot-cta .arrow {
+  transition: transform 200ms;
+}
+
+.shot-window:hover .shot-cta {
+  background: var(--signal-hover);
+}
+
+.shot-window:hover .shot-cta .arrow {
+  transform: translateX(3px);
+}
+
+/* ---- built on VS Code --------------------------------------------------------------------------------------------------------- */
+
+.vscode {
+  padding: 120px 0 0;
+}
+
+.vscode-head .lede {
+  max-width: 52ch;
+}
+
+.carry {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px;
+  margin: 44px 0 0;
+  padding: 32px 0 0;
+  list-style: none;
+  border-top: 2px solid var(--ink);
+  counter-reset: carry;
+}
+
+.carry li {
+  counter-increment: carry;
+}
+
+/* Each claim is numbered like a line in the canvas's code cards: a small mono gutter number. */
+.carry h3::before {
+  content: counter(carry, decimal-leading-zero);
+  display: block;
+  margin-bottom: 10px;
+  font: 500 13px/1 var(--mono);
+  color: var(--link);
+  letter-spacing: 0.04em;
+}
+
+.carry p {
+  margin: 10px 0 0;
+  color: var(--ink-2);
+}
+
+.carry b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.everything {
+  margin: 56px 0 0;
+  padding: 28px 32px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 1px var(--rule);
+}
+
+.everything-title {
+  margin: 0;
+  font-weight: 650;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chips li {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--film-2);
+  font: 500 14px/1.3 var(--mono);
+  color: var(--ink);
+}
+
+.everything .quiet {
+  margin: 18px 0 0;
+  max-width: 80ch;
+}
+
+/* ---- what it adds: the live canvas --------------------------------------------------------------------------------------------- */
+
+.adds {
+  padding: 136px 0 0;
 }
 
 .stage-wrap {
@@ -373,7 +547,7 @@ h3 {
   background: var(--window);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 30px 60px -30px rgba(21, 27, 59, 0.55);
+  box-shadow: 0 0 0 1px var(--window-edge), 0 30px 70px -30px var(--shadow);
 }
 
 .stage-poster,
@@ -427,7 +601,7 @@ h3 {
   margin: 0;
   padding: 10px 14px;
   background: #fff;
-  color: var(--ink);
+  color: #151b3b;
   border-radius: 8px;
   font-size: 15px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
@@ -481,6 +655,7 @@ h3 {
   background: var(--window);
   border-radius: var(--radius);
   overflow: hidden;
+  box-shadow: 0 0 0 1px var(--window-edge);
 }
 
 .clip img,
@@ -498,7 +673,7 @@ figcaption {
 
 /* The harness scan, drawn on the page: the one product surface that is not a capture, so it takes the page's own colours. */
 .harness {
-  background: #fff;
+  background: var(--surface);
   border-radius: var(--radius);
   padding: 28px;
   box-shadow: 0 0 0 1px var(--rule);
@@ -624,6 +799,7 @@ figcaption {
 .terminal {
   margin: 0;
   background: var(--window);
+  box-shadow: 0 0 0 1px var(--window-edge);
   color: #d7dce5;
   border-radius: var(--radius);
   padding: 22px 24px;
@@ -720,8 +896,9 @@ figcaption {
 /* ---- footer ------------------------------------------------------------------------------------------------------------------ */
 
 .footer {
-  background: var(--ink);
-  color: #d6daea;
+  background: #070a14;
+  color: var(--ink-2);
+  border-top: 1px solid var(--rule);
 }
 
 .footer-inner {
@@ -735,7 +912,7 @@ figcaption {
 }
 
 .footer a {
-  color: #fff;
+  color: var(--ink);
 }
 
 .footer p {
@@ -902,7 +1079,7 @@ figcaption {
 }
 
 .switch label:has(input:checked) {
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 0 0 1px var(--rule);
   font-weight: 600;
 }
@@ -1080,6 +1257,7 @@ figcaption {
   }
 
   .with-grid,
+  .carry,
   .dl-list {
     grid-template-columns: 1fr;
     gap: 28px;
@@ -1159,10 +1337,37 @@ figcaption {
     width: 100%;
   }
 
-  .stage-wrap::before {
+  .stage-wrap::before,
+  .shot::before {
     left: calc(-1 * var(--gutter) + 7px);
     width: calc(var(--gutter) - 7px);
     top: 48px;
+  }
+
+  .hero h1 {
+    font-size: 36px;
+  }
+
+  .shot {
+    margin-top: 40px;
+  }
+
+  /* On a phone the button sits under the window, not on it: the window is small enough that it would hide the terminal. */
+  .shot-cta {
+    position: static;
+    display: flex;
+    justify-content: center;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .vscode,
+  .adds {
+    padding-top: 96px;
+  }
+
+  .everything {
+    padding: 22px 18px;
   }
 
   .stage {
@@ -1236,7 +1441,13 @@ figcaption {
     animation: none;
   }
 
-  .stage-poster {
+  .stage-poster,
+  .shot-window,
+  .shot-cta .arrow {
     transition: none;
+  }
+
+  .shot-window:hover {
+    transform: none;
   }
 }

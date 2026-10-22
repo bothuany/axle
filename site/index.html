@@ -4,24 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'self' https://api.github.com; frame-src 'self'; base-uri 'none'; form-action 'none'" />
-    <title>{{name}}: see how your code runs and what agents changed</title>
-    <meta name="description" content="{{name}} is an open-source code editor that draws how your code runs and shows what Claude Code, Codex or any CLI agent changed on it. Windows, macOS, Linux." />
+    <title>{{name}}: the code editor that shows how your code runs</title>
+    <meta name="description" content="{{name}} is an open-source code editor built on VS Code: your extensions work, plus a live canvas of how your code runs and what your agents changed." />
     <link rel="canonical" href="{{site}}/" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#e4e8ef" />
+    <meta name="theme-color" content="#0c1020" />
     <meta name="google-site-verification" content="XrNonl685EqpBR0y6wrhLbWKfsVRcuFygn4sOPC6Ajw" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="{{name}}" />
-    <meta property="og:title" content="{{name}}: see how your code runs" />
-    <meta property="og:description" content="An open-source code editor that draws how your code runs, and what your agents changed on it." />
+    <meta property="og:title" content="{{name}}: the code editor that shows how your code runs" />
+    <meta property="og:description" content="A code editor built on VS Code that shows how your code runs, and what your agents changed in it." />
     <meta property="og:url" content="{{site}}/" />
-    <meta property="og:image" content="{{site}}/media/hero.jpg" />
+    <meta property="og:image" content="{{site}}/media/editor.jpg" />
     <meta name="twitter:card" content="summary_large_image" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareApplication","name":"{{name}}","applicationCategory":"DeveloperApplication","operatingSystem":"Windows, macOS, Linux","url":"{{site}}/","downloadUrl":"https://github.com/{{repo}}/releases/latest","license":"https://opensource.org/licenses/MIT","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+      {"@context":"https://schema.org","@type":"SoftwareApplication","name":"{{name}}","description":"The code editor that shows how your code runs. Built on VS Code.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Code editor","operatingSystem":"Windows, macOS, Linux","url":"{{site}}/","downloadUrl":"https://github.com/{{repo}}/releases/latest","license":"https://opensource.org/licenses/MIT","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
     </script>
-    <link rel="preload" as="image" href="./media/hero.webp" media="(min-width: 761px)" fetchpriority="high" />
-    <link rel="preload" as="image" href="./media/hero-narrow.webp" media="(max-width: 760px)" fetchpriority="high" />
+    <link rel="preload" as="image" href="./media/editor.webp" media="(min-width: 761px)" fetchpriority="high" />
+    <link rel="preload" as="image" href="./media/editor-narrow.webp" media="(max-width: 760px)" fetchpriority="high" />
   </head>
   <body>
     <a class="skip" href="#main">Skip to the content</a>
@@ -44,17 +44,72 @@
       <div class="trace" aria-hidden="true"></div>
 
       <section class="hero" aria-labelledby="hero-title">
-        <h1 id="hero-title">See how your code runs.</h1>
-        <p class="lede">Every editor shows where code is stored. {{name}} shows how it runs, and what your agents changed in it.</p>
+        <h1 id="hero-title">The code editor that shows how your code runs.</h1>
+        <p class="lede">Built on VS Code, so your extensions, themes and keybindings work. Plus a live canvas of every request, a review of what your agents changed, and a dock that runs Claude Code and Codex side by side.</p>
         <div class="ctas">
           <a class="btn btn-primary" data-download href="https://github.com/{{repo}}/releases/latest">Download {{name}}</a>
-          <a class="btn btn-secondary" href="https://github.com/{{repo}}">View on GitHub</a>
+          <a class="btn btn-secondary" href="./try/">Try it in your browser</a>
         </div>
         <p class="quiet" data-platforms>Free and open source, for Windows, macOS and Linux.</p>
 
+        <figure class="shot">
+          <a class="shot-window" href="./try/" aria-label="Try the live demo of {{name}} in your browser">
+            <picture>
+              <source media="(max-width: 760px)" srcset="./media/editor-narrow.webp" width="1800" height="2100" />
+              <img src="./media/editor.webp" width="3360" height="2100" fetchpriority="high" alt="The {{name}} editor, in a dark theme, on a demo shop: the file explorer, a tab for OrderService.java and the open canvas tab with the flow of POST /orders from the controller to the orders table, billing and Kafka, Claude Code running in the terminal below, and the Agents dock on the right." />
+            </picture>
+            <span class="shot-cta" aria-hidden="true">Try the live demo <span class="arrow">&rarr;</span></span>
+          </a>
+          <figcaption>The real editor, with the demo project open. Explorer, tabs, terminal and extensions are VS Code's; the canvas tab and the Agents dock are what {{name}} adds.</figcaption>
+        </figure>
+      </section>
+
+      <section class="vscode" id="vscode" aria-labelledby="vscode-title">
+        <div class="vscode-head">
+          <h2 class="branch" id="vscode-title">Built on VS Code. Your setup comes with you.</h2>
+          <p class="lede">{{name}} is a fork of VS Code (Code - OSS, the open-source core of VS Code), not a plugin and not a new editor to learn. The editor you know is all there; {{name}} adds to it.</p>
+        </div>
+        <ol class="carry">
+          <li>
+            <h3>Your extensions</h3>
+            <p>Install them from <a href="https://open-vsx.org/">Open VSX</a>, the open extension registry that VS Code forks use. Most of the VS Code extensions you run are published there.</p>
+          </li>
+          <li>
+            <h3>Your themes, keybindings and settings</h3>
+            <p>The same commands, the same shortcuts and the same <code>settings.json</code>. Vim, Emacs and other keymaps are extensions, like in VS Code.</p>
+          </li>
+          <li>
+            <h3>Your profile</h3>
+            <!-- TODO(import-from-vscode): the one-click "Import from VS Code" is in PR #28, not released. When it ships, replace this paragraph with: "Import your settings, keybindings, snippets and theme from VS Code or Cursor; extensions available on Open VSX are installed, the rest are listed." Never "all your extensions". Same in README.md and docs/design/messaging.md. -->
+            <p>In VS Code, run <b>Profiles: Export Profile…</b> to save your settings, keybindings, snippets and extension list to a file. In {{name}}, choose <b>Import Profile…</b> in <b>Preferences: Open Profiles (UI)</b>.</p>
+          </li>
+        </ol>
+        <div class="everything">
+          <p class="everything-title">Everything VS Code does is there</p>
+          <ul class="chips">
+            <li>Git and source control</li>
+            <li>Integrated terminal</li>
+            <li>Debugger</li>
+            <li>Language servers (LSP)</li>
+            <li>IntelliSense</li>
+            <li>Search and replace</li>
+            <li>Tasks</li>
+            <li>Multi-root workspaces</li>
+            <li>Profiles</li>
+            <li>Snippets</li>
+            <li>Command Palette</li>
+          </ul>
+          <p class="quiet">A few of Microsoft's own extensions (such as Pylance, C# Dev Kit, the Remote - SSH, WSL and Dev Containers family, and GitHub Copilot) are licensed for Microsoft's builds of VS Code only, so they are not on Open VSX; open alternatives are.</p>
+        </div>
+      </section>
+
+      <section class="adds" aria-labelledby="adds-title">
+        <h2 class="branch" id="adds-title">What {{name}} adds to VS Code.</h2>
+        <p class="lede">A canvas that draws how your code runs, card by card, from the request to the table it writes. Here it is, live, on the demo shop.</p>
+
         <div class="stage-wrap">
           <div class="stage" data-stage>
-            <picture><source media="(max-width: 760px)" srcset="./media/hero-narrow.webp" width="840" height="1120" /><img class="stage-poster" src="./media/hero.webp" width="1600" height="940" fetchpriority="high" alt="The {{name}} canvas on POST /orders: the controller calls the order service, which saves to the orders table, asks billing for an invoice over HTTP and announces the order on Kafka." /></picture>
+            <picture><source media="(max-width: 760px)" srcset="./media/hero-narrow.webp" width="840" height="1120" /><img class="stage-poster" src="./media/hero.webp" width="1600" height="940" loading="lazy" alt="The {{name}} canvas on POST /orders: the controller calls the order service, which saves to the orders table, asks billing for an invoice over HTTP and announces the order on Kafka." /></picture>
             <p class="stage-note" role="status" hidden></p>
             <div class="stage-actions">
               <button class="btn btn-light stage-play" type="button" data-play="order"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0l9 5-9 5z" /></svg>Play the tour</button>
@@ -156,7 +211,7 @@
         <dl class="proof-list">
           <div>
             <dt>MIT licensed</dt>
-            <dd>The whole editor is open source, and it builds on VS Code. <a href="https://github.com/{{repo}}/blob/main/LICENSE">Read the licence</a>.</dd>
+            <dd>The whole editor is open source, a fork of VS Code's open-source core (Code - OSS, also MIT). <a href="https://github.com/{{repo}}/blob/main/LICENSE">Read the licence</a>.</dd>
           </div>
           <div>
             <dt>Released often, updated in place</dt>
@@ -167,8 +222,8 @@
             <dd>The code index is checked against the expected flows of sample projects, and this page's demo is played in a browser, on every pull request. <a href="https://github.com/{{repo}}/actions/workflows/ci.yml">See the runs</a>.</dd>
           </div>
           <div>
-            <dt>The canvas above is the real one</dt>
-            <dd>It is the editor's own canvas code, fed by the editor's own index of a demo project. <a href="https://github.com/{{repo}}/tree/main/site">How this page is built</a>.</dd>
+            <dt>What you see here is the real editor</dt>
+            <dd>The picture at the top is a capture of the editor itself, and the canvas is the editor's own canvas code, fed by its own index of a demo project. <a href="https://github.com/{{repo}}/tree/main/site">How this page is built</a>.</dd>
           </div>
         </dl>
       </section>
@@ -185,7 +240,7 @@
 
     <footer class="footer">
       <div class="footer-inner">
-        <p>{{name}} is MIT licensed and builds on <a href="https://github.com/microsoft/vscode">VS Code</a>. The Claude and Codex marks belong to their owners.</p>
+        <p>{{name}} is MIT licensed and built on <a href="https://github.com/microsoft/vscode">VS Code</a> (Code - OSS); it is not affiliated with Microsoft. The Claude and Codex marks belong to their owners.</p>
         <p><a href="https://github.com/{{repo}}">GitHub</a> &nbsp; <a href="https://github.com/{{repo}}/blob/main/CONTRIBUTING.md">Contributing</a> &nbsp; <a href="https://github.com/{{repo}}/blob/main/SECURITY.md">Security</a></p>
       </div>
     </footer>
