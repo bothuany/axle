@@ -1,0 +1,7 @@
+{
+	// Insilode's own log snippet.
+	"Log": {
+		"prefix": "log",
+		"body": ["console.info($1);"]
+	}
+}

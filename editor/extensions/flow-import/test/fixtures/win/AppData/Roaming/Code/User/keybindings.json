@@ -1,0 +1,7 @@
+// Place your key bindings in this file to override the defaults
+[
+	{ "key": "ctrl+shift+d", "command": "editor.action.copyLinesDownAction", "when": "editorTextFocus" },
+	{ "key": "ctrl+k ctrl+t", "command": "workbench.action.selectTheme" },
+	{ "key": "ctrl+alt+n", "command": "-extension.runCode" },
+	{ "key": "ctrl+e", "command": "workbench.action.quickOpen" }
+]

@@ -1,0 +1,7 @@
+{
+	"Component": {
+		"scope": "typescriptreact",
+		"prefix": "rfc",
+		"body": ["export function $1() {", "\treturn <div>$0</div>", "}"]
+	}
+}

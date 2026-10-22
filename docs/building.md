@@ -117,6 +117,7 @@ editor/extensions/
   flow-agent/       terminal agents and the Agents dock (plus ACP chat sessions, off by default)
   flow-harness/     harness map, hook studio, permission inbox, context budget
   flow-theme/       Insilode's colour theme and defaults
+  flow-import/      Import from VS Code: settings, shortcuts, snippets, theme, extensions (docs/import-from-vscode.md)
 ui/                 the canvas (React Flow + Monaco), built into one script the extension inlines
 site/               the website (GitHub Pages): the real canvas on demo data from the real index, guided tours, downloads
 analyzer/           C# analyzer (.NET 10, Roslyn MSBuildWorkspace) serving flows over HTTP

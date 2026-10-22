@@ -1,0 +1,20 @@
+// VS Code's user settings on Windows: comments and a trailing comma, as people write them.
+{
+	"editor.fontSize": 15,
+	"editor.tabSize": 2,
+	"files.autoSave": "afterDelay",
+	"workbench.colorTheme": "Default Dark Modern",
+	"workbench.iconTheme": "material-icon-theme",
+	"workbench.colorCustomizations": { "editor.background": "#101010" },
+	"telemetry.telemetryLevel": "off",
+	"settingsSync.ignoredSettings": ["editor.fontSize"],
+	"update.mode": "manual",
+	"flow.agents.enabled": false,
+	"[python]": {
+		"editor.tabSize": 4,
+		"editor.formatOnSave": true,
+	},
+	"[markdown]": {
+		"editor.wordWrap": "on"
+	},
+}

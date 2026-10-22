@@ -1,0 +1,3 @@
+out/
+# The fixture homes hold a VS Code extensions folder, which the repository's root .gitignore leaves out everywhere else.
+!test/fixtures/*/.vscode/

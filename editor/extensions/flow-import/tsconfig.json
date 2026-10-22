@@ -1,0 +1,12 @@
+{
+	"extends": "../../vscode/extensions/tsconfig.base.json",
+	"compilerOptions": {
+		"rootDir": "./src",
+		"noEmit": true,
+		"module": "preserve",
+		"moduleResolution": "bundler",
+		"types": ["node"],
+		"typeRoots": ["../../vscode/node_modules/@types"]
+	},
+	"include": ["src/**/*", "../../vscode/src/vscode-dts/vscode.d.ts", "../../vscode/src/vscode-dts/vscode.proposed.extensionsAny.d.ts"]
+}

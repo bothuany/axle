@@ -1,0 +1,8 @@
+// Insilode's user settings before the import: these values stay.
+{
+	"editor.fontSize": 13, // chosen in Insilode
+	"flow.agents.enabled": true,
+	"[python]": {
+		"editor.tabSize": 2
+	}
+}

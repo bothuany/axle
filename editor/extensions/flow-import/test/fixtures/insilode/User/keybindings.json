@@ -1,0 +1,5 @@
+// Insilode's own shortcuts
+[
+	{ "key": "ctrl+e", "command": "flow.showAtCursor" },
+	{ "key": "ctrl+K  ctrl+T", "command": "workbench.action.selectTheme" }
+]

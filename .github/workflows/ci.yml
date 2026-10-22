@@ -81,6 +81,13 @@ jobs:
           node esbuild.mjs
           npm test
 
+      - name: flow-import (build and tests)
+        working-directory: editor/extensions/flow-import
+        run: |
+          npm ci --no-audit --no-fund
+          node esbuild.mjs
+          npm test
+
       # Last, so every package's node_modules exist and the devDependency rule can resolve imports; it still runs when
       # an earlier step failed, so a broken test does not hide an architecture violation.
       - name: Architecture rules (dependency-cruiser, wire types, command contracts)
