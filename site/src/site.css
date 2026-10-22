@@ -931,6 +931,37 @@ figcaption {
   margin-top: 4px;
 }
 
+/* ---- the stack: languages and frameworks the canvas reads ---------------------------------------------------------------- */
+
+.stack {
+  padding: 136px 0 0;
+}
+
+.stack-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0 32px;
+  margin: 36px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stack-list li {
+  padding: 14px 0;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-2);
+}
+
+.stack-list b {
+  display: block;
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.stack > p:last-child {
+  margin: 20px 0 0;
+}
+
 /* ---- agents ------------------------------------------------------------------------------------------------------------------ */
 
 .with {
@@ -1414,6 +1445,10 @@ figcaption {
     grid-template-columns: 1fr;
   }
 
+  .stack-list {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .try {
     grid-template-columns: 1fr;
   }
@@ -1588,6 +1623,7 @@ figcaption {
   }
 
   .problem,
+  .stack,
   .with,
   .proof {
     padding-top: 96px;

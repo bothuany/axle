@@ -12,9 +12,7 @@ export function playWhileVisible(video: HTMLVideoElement) {
   // Muted inline playback is what lets a browser start it without a gesture; set as properties too, for the browsers that read those.
   // A phone gets the crop of the window (code, canvas and terminal) at a size it can read; its poster is that crop too.
   if (matchMedia('(max-width: 760px)').matches) {
-    video.poster = './media/hero-loop-narrow-poster.jpg'
-    video.width = 864
-    video.height = 900
+    video.poster = './media/hero-loop-narrow-poster.webp'
   }
   video.muted = true
   video.playsInline = true

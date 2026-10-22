@@ -4,24 +4,33 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src 'self' https://api.github.com; frame-src 'self'; base-uri 'none'; form-action 'none'" />
-    <title>{{name}}, the code editor that shows how code runs</title>
-    <meta name="description" content="Every code editor shows your files. {{name}} shows how your code runs: a code editor built on VS Code, with a live canvas of every request." />
+    <title>{{name}}: the code editor that shows how your code runs</title>
+    <meta name="description" content="{{name}} is a free, open-source code editor built on VS Code. A live call-flow canvas of every request, plus Claude Code and Codex agents side by side." />
     <link rel="canonical" href="{{site}}/" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#0c1020" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="google-site-verification" content="XrNonl685EqpBR0y6wrhLbWKfsVRcuFygn4sOPC6Ajw" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="{{name}}" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content="Every code editor shows your files. {{name}} shows how your code runs." />
-    <meta property="og:description" content="A code editor built on VS Code that shows how your code runs, and what your agents changed in it." />
+    <meta property="og:description" content="A free, open-source code editor built on VS Code, with a live call-flow canvas and Claude Code and Codex side by side." />
     <meta property="og:url" content="{{site}}/" />
-    <meta property="og:image" content="{{site}}/media/hero-loop-poster.jpg" />
+    <meta property="og:image" content="{{site}}/media/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="The {{name}} editor showing the call flow of POST /orders, under the slogan: every code editor shows your files, {{name}} shows how your code runs." />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Every code editor shows your files. {{name}} shows how your code runs." />
+    <meta name="twitter:description" content="A free, open-source code editor built on VS Code, with a live call-flow canvas and Claude Code and Codex side by side." />
+    <meta name="twitter:image" content="{{site}}/media/og.jpg" />
     <script type="application/ld+json">
-      {"@context":"https://schema.org","@type":"SoftwareApplication","name":"{{name}}","description":"Every code editor shows your files. {{name}} shows how your code runs. Built on VS Code.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Code editor","operatingSystem":"Windows, macOS, Linux","url":"{{site}}/","downloadUrl":"https://github.com/{{repo}}/releases/latest","license":"https://www.gnu.org/licenses/agpl-3.0.html","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}
+      {"@context":"https://schema.org","@graph":[{"@type":"SoftwareApplication","@id":"{{site}}/#app","name":"{{name}}","description":"A free, open-source code editor built on VS Code (Code - OSS) that shows how your code runs: a live call-flow canvas of every request, a review of what your agents changed, and Claude Code and Codex side by side.","applicationCategory":"DeveloperApplication","applicationSubCategory":"Code editor","operatingSystem":"Windows, macOS, Linux","softwareVersion":"{{version}}","url":"{{site}}/","downloadUrl":"https://github.com/{{repo}}/releases/latest","license":"https://www.gnu.org/licenses/agpl-3.0.html","isAccessibleForFree":true,"screenshot":"{{site}}/media/og.jpg","image":"{{site}}/media/og.jpg","author":{"@id":"{{site}}/#org"},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}},{"@type":"Organization","@id":"{{site}}/#org","name":"{{name}}","url":"{{site}}/","logo":"{{site}}/logo.png","sameAs":["https://github.com/{{repo}}"]},{"@type":"WebSite","@id":"{{site}}/#site","name":"{{name}}","url":"{{site}}/","publisher":{"@id":"{{site}}/#org"}}]}
     </script>
-    <link rel="preload" as="image" href="./media/hero-loop-poster.jpg" media="(min-width: 761px)" fetchpriority="high" />
-    <link rel="preload" as="image" href="./media/hero-loop-narrow-poster.jpg" media="(max-width: 760px)" fetchpriority="high" />
+    <link rel="preload" as="font" type="font/woff2" href="./node_modules/@fontsource-variable/instrument-sans/files/instrument-sans-latin-wght-normal.woff2" crossorigin />
+    <link rel="preload" as="image" href="./media/hero-loop-poster.webp" media="(min-width: 761px)" fetchpriority="high" />
+    <link rel="preload" as="image" href="./media/hero-loop-narrow-poster.webp" media="(max-width: 760px)" fetchpriority="high" />
   </head>
   <body>
     <a class="skip" href="#main">Skip to the content</a>
@@ -55,7 +64,7 @@
 
         <figure class="shot">
           <a class="shot-window" href="./try/" aria-label="Try the live demo of {{name}} in your browser">
-            <video class="shot-video" data-loop muted playsinline loop preload="none" poster="./media/hero-loop-poster.jpg" width="1920" height="1200" aria-label="The {{name}} editor on a demo shop: OrderController.java is open; POST /orders is picked in the Insilode Endpoints view, the canvas opens on its flow and moves from the controller to the order service, its discount and the orders table, then the editor is back where it started. Claude Code runs in the terminal below, the Agents dock is on the right.">
+            <video class="shot-video" data-loop muted playsinline loop preload="none" poster="./media/hero-loop-poster.webp" width="1920" height="1200" aria-label="The {{name}} editor on a demo shop: OrderController.java is open; POST /orders is picked in the Insilode Endpoints view, the canvas opens on its flow and moves from the controller to the order service, its discount and the orders table, then the editor is back where it started. Claude Code runs in the terminal below, the Agents dock is on the right.">
               <source src="./media/hero-loop-narrow.webm" type="video/webm" media="(max-width: 760px)" />
               <source src="./media/hero-loop-narrow.mp4" type="video/mp4" media="(max-width: 760px)" />
               <source src="./media/hero-loop.webm" type="video/webm" />
@@ -114,7 +123,7 @@
 
       <section class="adds" aria-labelledby="adds-title">
         <h2 class="branch" id="adds-title">What {{name}} adds to VS&nbsp;Code.</h2>
-        <p class="lede">A live canvas of how your code runs, from the request to the table it writes. This one is real: try it.</p>
+        <p class="lede">A live call-flow canvas of how your code runs, from the request to the table it writes. This one is real: try it.</p>
 
         <div class="stage-wrap">
           <div class="stage" data-stage>
@@ -184,6 +193,22 @@
           <div class="harness" data-harness aria-live="polite"><p class="quiet">The scan of the demo project loads here.</p></div>
           <figcaption>The harness scan of the demo project, as {{name}} reads it.</figcaption>
         </figure>
+      </section>
+
+      <section class="stack" aria-labelledby="stack-title">
+        <h2 class="branch" id="stack-title">Call flows in the stack you use.</h2>
+        <p class="lede">The canvas reads your project with a build-free index: from an endpoint to the table it writes, across services.</p>
+        <ul class="stack-list">
+          <li><b>C# / .NET</b> ASP.NET, EF Core</li>
+          <li><b>Java</b> Spring, JAX-RS, JPA</li>
+          <li><b>Python</b> FastAPI, Flask, Django</li>
+          <li><b>TypeScript / JavaScript</b> Express, NestJS, Next.js</li>
+          <li><b>Go</b> Gin, Echo, Fiber, chi</li>
+          <li><b>Rust</b> axum, actix-web, Rocket</li>
+          <li><b>PHP</b> Laravel, Symfony</li>
+          <li><b>Ruby</b> Rails, Sinatra</li>
+        </ul>
+        <p><a href="./docs/languages/">Supported languages and frameworks</a></p>
       </section>
 
       <section class="with" aria-labelledby="with-title">

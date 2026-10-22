@@ -33,7 +33,7 @@ https://insilode.dev/: the home page and the Try page, with the real canvas on a
 
 ## Being found
 
-Each page sets its title, description, canonical address, Open Graph tags and a Content-Security-Policy; the home page adds `SoftwareApplication` JSON-LD and the `google-site-verification` tag. `{{site}}` comes from `SITE_URL` (default `https://insilode.dev`). The build emits `sitemap.xml` with both pages. The framed pages (`canvas.html`, `pages/dock.html`, `pages/island.html`) carry `noindex`. There is no `robots.txt`: on a project site it would have to sit at the domain's root.
+Each page sets a title of its own (60 characters at most), a description (155 at most), its canonical address, `index, follow`, Open Graph and Twitter tags with the social card `media/og.jpg` (1200x630, made by `node scripts/og-image.mjs` from the hero loop's poster and the slogan, committed) and a Content-Security-Policy. The docs pages take their titles from `DOCS[].seo` in `scripts/docs-pages.mjs`. The home page adds JSON-LD (`SoftwareApplication` with `softwareVersion` from the root package.json, `Organization` with `logo.png`, `WebSite`) and the `google-site-verification` tag, and says in its own HTML what the product is and which languages and frameworks it reads. `{{site}}` comes from `SITE_URL` (default `https://insilode.dev`). The build emits `sitemap.xml` with every page and `robots.txt` (everything allowed, the sitemap named). The framed pages (`canvas.html`, `pages/dock.html`, `pages/island.html`) carry `noindex`. The e2e test "the pages can be found" fails when a page in the sitemap lacks any of these, or when the sitemap or robots.txt is missing.
 
 ## The domain (insilode.dev)
 

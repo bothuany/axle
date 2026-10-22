@@ -1,6 +1,6 @@
 # Languages
 
-| | Insilode from an endpoint | Insilode at the cursor | Database schema cards |
+| Language | Insilode from an endpoint | Insilode at the cursor | Database schema cards |
 |---|---|---|---|
 | C# / .NET | ✓ ASP.NET (Roslyn, incl. MediatR and DI) from a `.sln`/`.slnx`, or a `.csproj` when there is no solution; needs the .NET 10 SDK | ✓ | ✓ EF Core |
 | Java | ✓ Spring, JAX-RS, Servlets, Axis2, JSF, plus scheduled jobs and message listeners | ✓ | ✓ JPA entities and Spring Data repositories; JDBC (raw SQL) in progress |
