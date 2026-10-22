@@ -88,8 +88,8 @@ push (1.00 → 1.04). Line 01. Focal (1:1, 9:16): the code tab and the Explorer.
 A2 (5.0-7.6): the side bar switches to Extensions, `@popular` from **Open VSX** (Pyrefly, Python, Claude Code,
 Red Hat Java, Go…); label "Extensions from Open VSX" at the side bar. A3 (7.6-9.4): `category:themes` (One Dark Pro,
 Monokai Pro, Catppuccin…). A4 (9.4-11.0): the Keyboard Shortcuts editor. Camera drifts from the side bar to the centre.
-Line 02. A one-line footnote at the bottom for 4 s (messaging.md asks for it wherever the extension claim appears):
-"Extensions on Open VSX install. A few Microsoft ones are licensed for Microsoft's builds only." Focal: the side bar list.
+Line 02. The note that a few Microsoft extensions are licensed for Microsoft's builds only stays on the site, next to
+the full claim (the user's call); the film says only "from Open VSX". Focal: the side bar list.
 
 ### 03 Open an endpoint (11-17 s)
 B1 (11.0-12.4): the endpoint picker ("Insilode: open an endpoint") with POST /orders selected. B2 (12.4-17): the
@@ -151,4 +151,3 @@ Loudness about -14 LUFS, peaks under -1 dBTP.
 
 - **Voice:** the audition (Kokoro, Chatterbox, Chatterbox Turbo, Dia) or no voice (captions and music only). No model says
   "Insilode" reliably unaided; the name line is fixed by ear whichever voice wins.
-- **The Microsoft footnote** at beat 02: keep, or move it to the site only.
