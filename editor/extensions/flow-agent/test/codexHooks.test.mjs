@@ -96,9 +96,21 @@ test('codex launch, Windows: an npm codex.cmd runs its script under Node, never 
 	assert.deepEqual(c.codexLaunch('win32', `C:\\Windows;"${npm}"`, '.COM;.EXE;.BAT;.CMD', fakeFs(files)), { script })
 	// The shim prefers a node.exe in its own folder, and so does the launch.
 	assert.deepEqual(c.codexLaunch('win32', npm, undefined, fakeFs({ ...files, [`${npm}\\node.exe`]: '' })), { script, node: `${npm}\\node.exe` })
-	// A shim whose script is gone, or a .cmd that is not npm's shim, is not started at all.
-	assert.equal(c.codexLaunch('win32', npm, undefined, fakeFs({ [`${npm}\\codex.cmd`]: NPM_SHIM })), undefined)
-	assert.equal(c.codexLaunch('win32', npm, undefined, fakeFs({ [`${npm}\\codex.cmd`]: '@echo off\r\nrd /s /q %1' })), undefined)
+	// A .cmd that is not npm's shim (or a shim whose script is gone) is a batch file only cmd.exe can run.
+	assert.deepEqual(c.codexLaunch('win32', npm, undefined, fakeFs({ [`${npm}\\codex.cmd`]: NPM_SHIM })), { batch: `${npm}\\codex.cmd` })
+})
+
+test('codex launch, Windows: a wrapper of the user\'s own (the Codex desktop app\'s codex.exe) runs through cmd.exe, one fixed line', () => {
+	const bin = 'C:\\Users\\a b\\.local\\bin'
+	const wrapper = '@echo off\r\nset "ROOT=%LOCALAPPDATA%\\OpenAI\\Codex\\bin"\r\nendlocal & "%EXE%" %*\r\n'
+	const launch = c.codexLaunch('win32', bin, '.COM;.EXE;.BAT;.CMD', fakeFs({ [`${bin}\\codex.cmd`]: wrapper }))
+	assert.deepEqual(launch, { batch: `${bin}\\codex.cmd` })
+	assert.deepEqual(c.batchCommandLine(launch.batch, ['-p', 'insilode', 'mcp', 'list']), ['/d', '/s', '/c', `""${bin}\\codex.cmd" -p insilode mcp list"`])
+	// Nothing cmd.exe would expand or split, in the path or the arguments, is ever passed to it.
+	assert.equal(c.batchCommandLine('C:\\%PATH%\\codex.cmd', ['mcp']), undefined)
+	assert.equal(c.batchCommandLine('C:\\a"b\\codex.cmd', ['mcp']), undefined)
+	assert.equal(c.batchCommandLine('C:\\bin\\codex.cmd', ['mcp & calc']), undefined)
+	assert.equal(c.batchCommandLine('C:\\bin\\codex.cmd', ['!x!']), undefined)
 })
 
 test('codex launch, Windows: an earlier PATH folder wins, and an .exe runs as it is', () => {

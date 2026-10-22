@@ -17,7 +17,7 @@ import * as vscode from 'vscode';
 import { crashNeed, nextAttention, startupNeed, type Attention, type Need } from './attention';
 import { needsYouCount } from './desktopModel';
 import { findConflicts, key, type Conflict, type SessionEdits } from './conflicts';
-import { CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexLaunch, codexProfile, codexProfileFile } from './codexHooks';
+import { batchCommandLine, CODEX_HOOK_SCRIPT, CODEX_PROFILE, codexHookCommand, codexLaunch, codexProfile, codexProfileFile } from './codexHooks';
 import { agentCwd, agentProcessEnv, inheritedAgentEnv } from './env';
 import { CostTracker, statusUsd, type SessionCost } from './cost';
 import { disposeGaze, gazeHook, gazeTurn } from './gazeHost';
@@ -477,9 +477,10 @@ export class Agents implements vscode.Disposable {
 			return Promise.resolve(false);
 		}
 		return this.codexHooks ??= this.writeCodexProfile().then(() => new Promise<boolean>(resolve => {
-			// No shell: `codex` is looked up on PATH here. npm installs it on Windows as codex.cmd, which execFile cannot
-			// start without cmd.exe, so the shim's script runs under Node instead (the node.exe beside it, a `node` on
-			// PATH, or this editor in Node mode).
+			// No `shell: true`: `codex` is looked up on PATH here. npm installs it on Windows as codex.cmd, which execFile
+			// cannot start without cmd.exe, so the shim's script runs under Node instead (the node.exe beside it, a `node`
+			// on PATH, or this editor in Node mode). A batch wrapper of the user's own runs under cmd.exe with this one
+			// fixed command line (batchCommandLine), as the terminal would run it.
 			const launch = codexLaunch(process.platform, process.env.PATH ?? '', process.env.PATHEXT, {
 				exists: existsSync,
 				read: file => {
@@ -499,8 +500,19 @@ export class Agents implements vscode.Disposable {
 			let file: string;
 			let argv = args;
 			let extra: Record<string, string> = {};
+			let verbatim = false;
 			if ('file' in launch) {
 				file = launch.file;
+			} else if ('batch' in launch) {
+				const line = batchCommandLine(launch.batch, args);
+				if (!line) {
+					this.log.warn(`Agents: Codex runs without status: ${launch.batch} cannot be started safely`);
+					resolve(false);
+					return;
+				}
+				file = process.env.ComSpec || 'cmd.exe';
+				argv = line;
+				verbatim = true;
 			} else {
 				file = launch.node ?? findOnPath('node') ?? process.execPath;
 				argv = [launch.script, ...args];
@@ -508,7 +520,7 @@ export class Agents implements vscode.Disposable {
 					extra = { ELECTRON_RUN_AS_NODE: '1' };
 				}
 			}
-			execFile(file, argv, { timeout: 8000, windowsHide: true, env: agentProcessEnv(extra) }, (err, _out, stderr) => {
+			execFile(file, argv, { timeout: 8000, windowsHide: true, windowsVerbatimArguments: verbatim, env: agentProcessEnv(extra) }, (err, _out, stderr) => {
 				if (err) {
 					this.log.warn(`Agents: Codex runs without status: \`codex -p ${CODEX_PROFILE}\` failed (${String(stderr || err.message).trim().split('\n')[0]})`);
 				}
