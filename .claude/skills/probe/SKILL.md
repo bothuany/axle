@@ -10,7 +10,7 @@ Unit tests prove the index and the canvas code; a probe proves a person would se
 
 ## Ground rules
 
-- **Don't take over the user's screen.** They often watch something while you work. Use web mode (`npm run web`) in the built-in browser pane (`mcp__Claude_Browser__*`), never `npm start` (an Electron window that grabs focus), and never global keyboard or mouse input (Windows-MCP, Claude in Chrome on their real browser). Keys and clicks inside the browser pane are fine: they go to that page only. If something truly needs the desktop window (the installer, an update, the status island, window focus or position), do not open one here: probe them in Docker: `npm run docker:e2e` runs the desktop scenarios and `npm run docker:e2e -- --probe <file>` runs your own Playwright script (test/e2e-desktop/lib/probe.mjs) in a container with a virtual display, screenshots in the output folder it prints. Windows-only checks (the installer, the update) go to `npm run sandbox:e2e` (Windows Sandbox). They never run in GitHub Actions. Docs: docs/building.md "Desktop end-to-end tests". Web mode runs headless and never brings a window to the front; the desktop e2e tests refuse to run unless `INSILODE_E2E_ISOLATED=1`, which only CI and the sandbox set. Never set it yourself on the user's machine.
+- **Don't take over the user's screen.** They often watch something while you work. Use web mode (`npm run web`) in the built-in browser pane (`mcp__Claude_Browser__*`), never `npm start` (an Electron window that grabs focus), and never global keyboard or mouse input (Windows-MCP, Claude in Chrome on their real browser). Keys and clicks inside the browser pane are fine: they go to that page only. If something truly needs the desktop window (the installer, an update, the status island, window focus or position), do not open one here: probe them in Docker: `npm run docker:e2e` runs the desktop scenarios and `npm run docker:e2e -- --probe <file>` runs your own Playwright script (test/e2e-desktop/lib/probe.mjs) in a container with a virtual display, screenshots in the output folder it prints. Windows-only checks (the installer, the update) go to `npm run sandbox:e2e` (Windows Sandbox). They never run in GitHub Actions. Docs: docs/building.md "Probing and testing the app without taking over your screen". Web mode runs headless and never brings a window to the front; the desktop e2e tests refuse to run unless `INSILODE_E2E_ISOLATED=1`, which only the Docker entrypoint and the sandbox script set. Never set it yourself on the user's machine.
 - **Probe what the user means.** `$ARGUMENTS` or the conversation says which feature (HTTP links, method-level impact, a board, the agents dock...). If unclear, probe the most recent change. Say which branch or commit you are probing: unmerged branches in other worktrees are not in this checkout.
 - **Web mode serves webviews from the editor's origin** (docs/building.md), so only open the demo folder or the user's own code, never an untrusted folder.
 
@@ -85,3 +85,22 @@ Lead with the verdict, then:
 - **Not probed**: what you skipped and why (needs a live agent, a login, an unmerged branch).
 
 Say what you probed (branch or commit, folder). Reset any viewport you emulated. Leave the server running if the user may want to look, and say so (it is the background Bash task; stopping it ends the probe), otherwise stop it and close the pane tab.
+
+## Desktop-only behaviour: probe in Docker
+
+Web mode cannot show what only the desktop app does (the status island's second window, focus and window behaviour, first-run dialogs, native menus). Probe that in a container with a virtual display, so nothing opens on the user's machine:
+
+1. Docker Desktop must be running in Linux-containers mode. The first run builds the image and the VS Code checkout (20 to 40 minutes, once); later runs take about 30 seconds. If it has never run here, say so and ask before starting a 30 minute build.
+2. Write a probe script (start from `test/e2e-desktop/probes/hello.mjs`; keep yours in the scratchpad, not the repo):
+
+   ```js
+   import { startInsilode, shot, runCommand, sleep } from '/work/insilode/test/e2e-desktop/lib/probe.mjs'
+   const { app, page } = await startInsilode({ driver: true })   // driver: fake agents for the island
+   await runCommand(page, 'Insilode: Show Flow at Cursor')
+   console.log(await shot(page, 'flow'))
+   await app.close()
+   ```
+
+   `app.main(fn)` runs in Electron's main process (window bounds, visibility, focus); `app.overlayPage()` is the status island's page.
+3. `npm run docker:e2e -- --probe <script> --out <folder in the scratchpad>`. It copies the working tree (uncommitted changes included) and rebuilds only what changed. Read the screenshots from the output folder; they stay out of the repository.
+4. Report what you saw, with the screenshot paths. Docker is Linux: Windows-only checks (installer, update) go to `npm run sandbox:e2e`.

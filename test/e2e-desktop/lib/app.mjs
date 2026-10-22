@@ -76,7 +76,8 @@ export async function launchInsilode(o) {
 		'--user-data-dir', userData,
 		'--extensions-dir', join(profile, 'extensions'),
 		'--disable-workspace-trust', '--skip-release-notes',
-		'--disable-gpu', '--no-sandbox', ...(o.updates ? [] : ['--disable-updates']),
+		// --disable-dev-shm-usage: in a container (Docker's /dev/shm is small) Chromium otherwise fails a few percent of the module loads, and the workbench never starts.
+		'--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', ...(o.updates ? [] : ['--disable-updates']),
 		...(o.extensions ?? []).map(e => `--extensionDevelopmentPath=${e}`),
 		...(o.folder ? [o.folder] : []),
 	]
@@ -88,6 +89,10 @@ export async function launchInsilode(o) {
 	let browser
 	try {
 		app = await _electron.launch({ executablePath: o.exe, args, cwd: o.cwd, env, timeout: 60000 })
+		// Electron's own log (crashes, GPU and sandbox problems, files it could not read) is what explains an empty window.
+		const log = createWriteStream(join(o.out, 'app.log'), { flags: 'a' })
+		app.process().stdout?.pipe(log)
+		app.process().stderr?.pipe(log)
 	} catch (e) {
 		mode = 'cdp'
 		console.log(`  _electron could not attach (${String(e.message).split('\n')[0]}); using a remote debugging port`)

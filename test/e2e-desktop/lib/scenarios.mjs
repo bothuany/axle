@@ -51,10 +51,23 @@ export async function canvasTour(ctx) {
 	const page = await ctx.app.workbench()
 	await dismissWelcome(page)
 	const file = tourFile(ctx.folder)
-	await runCommand(page, 'Insilode: Play Tour from File')
-	// With a tour file in the workspace the command lists it; the file we wrote is the only one.
-	await until('the tour file to be offered', async () => (await page.locator('.quick-input-list .monaco-list-row').count()) > 0, { ms: 20000 })
-	await page.keyboard.press('Enter')
+	// The command exists once the extension has started and the flow needs the code index: until then it fails quietly, so ask again
+	// (each attempt is the whole gesture: palette, pick the file) until a flow tab is there.
+	await until('a flow tab after "Play Tour from File"', async () => {
+		if ((await tabTitles(page)).some(t => /^Flow:/.test(t))) {
+			return true
+		}
+		await runCommand(page, 'Insilode: Play Tour from File').catch(() => page.keyboard.press('Escape'))
+		// The picker lists the tour file we wrote; the palette's own rows must not be taken for it.
+		const row = page.locator('.quick-input-list .monaco-list-row', { hasText: 'e2e.tour.json' })
+		if (await row.first().waitFor({ timeout: 6000 }).then(() => true, () => false)) {
+			await row.first().click()
+		} else {
+			await page.keyboard.press('Escape')
+		}
+		await sleep(8000)
+		return (await tabTitles(page)).some(t => /^Flow:/.test(t))
+	}, { ms: 120000, every: 2000 })
 	const canvas = await until('the flow canvas', () => findCanvas(page), { ms: 90000, every: 1000 })
 	await until('a card on the canvas', async () => (await canvas.locator('.react-flow__node').count()) > 0, { ms: 60000, every: 1000 })
 	const caption = await until('the tour caption', async () => {
@@ -121,13 +134,15 @@ export async function island(ctx) {
 		if (movePointer(sx, sy)) {
 			const box = await overlay.locator('.box').boundingBox()
 			const [px, py] = [box.x + box.width / 2, box.y + box.height / 2]
+			// The island follows the pointer, so in the page's own coordinates the pointer stays where it is while the real cursor moves.
 			await overlay.mouse.move(px, py)
 			await overlay.mouse.down()
 			for (let i = 1; i <= 8; i++) {
 				movePointer(sx + i * 20, sy + i * 12)
-				await overlay.mouse.move(px + i * 20, py + i * 12)
+				await overlay.mouse.move(px + (i % 2), py)
 				await sleep(60)
 			}
+			await overlay.mouse.move(px, py)
 			await overlay.mouse.up()
 			await sleep(500)
 			const after = (await overlayInfo(ctx)).bounds
@@ -153,8 +168,14 @@ export async function island(ctx) {
 		} else {
 			steps.push('hide-while-focused skipped (this OS gave the window no focus)')
 		}
-		ctx.setSettings({ 'flow.agents.desktop.overlay.autoHide': { noAgents: true, insilodeFocused: false } })
-		await until('the island to come back', async () => (await overlayInfo(ctx))?.visible, { ms: 15000 })
+		// VS Code can miss a settings file written right after the last write: let that one land, and write again while waiting.
+		await sleep(3000)
+		let n = 0
+		await until('the island to come back', async () => {
+			ctx.setSettings({ 'flow.agents.desktop.overlay.autoHide': { noAgents: true, insilodeFocused: false }, 'flow.e2e.nonce': ++n })
+			await sleep(2000)
+			return (await overlayInfo(ctx))?.visible
+		}, { ms: 40000, every: 500 })
 	}
 
 	// Close: the x turns the island off in the settings.

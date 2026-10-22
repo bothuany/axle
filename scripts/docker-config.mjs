@@ -18,7 +18,7 @@ export function dockerRunArgs({ image, name, repo, ctl, out, probeDir, mode, mod
 	return [
 		'run', '--rm', '--name', name,
 		'--shm-size', '2g', '--memory', memory,
-		'-v', `${volume}:/work/insilode`,
+		'-v', `${volume ?? WORK_VOLUME}:/work/insilode`,
 		'-v', `${repo}:/src:ro`,
 		'-v', `${ctl}:/ctl:ro`,
 		'-v', `${out}:/out`,
@@ -34,4 +34,13 @@ export function dockerMissingMessage(detail) {
 		'Install and start Docker Desktop (Linux containers), then run this again. Desktop tests never run on your own desktop.',
 		'On Windows, the Windows-only scenarios can run in Windows Sandbox instead (npm run sandbox:e2e).',
 	].join('\n')
+}
+
+/**
+ * The files whose size or modification time differ from what the last run copied. Copying only those keeps a run on an unchanged
+ * tree from stat-ing every file through the container's bind mount (a minute on Docker Desktop). `previous` and `now` map a path
+ * to "<mtimeMs>:<size>".
+ */
+export function changedFiles(now, previous) {
+	return Object.keys(now).filter(file => previous?.[file] !== now[file])
 }
