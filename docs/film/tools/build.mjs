@@ -27,6 +27,15 @@ const IMG = {
 	islandWorking: ['capture/agents/island-1-working-2.png', 996, 165],
 	islandNeeds: ['capture/agents/island-2-needs-you.png', 996, 165],
 	tour: ['capture/tour.mp4', 1920, 1080],
+	// The dock and island pages recorded live (their avatars animate), gyro first, pixel pets from 9.97 s (agents-live.mjs).
+	dockLive: ['capture/dock-live.mp4', 968, 500],
+	// The same take under another name: two clips of one file in a film get their seeks mixed up when rendered.
+	dockLiveHook: ['capture/dock-live-hook.mp4', 968, 500],
+	islandLive: ['capture/island-live.mp4', 600, 96],
+	// The same take at 7x zoom on the dock's first row, so the pixel pet is drawn large, not upscaled.
+	petsClose: ['capture/pets-close.mp4', 1920, 1080],
+	skeleton: ['wb/skeleton.png', 3840, 2160],
+	skeletonMatched: ['wb/skeleton-2.png', 3840, 2160],
 	logo: ['icon.png', 1024, 1024],
 }
 
@@ -44,8 +53,8 @@ const key = (t, rect, more = {}) => ({ t, rect, ...more })
 function shots16(f) {
 	const s = []
 	// 01 Hook: the dock's real row turns amber while the statement lands.
-	s.push({ id: 's01a', img: 'dockWorking', start: 0, dur: 1.2, crop: [0, 0.1, 1, 0.56], place: dockPlace(f), dim: 0.2 })
-	s.push({ id: 's01b', img: 'dockNeeds', start: 1.2, dur: 3.0, crop: [0, 0.1, 1, 0.56], place: dockPlace(f), dim: 0.2 })
+	// The live dock: working, then its row turns amber at 1.26 s (the recording's "needs you" is at 6.457 s).
+	s.push({ id: 's01', video: 'dockLiveHook', start: 0, dur: 4.2, mediaStart: 5.2, place: dockPlace(f) })
 	// 03 The turn: the change set, from its root down through the changed cards.
 	s.push({ id: 's03', img: 'changes', start: 12, dur: 10, fadeIn: 0.5, keys: [
 		key(0, [0, 0, 0.56, 0.14], { square: [0, 0, 0.34, 0.12], vertical: [0, 0, 0.3, 0.16] }),
@@ -77,9 +86,11 @@ function shots16(f) {
 	// 06 Agents: the dock beside a darkened canvas, the row turning amber on "needs you"; then the island drops.
 	const flip = at('06a', 'needs')
 	s.push({ id: 's06bg', img: 'changes', start: 40, dur: 14, dim: 0.72, keys: [key(0, [0, 0.24, 0.7, 0.38]), key(14, [0.02, 0.25, 0.66, 0.37])] })
-	s.push({ id: 's06a', img: 'dockWorking', start: 40, dur: flip - 40, crop: [0, 0, 1, 0.56], place: agentsPlace(f) })
-	s.push({ id: 's06b', img: 'dockNeeds', start: flip, dur: 54 - flip, crop: [0, 0, 1, 0.56], place: agentsPlace(f), pushTo: 1.12, pushAt: flip + 1.2 - flip })
-	s.push({ id: 's06c', img: 'islandNeeds', start: 50.2, dur: 3.8, place: islandPlace(f), drop: true })
+	// One live take: the row turns amber on "needs" (6.457 s in the take), switches to pixel pets at 47.23 s, then works on.
+	s.push({ id: 's06a', video: 'dockLive', start: 40, dur: 14, mediaStart: +(6.457 - (flip - 40)).toFixed(3), place: agentsPlace(f), pushTo: 1.1, pushAt: 4.8 })
+	// Close on the avatar: the gyro, then the pixel cat with its "needs you" face (switch at 9.953 s in the take, 47.9 s here).
+	s.push({ id: 's06p', video: 'petsClose', start: 47, dur: 3.2, mediaStart: 9.053, place: closePlace(f), pushTo: 1.06, pushAt: 0.8 })
+	s.push({ id: 's06c', video: 'islandLive', start: 50.2, dur: 3.8, mediaStart: +(6.457 - (flip - 40) + 10.2).toFixed(3), place: islandPlace(f), drop: true })
 	// 07 Diagrams: the sequence board of POST /orders, read from the index.
 	s.push({ id: 's07', img: 'seq', start: 54, dur: 8, keys: [
 		key(0, [0.02, 0.07, 0.98, 0.86], { square: [0.08, 0.15, 0.55, 0.65], vertical: [0.08, 0.15, 0.45, 0.85] }),
@@ -87,9 +98,12 @@ function shots16(f) {
 		key(8, [0.4, 0.4, 0.96, 0.8], { square: [0.55, 0.45, 0.95, 0.8], vertical: [0.6, 0.45, 0.93, 0.85] }),
 	] })
 	// 08 Montage: three real views, a push-in each, cut on the downbeat.
-	s.push({ id: 's08a', img: 'home', start: 62, dur: 2, crop: [0.425, 0.435, 0.568, 0.7], keys: [key(0, [0.42, 0.43, 0.573, 0.705]), key(2, [0.425, 0.44, 0.568, 0.69])] })
-	s.push({ id: 's08b', img: 'home', start: 64, dur: 2, crop: [0.585, 0.44, 0.75, 0.535], keys: [key(0, [0.58, 0.435, 0.755, 0.54]), key(2, [0.585, 0.445, 0.72, 0.53])] })
-	s.push({ id: 's08c', img: 'er', start: 66, dur: 2, crop: [0.26, 0.46, 0.74, 0.67], keys: [key(0, [0.25, 0.44, 0.75, 0.68]), key(2, [0.27, 0.46, 0.73, 0.66])] })
+	// Skeleton first: the agent's design with the types still MISSING, then the developer's save turns one MATCHES.
+	const sk = [0.12, 0.4, 0.74, 0.7]
+	const skV = { square: [0.13, 0.43, 0.55, 0.68], vertical: [0.13, 0.43, 0.42, 0.68] }
+	s.push({ id: 's08a', img: 'skeleton', start: 62, dur: 2.4, keys: [key(0, sk, skV), key(2.4, [0.13, 0.41, 0.72, 0.69], skV)] })
+	s.push({ id: 's08b', img: 'skeletonMatched', start: 64.4, dur: 1.6, keys: [key(0, [0.13, 0.41, 0.72, 0.69], skV), key(1.6, [0.15, 0.42, 0.7, 0.68], skV)] })
+	s.push({ id: 's08c', img: 'home', start: 66, dur: 2, crop: [0.585, 0.44, 0.75, 0.535], keys: [key(0, [0.58, 0.435, 0.755, 0.54]), key(2, [0.585, 0.445, 0.72, 0.53])] })
 	// 09 Held frame, 10 lockup: the change set again, quiet, then darkened behind the mark.
 	s.push({ id: 's09', img: 'changes', start: 68, dur: 4, dim: 0.25, keys: [key(0, [0, 0, 0.62, 0.36], { square: [0, 0, 0.4, 0.36], vertical: [0, 0, 0.36, 0.42] })] })
 	s.push({ id: 's10', img: 'changes', start: 72, dur: 8, dim: 0.25, dimTo: [0.86, 72.6, 1.4], keys: [key(0, [0, 0, 0.62, 0.36], { square: [0, 0, 0.4, 0.36], vertical: [0, 0, 0.36, 0.42] }), key(8, [0.03, 0.04, 0.6, 0.36], { square: [0.02, 0.03, 0.38, 0.35], vertical: [0.02, 0.03, 0.34, 0.41] })] })
@@ -102,14 +116,15 @@ function shotsLoop() {
 		{ id: 'l1', img: 'changes', start: 0, dur: 5, keys: [key(0, A), key(1, A), key(5, [0.16, 0.25, 0.64, 0.355])] },
 		{ id: 'l2', video: 'tour', start: 5, dur: 5, mediaStart: 0.4, keys: [key(0, [0, 0, 1, 1]), key(5, [0.05, 0.05, 0.95, 0.95])] },
 		{ id: 'l3bg', img: 'changes', start: 10, dur: 3, dim: 0.72, keys: [key(0, [0, 0.24, 0.7, 0.38])] },
-		{ id: 'l3', img: 'dockNeeds', start: 10, dur: 3, crop: [0, 0, 1, 0.56], place: agentsPlace(FORMATS.loop) },
+		{ id: 'l3', video: 'dockLive', start: 10, dur: 3, mediaStart: 9.4, place: agentsPlace(FORMATS.loop) },
 		{ id: 'l4', img: 'changes', start: 13, dur: 2, keys: [key(0, [0.1, 0.12, 0.6, 0.25]), key(2, A)] },
 	]
 }
 
 // Where a fixed (not camera-driven) image sits, per format, in frame pixels: x, y, width.
 function dockPlace(f) { return f.h > f.w ? { x: 140, y: 220, w: 800 } : f.w === f.h ? { x: 520, y: 90, w: 500 } : { x: 1180, y: 150, w: 600 } }
-function agentsPlace(f) { return f.h > f.w ? { x: 90, y: 360, w: 900 } : f.w === f.h ? { x: 190, y: 220, w: 700 } : { x: 1040, y: 230, w: 740 } }
+function agentsPlace(f) { return f.h > f.w ? { x: 90, y: 360, w: 900 } : f.w === f.h ? { x: 190, y: 220, w: 700 } : { x: 1000, y: 230, w: 820 } }
+function closePlace(f) { return f.h > f.w ? { x: 0, y: 656, w: 1080 } : f.w === f.h ? { x: 0, y: 236, w: 1080 } : { x: 0, y: 0, w: 1920 } }
 function islandPlace(f) { return f.h > f.w ? { x: 60, y: 60, w: 960 } : f.w === f.h ? { x: 90, y: 40, w: 900 } : { x: 520, y: 34, w: 880 } }
 
 // The camera transform that fits `rect` of an image (iw x ih) into the picture area of the frame.
@@ -160,6 +175,15 @@ function build(variant) {
 	let html = ''
 	for (const s of shotList) {
 		const [, iw, ih] = IMG[s.img ?? s.video]
+		if (s.video && s.place) {
+			// A live page recording placed in the frame (the dock, the island): sized by place, pushed or dropped in.
+			const p = s.place, h = Math.round(p.w * ih / iw)
+			html += `<video id="${s.id}" class="clip media placed" src="${asset(s.video)}" muted playsinline data-start="${s.start}" data-duration="${s.dur}" data-media-start="${s.mediaStart ?? 0}" data-track-index="2" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${h}px"></video>
+`
+			if (s.drop) tl.push(`tl.fromTo('#${s.id}', { y: -${h + p.y + 20} }, { y: 0, duration: 0.55, ease: 'power3.out' }, ${s.start})`)
+			if (s.pushTo) tl.push(`tl.fromTo('#${s.id}', { scale: 1 }, { scale: ${s.pushTo}, duration: ${(s.dur - s.pushAt).toFixed(2)}, ease: 'power2.inOut' }, ${s.start + s.pushAt})`)
+			continue
+		}
 		if (s.video) {
 			const k0 = fit(pick(s.keys[0], variant), iw, ih, f)
 			html += `<video id="${s.id}" class="clip media" src="${asset(s.video)}" muted playsinline data-start="${s.start}" data-duration="${s.dur}"${s.mediaStart ? ` data-media-start="${s.mediaStart}"` : ''} data-track-index="1" style="width:${iw}px;height:${ih}px"></video>\n`
@@ -277,6 +301,7 @@ html, body { width: ${f.w}px; height: ${f.h}px; overflow: hidden; background: va
 .cam { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .cam img { display: block; }
 .media { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.media.placed { transform-origin: 50% 50%; border-radius: 10px; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
 .dim { position: absolute; inset: 0; background: var(--ground); }
 .ring { position: absolute; border: 6px solid var(--signal); border-radius: 14px; opacity: 0; box-shadow: 0 0 0 4px rgba(15,15,15,.6); }
 .stmt { position: absolute; font-weight: 700; letter-spacing: -0.03em; line-height: 1.04; color: var(--text); }

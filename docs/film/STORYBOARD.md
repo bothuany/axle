@@ -101,6 +101,18 @@ olan görseller, CSS'ler kullanılmalıydı", and the product name may change.
 - The per-frame notes below keep their timing, VO and audio; where their visuals describe film-made UI
   (the chip flight, a rebuilt terminal), `storyboard.html` v2 is the plan.
 
+## Changes after the first cut (user notes)
+
+- "videonun sonunda bothuany/axle yazıyor": the URL is github.com/bothuany/insilode (brand.json).
+- "40. saniyede animasyon yok agent simgesinde": the dock and the island are now recorded live
+  (`capture/agents-live.mjs`), so the avatar animates; the hook uses the same take.
+- "pixel seçeneği datlı bir şekilde gösterilsin": at 47–50 s a close-up on the dock's first row (the page at 7× zoom,
+  not upscaled) shows the avatar switch from the gyro to the pixel cat with its "needs you" face; the island follows
+  with the cat. New line 06c: "Or switch them to pixel pets." (the `flow.agents.avatar` setting's second value).
+- "skeleton modundan da bahsedilsin": the montage opens on a real skeleton-first board, drawn through the app's MCP
+  server (`check_skeleton`, then `draw_board`) with the types still MISSING, then the developer's save turns them
+  MATCHES. Line 08: "Draw the skeleton, write it yourself, and hand it over. Your harness, scored."
+
 ## Script (voiceover, verbatim)
 
 | # | Time | Line |

@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const VO = { '01a': 0.6, '01b': 4.3, '02': 6.6, '03': 12.6, '04': 22.4, '05': 30.6, '06a': 40.6, '06b': 50.4, '07': 54.6, '08': 62.3, '09': 68.8, '10': 74.2 }
+export const VO = { '01a': 0.6, '01b': 4.3, '02': 6.6, '03': 12.6, '04': 22.4, '05': 30.6, '06a': 40.6, '06c': 47.3, '06b': 50.4, '07': 54.6, '08': 62.3, '09': 68.8, '10': 74.2 }
 
 export const timing = shots => {
 	const words = id => JSON.parse(readFileSync(join(shots, 'vo', `${id}.words.json`), 'utf8'))
@@ -24,7 +24,9 @@ export const sfx = ({ at }) => [
 	['pulse', at('04', 'HTTP'), 0.8], ['pulse', at('04', 'Kafka') + 0.3, 0.8], ['pulse', at('04', 'table') + 0.1, 0.8],
 	['whoosh', 29.7, 0.35], ['tick', 33.8, 0.5], ['tick', 37.6, 0.5],
 	['chime', at('06a', 'needs'), 0.7],
+	// The avatar style switches to pixel pets (dock and island repaint at once).
+	['whoosh', 46.85, 0.3], ['tick', 47.9, 0.7], ['tick', 47.98, 0.5],
 	['drop', 50.2, 0.8],
-	['thump', 54.0, 0.6], ['thump', 62.0, 0.6], ['thump', 64.0, 0.6], ['thump', 66.0, 0.6], ['thump', 68.0, 0.5],
+	['thump', 54.0, 0.6], ['thump', 62.0, 0.6], ['tick', 64.4, 0.8], ['thump', 66.0, 0.6], ['thump', 68.0, 0.5],
 	['hit', 74.0, 0.9],
 ]
