@@ -681,12 +681,12 @@ function Flow() {
           <span className="owner">{owner}</span>
           <span className="member">{member}</span>
         </div>
-        {down && (
-          <button className="chip" aria-pressed={showUp} onClick={() => setShowUp(v => !v)} title="Show who calls this method, to the left">
-            Callers
-          </button>
-        )}
-        {!down ? null : impact ? (
+        {/* Callers and the impact chip are on the bar from the first frame, before the flow arrives, so the bar keeps its lines: on a
+            narrow canvas, chips appearing later wrapped it onto another line and moved the canvas below it (a layout shift). */}
+        <button className="chip" aria-pressed={showUp} disabled={!down} onClick={() => setShowUp(v => !v)} title="Show who calls this method, to the left">
+          Callers
+        </button>
+        {down && impact ? (
           <span className="impact-wrap">
             <button className={`chip impact${impactCount ? ' hot' : ''}`} aria-expanded={impactOpen} disabled={!impactCount} onClick={() => setImpactOpen(v => !v)}>
               {impactText}
@@ -719,7 +719,7 @@ function Flow() {
           </button>
         )}
         <span className="wv-spacer" />
-        {status && <span className="wv-status">{status}</span>}
+        {status && <span className="wv-status" title={status}>{status}</span>}
         {gaze.toggle}
         <button className="icon-btn" onClick={() => load(target.target, true)} title="Trace the flow again">
           ↻

@@ -315,6 +315,35 @@ test('try: the order tour, the agent\'s change with its review and Keep, and the
 	await page.close()
 })
 
+test('try: the page and its canvas do not shift as they load (CLS under 0.1 on a phone and a desktop)', { skip }, async () => {
+	for (const viewport of [{ width: 412, height: 823, isMobile: true, hasTouch: true }, { width: 1440, height: 900 }]) {
+		const context = await browser.createBrowserContext()
+		const page = await context.newPage()
+		await page.setRequestInterception(true)
+		page.on('request', r => (r.url().startsWith('https://api.github.com/') ? r.abort() : r.continue()))
+		// Every document (the page and the canvas iframe) adds up its own layout shifts, as Lighthouse counts them.
+		await page.evaluateOnNewDocument(() => {
+			window.__cls = 0
+			new PerformanceObserver(list => {
+				for (const e of list.getEntries()) if (!e.hadRecentInput) window.__cls += e.value
+			}).observe({ type: 'layout-shift', buffered: true })
+		})
+		await page.setViewport(viewport)
+		await page.goto(`${url}try/`, { waitUntil: 'networkidle0' })
+		await drawn(await inside(page, '.stage-frame'))
+		// The bar fills in after the flow (impact, the status note that comes and goes): wait past that.
+		await wait(5000)
+		const shifts = {}
+		for (const frame of page.frames()) {
+			const cls = await frame.evaluate(() => window.__cls).catch(() => undefined)
+			if (cls !== undefined) shifts[frame === page.mainFrame() ? 'page' : frame.url().split('/').pop().split('?')[0]] = Math.round(cls * 1000) / 1000
+		}
+		assert.ok(shifts.page !== undefined && shifts['canvas.html'] !== undefined, `both documents were measured: ${JSON.stringify(shifts)}`)
+		for (const [doc, cls] of Object.entries(shifts)) assert.ok(cls < 0.1, `${doc} at ${viewport.width}px shifts by ${cls} as it loads`)
+		await context.close()
+	}
+})
+
 test('try: a link to a story plays it at once', { skip }, async () => {
 	const { page, problems } = await open('try/#invoice')
 	await until(async () => (await caption(await inside(page, '.stage-frame')))?.title === 'A Java endpoint', 'the invoice tour')

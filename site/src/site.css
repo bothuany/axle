@@ -1594,8 +1594,9 @@ figcaption {
     padding: 22px 18px;
   }
 
-  /* Not when it is full screen: .adds .stage outranks .stage.is-full, which would keep the 3/4 box on a phone's screen. */
-  .stage:not(.is-full),
+  /* The home page's canvas on a phone: a 3/4 box, but not when it is full screen (.adds .stage outranks .stage.is-full). Only on
+     the home page: the Try page's canvas has a height of its own (.try .stage), and a 3/4 ratio on top of that height made it wider
+     than the phone, so its header wrapped and unwrapped as it loaded (a layout shift). */
   .adds .stage:not(.is-full) {
     aspect-ratio: 3 / 4;
   }
