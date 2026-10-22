@@ -5,7 +5,7 @@ message: "Your agent changed the code. Axle shows you where, on how it runs."
 arc: Problem (hook) → Turn (the canvas answers) → Proof ×3 (tour, agents, diagrams) → Credibility → One CTA
 audience: developers who run Claude Code or Codex on real codebases
 mode: collaborative
-version: v2
+version: v2 (built)
 ---
 
 # Launch film: storyboard v2
@@ -37,9 +37,8 @@ Harbor Goods (the playground's demo project: orders and shipping in Java, billin
 the playground's host (`playground/canvas.html`, `scripts/playground-data.mjs`), and the workbench in
 web mode for the frames that need the whole window. The film adds only framing, camera moves, rings,
 captions and type. The agent's change is a real commit for the film (`demo/changed/`, 14 files,
-+112 −16), so the count, the diff and the green/red lines are real. The tour's steps are scripted. Whether the agent terminals and the dock show real sessions or the playground's
-scripted one is open (see *Still open*); the island is Axle's own page fed a scripted session either
-way. The question in 05 is asked in Axle's own point-and-ask box (`ui/src/tour/PointAsk.tsx`).
++112 −16), so the count, the diff and the green/red lines are real. The tour's steps are scripted, and the dock and the island are the app's own pages fed the playground's
+scripted session. The question in 05 is asked in Axle's own point-and-ask box (`ui/src/tour/PointAsk.tsx`).
 
 ## Brand (from the product)
 
@@ -134,9 +133,8 @@ real VO after it is generated.
   motif that returns at the lockup. Silent under the hook (0-12 s): only room tone and UI sounds.
   The bed enters on the downbeat at 12.0 s, the moment Axle appears. It drops to the bass alone under
   the held frame (68-72 s) and resolves on the logo at 74 s. Ducked about 8 dB under VO.
-- **Source: open.** Candidates, in order: (1) generate it locally with ACE-Step (Apache-2.0, runs on
-  the RTX 5080; needs approval to download, as it is a second model); (2) a CC0 track; (3) a track
-  the user supplies. Not decided; listed under *Still open*.
+- **Source:** composed and synthesized in code (`tools/score.py`): kick, band-limited hats, a saw bass, a Karplus-Strong
+  arpeggio, a detuned pad and an FM bell motif. No model and no samples, so there is no licence to clear.
 - **Sound effects,** synthesized locally (no library licence), each tied to a real state change:
   key ticks under the terminal text (01); a dry "tick" per file name in the diff (02); a soft
   air-whoosh on the chip flight and a click per chip landing (03); a low pulse when a dashed
@@ -157,31 +155,17 @@ real VO after it is generated.
 - **Per-feature clips** for the website (`docs/media/film/clips/`, silent, 16:9): `change-set.mp4`,
   `across-services.mp4`, `tour.mp4`, `agents.mp4`, `diagrams.mp4`, `loop-15s.mp4`.
 
-## Still open
+## Decided (approved, v2)
 
-- The music source (above).
-- The voice: three samples of the hook line (kept outside the repo, in the review folder), all generated on this machine.
-  Recommended: Chatterbox, the most natural read. Both venvs live in `%USERPROFILE%\axle-tts`,
-  outside the repo.
-  - `chatterbox_default.mp3`: Resemble AI Chatterbox, weights MIT
-    (https://huggingface.co/ResembleAI/chatterbox), run on the RTX 5080 through CUDA by
-    `tools/cb_say.py`. Every output carries Resemble's PerTh watermark (the model card says so):
-    inaudible, it marks the audio as AI-generated.
-  - `kokoro_am_michael.mp3`, `kokoro_bm_george.mp3`: Kokoro-82M, weights Apache-2.0
-    (https://huggingface.co/hexgrad/Kokoro-82M), through `hyperframes tts`. No watermark.
-  - F5-TTS is out: its pretrained weights are CC BY-NC 4.0 (https://huggingface.co/SWivid/F5-TTS),
-    non-commercial.
-  - Caption timing uses a local transcription model, NVIDIA Parakeet TDT 0.6B v3 (CC BY 4.0,
-    https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3, about 640 MB, cached by HyperFrames in the
-    user profile), installed with `hyperframes models install parakeet`.
-- Real agent sessions or scripted ones (frames 01 and 06). (a) Run Claude Code and Codex once on
-  the demo repo in web mode's terminals: real terminals and a real dock, but it spends quota and
-  needs both CLIs logged in. (b) Use the playground's scripted session on Axle's own dock and island
-  pages, with the two terminals rebuilt from a real capture of each CLI. Recommended: (a) for the
-  terminals and the dock if the user agrees, (b) otherwise; the island is (b) either way.
-- The hook line. The brief's line is "Your agent changed 14 files. Where?"; v1 reads "Your agent
-  just changed 14 files." ("just" for the spoken rhythm). Keep or drop "just".
-- Whether the hook's number stays "fourteen" (it follows the real commit).
+- **Voice:** Kokoro-82M (Apache-2.0, https://huggingface.co/hexgrad/Kokoro-82M), British voice `bm_george`, run on
+  this machine (`tools/vo-kokoro.mjs`). The name goes in as phonemes from `brand.json` so it is said IN-sih-lohd.
+  Word times come from the local transcription model HyperFrames uses (NVIDIA Parakeet TDT 0.6B v3, CC BY 4.0).
+  Rejected: F5-TTS (weights CC BY-NC 4.0). Chatterbox (MIT) takes stay possible with `tools/vo.py`.
+- **Music:** composed and synthesized in code, no model (see *Music and sound*).
+- **Agent sessions:** scripted: the playground's scripted session drives the app's real dock and island pages; no
+  live Claude Code or Codex runs.
+- **Hook:** "Your agent just changed fourteen files." The number is the real commit's (14 files).
+- **Name:** Insilode, from `brand.json`; the URL on screen is the repository's, as a variable.
 
 ## Frame 01 — Hook (0.0–6.0, 6 s)
 

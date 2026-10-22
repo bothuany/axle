@@ -7,7 +7,7 @@ delivered files are in [docs/media/film](../media/film).
 Nothing in the picture is drawn for the film: every product frame is a capture of the app (the canvas, its tour, the
 Agents dock and status island pages, the workbench in web mode) on Harbor Goods, the playground's demo project, with a
 real 14-file change made for the film ([demo/](demo)). The film adds framing, camera moves, rings, type and captions.
-The voice and the music are generated on this machine by open models.
+The voice is generated on this machine by an open model (Kokoro-82M); the music is composed and synthesized in code.
 
 Stills, captures, voice takes and renders are working material and stay out of the repo (`%LOCALAPPDATA%\Temp\axle-film-shots`
 below, the "shots" folder). Only the delivered files go in `docs/media/film`.
@@ -28,9 +28,9 @@ Everything runs headless; nothing opens a window.
 2. **Voice.** `HYPERFRAMES_PYTHON=<kokoro venv python> node tools/vo-kokoro.mjs <shots> [line ids]` generates each line
    with Kokoro-82M (Apache-2.0), voice `bm_george`, and transcribes it for its word times (`<id>.words.json`).
    Lines: [vo/script.json](vo/script.json). `tools/vo.py` makes Chatterbox takes of the same lines instead.
-3. **Music.** `python tools/music.py <ACE-Step-1.5 dir> <shots>/music [seeds]` in an ACE-Step 1.5 checkout (code and
-   weights MIT; the model card allows commercial use of the output).
-4. **Mix.** `node tools/mix.mjs <shots> <music.wav>`: voice at its times, the bed silent under the hook and ducked
+3. **Music.** `python tools/score.py <shots>/music/score.wav` composes and synthesizes the bed in code (NumPy, no model):
+   120 BPM in A minor, silent under the hook, in on the turn, the bass alone under the held frame, a bell motif on the logo.
+4. **Mix.** `node tools/mix.mjs <shots> <shots>/music/score.wav`: voice at its times, the bed silent under the hook and ducked
    under the voice, effects synthesized with ffmpeg (`<shots>/audio/sfx`), loudness about -14 LUFS.
 5. **Projects.** `node tools/build.mjs <shots>` writes one HyperFrames project per variant (`film`, `square`, `vertical`,
    `loop`) under `<shots>/build/`; check one with `npx hyperframes snapshot --at <seconds>`.

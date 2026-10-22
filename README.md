@@ -17,7 +17,7 @@
 
 <p align="center"><b><a href="https://bothuany.github.io/axle/">Try it in your browser</a></b>: open an endpoint, watch an agent change it, and see exactly what it touched. Nothing to install.</p>
 
-https://github.com/user-attachments/assets/2659c972-8d4a-40d3-bbe0-6f4442d24aa5
+[![Launch film, 80 s: see what your agent changed, on how your code runs](docs/media/film/launch-film-poster.jpg)](docs/media/film/launch-film.mp4)
 
 ## See how your code runs
 
