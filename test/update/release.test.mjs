@@ -77,7 +77,8 @@ test('the RPM is best effort; any other missing file, a missing artifact or a st
 })
 
 test('release.yml: only the publish job can write, it runs no repository code, and no checkout keeps the token', () => {
-	const yml = readFileSync(join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8')
+	// A Windows checkout with core.autocrlf=true has CRLF line ends.
+	const yml = readFileSync(join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8').replace(/\r\n/g, '\n')
 	const body = yml.split(/^jobs:\n/m)[1]
 	const heads = [...body.matchAll(/^ {2}([a-z-]+):$/gm)]
 	const jobs = Object.fromEntries(heads.map((h, i) => [h[1], body.slice(h.index, heads[i + 1]?.index)]))
