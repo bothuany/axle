@@ -346,6 +346,21 @@ test('state: an enum nothing moves, an unknown enum and no enum are skipped with
 	assert.match(empty.skipped, /No enum with two or more values is used as a field type/)
 })
 
+test('state: the enum is named by simple name, qualified name, or Owner.field (the owner qualified or not)', async () => {
+	const fx = await open('java-orders')
+	const read = f => readFileSync(f, 'utf8')
+	for (const name of ['OrderStatus', 'com.acme.OrderStatus', 'Order.status', 'com.acme.Order.status']) {
+		const out = gen.stateFromEnum({ graph: fx.graph, readSource: read }, { enum: name })
+		assert.equal(out.board?.title, 'States: OrderStatus', name)
+	}
+	const py = await open('py-orders')
+	const pyName = py.graph.types.find(t => t.name === 'OrderStatus').qualifiedName
+	assert.ok(pyName.includes('.'), pyName)
+	assert.equal(gen.stateFromEnum({ graph: py.graph, readSource: read }, { enum: pyName }).board?.title, 'States: OrderStatus', pyName)
+	assert.match(gen.stateFromEnum({ graph: fx.graph, readSource: read }, { enum: 'com.acme.Nope' }).skipped, /No enum "com\.acme\.Nope"/)
+	assert.match(gen.stateFromEnum({ graph: fx.graph, readSource: read }, { enum: 'Order.nope' }).skipped, /No enum "Order\.nope"/)
+})
+
 test('state: with no enum named, the one with clear transitions is found', async () => {
 	const fx = await open('java-orders')
 	const out = gen.stateFromEnum({ graph: fx.graph, readSource: f => readFileSync(f, 'utf8') })

@@ -133,3 +133,13 @@ test('plan-edit: editing a file linked from a step moves that step', () => {
 	assert.equal(plan.statusAfterEdit('blocked', 'after'), 'blocked')
 	assert.equal(plan.statusAfterEdit(undefined, 'after'), 'done')
 })
+
+test('plan-edit: the host applies before and then after to one edit; a blocked or skipped step keeps its status through both', () => {
+	const edit = s => plan.statusAfterEdit(plan.statusAfterEdit(s, 'before'), 'after')
+	assert.equal(plan.statusAfterEdit('blocked', 'before'), 'blocked')
+	assert.equal(edit('blocked'), 'blocked')
+	assert.equal(edit('skipped'), 'skipped')
+	assert.equal(edit('todo'), 'done')
+	assert.equal(edit('done'), 'done')
+	assert.equal(edit(undefined), 'done')
+})

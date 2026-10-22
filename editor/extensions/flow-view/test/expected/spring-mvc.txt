@@ -1,0 +1,3 @@
+GET /owners/{id}  OwnerController.show
+GET /vets         VetController.list
+POST /pets/new    PetController.create

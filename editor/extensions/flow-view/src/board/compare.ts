@@ -21,8 +21,74 @@ function nodeSignature(n: BoardNode): string {
 
 const edgeKey = (e: BoardEdge) => `${e.from}>${e.to}|${e.kind ?? ''}`;
 
-function edgeSignature(e: BoardEdge): string {
-	return [e.label, e.order, e.style, e.async, e.guard, e.fromCard, e.toCard].join('\u0001');
+function edgeSignature(e: BoardEdge, withOrder = true): string {
+	return [e.label, withOrder ? e.order : '', e.style, e.async, e.guard, e.fromCard, e.toCard].join('\u0001');
+}
+
+/**
+ * Which old edge each new edge (by index) is. Edges between the same two nodes of the same kind are told apart the way a reader would:
+ * the same message first, then the same label, then the rest in order. A sequence board has many `api -> db` messages; keyed by the
+ * ends alone they would collapse into one.
+ */
+function pairEdges(base: BoardEdge[], next: BoardEdge[]): Map<number, BoardEdge> {
+	const pool = new Map<string, BoardEdge[]>();
+	for (const e of base) {
+		const list = pool.get(edgeKey(e));
+		if (list) {
+			list.push(e);
+		} else {
+			pool.set(edgeKey(e), [e]);
+		}
+	}
+	const pairs = new Map<number, BoardEdge>();
+	const passes: ((old: BoardEdge, e: BoardEdge) => boolean)[] = [
+		(old, e) => edgeSignature(old) === edgeSignature(e),
+		(old, e) => (old.label ?? '') === (e.label ?? ''),
+		() => true,
+	];
+	for (const same of passes) {
+		next.forEach((e, i) => {
+			const list = pool.get(edgeKey(e));
+			const at = pairs.has(i) || !list ? -1 : list.findIndex(old => same(old, e));
+			if (at >= 0) {
+				pairs.set(i, list!.splice(at, 1)[0]);
+			}
+		});
+	}
+	return pairs;
+}
+
+/**
+ * The paired edges whose place in the message order changed. A message removed or added before them renumbers the rest, which is not
+ * a change to them. Of the messages that keep their order, the longest run that is still in the old order stays; the others moved, so
+ * one message moved past several is the only one marked.
+ */
+function movedEdges(pairs: Map<number, BoardEdge>, next: BoardEdge[]): Set<number> {
+	const ordered = [...pairs]
+		.filter(([i, old]) => old.order !== undefined && next[i].order !== undefined)
+		.sort(([a], [b]) => next[a].order! - next[b].order! || a - b);
+	// Longest strictly increasing run of old orders, in new order (n is the edges of one board: quadratic is fine).
+	const len: number[] = [];
+	const prev: number[] = [];
+	let best = -1;
+	ordered.forEach(([, old], k) => {
+		len[k] = 1;
+		prev[k] = -1;
+		for (let j = 0; j < k; j++) {
+			if (ordered[j][1].order! < old.order! && len[j] + 1 > len[k]) {
+				len[k] = len[j] + 1;
+				prev[k] = j;
+			}
+		}
+		if (best < 0 || len[k] > len[best]) {
+			best = k;
+		}
+	});
+	const stay = new Set<number>();
+	for (let k = best; k >= 0; k = prev[k]) {
+		stay.add(ordered[k][0]);
+	}
+	return new Set(ordered.map(([i]) => i).filter(i => !stay.has(i)));
 }
 
 /**
@@ -56,20 +122,22 @@ export function compareBoards(base: BoardSpec, next: BoardSpec): BoardSpec {
 			have.add(old.id);
 		}
 	}
-	const oldEdges = new Map(base.edges.map(e => [edgeKey(e), e]));
-	const edges: BoardEdge[] = next.edges.map(e => {
-		const old = oldEdges.get(edgeKey(e));
+	const pairs = pairEdges(base.edges, next.edges);
+	const moved = movedEdges(pairs, next.edges);
+	const edges: BoardEdge[] = next.edges.map((e, i) => {
+		const old = pairs.get(i);
 		if (e.change) {
 			return e;
 		}
 		if (!old) {
 			return { ...e, change: 'added' };
 		}
-		return edgeSignature(old) === edgeSignature(e) ? e : { ...e, change: 'changed' };
+		const same = !moved.has(i) && (old.order === undefined) === (e.order === undefined) && edgeSignature(old, false) === edgeSignature(e, false);
+		return same ? e : { ...e, change: 'changed' };
 	});
-	const kept = new Set(next.edges.map(edgeKey));
+	const kept = new Set(pairs.values());
 	for (const old of base.edges) {
-		if (!kept.has(edgeKey(old)) && have.has(old.from) && have.has(old.to)) {
+		if (!kept.has(old) && have.has(old.from) && have.has(old.to)) {
 			edges.push({ ...old, change: 'removed', fragment: old.fragment && groups.has(old.fragment) ? old.fragment : undefined });
 		}
 	}

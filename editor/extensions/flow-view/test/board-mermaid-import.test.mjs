@@ -55,6 +55,29 @@ sequenceDiagram
 	assert.equal(p.spec.edges[1].fragment, 'f1')
 })
 
+test('mermaid-import: an alt with three or more branches: every else is a sibling branch of the alt, nested blocks stay inside theirs', () => {
+	const { board } = read(`sequenceDiagram
+  A->>B: pay
+  alt ok
+    B-->>A: 200
+  else retry
+    opt backoff
+      A->>A: wait
+    end
+    A->>B: pay again
+  else fail
+    B-->>A: 500
+  end
+  A->>B: done`)
+	assert.deepEqual(board.groups.map(g => [g.id, g.kind, g.label, g.parent]), [
+		['f1', 'alt', 'ok', undefined], ['f2', 'alt', 'retry', 'f1'], ['f3', 'opt', 'backoff', 'f2'], ['f4', 'alt', 'fail', 'f1'],
+	])
+	assert.deepEqual(board.edges.map(e => [e.label, e.fragment]), [['pay', undefined], ['200', 'f1'], ['wait', 'f3'], ['pay again', 'f2'], ['500', 'f4'], ['done', undefined]])
+	assert.equal(parsed(`sequenceDiagram\n  alt a\n    A->>B: 1\n  else b\n    A->>B: 2\n  else c\n    A->>B: 3\n  else d\n    A->>B: 4\n  end`).spec.groups.length, 4)
+	assert.throws(() => read('sequenceDiagram\n  alt a\n    A->>B: 1\n  end\n  else b'), /line 5: `else` outside an `alt`/, 'an else after the alt is closed is still refused')
+	assert.throws(() => read('sequenceDiagram\n  opt a\n    A->>B: 1\n  else b\n  end'), /line 4: `else` outside an `alt`/)
+})
+
 test('mermaid-import: unsupported blocks are read through and said so; unknown lines fail with their number', () => {
 	const ok = read('sequenceDiagram\n  A->>B: x\n  par one\n    B->>C: y\n  and two\n    B->>D: z\n  end\n  A--xB: lost')
 	assert.equal(ok.board.edges.length, 4)

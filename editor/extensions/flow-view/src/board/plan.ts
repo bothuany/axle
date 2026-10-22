@@ -252,7 +252,8 @@ export function nodesLinkedTo(spec: BoardSpec, file: string, platform: NodeJS.Pl
  */
 export function statusAfterEdit(current: NodeStatus | undefined, phase: 'before' | 'after'): NodeStatus {
 	if (phase === 'before') {
-		return current === 'skipped' ? 'skipped' : 'doing';
+		// The host applies 'before' and then 'after' to the same edit: a blocked step must survive both, not pass through 'doing' to 'done'.
+		return current === 'skipped' || current === 'blocked' ? current : 'doing';
 	}
 	return current === 'skipped' || current === 'blocked' ? current : 'done';
 }

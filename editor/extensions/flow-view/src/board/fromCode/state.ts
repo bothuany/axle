@@ -178,14 +178,16 @@ export function stateFromEnum(input: StateInput, scope: StateScope = {}, opts: S
 	let candidates = enums.filter(t => used.has(t.id));
 	const asked = scope.enum?.trim();
 	if (asked) {
-		let hit: TypeInfo[] = [];
-		if (asked.includes('.')) {
-			const [owner, field] = asked.split('.');
-			const ownerType = graph.types.find(t => t.name === owner);
+		// The enum by name or qualified name (`com.acme.OrderStatus`, `app.models.Status`) first; failing that `Owner.field`, the enum a
+		// field holds, where the owner may be qualified too (`com.acme.Order.status`).
+		let hit = enums.filter(t => t.name === asked || t.qualifiedName === asked);
+		const dot = asked.lastIndexOf('.');
+		if (!hit.length && dot > 0) {
+			const owner = asked.slice(0, dot);
+			const field = asked.slice(dot + 1);
+			const ownerType = graph.types.find(t => t.name === owner) ?? graph.types.find(t => t.qualifiedName === owner);
 			const ref = ownerType?.fields.find(f => f.name === field)?.refs.map(r => graph.byId.get(r)).find(t => t?.kind === 'enum');
 			hit = ref ? [ref] : [];
-		} else {
-			hit = enums.filter(t => t.name === asked || t.qualifiedName === asked);
 		}
 		if (!hit.length) {
 			return skip(`No enum "${asked}" with two or more values. Enums used as a field type: ${candidates.slice(0, 20).map(t => t.name).sort(byCode).join(', ') || 'none'}.`);

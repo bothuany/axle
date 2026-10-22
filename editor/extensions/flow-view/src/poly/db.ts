@@ -28,15 +28,46 @@ export interface PrismaModel {
 const SPRING_REPOS = new Set(['JpaRepository', 'CrudRepository', 'PagingAndSortingRepository', 'ListCrudRepository', 'ListPagingAndSortingRepository', 'MongoRepository', 'ReactiveCrudRepository', 'R2dbcRepository', 'JpaSpecificationExecutor', 'QuerydslPredicateExecutor', 'Repository', 'ElasticsearchRepository']);
 const WRITE_OP = /^(?!create(Query|NativeQuery|NamedQuery|QueryBuilder|Criteria|Statement|Native))(save|saveAll|saveAndFlush|delete|deleteAll|deleteBy|deleteById|deleteInBatch|remove|persist|merge|update|insert|create|createMany|upsert|updateMany|deleteMany|add|add_all|bulk_create|bulk_update|get_or_create|update_or_create|executeUpdate|batchUpdate|flush|commit|destroy|increment|decrement|softDelete|restore|insertOne|insertMany|updateOne|deleteOne|findOneAndUpdate|findByIdAndUpdate|findByIdAndDelete)/;
 
+/**
+ * For each offset of `s`, whether it is at the top level of the statement or inside parentheses that hold a query (`(SELECT …)`,
+ * `(WITH …)`): where a FROM names a table. Inside any other parentheses (a function call's arguments) it does not. Quotes are skipped.
+ */
+function queryGroups(s: string): boolean[] {
+	const out: boolean[] = new Array(s.length);
+	const stack: boolean[] = [];
+	let quote = '';
+	for (let i = 0; i < s.length; i++) {
+		const c = s[i];
+		if (quote) {
+			if (c === quote) {
+				quote = '';
+			}
+		} else if (c === '\'' || c === '"' || c === '`') {
+			quote = c;
+		} else if (c === '(') {
+			stack.push(/^\s*(select|with)\b/i.test(s.slice(i + 1, i + 16)));
+		} else if (c === ')') {
+			stack.pop();
+		}
+		out[i] = stack.length ? stack[stack.length - 1] : true;
+	}
+	return out;
+}
+
 /** Tables a SQL or JPQL string touches, in order: FROM/JOIN/INTO/UPDATE/DELETE FROM. */
 export function sqlTables(sql: string): { tables: string[]; writes: boolean; verb: string } {
 	const s = sql.replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ');
 	const verb = (s.match(/^\s*(select|insert|update|delete|merge|with|call|exec|begin|declare)\b/i)?.[1] ?? '').toUpperCase();
 	const tables: string[] = [];
-	const re = /\b(?:from|join|into|update|merge\s+into|delete\s+from)\s+([A-Za-z_][\w$#]*(?:\.[A-Za-z_][\w$#]*)?)/gi;
+	const group = queryGroups(s);
+	const re = /\b(from|join|into|update|merge\s+into|delete\s+from)\s+([A-Za-z_][\w$#]*(?:\.[A-Za-z_][\w$#]*)?)/gi;
 	for (let m = re.exec(s); m; m = re.exec(s)) {
-		const t = m[1];
-		if (!/^(select|where|set|values|the|dual|lateral|unnest|table)$/i.test(t) && !tables.includes(t)) {
+		const t = m[2];
+		const before = s.slice(0, m.index);
+		// Not a table: FROM inside a function's parentheses (`EXTRACT(YEAR FROM created_at)`, `TRIM(BOTH ' ' FROM name)`), the
+		// comparison `IS DISTINCT FROM`, and the row-lock and upsert clauses `FOR UPDATE`, `FOR NO KEY UPDATE`, `ON DUPLICATE KEY UPDATE`.
+		const notTable = /^from$/i.test(m[1]) ? !group[m.index] || /\bdistinct\s+$/i.test(before) : /^update$/i.test(m[1]) && /\b(for|key)\s+$/i.test(before);
+		if (!notTable && !/^(select|where|set|values|the|dual|lateral|unnest|table)$/i.test(t) && !tables.includes(t)) {
 			tables.push(t);
 		}
 	}
