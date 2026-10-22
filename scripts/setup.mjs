@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Sets up Axle on macOS, Linux or Windows:
-//   1. clones VS Code at the version Axle is built on (editor/vscode),
-//   2. applies Axle's core patches,
-//   3. links the Axle extensions into it,
+// Sets up Insilode on macOS, Linux or Windows:
+//   1. clones VS Code at the version Insilode is built on (editor/vscode),
+//   2. applies Insilode's core patches,
+//   3. links the Insilode extensions into it,
 //   4. installs and builds everything (editor, extensions, canvas, analyzer).
 // Safe to run again: the clone, the patches and the links are skipped when done, and so is the editor's `npm ci`
 // when its dependencies have not changed (`--force-install` runs it anyway, `--skip-editor-install` never runs it).
@@ -79,7 +79,7 @@ function applyBranding() {
 		}
 	}
 	if (isWin) {
-		const exe = join(VSCODE, '.build', 'electron', 'Axle.exe')
+		const exe = join(VSCODE, '.build', 'electron', 'Insilode.exe')
 		const rcedit = join(VSCODE, 'node_modules', 'rcedit', 'bin', 'rcedit.exe')
 		if (existsSync(exe) && existsSync(rcedit)) {
 			run(rcedit, [exe, '--set-icon', join(brand, 'icon.ico')], ROOT, { optional: true, consequence: 'the dev window keeps the stock VS Code icon' })
@@ -114,7 +114,7 @@ if (!existsSync(join(VSCODE, 'package.json'))) {
 	const described = launchSync('git', ['describe', '--tags'], { cwd: VSCODE, encoding: 'utf8' })
 	const have = described.status === 0 ? described.stdout.trim() : 'an unknown version'
 	if (have !== VSCODE_TAG) {
-		console.error(`editor/vscode is at ${have}, but Axle is built on VS Code ${VSCODE_TAG}.`)
+		console.error(`editor/vscode is at ${have}, but Insilode is built on VS Code ${VSCODE_TAG}.`)
 		console.error('Delete editor/vscode (after saving any changes you made there) and run setup again to clone the right version.')
 		process.exit(1)
 	}
@@ -122,14 +122,14 @@ if (!existsSync(join(VSCODE, 'package.json'))) {
 }
 
 // ── 2. patches ───────────────────────────────────────────────────────────────
-step('Applying Axle patches')
+step('Applying Insilode patches')
 for (const patch of readdirSync(PATCHES).filter(f => f.endsWith('.patch')).sort()) {
 	const file = join(PATCHES, patch)
 	const applied = launchSync('git', ['apply', '--reverse', '--check', file], { cwd: VSCODE, stdio: 'ignore' }).status === 0
 	if (applied) {
 		console.log(`  ${patch}: already applied`)
 	} else {
-		// An Axle checkout from before .gitattributes kept patches LF can still hold one with CRLF line endings, which
+		// An Insilode checkout from before .gitattributes kept patches LF can still hold one with CRLF line endings, which
 		// git apply rejects: deleting editor/vscode would not help there.
 		const crlf = readFileSync(file, 'utf8').includes('\r\n')
 		run('git', ['apply', '--whitespace=nowarn', file], VSCODE, {
@@ -141,7 +141,7 @@ for (const patch of readdirSync(PATCHES).filter(f => f.endsWith('.patch')).sort(
 }
 
 // ── 3. extensions ────────────────────────────────────────────────────────────
-step('Linking Axle extensions')
+step('Linking Insilode extensions')
 for (const name of readdirSync(EXTENSIONS).filter(n => n.startsWith('flow-'))) {
 	const target = join(VSCODE, 'extensions', name)
 	if (isLink(target)) {
@@ -183,10 +183,10 @@ run('npm', ['run', 'build-fast-extensions'], VSCODE)
 run('node', ['build/lib/preLaunch.ts'], VSCODE, { optional: true, consequence: 'npm start fetches Electron on its first launch instead' })
 run('npm', ['run', 'gulp', 'node'], VSCODE, { optional: true, consequence: 'npm run web falls back to the Node that runs it' })
 
-step('Applying the Axle app icon')
+step('Applying the Insilode app icon')
 applyBranding()
 
-step('Building the Axle extensions')
+step('Building the Insilode extensions')
 for (const name of buildableExtensions()) {
 	const dir = join(EXTENSIONS, name)
 	installDependencies(dir)
@@ -212,11 +212,11 @@ for (const name of readdirSync(join(VSCODE, 'extensions')).filter(n => n.startsW
 }
 
 if (skipped.length) {
-	console.log(`\n\x1b[33m! Axle is built, but ${skipped.length} optional ${skipped.length === 1 ? 'step' : 'steps'} did not run:\x1b[0m`)
+	console.log(`\n\x1b[33m! Insilode is built, but ${skipped.length} optional ${skipped.length === 1 ? 'step' : 'steps'} did not run:\x1b[0m`)
 	for (const what of skipped) {
 		console.log(`  - ${what}`)
 	}
 	console.log('  Start it with \x1b[1mnpm start\x1b[0m.')
 } else {
-	console.log(`\n\x1b[32m✓ Axle is ready.\x1b[0m  Start it with \x1b[1mnpm start\x1b[0m.`)
+	console.log(`\n\x1b[32m✓ Insilode is ready.\x1b[0m  Start it with \x1b[1mnpm start\x1b[0m.`)
 }

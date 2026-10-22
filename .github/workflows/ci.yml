@@ -137,7 +137,7 @@ jobs:
       - name: Install semgrep
         run: pipx install semgrep==1.181.0
 
-      - name: Axle's rules pass their fixtures
+      - name: Insilode's rules pass their fixtures
         run: semgrep --test --metrics=off .semgrep/rules
 
       # Same rulesets and policy as `npm run semgrep` locally: ERROR findings fail, WARNING findings are listed.

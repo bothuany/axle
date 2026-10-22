@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: binds one ACP agent (Claude / Codex) to a native chat session type.
+ *  Insilode: binds one ACP agent (Claude / Codex) to a native chat session type.
  *  Sessions, history and settings come from the agent itself (session/list, session/load,
  *  configOptions), so whatever the user does in the CLI shows up here and vice versa.
  *--------------------------------------------------------------------------------------------*/
@@ -94,7 +94,7 @@ export class AgentSessionType implements vscode.Disposable {
 	private readonly configs = new Map<string, SessionConfigOption[]>();
 	/**
 	 * The permission mode the user picked (bypassPermissions, acceptEdits, …). The agent itself always runs
-	 * in `default` (or `plan`) so every write asks first; Axle answers automatically per this mode, but only
+	 * in `default` (or `plan`) so every write asks first; Insilode answers automatically per this mode, but only
 	 * after snapshotting the files, which is what makes Keep/Undo work for every edit.
 	 */
 	private readonly approval = new Map<string, string>();
@@ -484,7 +484,7 @@ export class AgentSessionType implements vscode.Disposable {
 
 		// A new trail for the gaze, before anything the agent looks at during this prompt.
 		gazeTurn(id);
-		// Axle's timeline: every prompt is one step, so its edits can be shown and undone on their own.
+		// Insilode's timeline: every prompt is one step, so its edits can be shown and undone on their own.
 		await Promise.resolve(vscode.commands.executeCommand('flow.agentTurn', req.prompt, LABEL[this.kind])).catch(() => undefined);
 		const edits = new EditTracker();
 		const tools = new Map<string, { part: vscode.ChatToolInvocationPart; kind?: string; files: string[] }>();
@@ -613,7 +613,7 @@ export class AgentSessionType implements vscode.Disposable {
 		let option = auto ? r.options.find(o => o.kind === 'allow_once') ?? r.options.find(o => o.kind.startsWith('allow')) : undefined;
 		if (!option) {
 			const title = r.toolCall.title ?? 'Tool';
-			// Axle's canvas marks the methods this edit would touch while the user decides.
+			// Insilode's canvas marks the methods this edit would touch while the user decides.
 			const diffs = ((r.toolCall.content ?? []) as Array<{ type: string; path?: string; oldText?: string | null; newText?: string }>)
 				.filter(c => c.type === 'diff' && c.path)
 				.map(c => ({ path: c.path!, oldText: c.oldText ?? null, newText: c.newText ?? '' }));
@@ -639,7 +639,7 @@ export class AgentSessionType implements vscode.Disposable {
 				void Promise.resolve(vscode.commands.executeCommand('flow.agentProposalDone')).catch(() => undefined);
 			}
 		}
-		// Axle Harness keeps every question and its answer, so one can be turned into a standing rule.
+		// Insilode Harness keeps every question and its answer, so one can be turned into a standing rule.
 		void Promise.resolve(vscode.commands.executeCommand('flowHarness.recordPermission', {
 			at: Date.now(),
 			agent: LABEL[this.kind],
@@ -653,7 +653,7 @@ export class AgentSessionType implements vscode.Disposable {
 			return { outcome: { outcome: 'cancelled' } };
 		}
 		if (option.kind.startsWith('allow') && isEdit) {
-			// Axle's canvas keeps the pre-edit text so cards can show this change (and undo it per method).
+			// Insilode's canvas keeps the pre-edit text so cards can show this change (and undo it per method).
 			await Promise.resolve(vscode.commands.executeCommand('flow.agentWillEdit', files)).catch(() => undefined);
 			await edits.track(r.toolCall.toolCallId, files, stream);
 		}

@@ -17,7 +17,7 @@ export interface FlowNode {
 	code: string | null;
 	children: FlowEdge[];
 	/**
-	 * Change inside this method (current-file line numbers), when Axle is tracking one. `source` 'git' when only the
+	 * Change inside this method (current-file line numbers), when Insilode is tracking one. `source` 'git' when only the
 	 * Git-changes view tracks the file (a change by anyone), else an agent made it. `base`: what a Git change is measured
 	 * against when that is not HEAD ("main", "the last commit"): committed work, which a card must not offer to undo.
 	 */

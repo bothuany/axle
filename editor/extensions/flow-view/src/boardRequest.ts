@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle board webview: what the canvas may ask of the host, cleaned, and how its options map onto the type
+ *  Insilode board webview: what the canvas may ask of the host, cleaned, and how its options map onto the type
  *  boards' own options (src/types/boards.ts). The webview is not trusted (its page shows text from the code
  *  base), so every message is checked here. Pure: no `vscode`, unit-tested directly.
  *--------------------------------------------------------------------------------------------*/

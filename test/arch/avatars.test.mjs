@@ -1,5 +1,5 @@
 // The agent avatars are drawn by flow-agent's dock and by core's desktop overlay. Core cannot import an extension, so
-// the patch carries a copy of the renderer (src/vs/platform/axleDesktop/common/axleAvatars.ts). This test keeps the
+// the patch carries a copy of the renderer (src/vs/platform/insilodeDesktop/common/insilodeAvatars.ts). This test keeps the
 // copy byte for byte equal to the extension's file, so the two never drift apart.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const SOURCE = `${repo}editor/extensions/flow-agent/src/avatars.ts`;
 const PATCH = `${repo}editor/patches/flow-desktop.patch`;
-const COPY = 'src/vs/platform/axleDesktop/common/axleAvatars.ts';
+const COPY = 'src/vs/platform/insilodeDesktop/common/insilodeAvatars.ts';
 
 /** The content of a file the patch adds, from its `+` lines. */
 function addedFile(patch, path) {

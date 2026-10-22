@@ -6,8 +6,8 @@ index d0e7e0f..bda3e16 100644
  import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
  import { ProcessMainService } from '../../platform/process/electron-main/processMainService.js';
  import { IKeyboardLayoutMainService, KeyboardLayoutMainService } from '../../platform/keyboardLayout/electron-main/keyboardLayoutMainService.js';
-+import { AXLE_OVERLAY_CHANNEL, IAxleOverlayService } from '../../platform/axleDesktop/common/axleDesktop.js';
-+import { AxleOverlayMainService } from '../../platform/axleDesktop/electron-main/axleOverlayMainService.js';
++import { INSILODE_OVERLAY_CHANNEL, IInsilodeOverlayService } from '../../platform/insilodeDesktop/common/insilodeDesktop.js';
++import { InsilodeOverlayMainService } from '../../platform/insilodeDesktop/electron-main/insilodeOverlayMainService.js';
  import { ILaunchMainService, LaunchMainService } from '../../platform/launch/electron-main/launchMainService.js';
  import { ILifecycleMainService, LifecycleMainPhase, ShutdownReason } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
  import { ILoggerService, ILogService } from '../../platform/log/common/log.js';
@@ -15,8 +15,8 @@ index d0e7e0f..bda3e16 100644
  		// Keyboard Layout
  		services.set(IKeyboardLayoutMainService, new SyncDescriptor(KeyboardLayoutMainService));
  
-+		// Axle: the desktop agent status overlay
-+		services.set(IAxleOverlayService, new SyncDescriptor(AxleOverlayMainService));
++		// Insilode: the desktop agent status overlay
++		services.set(IInsilodeOverlayService, new SyncDescriptor(InsilodeOverlayMainService));
 +
  		// Native Host
  		services.set(INativeHostMainService, new SyncDescriptor(NativeHostMainService, undefined, false /* proxied to other processes */));
@@ -25,26 +25,26 @@ index d0e7e0f..bda3e16 100644
  		const keyboardLayoutChannel = ProxyChannel.fromService(accessor.get(IKeyboardLayoutMainService), disposables);
  		mainProcessElectronServer.registerChannel('keyboardLayout', keyboardLayoutChannel);
  
-+		// Axle: the desktop agent status overlay
-+		const axleOverlayChannel = ProxyChannel.fromService(accessor.get(IAxleOverlayService), disposables);
-+		mainProcessElectronServer.registerChannel(AXLE_OVERLAY_CHANNEL, axleOverlayChannel);
++		// Insilode: the desktop agent status overlay
++		const insilodeOverlayChannel = ProxyChannel.fromService(accessor.get(IInsilodeOverlayService), disposables);
++		mainProcessElectronServer.registerChannel(INSILODE_OVERLAY_CHANNEL, insilodeOverlayChannel);
 +
  		// Native host (main & shared process)
  		this.nativeHostMainService = accessor.get(INativeHostMainService);
  		const nativeHostChannel = ProxyChannel.fromService(this.nativeHostMainService, disposables, {
-diff --git a/src/vs/platform/axleDesktop/common/axleAvatars.ts b/src/vs/platform/axleDesktop/common/axleAvatars.ts
+diff --git a/src/vs/platform/insilodeDesktop/common/insilodeAvatars.ts b/src/vs/platform/insilodeDesktop/common/insilodeAvatars.ts
 new file mode 100644
 index 0000000..8c73243
 --- /dev/null
-+++ b/src/vs/platform/axleDesktop/common/axleAvatars.ts
++++ b/src/vs/platform/insilodeDesktop/common/insilodeAvatars.ts
 @@ -0,0 +1,119 @@
 +/*---------------------------------------------------------------------------------------------
-+ *  Axle: the agent avatars (themes "gyro" and "pixel"), drawn by the Agents dock and by the
++ *  Insilode: the agent avatars (themes "gyro" and "pixel"), drawn by the Agents dock and by the
 + *  desktop status overlay. This file is copied byte for byte into the core patch
-+ *  (src/vs/platform/axleDesktop/common/axleAvatars.ts in editor/patches/flow-desktop.patch);
++ *  (src/vs/platform/insilodeDesktop/common/insilodeAvatars.ts in editor/patches/flow-desktop.patch);
 + *  test/arch/avatars.test.mjs fails when the two differ. It imports nothing for that reason.
 + *
-+ *  AVATAR_SCRIPT defines axleAvatar(kind, cli, state, context, size) in the page it is put in.
++ *  AVATAR_SCRIPT defines insilodeAvatar(kind, cli, state, context, size) in the page it is put in.
 + *  Every argument is checked against a fixed list or clamped to a number, and the SVG it returns
 + *  is built from constants only: no text from an agent ever reaches it.
 + *--------------------------------------------------------------------------------------------*/
@@ -148,7 +148,7 @@ index 0000000..8c73243
 +		return '<svg class="ax" width="' + z + '" height="' + z + '" viewBox="-1 -6 15 16" shape-rendering="crispEdges" aria-hidden="true"><g transform="translate(0 1)"><g class="' + anim + '">' + body + blush + e + '</g></g>' + deco + '</svg>';
 +	}
 +
-+	window.axleAvatar = function (kind, cli, state, context, size) {
++	window.insilodeAvatar = function (kind, cli, state, context, size) {
 +		var c = Object.prototype.hasOwnProperty.call(COL, cli) ? cli : 'custom';
 +		var s = STATES.indexOf(state) >= 0 ? state : 'idle';
 +		var z = typeof size === 'number' && isFinite(size) ? Math.min(96, Math.max(12, Math.round(size))) : 24;
@@ -157,32 +157,32 @@ index 0000000..8c73243
 +	};
 +})();
 +`;
-diff --git a/src/vs/platform/axleDesktop/common/axleDesktop.ts b/src/vs/platform/axleDesktop/common/axleDesktop.ts
+diff --git a/src/vs/platform/insilodeDesktop/common/insilodeDesktop.ts b/src/vs/platform/insilodeDesktop/common/insilodeDesktop.ts
 new file mode 100644
 index 0000000..a9c5ff8
 --- /dev/null
-+++ b/src/vs/platform/axleDesktop/common/axleDesktop.ts
++++ b/src/vs/platform/insilodeDesktop/common/insilodeDesktop.ts
 @@ -0,0 +1,73 @@
 +/*---------------------------------------------------------------------------------------------
-+ *  Axle: the desktop agent status overlay, shared by the main process (which owns the window) and
-+ *  the workbench (which pushes each window's agents). Axle's Agents extension builds the model
++ *  Insilode: the desktop agent status overlay, shared by the main process (which owns the window) and
++ *  the workbench (which pushes each window's agents). Insilode's Agents extension builds the model
 + *  (editor/extensions/flow-agent/src/desktopModel.ts); every string in it is drawn as text.
 + *--------------------------------------------------------------------------------------------*/
 +
 +import { Event } from '../../../base/common/event.js';
 +import { createDecorator } from '../../instantiation/common/instantiation.js';
 +
-+export const AXLE_OVERLAY_CHANNEL = 'axleOverlay';
++export const INSILODE_OVERLAY_CHANNEL = 'insilodeOverlay';
 +
-+export type AxleOverlayItemState = 'working' | 'needs' | 'done' | 'idle';
-+export type AxleOverlayAttention = 'approval' | 'question' | 'error' | 'done';
++export type InsilodeOverlayItemState = 'working' | 'needs' | 'done' | 'idle';
++export type InsilodeOverlayAttention = 'approval' | 'question' | 'error' | 'done';
 +
-+export interface IAxleOverlayItem {
++export interface IInsilodeOverlayItem {
 +	readonly id: string;
 +	readonly name: string;
 +	readonly cli: string;
-+	readonly state: AxleOverlayItemState;
-+	readonly attention?: AxleOverlayAttention;
++	readonly state: InsilodeOverlayItemState;
++	readonly attention?: InsilodeOverlayAttention;
 +	readonly activity?: string;
 +	readonly context?: number;
 +	readonly usd?: number;
@@ -190,20 +190,20 @@ index 0000000..a9c5ff8
 +	readonly since?: number;
 +}
 +
-+export interface IAxleOverlayOptions {
++export interface IInsilodeOverlayOptions {
 +	readonly position: 'top-center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
-+	readonly display: 'axle' | 'primary' | 'secondary';
++	readonly display: 'insilode' | 'primary' | 'secondary';
 +	readonly style: 'pill' | 'dots' | 'list';
 +	readonly size: 'small' | 'medium' | 'large';
 +	readonly opacity: number;
 +	readonly theme: 'black' | 'editor' | 'dark' | 'light';
-+	readonly autoHide: { readonly noAgents: boolean; readonly axleFocused: boolean };
-+	/** How each agent is drawn (axleAvatars.ts). */
++	readonly autoHide: { readonly noAgents: boolean; readonly insilodeFocused: boolean };
++	/** How each agent is drawn (insilodeAvatars.ts). */
 +	readonly avatar: 'gyro' | 'pixel';
 +}
 +
 +/** CSS colours, resolved from the window's colour theme when the overlay follows it. */
-+export interface IAxleOverlayColors {
++export interface IInsilodeOverlayColors {
 +	readonly background: string;
 +	readonly foreground: string;
 +	readonly muted: string;
@@ -216,15 +216,15 @@ index 0000000..a9c5ff8
 +	readonly idle: string;
 +}
 +
-+export interface IAxleOverlayState {
-+	readonly items: readonly IAxleOverlayItem[];
++export interface IInsilodeOverlayState {
++	readonly items: readonly IInsilodeOverlayItem[];
 +	readonly counts?: { readonly needs: number; readonly working: number; readonly done: number };
-+	readonly options: IAxleOverlayOptions;
++	readonly options: IInsilodeOverlayOptions;
 +}
 +
-+export const IAxleOverlayService = createDecorator<IAxleOverlayService>('axleOverlayService');
++export const IInsilodeOverlayService = createDecorator<IInsilodeOverlayService>('insilodeOverlayService');
 +
-+export interface IAxleOverlayService {
++export interface IInsilodeOverlayService {
 +	readonly _serviceBrand: undefined;
 +
 +	/** The user clicked an agent in the overlay: the window that pushed it shows it. */
@@ -234,23 +234,23 @@ index 0000000..a9c5ff8
 +	readonly onDidRequestClose: Event<{ readonly windowId: number }>;
 +
 +	/** This window's agents, or undefined when it has none to show (the overlay is off, or the window goes away). */
-+	update(windowId: number, state: IAxleOverlayState | undefined, colors: IAxleOverlayColors | undefined): Promise<void>;
++	update(windowId: number, state: IInsilodeOverlayState | undefined, colors: IInsilodeOverlayColors | undefined): Promise<void>;
 +}
-diff --git a/src/vs/platform/axleDesktop/common/axleIsland.ts b/src/vs/platform/axleDesktop/common/axleIsland.ts
+diff --git a/src/vs/platform/insilodeDesktop/common/insilodeIsland.ts b/src/vs/platform/insilodeDesktop/common/insilodeIsland.ts
 new file mode 100644
 index 0000000..2e0b622
 --- /dev/null
-+++ b/src/vs/platform/axleDesktop/common/axleIsland.ts
++++ b/src/vs/platform/insilodeDesktop/common/insilodeIsland.ts
 @@ -0,0 +1,152 @@
 +/*---------------------------------------------------------------------------------------------
-+ *  Axle: the rules of the desktop status island that need no Electron, so they are tested on
++ *  Insilode: the rules of the desktop status island that need no Electron, so they are tested on
 + *  their own (editor/extensions/flow-agent/test/island.test.mjs reads this file out of
 + *  editor/patches/flow-desktop.patch). This file imports nothing.
 + *
 + *  - Position: where the user dropped the island, remembered per display as a fraction of the
 + *    display's width (so a new resolution keeps it in the same place) plus a distance from the
 + *    top, and always clamped back onto a display that exists.
-+ *  - Visibility: the island is hidden while an Axle window has focus. Focus moves between windows
++ *  - Visibility: the island is hidden while an Insilode window has focus. Focus moves between windows
 + *    (and through the Alt+Tab switcher) as a blur then a focus, so a change only counts once it
 + *    has lasted a little: hiding fast, coming back slower, so that switching does not flicker.
 + *--------------------------------------------------------------------------------------------*/
@@ -343,16 +343,16 @@ index 0000000..2e0b622
 +// --- Visibility ---------------------------------------------------------------------------------
 +
 +export interface FocusDelays {
-+	/** How long Axle must have been focused before the island hides. */
++	/** How long Insilode must have been focused before the island hides. */
 +	readonly hideMs: number;
-+	/** How long no Axle window must have focus before the island comes back. */
++	/** How long no Insilode window must have focus before the island comes back. */
 +	readonly showMs: number;
 +}
 +
 +export const FOCUS_DELAYS: FocusDelays = { hideMs: 120, showMs: 400 };
 +
 +export interface FocusGate {
-+	/** Whether an Axle window has focus, as settled. */
++	/** Whether an Insilode window has focus, as settled. */
 +	readonly focused: boolean;
 +	/** A change seen but not yet settled. */
 +	readonly pending?: { readonly value: boolean; readonly at: number };
@@ -385,24 +385,24 @@ index 0000000..2e0b622
 +
 +export interface VisibilityInput {
 +	readonly hasAgents: boolean;
-+	readonly autoHide: { readonly noAgents: boolean; readonly axleFocused: boolean };
-+	/** The settled focus of the Axle windows. */
-+	readonly axleFocused: boolean;
++	readonly autoHide: { readonly noAgents: boolean; readonly insilodeFocused: boolean };
++	/** The settled focus of the Insilode windows. */
++	readonly insilodeFocused: boolean;
 +}
 +
 +/** Whether the island is on screen. */
 +export function islandVisible(i: VisibilityInput): boolean {
-+	return !(i.autoHide.noAgents && !i.hasAgents) && !(i.autoHide.axleFocused && i.axleFocused);
++	return !(i.autoHide.noAgents && !i.hasAgents) && !(i.autoHide.insilodeFocused && i.insilodeFocused);
 +}
-diff --git a/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts b/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts
+diff --git a/src/vs/platform/insilodeDesktop/electron-main/insilodeOverlayMainService.ts b/src/vs/platform/insilodeDesktop/electron-main/insilodeOverlayMainService.ts
 new file mode 100644
 index 0000000..9569328
 --- /dev/null
-+++ b/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts
++++ b/src/vs/platform/insilodeDesktop/electron-main/insilodeOverlayMainService.ts
 @@ -0,0 +1,702 @@
 +/*---------------------------------------------------------------------------------------------
-+ *  Axle: the desktop agent status overlay. One small always-on-top window for the whole app that
-+ *  draws the agents every Axle window pushes (merged per window, like the Dock badge).
++ *  Insilode: the desktop agent status overlay. One small always-on-top window for the whole app that
++ *  draws the agents every Insilode window pushes (merged per window, like the Dock badge).
 + *
 + *  It never takes focus: it is created hidden and not focusable (an NSPanel on macOS), it appears
 + *  with showInactive() only, and nothing here focuses or shows any window. A click on an agent is
@@ -421,25 +421,25 @@ index 0000000..9569328
 +import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 +import { isMacintosh } from '../../../base/common/platform.js';
 +import { ILogService } from '../../log/common/log.js';
-+import { AVATAR_CSS, AVATAR_SCRIPT } from '../common/axleAvatars.js';
-+import { clampRect, displayForRect, FocusGate, focusWait, INITIAL_GATE, IslandRect, IslandSpot, islandVisible, observeFocus, readSpot, rectToSpot, resolvePlacement, settleFocus, spotToRect } from '../common/axleIsland.js';
-+import { IAxleOverlayColors, IAxleOverlayItem, IAxleOverlayOptions, IAxleOverlayService, IAxleOverlayState } from '../common/axleDesktop.js';
++import { AVATAR_CSS, AVATAR_SCRIPT } from '../common/insilodeAvatars.js';
++import { clampRect, displayForRect, FocusGate, focusWait, INITIAL_GATE, IslandRect, IslandSpot, islandVisible, observeFocus, readSpot, rectToSpot, resolvePlacement, settleFocus, spotToRect } from '../common/insilodeIsland.js';
++import { IInsilodeOverlayColors, IInsilodeOverlayItem, IInsilodeOverlayOptions, IInsilodeOverlayService, IInsilodeOverlayState } from '../common/insilodeDesktop.js';
 +
 +/** What the page prefixes its messages with, so an unrelated console line is never taken for one. */
-+const MARKER = '\u0001axle-overlay:';
++const MARKER = '\u0001insilode-overlay:';
 +const MAX_ITEMS = 40;
 +
-+const PALETTES: Record<'black' | 'dark' | 'light', IAxleOverlayColors> = {
++const PALETTES: Record<'black' | 'dark' | 'light', IInsilodeOverlayColors> = {
 +	black: { background: '#000000', foreground: '#f4f4f6', muted: '#8b8b95', border: 'rgba(255, 255, 255, 0.10)', working: '#8c9bff', approval: '#ffb454', question: '#c58cff', error: '#ff6b6b', done: '#5fe0a1', idle: '#4a4a52' },
 +	dark: { background: 'rgba(28, 29, 35, 0.94)', foreground: '#e8e9ee', muted: '#a3a7b5', border: 'rgba(255, 255, 255, 0.12)', working: '#6f86ff', approval: '#ffb454', question: '#c58cff', error: '#ff6b6b', done: '#5fe0a1', idle: '#7d8293' },
 +	light: { background: 'rgba(250, 250, 252, 0.96)', foreground: '#1f2128', muted: '#5d6170', border: 'rgba(0, 0, 0, 0.12)', working: '#3b5bdb', approval: '#d9480f', question: '#8e44ad', error: '#d63031', done: '#2b8a3e', idle: '#868e96' },
 +};
 +
-+const DEFAULT_OPTIONS: IAxleOverlayOptions = { position: 'top-center', display: 'axle', style: 'pill', size: 'medium', opacity: 0.95, theme: 'black', autoHide: { noAgents: true, axleFocused: true }, avatar: 'gyro' };
++const DEFAULT_OPTIONS: IInsilodeOverlayOptions = { position: 'top-center', display: 'insilode', style: 'pill', size: 'medium', opacity: 0.95, theme: 'black', autoHide: { noAgents: true, insilodeFocused: true }, avatar: 'gyro' };
 +
 +interface IWindowAgents {
-+	readonly state: IAxleOverlayState;
-+	readonly colors: IAxleOverlayColors | undefined;
++	readonly state: IInsilodeOverlayState;
++	readonly colors: IInsilodeOverlayColors | undefined;
 +	readonly at: number;
 +}
 +
@@ -449,8 +449,8 @@ index 0000000..9569328
 +const COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d.,\s%]+\))$/i;
 +
 +/** The model comes from an extension through the renderer: keep only what has the right shape. */
-+function sanitizeState(raw: IAxleOverlayState): IAxleOverlayState {
-+	const items: IAxleOverlayItem[] = [];
++function sanitizeState(raw: IInsilodeOverlayState): IInsilodeOverlayState {
++	const items: IInsilodeOverlayItem[] = [];
 +	for (const i of Array.isArray(raw?.items) ? raw.items.slice(0, MAX_ITEMS) : []) {
 +		const id = text(i?.id, 200);
 +		const name = text(i?.name, 60);
@@ -464,14 +464,14 @@ index 0000000..9569328
 +		});
 +	}
 +	const o = raw?.options;
-+	const options: IAxleOverlayOptions = {
++	const options: IInsilodeOverlayOptions = {
 +		position: oneOf(o?.position, ['top-center', 'top-left', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'], DEFAULT_OPTIONS.position),
-+		display: oneOf(o?.display, ['axle', 'primary', 'secondary'], DEFAULT_OPTIONS.display),
++		display: oneOf(o?.display, ['insilode', 'primary', 'secondary'], DEFAULT_OPTIONS.display),
 +		style: oneOf(o?.style, ['pill', 'dots', 'list'], DEFAULT_OPTIONS.style),
 +		size: oneOf(o?.size, ['small', 'medium', 'large'], DEFAULT_OPTIONS.size),
 +		opacity: Math.min(1, Math.max(0.3, finite(o?.opacity) ?? DEFAULT_OPTIONS.opacity)),
 +		theme: oneOf(o?.theme, ['black', 'editor', 'dark', 'light'], DEFAULT_OPTIONS.theme),
-+		autoHide: { noAgents: o?.autoHide?.noAgents !== false, axleFocused: o?.autoHide?.axleFocused !== false },
++		autoHide: { noAgents: o?.autoHide?.noAgents !== false, insilodeFocused: o?.autoHide?.insilodeFocused !== false },
 +		avatar: oneOf(o?.avatar, ['gyro', 'pixel'], DEFAULT_OPTIONS.avatar),
 +	};
 +	const c = raw?.counts;
@@ -479,22 +479,22 @@ index 0000000..9569328
 +	return { items, options, ...(counts ? { counts } : {}) };
 +}
 +
-+function sanitizeColors(raw: IAxleOverlayColors | undefined): IAxleOverlayColors | undefined {
++function sanitizeColors(raw: IInsilodeOverlayColors | undefined): IInsilodeOverlayColors | undefined {
 +	if (!raw) {
 +		return undefined;
 +	}
 +	const out: Record<string, string> = {};
-+	for (const key of Object.keys(PALETTES.dark) as (keyof IAxleOverlayColors)[]) {
++	for (const key of Object.keys(PALETTES.dark) as (keyof IInsilodeOverlayColors)[]) {
 +		const v = raw[key];
 +		if (typeof v !== 'string' || !COLOR.test(v)) {
 +			return undefined;
 +		}
 +		out[key] = v;
 +	}
-+	return out as unknown as IAxleOverlayColors;
++	return out as unknown as IInsilodeOverlayColors;
 +}
 +
-+export class AxleOverlayMainService extends Disposable implements IAxleOverlayService {
++export class InsilodeOverlayMainService extends Disposable implements IInsilodeOverlayService {
 +
 +	declare readonly _serviceBrand: undefined;
 +
@@ -511,13 +511,13 @@ index 0000000..9569328
 +	private overlay: BrowserWindow | undefined;
 +	private loaded = false;
 +	private size = { width: 0, height: 0 };
-+	private placement: { display: Display; notch: number; attached: boolean; spot: IslandSpot | undefined; options: IAxleOverlayOptions } | undefined;
++	private placement: { display: Display; notch: number; attached: boolean; spot: IslandSpot | undefined; options: IInsilodeOverlayOptions } | undefined;
 +	private focusTimer: Timeout | undefined;
-+	/** Whether an Axle window has focus, settled (see axleIsland.ts): hiding and coming back are both debounced. */
++	/** Whether an Insilode window has focus, settled (see insilodeIsland.ts): hiding and coming back are both debounced. */
 +	private gate: FocusGate = INITIAL_GATE;
 +	/** What the user chose by hand, kept in the user data folder: where the island sits, per display, and whether it is a dot. */
 +	private store: { minimized: boolean; spots: Record<string, IslandSpot>; last?: string } = { minimized: false, spots: {} };
-+	private readonly storeFile = join(app.getPath('userData'), 'axle-island.json');
++	private readonly storeFile = join(app.getPath('userData'), 'insilode-island.json');
 +	private drag: { cursor: { x: number; y: number }; origin: IslandRect } | undefined;
 +	/** The position settings last seen: changing them puts the island back where the settings say. */
 +	private layoutKey: string | undefined;
@@ -547,7 +547,7 @@ index 0000000..9569328
 +		}));
 +	}
 +
-+	async update(windowId: number, state: IAxleOverlayState | undefined, colors: IAxleOverlayColors | undefined): Promise<void> {
++	async update(windowId: number, state: IInsilodeOverlayState | undefined, colors: IInsilodeOverlayColors | undefined): Promise<void> {
 +		if (!state) {
 +			this.windows.delete(windowId);
 +			this.render();
@@ -559,8 +559,8 @@ index 0000000..9569328
 +			return;
 +		}
 +		if (!this.gate.pending) {
-+			// Nothing is settling: start from the real focus, so an island pushed from a focused Axle window never flashes.
-+			this.gate = { focused: this.axleFocused() };
++			// Nothing is settling: start from the real focus, so an island pushed from a focused Insilode window never flashes.
++			this.gate = { focused: this.insilodeFocused() };
 +		}
 +		this.windows.set(windowId, { state: sanitizeState(state), colors: sanitizeColors(colors), at: Date.now() });
 +		if (!this.watched.has(windowId)) {
@@ -592,14 +592,14 @@ index 0000000..9569328
 +	}
 +
 +	private saveStore(): void {
-+		writeFile(this.storeFile, JSON.stringify(this.store), err => err && this.logService.warn(`[axle overlay] saving the position failed: ${err}`));
++		writeFile(this.storeFile, JSON.stringify(this.store), err => err && this.logService.warn(`[insilode overlay] saving the position failed: ${err}`));
 +	}
 +
-+	/** Reads whether an Axle window has focus now and lets the gate decide when that counts. */
++	/** Reads whether an Insilode window has focus now and lets the gate decide when that counts. */
 +	private observeFocus(): void {
 +		clearTimeout(this.focusTimer);
 +		const now = Date.now();
-+		this.gate = settleFocus(observeFocus(this.gate, this.axleFocused(), now), now);
++		this.gate = settleFocus(observeFocus(this.gate, this.insilodeFocused(), now), now);
 +		const wait = focusWait(this.gate, now);
 +		this.render();
 +		if (wait !== undefined) {
@@ -623,7 +623,7 @@ index 0000000..9569328
 +		const [ownerId, owner] = latest;
 +		const options = owner.state.options;
 +		this.keys = new Map();
-+		const items: (IAxleOverlayItem & { key: string })[] = [];
++		const items: (IInsilodeOverlayItem & { key: string })[] = [];
 +		const counts = { needs: 0, working: 0, done: 0 };
 +		let showCounts = false;
 +		for (const [windowId, agents] of this.windows) {
@@ -646,7 +646,7 @@ index 0000000..9569328
 +			this.saveStore();
 +		}
 +		this.layoutKey = layoutKey;
-+		if (!islandVisible({ hasAgents: items.length > 0, autoHide: options.autoHide, axleFocused: this.gate.focused })) {
++		if (!islandVisible({ hasAgents: items.length > 0, autoHide: options.autoHide, insilodeFocused: this.gate.focused })) {
 +			this.overlay?.hide();
 +			return;
 +		}
@@ -667,16 +667,16 @@ index 0000000..9569328
 +		}
 +		const model = { items, counts: showCounts ? counts : undefined, style: options.style, size: options.size, opacity: options.opacity, colors, notch, attached, avatar: options.avatar, minimized: this.store.minimized, moved: !!spot };
 +		// JSON is a JavaScript expression: the model arrives as data, never as code.
-+		overlay.webContents.executeJavaScript(`window.axleRender(${JSON.stringify(model)})`).catch(e => this.logService.warn(`[axle overlay] render failed: ${e}`));
++		overlay.webContents.executeJavaScript(`window.insilodeRender(${JSON.stringify(model)})`).catch(e => this.logService.warn(`[insilode overlay] render failed: ${e}`));
 +		this.place();
 +	}
 +
-+	private axleFocused(): boolean {
++	private insilodeFocused(): boolean {
 +		const focused = BrowserWindow.getFocusedWindow();
 +		return !!focused && focused !== this.overlay;
 +	}
 +
-+	private display(which: IAxleOverlayOptions['display'], ownerId: number): Display {
++	private display(which: IInsilodeOverlayOptions['display'], ownerId: number): Display {
 +		const primary = screen.getPrimaryDisplay();
 +		if (which === 'primary') {
 +			return primary;
@@ -712,7 +712,7 @@ index 0000000..9569328
 +			alwaysOnTop: true,
 +			width: 160,
 +			height: 40,
-+			title: 'Axle Agents',
++			title: 'Insilode Agents',
 +			webPreferences: {
 +				sandbox: true,
 +				contextIsolation: true,
@@ -721,7 +721,7 @@ index 0000000..9569328
 +				spellcheck: false,
 +				devTools: false,
 +				backgroundThrottling: false,
-+				partition: 'axle-overlay',
++				partition: 'insilode-overlay',
 +			},
 +		});
 +		overlay.setAlwaysOnTop(true, 'screen-saver');
@@ -759,7 +759,7 @@ index 0000000..9569328
 +		this.overlay = overlay;
 +		this.loaded = false;
 +		this.size = { width: 0, height: 0 };
-+		overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(PAGE)}`).catch(e => this.logService.warn(`[axle overlay] load failed: ${e}`));
++		overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(PAGE)}`).catch(e => this.logService.warn(`[insilode overlay] load failed: ${e}`));
 +		return overlay;
 +	}
 +
@@ -877,7 +877,7 @@ index 0000000..9569328
 + * agent list while the pointer is over it, and reports a click on an agent by the key it was given. All text is set
 + * with textContent.
 + *
-+ * Design: a black island that hangs from the top edge. Collapsed it is one avatar per agent (axleAvatars.ts: the
++ * Design: a black island that hangs from the top edge. Collapsed it is one avatar per agent (insilodeAvatars.ts: the
 + * theme the user picked), the most urgent agent's name and verb, and its context and elapsed time. Hover opens a
 + * quiet list with the same facts for every agent. Drag it anywhere (it then floats; double-click puts it back),
 + * minimize it to one avatar (click to open it again) or close it (x). The page only reports these gestures; the
@@ -885,7 +885,7 @@ index 0000000..9569328
 + */
 +const PAGE = /* html */ `<!doctype html><html><head><meta charset="utf-8">
 +<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
-+<title>Axle Agents</title>
++<title>Insilode Agents</title>
 +<style>
 +html, body { margin: 0; background: transparent; overflow: hidden; cursor: default; -webkit-user-select: none; user-select: none; }
 +body { font: 12px/1.3 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: 0.005em; color: var(--foreground); }
@@ -927,12 +927,12 @@ index 0000000..9569328
 +const AV = { small: 18, medium: 22, large: 28 };
 +// What the avatar shows: what the agent waits for, else its state.
 +const avState = i => i.attention && i.attention !== 'done' ? i.attention : i.state === 'needs' ? 'approval' : i.state;
-+// The page builds avatars from fixed lists only (axleAvatar checks every argument), so their SVG may go in as markup.
++// The page builds avatars from fixed lists only (insilodeAvatar checks every argument), so their SVG may go in as markup.
 +function avatar(i) {
 +	const w = el('span', 'avw');
 +	const s = avState(i);
 +	w.dataset.k = [i.key, data.avatar, i.cli, s, i.context ?? ''].join('|');
-+	w.innerHTML = window.axleAvatar(data.avatar, i.cli, s, i.context, AV[data.size] || 22);
++	w.innerHTML = window.insilodeAvatar(data.avatar, i.cli, s, i.context, AV[data.size] || 22);
 +	return w;
 +}
 +const MARKER = ${JSON.stringify(MARKER)};
@@ -1100,22 +1100,22 @@ index 0000000..9569328
 +root.addEventListener('pointercancel', endPress);
 +root.addEventListener('lostpointercapture', endPress);
 +root.addEventListener('dblclick', e => { if (data && data.moved && !e.target.closest('button, .row')) { say({ type: 'reset' }); } });
-+window.axleRender = model => { data = model; render(); };
++window.insilodeRender = model => { data = model; render(); };
 +</script></body></html>`;
-diff --git a/src/vs/workbench/contrib/axleDesktop/electron-browser/axleDesktop.contribution.ts b/src/vs/workbench/contrib/axleDesktop/electron-browser/axleDesktop.contribution.ts
+diff --git a/src/vs/workbench/contrib/insilodeDesktop/electron-browser/insilodeDesktop.contribution.ts b/src/vs/workbench/contrib/insilodeDesktop/electron-browser/insilodeDesktop.contribution.ts
 new file mode 100644
 index 0000000..c00b221
 --- /dev/null
-+++ b/src/vs/workbench/contrib/axleDesktop/electron-browser/axleDesktop.contribution.ts
++++ b/src/vs/workbench/contrib/insilodeDesktop/electron-browser/insilodeDesktop.contribution.ts
 @@ -0,0 +1,176 @@
 +/*---------------------------------------------------------------------------------------------
-+ *  Axle: agent status outside the window, for Axle's Agents extension (flow-agent, src/desktop.ts).
++ *  Insilode: agent status outside the window, for Insilode's Agents extension (flow-agent, src/desktop.ts).
 + *
 + *  - `flow.desktop.setBadge(count)`: the number of agents that need you on the app icon (Dock on
 + *    macOS, taskbar overlay icon on Windows, launcher on Linux), through the same native call as
 + *    the Sessions badge. 0 clears it.
 + *  - `flow.desktop.setOverlay(state | undefined)`: this window's agents for the status overlay the
-+ *    main process draws (platform/axleDesktop), with the colours of this window's theme.
++ *    main process draws (platform/insilodeDesktop), with the colours of this window's theme.
 + *
 + *  Both commands exist only in the desktop app, so the extension finds them missing in the browser
 + *  and does nothing. A click on an agent in the overlay is the user's gesture: the agent's terminal
@@ -1132,20 +1132,20 @@ index 0000000..c00b221
 +import { ILogService } from '../../../../platform/log/common/log.js';
 +import { FocusMode, IApplicationBadge, INativeHostService } from '../../../../platform/native/common/native.js';
 +import { IColorTheme, IThemeService } from '../../../../platform/theme/common/themeService.js';
-+import { AXLE_OVERLAY_CHANNEL, IAxleOverlayColors, IAxleOverlayService, IAxleOverlayState } from '../../../../platform/axleDesktop/common/axleDesktop.js';
++import { INSILODE_OVERLAY_CHANNEL, IInsilodeOverlayColors, IInsilodeOverlayService, IInsilodeOverlayState } from '../../../../platform/insilodeDesktop/common/insilodeDesktop.js';
 +import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
 +import { ACTIVITY_BAR_BADGE_BACKGROUND, ACTIVITY_BAR_BADGE_FOREGROUND } from '../../../common/theme.js';
 +
-+registerMainProcessRemoteService(IAxleOverlayService, AXLE_OVERLAY_CHANNEL);
++registerMainProcessRemoteService(IInsilodeOverlayService, INSILODE_OVERLAY_CHANNEL);
 +
 +/** flow-agent registers this: it shows a live agent's terminal and ignores an id it does not know. */
 +const REVEAL_AGENT = 'flow.agents.reveal';
 +/** flow-agent registers this: it turns the overlay off in the settings (the island's close button) and says how to bring it back. */
 +const HIDE_OVERLAY = 'flow.agents.desktop.hideOverlay';
 +
-+class AxleDesktopContribution extends Disposable implements IWorkbenchContribution {
++class InsilodeDesktopContribution extends Disposable implements IWorkbenchContribution {
 +
-+	static readonly ID = 'workbench.contrib.axleDesktop';
++	static readonly ID = 'workbench.contrib.insilodeDesktop';
 +
 +	/** Windows renders the taskbar overlay small, so draw at 2x for HiDPI. */
 +	private static readonly ICON_SIZE = 32;
@@ -1153,12 +1153,12 @@ index 0000000..c00b221
 +	private static readonly MAX_ICON_COUNT = 9;
 +
 +	private badgeCount = 0;
-+	private overlay: IAxleOverlayState | undefined;
++	private overlay: IInsilodeOverlayState | undefined;
 +
 +	constructor(
 +		@INativeHostService private readonly nativeHostService: INativeHostService,
 +		@IThemeService private readonly themeService: IThemeService,
-+		@IAxleOverlayService private readonly overlayService: IAxleOverlayService,
++		@IInsilodeOverlayService private readonly overlayService: IInsilodeOverlayService,
 +		@ICommandService commandService: ICommandService,
 +		@ILogService private readonly logService: ILogService,
 +	) {
@@ -1168,7 +1168,7 @@ index 0000000..c00b221
 +			this.setBadge(typeof count === 'number' && Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0);
 +		}));
 +		this._register(CommandsRegistry.registerCommand('flow.desktop.setOverlay', (_accessor, state: unknown) => {
-+			this.overlay = state && typeof state === 'object' ? state as IAxleOverlayState : undefined;
++			this.overlay = state && typeof state === 'object' ? state as IInsilodeOverlayState : undefined;
 +			this.pushOverlay();
 +		}));
 +
@@ -1186,14 +1186,14 @@ index 0000000..c00b221
 +			if (e.windowId !== this.nativeHostService.windowId) {
 +				return;
 +			}
-+			commandService.executeCommand(REVEAL_AGENT, e.id).catch(err => this.logService.warn(`[axle desktop] ${REVEAL_AGENT} failed: ${err}`));
++			commandService.executeCommand(REVEAL_AGENT, e.id).catch(err => this.logService.warn(`[insilode desktop] ${REVEAL_AGENT} failed: ${err}`));
 +			this.nativeHostService.focusWindow({ mode: FocusMode.Force });
 +		}));
 +
 +		// The close button is a gesture too, and it never focuses: only the window that pushed last answers it.
 +		this._register(this.overlayService.onDidRequestClose(e => {
 +			if (e.windowId === this.nativeHostService.windowId) {
-+				commandService.executeCommand(HIDE_OVERLAY).catch(err => this.logService.warn(`[axle desktop] ${HIDE_OVERLAY} failed: ${err}`));
++				commandService.executeCommand(HIDE_OVERLAY).catch(err => this.logService.warn(`[insilode desktop] ${HIDE_OVERLAY} failed: ${err}`));
 +			}
 +		}));
 +
@@ -1219,18 +1219,18 @@ index 0000000..c00b221
 +		let badge: IApplicationBadge | undefined;
 +		if (count > 0) {
 +			const description = count === 1
-+				? localize('axle.desktop.badge.single', "1 agent needs you")
-+				: localize('axle.desktop.badge.multiple', "{0} agents need you", count);
++				? localize('insilode.desktop.badge.single', "1 agent needs you")
++				: localize('insilode.desktop.badge.multiple', "{0} agents need you", count);
 +			// Leave `iconDataURL` out rather than undefined: the IPC drops undefined properties (see SessionsApplicationBadge).
 +			const iconDataURL = colorTheme ? this.renderIcon(count, colorTheme) : undefined;
 +			badge = iconDataURL ? { count, description, iconDataURL } : { count, description };
 +		}
-+		this.nativeHostService.setApplicationBadge(badge).catch(err => this.logService.warn(`[axle desktop] badge failed: ${err}`));
++		this.nativeHostService.setApplicationBadge(badge).catch(err => this.logService.warn(`[insilode desktop] badge failed: ${err}`));
 +	}
 +
 +	/** The taskbar overlay icon on Windows: a badge-coloured disc with the count, drawn like the Sessions badge. */
 +	private renderIcon(count: number, colorTheme: IColorTheme): string | undefined {
-+		const size = AxleDesktopContribution.ICON_SIZE;
++		const size = InsilodeDesktopContribution.ICON_SIZE;
 +		const canvas = mainWindow.document.createElement('canvas');
 +		canvas.width = size;
 +		canvas.height = size;
@@ -1242,7 +1242,7 @@ index 0000000..c00b221
 +		context.beginPath();
 +		context.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI);
 +		context.fill();
-+		const label = count > AxleDesktopContribution.MAX_ICON_COUNT ? `${AxleDesktopContribution.MAX_ICON_COUNT}+` : String(count);
++		const label = count > InsilodeDesktopContribution.MAX_ICON_COUNT ? `${InsilodeDesktopContribution.MAX_ICON_COUNT}+` : String(count);
 +		context.fillStyle = (colorTheme.getColor(ACTIVITY_BAR_BADGE_FOREGROUND) ?? Color.white).toString();
 +		context.font = `600 ${label.length > 1 ? 17 : 21}px "Segoe UI", sans-serif`;
 +		context.textAlign = 'center';
@@ -1253,11 +1253,11 @@ index 0000000..c00b221
 +
 +	private pushOverlay(): void {
 +		const colors = this.overlay ? this.overlayColors(this.themeService.getColorTheme()) : undefined;
-+		this.overlayService.update(this.nativeHostService.windowId, this.overlay, colors).catch(err => this.logService.warn(`[axle desktop] overlay failed: ${err}`));
++		this.overlayService.update(this.nativeHostService.windowId, this.overlay, colors).catch(err => this.logService.warn(`[insilode desktop] overlay failed: ${err}`));
 +	}
 +
 +	/** The overlay in this theme's colours: a widget's background and text, the chart colours for the states. */
-+	private overlayColors(theme: IColorTheme): IAxleOverlayColors {
++	private overlayColors(theme: IColorTheme): IInsilodeOverlayColors {
 +		const pick = (fallback: string, ...ids: string[]) => {
 +			for (const id of ids) {
 +				const c = theme.getColor(id);
@@ -1283,7 +1283,7 @@ index 0000000..c00b221
 +	}
 +}
 +
-+registerWorkbenchContribution2(AxleDesktopContribution.ID, AxleDesktopContribution, WorkbenchPhase.BlockRestore);
++registerWorkbenchContribution2(InsilodeDesktopContribution.ID, InsilodeDesktopContribution, WorkbenchPhase.BlockRestore);
 diff --git a/src/vs/workbench/workbench.desktop.main.ts b/src/vs/workbench/workbench.desktop.main.ts
 index 74be4ca..60cbf66 100644
 --- a/src/vs/workbench/workbench.desktop.main.ts
@@ -1292,9 +1292,182 @@ index 74be4ca..60cbf66 100644
  // System-wide (OS global) Keybindings
  import './contrib/keybindings/electron-browser/systemWideKeybindings.contribution.js';
  
-+// Axle: agent status on the app icon and in the desktop overlay
-+import './contrib/axleDesktop/electron-browser/axleDesktop.contribution.js';
++// Insilode: agent status on the app icon and in the desktop overlay
++import './contrib/insilodeDesktop/electron-browser/insilodeDesktop.contribution.js';
 +
  //#endregion
  
  
+diff --git a/src/insilodeMigrate.ts b/src/insilodeMigrate.ts
+new file mode 100644
+index 0000000..a0cb80e
+--- /dev/null
++++ b/src/insilodeMigrate.ts
+@@ -0,0 +1,135 @@
++/*---------------------------------------------------------------------------------------------
++ *  Insilode: what an Axle install left behind (the product was called Axle until 0.4.x).
++ *
++ *  The settings live in the user data folder (`Axle` under the platform's app data folder) and the
++ *  extensions in the data folder in the home directory (`.axle`). Insilode uses `Insilode` and `.insilode`,
++ *  so the first start copies what is worth keeping, once. The old folders are never touched: an Axle
++ *  that is still installed keeps working, and nothing is lost if the copy has to be redone.
++ *
++ *  Plain TypeScript with no VS Code imports, so the unit test cuts it out of the patch and runs it as it is.
++ *--------------------------------------------------------------------------------------------*/
++
++import * as fs from 'node:fs';
++import * as path from 'node:path';
++
++export const LEGACY_USER_DATA = 'Axle';
++export const LEGACY_DATA_FOLDER = '.axle';
++
++/** Written into a folder made by the migration; the folder is never migrated again, and a half-made copy never carries it. */
++export const MARKER = '.migrated-from-axle';
++
++/** What is copied from the user data folder: settings, keybindings, snippets, global and workspace state (trust included), unsaved backups. Caches and logs are not. */
++const USER_DATA_ENTRIES = ['User', 'Backups', 'storage.json', 'languagepacks.json', 'machineid'];
++
++/** What is copied from the data folder in the home directory. The agent bridge folder is runtime state. */
++const DATA_FOLDER_ENTRIES = ['extensions', 'argv.json'];
++
++export interface MigrationInput {
++	platform: NodeJS.Platform;
++	env: NodeJS.ProcessEnv;
++	home: string;
++	/** The command line after the executable: a user-chosen folder (`--user-data-dir`, `--extensions-dir`) is never replaced. */
++	argv: readonly string[];
++	/** product.json's `nameShort` and `dataFolderName`. */
++	product: { nameShort: string; dataFolderName: string };
++	isPortable: boolean;
++}
++
++export interface MigrationResult {
++	copied: string[];
++	failed: string[];
++}
++
++/** Where VS Code keeps the user data folder: VSCODE_APPDATA, else %APPDATA%, ~/Library/Application Support or $XDG_CONFIG_HOME. */
++export function appDataFolder(i: Pick<MigrationInput, 'platform' | 'env' | 'home'>): string {
++	if (i.env['VSCODE_APPDATA']) {
++		return i.env['VSCODE_APPDATA'];
++	}
++	switch (i.platform) {
++		case 'win32': return i.env['APPDATA'] ?? path.join(i.home, 'AppData', 'Roaming');
++		case 'darwin': return path.join(i.home, 'Library', 'Application Support');
++		default: return i.env['XDG_CONFIG_HOME'] ?? path.join(i.home, '.config');
++	}
++}
++
++const hasFlag = (argv: readonly string[], name: string) => argv.some(a => a === `--${name}` || a.startsWith(`--${name}=`));
++
++/** Text that names the old theme or the old folder: rewritten in the copy, never in the original. */
++export function rewriteSettings(file: 'settings' | 'extensions', text: string): string {
++	if (file === 'settings') {
++		return text.replace(/"Axle (Dark|Light)"/g, '"Insilode $1"');
++	}
++	// extensions.json records where each extension lives, as an absolute path in the old folder.
++	return text.replace(/([\\/])\.axle([\\/])/g, '$1.insilode$2');
++}
++
++function copyEntries(from: string, to: string, entries: readonly string[]): void {
++	for (const name of entries) {
++		const source = path.join(from, name);
++		if (fs.existsSync(source)) {
++			fs.cpSync(source, path.join(to, name), { recursive: true });
++		}
++	}
++}
++
++function rewriteIn(file: string, kind: 'settings' | 'extensions'): void {
++	if (!fs.existsSync(file)) {
++		return;
++	}
++	const text = fs.readFileSync(file, 'utf8');
++	const next = rewriteSettings(kind, text);
++	if (next !== text) {
++		fs.writeFileSync(file, next);
++	}
++}
++
++/** Copies `from` to `to` when `to` is missing: into a sibling first, then a rename, so `to` is either absent or whole. */
++function migrateFolder(from: string, to: string, entries: readonly string[], rewrite: (folder: string) => void, result: MigrationResult): void {
++	if (!fs.existsSync(from) || fs.existsSync(to)) {
++		return;
++	}
++	const partial = `${to}.migrating`;
++	try {
++		fs.rmSync(partial, { recursive: true, force: true });
++		fs.mkdirSync(partial, { recursive: true });
++		copyEntries(from, partial, entries);
++		rewrite(partial);
++		fs.writeFileSync(path.join(partial, MARKER), JSON.stringify({ from, at: new Date().toISOString() }) + '\n');
++		fs.renameSync(partial, to);
++		result.copied.push(`${from} -> ${to}`);
++	} catch (e) {
++		result.failed.push(`${from}: ${(e as Error).message}`);
++		fs.rmSync(partial, { recursive: true, force: true });
++	}
++}
++
++/** Never throws: a start must not fail because an old folder could not be copied. It is tried again at the next start. */
++export function migrateLegacyData(i: MigrationInput): MigrationResult {
++	const result: MigrationResult = { copied: [], failed: [] };
++	// A build run from source (VSCODE_DEV) works on folders of its own ("Insilode Dev", ".insilode-dev"): it never takes a person's real data.
++	if (i.isPortable || i.env['VSCODE_PORTABLE'] || i.env['VSCODE_DEV']) {
++		return result;
++	}
++	try {
++		if (!hasFlag(i.argv, 'user-data-dir')) {
++			const base = appDataFolder(i);
++			migrateFolder(path.join(base, LEGACY_USER_DATA), path.join(base, i.product.nameShort), USER_DATA_ENTRIES, folder => {
++				rewriteIn(path.join(folder, 'User', 'settings.json'), 'settings');
++				const profiles = path.join(folder, 'User', 'profiles');
++				if (fs.existsSync(profiles)) {
++					for (const p of fs.readdirSync(profiles)) {
++						rewriteIn(path.join(profiles, p, 'settings.json'), 'settings');
++					}
++				}
++			}, result);
++		}
++		if (!hasFlag(i.argv, 'extensions-dir')) {
++			migrateFolder(path.join(i.home, LEGACY_DATA_FOLDER), path.join(i.home, i.product.dataFolderName), DATA_FOLDER_ENTRIES, folder => {
++				rewriteIn(path.join(folder, 'extensions', 'extensions.json'), 'extensions');
++			}, result);
++		}
++	} catch (e) {
++		result.failed.push((e as Error).message);
++	}
++	return result;
++}
+diff --git a/src/mainImpl.ts b/src/mainImpl.ts
+index 3d34aea..c148e2f 100644
+--- a/src/mainImpl.ts
++++ b/src/mainImpl.ts
+@@ -9,6 +9,7 @@ import * as os from 'node:os';
+ import { performance } from 'node:perf_hooks';
+ import { configurePortable } from './bootstrap-node.js';
+ import { bootstrapESM } from './bootstrap-esm.js';
++import { migrateLegacyData } from './insilodeMigrate.js';
+ import { app, protocol, crashReporter, Menu, contentTracing } from 'electron';
+ import minimist from 'minimist';
+ import { product } from './bootstrap-meta.js';
+@@ -33,6 +34,19 @@ perf.mark('code/didLoadMainBundle');
+ // Enable portable support
+ const portable = configurePortable(product);
+ 
++// Insilode: the settings and extensions an Axle install left are copied once, before argv.json and the user data folder are read.
++const migration = migrateLegacyData({
++	platform: process.platform,
++	env: process.env,
++	home: os.homedir(),
++	argv: process.argv.slice(1),
++	product: { nameShort: product.nameShort ?? 'Insilode', dataFolderName: product.dataFolderName ?? '.insilode' },
++	isPortable: portable.isPortable
++});
++for (const failure of migration.failed) {
++	console.error(`Insilode: could not copy data from Axle: ${failure}`);
++}
++
+ const args = parseCLIArgs();
+ // Configure static command line arguments
+ perf.mark('code/willConfigureCommandlineSwitches');

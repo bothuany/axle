@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle boards generated from code: what an agent may add to a generated board. A title, a description, and a note per node
+ *  Insilode boards generated from code: what an agent may add to a generated board. A title, a description, and a note per node
  *  (named by node id or symbol). Never a node or an edge: every relation on a generated board comes from the index.
  *  Pure: no `vscode`.
  *--------------------------------------------------------------------------------------------*/

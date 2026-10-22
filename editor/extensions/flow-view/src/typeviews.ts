@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle type views: the commands that open the DTO relation diagram and the architecture diagram on the board
+ *  Insilode type views: the commands that open the DTO relation diagram and the architecture diagram on the board
  *  canvas, drawn from the type graph (src/types). The canvas asks this file to draw again (focus a type, search,
  *  hide roles) through a BoardSource, so the graph work stays in the host.
  *--------------------------------------------------------------------------------------------*/
@@ -61,15 +61,15 @@ export function registerTypeViews({ context, log }: TypeViewsHost): BoardPanel {
 
 	const showDto = async (request: BoardRequest = {}) => {
 		const initial = { ...dtoDefaults(), ...sanitizeRequest(request) };
-		const spec = await draw('Axle: reading types…', () => dto.build(initial));
+		const spec = await draw('Insilode: reading types…', () => dto.build(initial));
 		await panel.show(spec, { key: DTO_KEY, source: dto, request: initial });
 	};
 	const showArchitecture = async (request: BoardRequest = {}) => {
 		const initial = { ...architectureDefaults(), ...sanitizeRequest(request) };
-		const spec = await draw('Axle: reading types…', () => architecture.build(initial));
+		const spec = await draw('Insilode: reading types…', () => architecture.build(initial));
 		await panel.show(spec, { key: ARCH_KEY, source: architecture, request: initial });
 	};
-	const fail = (e: unknown) => void vscode.window.showErrorMessage(`Axle: ${(e as Error)?.message ?? e}`);
+	const fail = (e: unknown) => void vscode.window.showErrorMessage(`Insilode: ${(e as Error)?.message ?? e}`);
 
 	/** The type a command was asked about: an id or a name, or an object with one, or the word at the cursor. */
 	const typeRef = async (arg: unknown): Promise<string | undefined> => {
@@ -93,7 +93,7 @@ export function registerTypeViews({ context, log }: TypeViewsHost): BoardPanel {
 				return word;
 			}
 		}
-		return vscode.window.showInputBox({ title: 'Axle: show a type in the diagram', prompt: 'A type name', placeHolder: 'OrderDto' });
+		return vscode.window.showInputBox({ title: 'Insilode: show a type in the diagram', prompt: 'A type name', placeHolder: 'OrderDto' });
 	};
 
 	/** Which diagram a type belongs in: DTOs, enums and entities in the DTO diagram, everything else in the architecture. */
@@ -102,9 +102,9 @@ export function registerTypeViews({ context, log }: TypeViewsHost): BoardPanel {
 		if (!ref) {
 			return;
 		}
-		const found = await draw('Axle: reading types…', () => service().detail(ref, vscode.window.activeTextEditor?.document.uri.fsPath, 1));
+		const found = await draw('Insilode: reading types…', () => service().detail(ref, vscode.window.activeTextEditor?.document.uri.fsPath, 1));
 		if (!found) {
-			void vscode.window.showInformationMessage(`Axle: "${ref}" is not a type of this workspace.`);
+			void vscode.window.showInformationMessage(`Insilode: "${ref}" is not a type of this workspace.`);
 			return;
 		}
 		if (found.role === 'dto' || found.role === 'enum' || found.role === 'entity') {
@@ -118,7 +118,7 @@ export function registerTypeViews({ context, log }: TypeViewsHost): BoardPanel {
 	const copyMermaid = async () => {
 		let key = panel.activeKey();
 		if (!key || !key.startsWith('types.')) {
-			const pick = await vscode.window.showQuickPick([{ label: 'DTO diagram', key: DTO_KEY }, { label: 'Architecture diagram', key: ARCH_KEY }], { title: 'Axle: copy a diagram as Mermaid' });
+			const pick = await vscode.window.showQuickPick([{ label: 'DTO diagram', key: DTO_KEY }, { label: 'Architecture diagram', key: ARCH_KEY }], { title: 'Insilode: copy a diagram as Mermaid' });
 			if (!pick) {
 				return;
 			}
@@ -128,11 +128,11 @@ export function registerTypeViews({ context, log }: TypeViewsHost): BoardPanel {
 		let source = panel.sourceOf(key);
 		if (!spec) {
 			source = key === DTO_KEY ? dto : architecture;
-			spec = await draw('Axle: reading types…', () => source!.build(key === DTO_KEY ? dtoDefaults() : architectureDefaults()));
+			spec = await draw('Insilode: reading types…', () => source!.build(key === DTO_KEY ? dtoDefaults() : architectureDefaults()));
 		}
 		const text = source?.exportText?.(spec, 'mermaid') ?? service().exportBoard(spec, 'mermaid');
 		await vscode.env.clipboard.writeText(text);
-		void vscode.window.showInformationMessage(`Axle: "${spec.title}" is on the clipboard as Mermaid.`);
+		void vscode.window.showInformationMessage(`Insilode: "${spec.title}" is on the clipboard as Mermaid.`);
 	};
 
 	// An open board follows the code: when the type graph is rebuilt (an edit, the index finished) it is drawn again.

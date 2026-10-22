@@ -19,7 +19,7 @@ before(async () => {
 })
 after(() => rmSync(tmp, { recursive: true, force: true }))
 
-const work = resolve(tmpdir(), 'axle-gaze-work')
+const work = resolve(tmpdir(), 'insilode-gaze-work')
 const roots = [work]
 const at = (...p) => join(work, ...p)
 const look = (extra = {}) => ({ session: 's1', agent: 'Claude Code (terminal)', color: '#ff9d7d', act: 'read', file: at('src', 'a.js'), startLine: 10, endLine: 20, turn: 1, at: 1000, ...extra })

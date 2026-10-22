@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: how a tour file's code is read. A tour is untrusted input (it can come from a pull request), so a path is judged by the
+ *  Insilode: how a tour file's code is read. A tour is untrusted input (it can come from a pull request), so a path is judged by the
  *  real file behind it, never by how it is spelled, and what is read is bounded. Pure: no `vscode`.
  *--------------------------------------------------------------------------------------------*/
 
@@ -11,7 +11,7 @@ export const PEEK_READ_BYTES = 512 * 1024;
 
 /**
  * `file` as the real file it is (symlinks resolved), when that is inside a workspace folder. A tour is untrusted: a symlink in a
- * pull request that points out of the workspace must not make Axle read what is behind it.
+ * pull request that points out of the workspace must not make Insilode read what is behind it.
  */
 export function realInside(roots: string[], file: string): string | undefined {
 	try {

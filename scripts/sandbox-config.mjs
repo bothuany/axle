@@ -2,8 +2,8 @@
 // command, and what to tell a person whose machine cannot run it. Pure, so test/e2e-desktop/unit tests it anywhere.
 
 /** Where the mapped folders appear inside the sandbox. */
-export const SANDBOX_IN = 'C:\\axle-e2e\\in'
-export const SANDBOX_OUT = 'C:\\axle-e2e\\out'
+export const SANDBOX_IN = 'C:\\insilode-e2e\\in'
+export const SANDBOX_OUT = 'C:\\insilode-e2e\\out'
 
 const xml = text => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 

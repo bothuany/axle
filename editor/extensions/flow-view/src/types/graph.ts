@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle type model: one TypeGraph from the two sources. The code index's facts (Java, Python,
+ *  Insilode type model: one TypeGraph from the two sources. The code index's facts (Java, Python,
  *  JS/TS, Go, PHP, Ruby, Rust) and the C# analyzer's types are both turned into one raw shape,
  *  every field, method and constructor type is resolved to workspace types (collections and
  *  response wrappers seen through), roles and DTOs are decided, and the edges are collected.

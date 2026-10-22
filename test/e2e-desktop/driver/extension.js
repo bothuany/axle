@@ -11,13 +11,13 @@ const AGENTS = [
 	{ id: 'e2e-3', name: 'Codex 1', cli: 'codex', state: 'done', attention: 'done' },
 ]
 
-/** The model the island takes (src/vs/platform/axleDesktop/common/axleDesktop.ts); the main process sanitizes it again. */
+/** The model the island takes (src/vs/platform/insilodeDesktop/common/insilodeDesktop.ts); the main process sanitizes it again. */
 function model() {
 	const o = vscode.workspace.getConfiguration('flow.agents.desktop.overlay')
 	return {
 		items: AGENTS,
 		counts: { needs: 1, working: 1, done: 1 },
-		options: { position: 'top-center', display: 'axle', style: 'pill', size: 'medium', opacity: 1, theme: 'black', avatar: 'gyro', autoHide: o.get('autoHide') ?? { noAgents: true, axleFocused: false } },
+		options: { position: 'top-center', display: 'insilode', style: 'pill', size: 'medium', opacity: 1, theme: 'black', avatar: 'gyro', autoHide: o.get('autoHide') ?? { noAgents: true, insilodeFocused: false } },
 	}
 }
 

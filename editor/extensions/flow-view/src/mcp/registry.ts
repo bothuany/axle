@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle agent bridge: how an MCP server finds the Axle window of a folder. Every window writes
+ *  Insilode agent bridge: how an MCP server finds the Insilode window of a folder. Every window writes
  *  <bridge dir>/<pid>.json (port, token, folders) while it runs; the MCP server reads them and picks
  *  the window whose folder holds its working directory. Pure Node: no `vscode`, so the stdio server
  *  (a separate process) and the tests share it.
@@ -17,8 +17,8 @@ export interface BridgeInfo {
 	createdAt: number;
 }
 
-/** AXLE_BRIDGE_DIR lets tests (and unusual setups) keep this away from the real ~/.axle. */
-export const bridgeDir = (env: NodeJS.ProcessEnv = process.env) => env.AXLE_BRIDGE_DIR || path.join(os.homedir(), '.axle', 'bridge');
+/** INSILODE_BRIDGE_DIR lets tests (and unusual setups) keep this away from the real ~/.insilode. */
+export const bridgeDir = (env: NodeJS.ProcessEnv = process.env) => env.INSILODE_BRIDGE_DIR || path.join(os.homedir(), '.insilode', 'bridge');
 
 /** One spelling per path: forward slashes, no trailing slash, and lower case where the file system ignores case. */
 export function normalizePath(p: string, platform: NodeJS.Platform = process.platform): string {
@@ -105,7 +105,7 @@ export async function readBridges(dir = bridgeDir()): Promise<BridgeInfo[]> {
 	return out;
 }
 
-/** Removes the files of windows that are gone (a killed Axle cannot delete its own). Returns the pids it removed. */
+/** Removes the files of windows that are gone (a killed Insilode cannot delete its own). Returns the pids it removed. */
 export async function cleanStale(dir = bridgeDir(), alive: (pid: number) => boolean = isAlive, keepPid?: number): Promise<number[]> {
 	const removed: number[] = [];
 	for (const info of await readBridges(dir)) {

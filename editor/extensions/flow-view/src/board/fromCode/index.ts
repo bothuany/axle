@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle boards generated from code (research roadmap #5, docs/research/agent-diagrams.md): the common diagrams an agent used to
+ *  Insilode boards generated from code (research roadmap #5, docs/research/agent-diagrams.md): the common diagrams an agent used to
  *  draw by hand and get wrong are built from the index instead. The agent chooses a scope and a kind and may add titles and
  *  notes; every node and every relation comes from the code. This file names the kinds and checks that a scope fits its kind;
  *  the generators are one file each. Pure: no `vscode`.
@@ -20,7 +20,7 @@ const WHAT: Record<FromCodeKind, string> = {
 	sequence: 'an endpoint or method: scope.id (from find_entry_points), or scope.file with scope.method or scope.line, or scope.symbol ("OrderService.place")',
 	er: 'a set of tables: scope.tables (table or entity names; omit for all tables, capped)',
 	architecture: 'modules or packages: scope.module (a module or package name; omit for the whole workspace)',
-	state: 'an enum: scope.enum ("OrderStatus" or "Order.status"; omit to let Axle look for the one with clear transitions)',
+	state: 'an enum: scope.enum ("OrderStatus" or "Order.status"; omit to let Insilode look for the one with clear transitions)',
 };
 
 export interface CheckedScope {

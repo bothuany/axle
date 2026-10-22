@@ -1,4 +1,4 @@
-// Writes a small multi-service project to probe Axle against: an Express backend, a frontend that
+// Writes a small multi-service project to probe Insilode against: an Express backend, a frontend that
 // calls it with axios and fetch, and a FastAPI service that calls it with requests. Each client call
 // is a different URL shape (plain, template, concatenation, f-string with a host), so one flow and one
 // callers view show whether cross-service links, routes and the index work end to end.
@@ -18,14 +18,14 @@ if (!dir) {
 	process.exit(2)
 }
 // Only replace a folder this script made: anything else might be someone's work.
-if (existsSync(dir) && readdirSync(dir).length && !existsSync(join(dir, '.axle-probe'))) {
+if (existsSync(dir) && readdirSync(dir).length && !existsSync(join(dir, '.insilode-probe'))) {
 	console.error(`${dir} is not empty and was not made by this script; pick another folder`)
 	process.exit(1)
 }
 rmSync(dir, { recursive: true, force: true })
 
 const files = {
-	'.axle-probe': 'Made by .claude/skills/probe/scripts/demo-workspace.mjs; safe to delete.\n',
+	'.insilode-probe': 'Made by .claude/skills/probe/scripts/demo-workspace.mjs; safe to delete.\n',
 	'package.json': '{ "name": "demo-shop", "private": true, "dependencies": { "express": "^4.19.0", "axios": "^1.7.0" } }\n',
 	'server/app.js': `const express = require('express');
 const orders = require('./orders');

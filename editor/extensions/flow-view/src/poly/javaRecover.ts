@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: Java declarations out of a file that does not parse. tree-sitter recovers from a broken import or an unclosed
+ *  Insilode polyglot index: Java declarations out of a file that does not parse. tree-sitter recovers from a broken import or an unclosed
  *  call by turning the whole file into one ERROR node with its tokens flattened, so `class_declaration` is gone and the type is
  *  not in the index at all. A developer who has written a class (even half of it) still has written it, so this reads the type
  *  headers and the members of each body from the text itself. It only adds what the tree did not find.

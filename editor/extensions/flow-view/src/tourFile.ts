@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: "Play Tour from File…". Reads a tour file (a hand-written JSON, see tour/validate.ts), opens the flow the tour is
+ *  Insilode: "Play Tour from File…". Reads a tour file (a hand-written JSON, see tour/validate.ts), opens the flow the tour is
  *  about and plays it on the canvas. A development command for phase 0 of the guided tours: the same path (`panel.playTour`)
  *  will carry the tours an agent sends.
  *--------------------------------------------------------------------------------------------*/
@@ -92,11 +92,11 @@ async function pickTourFile(): Promise<vscode.Uri | undefined> {
 	const found = await vscode.workspace.findFiles('**/*.tour.json', '**/{node_modules,.git}/**', 50);
 	const browse = { label: '$(folder-opened) Browse…', uri: undefined as vscode.Uri | undefined };
 	const items = [...found.map(uri => ({ label: vscode.workspace.asRelativePath(uri, false), uri: uri as vscode.Uri | undefined })).sort((a, b) => a.label.localeCompare(b.label)), browse];
-	const pick = found.length ? await vscode.window.showQuickPick(items, { title: 'Axle: play a tour', placeHolder: 'A tour file in this workspace' }) : browse;
+	const pick = found.length ? await vscode.window.showQuickPick(items, { title: 'Insilode: play a tour', placeHolder: 'A tour file in this workspace' }) : browse;
 	if (pick?.uri) {
 		return pick.uri;
 	}
-	return pick ? (await vscode.window.showOpenDialog({ canSelectMany: false, openLabel: 'Play Tour', title: 'Axle: play a tour file', filters: { 'Axle tour': ['json'] } }))?.[0] : undefined;
+	return pick ? (await vscode.window.showOpenDialog({ canSelectMany: false, openLabel: 'Play Tour', title: 'Insilode: play a tour file', filters: { 'Insilode tour': ['json'] } }))?.[0] : undefined;
 }
 
 /** `source`: a file the caller already chose (a Uri or a path); without one the user picks it. */

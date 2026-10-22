@@ -24,4 +24,4 @@ Three small services behind one gateway. Read this before touching anything.
 
 ## When you change an endpoint
 
-Check who calls it first: the flow canvas (`axle` MCP, `impact`) lists the endpoints and the tables a method reaches. Say which ones your change touches in the summary.
+Check who calls it first: the flow canvas (`insilode` MCP, `impact`) lists the endpoints and the tables a method reaches. Say which ones your change touches in the summary.

@@ -60,6 +60,10 @@ jobs:
 
       - name: Site (type-check, build, play the demo in Chrome)
         working-directory: site
+        env:
+          # Empty: the build's own address, https://insilode.dev (and a CNAME file for it). Set the repository variable SITE_URL
+          # (Settings, Secrets and variables, Actions, Variables) only to serve the site from somewhere else, e.g. a fork's github.io.
+          SITE_URL: ${{ vars.SITE_URL }}
         run: |
           npm ci --no-audit --no-fund
           npm run typecheck

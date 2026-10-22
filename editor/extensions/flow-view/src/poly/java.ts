@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: Java. Classes, fields, methods, annotations and the calls inside each
+ *  Insilode polyglot index: Java. Classes, fields, methods, annotations and the calls inside each
  *  method, with the declared types of locals and parameters so calls can be resolved by type.
  *--------------------------------------------------------------------------------------------*/
 

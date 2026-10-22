@@ -5,8 +5,8 @@ here hand those release files to package managers. **None of them is published y
 
 | | File | Where it goes | Status |
 |---|---|---|---|
-| Windows | `winget/manifests/b/bothuany/Axle/<version>/` | a pull request to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) | written, not submitted |
-| macOS | `homebrew/axle.rb` | `Casks/axle.rb` in a new repository `bothuany/homebrew-tap` | written, the tap repository does not exist |
+| Windows | `winget/manifests/b/bothuany/Insilode/<version>/` | a pull request to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) | written, not submitted |
+| macOS | `homebrew/insilode.rb` | `Casks/insilode.rb` in a new repository `bothuany/homebrew-tap` | written, the tap repository does not exist |
 | Linux | `apt/README.md` | a signed APT repository | described, not set up |
 | Linux | `linux/deb/` | used by `scripts/package.mjs`: the `.deb`'s maintainer scripts | in use |
 
@@ -18,51 +18,51 @@ here hand those release files to package managers. **None of them is published y
 3. **winget:** copy the folder to the new version. Set `PackageVersion`, `InstallerUrl`, `ReleaseNotesUrl` and
    `InstallerSha256` (the `.exe` line, in upper or lower case), then check the manifest with
    `winget validate --manifest <folder>`. Submit it with `wingetcreate submit <folder>`, or as a pull request to
-   winget-pkgs under `manifests/b/bothuany/Axle/<version>/`. For later versions, `wingetcreate update bothuany.Axle
+   winget-pkgs under `manifests/b/bothuany/Insilode/<version>/`. For later versions, `wingetcreate update bothuany.Insilode
    --version <v> --urls <exe url> --submit` does all of this in one step. After the first merge, `winget install
-   bothuany.Axle` works and `winget upgrade` picks up each new version as soon as its manifest is merged.
+   bothuany.Insilode` works and `winget upgrade` picks up each new version as soon as its manifest is merged.
 4. **Homebrew:** in the tap, set `version` and the two `sha256` values (the `darwin-arm64.zip` and `darwin-x64.zip`
-   lines), then run `brew audit --cask --online bothuany/tap/axle` and `brew style`. `brew upgrade` picks it up after
+   lines), then run `brew audit --cask --online bothuany/tap/insilode` and `brew style`. `brew upgrade` picks it up after
    that. A release job could do this with a token for the tap repository; `brew bump-cask-pr` is the manual route.
 5. **APT:** see `apt/README.md`.
 
 ## Updates
 
-A running Axle updates itself from the release files, without an update server. VS Code's update service is kept
+A running Insilode updates itself from the release files, without an update server. VS Code's update service is kept
 (Update available on the gear, Help, Check for Updates, `update.mode`), but it reads a static file instead of
 `/api/update/<platform>/<quality>/<commit>` (`editor/patches/flow-update.patch`):
 
-1. `product.json` has `"quality": "axle"` and `"updateUrl": "https://github.com/bothuany/axle/releases/latest/download"`.
+1. `product.json` has `"quality": "insilode"` and `"updateUrl": "https://github.com/bothuany/insilode/releases/latest/download"`.
    GitHub redirects `releases/latest/download/<file>` to the newest release that is not a draft or prerelease.
-2. The app asks for `<updateUrl>/update-<platform>-axle.json`, where `<platform>` is `win32-x64-user`, `darwin`,
+2. The app asks for `<updateUrl>/update-<platform>-insilode.json`, where `<platform>` is `win32-x64-user`, `darwin`,
    `darwin-arm64` or `linux-x64`. Each file is `{ url, name, version, productVersion, sha256hash, timestamp }`;
-   `version` is the commit of the release, `productVersion` its Axle version.
-3. The app compares `productVersion` with its own Axle version (semver; a release is newer than its prereleases). Equal or
+   `version` is the commit of the release, `productVersion` its Insilode version.
+3. The app compares `productVersion` with its own Insilode version (semver; a release is newer than its prereleases). Equal or
    older means no update, which replaces the server's 204. The built app's `version` in `product.json` is VS Code's, so
-   `npm run installer` and `npm run package` stamp `axleVersion` (from `package.json`) into it; that is what is compared.
+   `npm run installer` and `npm run package` stamp `insilodeVersion` (from `package.json`) into it; that is what is compared.
 4. `release.yml` writes the files with `scripts/update-manifests.mjs` (sha256 of the right asset) and uploads them as release
    assets, after everything else is attached. It fails, and uploads nothing, when a platform's asset is missing.
 
 | Platform | The file points at | What the app does |
 |---|---|---|
-| Windows (per-user setup) | `Axle-Setup-<v>-x64.exe` | downloads it, checks the sha256, runs it silently when you choose Restart to Update (VS Code's Inno Setup flow) |
+| Windows (per-user setup) | `Insilode-Setup-<v>-x64.exe` | downloads it, checks the sha256, runs it silently when you choose Restart to Update (VS Code's Inno Setup flow) |
 | macOS (x64, arm64) | the release page | notification with a Download button that opens the page |
 | Linux (x64) | the release page | the same |
 
 - **Windows** only works for the per-user installer (`npm run installer`'s default), which is the one on the release: its
   target is `user`. A system-wide install (`--system`, not released) would look for `win32-x64` files that are not published.
-  The app id, `axle` mutex and install folder come from `product.json`, so they are Axle's and not Code - OSS's; the installer's
-  `/update` flow shares them with the app. The update cache is `%TEMP%\axle-axle-user-x64`, not VS Code's.
+  The app id, `insilode` mutex and install folder come from `product.json`, so they are Insilode's and not Code - OSS's; the installer's
+  `/update` flow shares them with the app. The update cache is `%TEMP%\insilode-insilode-user-x64`, not VS Code's.
   The update is installed when you choose Restart to Update: the app quits and runs the installer silently over the install,
-  which starts Axle again. VS Code's background updates (the new build is staged in `{app}\_` while the app runs, and
+  which starts Insilode again. VS Code's background updates (the new build is staged in `{app}\_` while the app runs, and
   `inno_updater` swaps it in on restart) are switched off in the update patch, and the `update.enableWindowsBackgroundUpdates`
-  setting is hidden. `inno_updater` 0.26 only knows the *versioned* layout (`win32VersionedUpdate`: `Axle.exe` is a proxy at the
+  setting is hidden. `inno_updater` 0.26 only knows the *versioned* layout (`win32VersionedUpdate`: `Insilode.exe` is a proxy at the
   install root and the app lives in a commit-named folder), and that layout needs Microsoft's custom Electron build with
-  `electron_proxy.exe`; the Electron from electronjs.org that Axle uses fails to start from it ("Invalid file descriptor to
+  `electron_proxy.exe`; the Electron from electronjs.org that Insilode uses fails to start from it ("Invalid file descriptor to
   ICU data"). Installs of 0.4.3 and older still have the background mode, which fails at the swap: install the next release
   once by hand (run the Setup over it, or uninstall first), and updates are in place from then on.
 - **macOS** cannot install in place yet: Squirrel.Mac only replaces an app that is signed with a Developer ID and notarized,
-  and Axle's ad hoc signature would make every download fail. So the app never calls Squirrel; it reads the file and offers the
+  and Insilode's ad hoc signature would make every download fail. So the app never calls Squirrel; it reads the file and offers the
   page. When signing is added (the section below), point the file at the zip and restore Squirrel's check in
   `updateService.darwin.ts` (see `flow-update.patch`: it replaces `electron.autoUpdater`).
 - **Linux** is notification and link only, as in VS Code: there is no apt repository, and an `apt upgrade` cannot update the
@@ -71,16 +71,29 @@ A running Axle updates itself from the release files, without an update server. 
 - Between the release being created and the last job finishing, `latest/download` has no update files yet: a check then gets
   a 404, which an automatic check ignores and **Check for Updates** shows as an error.
 
-**Test it without a release.** `AXLE_UPDATE_URL` replaces `updateUrl` (https, or http on this machine only):
+**Test it without a release.** `INSILODE_UPDATE_URL` replaces `updateUrl` (https, or http on this machine only):
 
 ```bash
-node scripts/update-manifests.mjs --dir <folder with the four release files> --out /tmp/axle-update --version 9.9.9 --commit test --repo bothuany/axle
-(cd /tmp/axle-update && python -m http.server 8123 --bind 127.0.0.1)
-AXLE_UPDATE_URL=http://127.0.0.1:8123 npm start     # an installed build, not `npm start`: updates are off when running from source
+node scripts/update-manifests.mjs --dir <folder with the four release files> --out /tmp/insilode-update --version 9.9.9 --commit test --repo bothuany/insilode
+(cd /tmp/insilode-update && python -m http.server 8123 --bind 127.0.0.1)
+INSILODE_UPDATE_URL=http://127.0.0.1:8123 npm start     # an installed build, not `npm start`: updates are off when running from source
 ```
 
 A build from source is never updated (`update#ctor - not built`); install a build of an older version, set the variable and
 choose Help, Check for Updates. `npm run test:update` runs the tests for the version check, the URLs and the files.
+
+## Moving from Axle
+
+The 0.5.x releases carry every update file twice: `update-<platform>-insilode.json` (what 0.5 asks for) and `update-<platform>-axle.json`
+(what an installed 0.4.x asks for, at `github.com/bothuany/axle/releases/latest/download`, which GitHub redirects to `bothuany/insilode` since the repository was renamed).
+Both are written by `scripts/update-manifests.mjs` (`LEGACY_QUALITY`); drop the second once the 0.4.x tail is gone. A 0.4.x app cannot install
+the update itself: its "Update available" leads to the new release. Never create a repository called `bothuany/axle` again: it would end the redirect.
+The winget manifest under `winget/manifests/b/bothuany/Insilode/0.1.0/` is the old template (its installer URL names a file the 0.1.0 release
+never had); regenerate it with `wingetcreate` from the first Insilode release.
+
+What Setup does to an Axle install (kept `AppId`), and what the app copies on its first start, is listed in
+[docs/building.md](../docs/building.md#coming-from-axle); the code is in `editor/patches/flow-core.patch` (`build/win32/code.iss`) and
+`flow-desktop.patch` (`src/insilodeMigrate.ts`).
 
 ## Not signed yet
 
@@ -95,15 +108,15 @@ choose Help, Check for Updates. `npm run test:update` runs the tests for the ver
 
 ## App identity
 
-`product.json` (in `editor/patches/flow-core.patch`) gives Axle its own names, so the packages install beside a
+`product.json` (in `editor/patches/flow-core.patch`) gives Insilode its own names, so the packages install beside a
 Code - OSS or VS Code one:
 
 | | Key | Value | What uses it |
 |---|---|---|---|
-| macOS | `darwinBundleIdentifier` | `io.github.bothuany.axle` | the bundle id: preferences in `~/Library/Preferences/io.github.bothuany.axle.plist`, saved window state, the policy domain |
-| macOS | `darwinProfileUUID`, `darwinProfilePayloadUUID` | Axle's own | the identity of the policy `.mobileconfig` VS Code's build can generate |
-| Linux | `linuxDesktopName` | `io.github.bothuany.Axle` | `/usr/share/applications/io.github.bothuany.Axle.desktop` (and `.UrlHandler.desktop`), the appdata file, the window class |
-| Linux | `linuxIconName` | `axle` | `/usr/share/pixmaps/axle.png` |
+| macOS | `darwinBundleIdentifier` | `dev.insilode.Insilode` | the bundle id: preferences in `~/Library/Preferences/dev.insilode.Insilode.plist`, saved window state, the policy domain |
+| macOS | `darwinProfileUUID`, `darwinProfilePayloadUUID` | Insilode's own | the identity of the policy `.mobileconfig` VS Code's build can generate |
+| Linux | `linuxDesktopName` | `dev.insilode.insilode` | `/usr/share/applications/dev.insilode.insilode.desktop` (and `.UrlHandler.desktop`), the appdata file, the window class |
+| Linux | `linuxIconName` | `insilode` | `/usr/share/pixmaps/insilode.png` |
 
 Two folder names are still Code - OSS's: `sharedDataFolderName` (`~/.vscode-oss-shared`) and `serverDataFolderName`
 (`~/.vscode-server-oss`, used by the remote server).

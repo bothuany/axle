@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: agents in terminals. Claude Code and Codex run as their real CLIs, each in its own
- *  terminal; Axle only watches. Claude reports through hooks that Axle hands to that one
+ *  Insilode: agents in terminals. Claude Code and Codex run as their real CLIs, each in its own
+ *  terminal; Insilode only watches. Claude reports through hooks that Insilode hands to that one
  *  session with --settings (the user's own settings and hooks are untouched and still run), so
  *  every agent shows whether it is working, waiting for you or done, what it is doing, its to-do
  *  list and how full its context is. The hooks never answer a permission question: the CLI asks. The only thing
@@ -93,7 +93,7 @@ export interface TurnImpact {
 export interface CustomAgent {
 	name: string;
 	command: string;
-	/** Text may be typed into its prompt (Ask, Home): off unless the user says so, since Axle cannot see its state. */
+	/** Text may be typed into its prompt (Ask, Home): off unless the user says so, since Insilode cannot see its state. */
 	acceptsInput?: boolean;
 }
 
@@ -153,7 +153,7 @@ const EVENT_INPUT = ['skill', 'subagent_type', 'command', 'file_path', 'path', '
 const ORPHAN_TTL_MS = 90_000;
 /** How long after a failing exit code a SessionEnd may still come, making it a quit rather than a crash. */
 const CRASH_GRACE_MS = 1500;
-/** The most a hook may wait for Axle to snapshot a file: the edit must not stall on it. */
+/** The most a hook may wait for Insilode to snapshot a file: the edit must not stall on it. */
 const SNAPSHOT_WAIT_MS = 2500;
 
 const KIND: Record<string, string> = { Bash: 'execute', Edit: 'edit', Write: 'edit', MultiEdit: 'edit', NotebookEdit: 'edit', Read: 'read', Grep: 'search', Glob: 'search', WebFetch: 'fetch', WebSearch: 'fetch', [PATCH_TOOL]: 'edit' };
@@ -184,12 +184,12 @@ function filesOf(tool: string, input: Record<string, unknown> = {}, cwd?: string
 const isEdit = (tool: string) => tool === PATCH_TOOL || EDIT_TOOLS.split('|').includes(tool);
 
 /** The setting is only the default for an agent nobody has switched yet: skeleton first is on or off per agent (Agents.skeletonOn). */
-const skeletonFirstDefault = () => vscode.workspace.getConfiguration('axle.skeletonFirst').get<boolean>('enabled', false) === true;
+const skeletonFirstDefault = () => vscode.workspace.getConfiguration('insilode.skeletonFirst').get<boolean>('enabled', false) === true;
 
 /** A skeleton-first click flow-view could not carry out: said, not swallowed, so the row never looks as if it did. */
 function skeletonFailed(e: unknown) {
 	const missing = /command .* not found/i.test(String((e as Error)?.message ?? e));
-	void vscode.window.showWarningMessage(missing ? 'Axle: skeleton first needs the Flow View extension, which is not running.' : `Axle: skeleton first: ${(e as Error)?.message ?? e}`);
+	void vscode.window.showWarningMessage(missing ? 'Insilode: skeleton first needs the Flow View extension, which is not running.' : `Insilode: skeleton first: ${(e as Error)?.message ?? e}`);
 }
 
 /** Resolves with undefined once `ms` have passed, whatever `p` is doing. */
@@ -279,12 +279,12 @@ export class Agents implements vscode.Disposable {
 	/** Worktrees kept after their agents were taken off the list (Agents: Kept Worktrees…). */
 	private kept: KeptWorktree[] = [];
 	private orphanTimer: NodeJS.Timeout | undefined;
-	/** Claude session ids that continue a Axle agent after /clear or /resume gave the conversation a new one. */
+	/** Claude session ids that continue a Insilode agent after /clear or /resume gave the conversation a new one. */
 	private readonly aliases = new Map<string, string>();
 	/** Set once start() has run: spawn waits on it so an agent never starts before the hook settings exist. */
 	private ready: Promise<void> | undefined;
 	private settingsOk = false;
-	/** Whether Codex can take Axle's profile (`-p axle`): settled on the first Codex start of this window. */
+	/** Whether Codex can take Insilode's profile (`-p insilode`): settled on the first Codex start of this window. */
 	private codexHooks: Promise<boolean> | undefined;
 	/** Files an agent edited since its last prompt, for the turn-end impact. */
 	private readonly touched = new Map<string, Set<string>>();
@@ -351,7 +351,7 @@ export class Agents implements vscode.Disposable {
 		this.save();
 	}
 
-	/** Puts the `claude` shim first on PATH of Axle's terminals (or takes it away), so a hand-typed `claude` gets the `axle` tools too. */
+	/** Puts the `claude` shim first on PATH of Insilode's terminals (or takes it away), so a hand-typed `claude` gets the `insilode` tools too. */
 	private async installShim() {
 		const collection = this.context.environmentVariableCollection;
 		const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -384,14 +384,14 @@ export class Agents implements vscode.Disposable {
 		return path.join(this.dir, 'agent-hooks.json');
 	}
 
-	/** The same hooks plus Axle's status line: for sessions where the user has no status line of their own. */
+	/** The same hooks plus Insilode's status line: for sessions where the user has no status line of their own. */
 	private get statusSettingsFile() {
 		return path.join(this.dir, 'agent-hooks-status.json');
 	}
 
 	/**
 	 * The settings a new Claude session gets. Decided at each start, from every place Claude reads a status line
-	 * for this workspace, so one the user added since Axle started is never replaced by Axle's.
+	 * for this workspace, so one the user added since Insilode started is never replaced by Insilode's.
 	 */
 	private claudeSettings() {
 		const config = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude');
@@ -404,8 +404,8 @@ export class Agents implements vscode.Disposable {
 	}
 
 	/**
-	 * The hooks a Axle agent gets on top of the user's own: read-only observers that print nothing,
-	 * so they never decide anything. Each one posts the event to whichever Axle window holds this
+	 * The hooks a Insilode agent gets on top of the user's own: read-only observers that print nothing,
+	 * so they never decide anything. Each one posts the event to whichever Insilode window holds this
 	 * workspace now: the port is read from a file at call time, because after a window reload the
 	 * old extension host can linger on the old port while the agent keeps running.
 	 */
@@ -418,7 +418,7 @@ export class Agents implements vscode.Disposable {
 		// A tiny Node script, run with the editor's own Node: the same on macOS, Linux and Windows.
 		const script = path.join(this.dir, 'flow-hook.js');
 		await fs.writeFile(script, hookScript(portFile, tokenFile));
-		// On the desktop `process.execPath` is the Axle executable itself: without ELECTRON_RUN_AS_NODE it would open
+		// On the desktop `process.execPath` is the Insilode executable itself: without ELECTRON_RUN_AS_NODE it would open
 		// an editor window for the script on every hook event. Claude Code runs hooks through bash, which takes the prefix.
 		const asNode = process.versions.electron ? 'ELECTRON_RUN_AS_NODE=1 ' : '';
 		const command = `${asNode}"${process.execPath}" "${script}"`;
@@ -441,7 +441,7 @@ export class Agents implements vscode.Disposable {
 	}
 
 	/**
-	 * Codex's hooks, in Axle's own Codex profile (see codexHooks.ts). One script for every window, outside the
+	 * Codex's hooks, in Insilode's own Codex profile (see codexHooks.ts). One script for every window, outside the
 	 * per-workspace folder, so the profile's text (and the trust Codex keeps for it) is the same everywhere.
 	 * Written only when it changed: rewriting the same bytes is harmless, but a changed file asks for trust again.
 	 */
@@ -459,13 +459,18 @@ export class Agents implements vscode.Disposable {
 			await fs.writeFile(file, text);
 			this.log.info(`Agents: wrote the Codex profile ${file}; Codex asks once to trust its hooks (/hooks)`);
 		}
+		// The profile of the same name before the rename (`codex -p axle`): ours only if it still says so.
+		const legacy = path.join(path.dirname(file), 'axle.config.toml');
+		if ((await fs.readFile(legacy, 'utf8').catch(() => '')).startsWith('# Written by Axle.')) {
+			await fs.rm(legacy, { force: true }).catch(() => undefined);
+		}
 	}
 
 	/**
-	 * Codex gets `-p axle` only once the profile is written and this `codex` takes it: an older Codex reads `-p` as a
-	 * [profiles] name and would not start at all. `codex -p axle mcp list` loads the profile without starting a
+	 * Codex gets `-p insilode` only once the profile is written and this `codex` takes it: an older Codex reads `-p` as a
+	 * [profiles] name and would not start at all. `codex -p insilode mcp list` loads the profile without starting a
 	 * session (a profile it cannot read fails it). Asked on the first Codex start, never at activation, so nothing
-	 * is written to ~/.codex for someone who never runs Codex from Axle. Any failure means plain `codex`.
+	 * is written to ~/.codex for someone who never runs Codex from Insilode. Any failure means plain `codex`.
 	 */
 	private codexTakesHooks(): Promise<boolean> {
 		if (!this.server || !vscode.workspace.getConfiguration('flow.agents').get<boolean>('codexHooks', true)) {
@@ -474,7 +479,7 @@ export class Agents implements vscode.Disposable {
 		return this.codexHooks ??= this.writeCodexProfile().then(() => new Promise<boolean>(resolve => {
 			// A shell finds `codex` the way the terminal will: npm installs it on Windows as codex.cmd, which execFile cannot
 			// start alone. The command line is fixed text, nothing from a user or a file reaches it.
-			// nosemgrep: axle-shell-true
+			// nosemgrep: insilode-shell-true
 			execFile('codex', ['-p', CODEX_PROFILE, 'mcp', 'list'], { shell: true, timeout: 8000, windowsHide: true, env: agentProcessEnv() }, (err, _out, stderr) => {
 				if (err) {
 					this.log.warn(`Agents: Codex runs without status: \`codex -p ${CODEX_PROFILE}\` failed (${String(stderr || err.message).trim().split('\n')[0]})`);
@@ -513,7 +518,7 @@ export class Agents implements vscode.Disposable {
 	}
 
 	/**
-	 * Its terminal is gone (Axle quit, or it was closed). A Claude conversation can be
+	 * Its terminal is gone (Insilode quit, or it was closed). A Claude conversation can be
 	 * picked up again with --resume, so it stays listed; other CLIs are dropped.
 	 */
 	private listEnded(s: Saved['sessions'][number]) {
@@ -577,7 +582,7 @@ export class Agents implements vscode.Disposable {
 	private writing: Promise<void> = Promise.resolve();
 
 	/**
-	 * The MCP config that gives an Axle agent the `axle` tools (open files, show flows, draw boards): a file declaring the stdio
+	 * The MCP config that gives an Insilode agent the `insilode` tools (open files, show flows, draw boards): a file declaring the stdio
 	 * server of the flow-view extension for this folder. Undefined, and the agent starts without it, when the setting is off,
 	 * flow-view or its server script is missing, or the file cannot be written: the tools are a bonus, never a reason not to start.
 	 */
@@ -587,16 +592,16 @@ export class Agents implements vscode.Disposable {
 		}
 		try {
 			const view = vscode.extensions.getExtension('flow.flow-view');
-			const script = view && path.join(view.extensionPath, 'out', 'axle-mcp.js');
+			const script = view && path.join(view.extensionPath, 'out', 'insilode-mcp.js');
 			if (!script || !existsSync(script)) {
 				return undefined;
 			}
 			// Like the hooks: on the desktop process.execPath is the editor, which runs a script only as Node.
 			const electron = !!process.versions.electron;
-			const config = { mcpServers: { axle: { command: process.execPath, args: [script], env: { ...(electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}), ...(cwd ? { AXLE_WORKSPACE: cwd } : {}), ...(session ? { AXLE_SESSION: session } : {}) } } } };
-			// One file per agent session: the `axle` tools then know which session a tour came from, and a question the reader asks about
+			const config = { mcpServers: { insilode: { command: process.execPath, args: [script], env: { ...(electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}), ...(cwd ? { INSILODE_WORKSPACE: cwd } : {}), ...(session ? { INSILODE_SESSION: session } : {}) } } } };
+			// One file per agent session: the `insilode` tools then know which session a tour came from, and a question the reader asks about
 			// it goes back to that session. The shared file is for the claude shim, which cannot know.
-			const file = path.join(this.dir, session ? `axle-mcp-${session}.json` : 'axle-mcp.json');
+			const file = path.join(this.dir, session ? `insilode-mcp-${session}.json` : 'insilode-mcp.json');
 			await fs.mkdir(this.dir, { recursive: true });
 			await fs.writeFile(file, JSON.stringify(config, null, 2), { mode: 0o600 });
 			return file;
@@ -625,16 +630,16 @@ export class Agents implements vscode.Disposable {
 		const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 		let worktree = resume?.worktree && existsSync(resume.worktree.path) ? resume.worktree : undefined;
 		if (resume?.worktree && !worktree) {
-			void vscode.window.showErrorMessage(`Axle: the worktree of ${resume.name} (${resume.worktree.path}) is gone; it cannot be resumed there.`);
+			void vscode.window.showErrorMessage(`Insilode: the worktree of ${resume.name} (${resume.worktree.path}) is gone; it cannot be resumed there.`);
 			return undefined;
 		}
 		if (!resume && folder && (place ?? (vscode.workspace.getConfiguration('flow.agents').get<boolean>('worktree', false) ? 'worktree' : 'here')) === 'worktree') {
 			try {
 				const slug = worktreeSlug(cli === 'custom' ? custom?.name ?? 'agent' : cli, randomBytes(2).toString('hex'));
-				worktree = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: 'Axle: creating a worktree for the agent' }, () => createWorktree(folder, slug));
+				worktree = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: 'Insilode: creating a worktree for the agent' }, () => createWorktree(folder, slug));
 			} catch (e) {
 				// Never fall back to the shared checkout without saying so: the user asked for a checkout of the agent's own.
-				void vscode.window.showErrorMessage(`Axle: could not create a worktree for the agent: ${(e as Error).message}`);
+				void vscode.window.showErrorMessage(`Insilode: could not create a worktree for the agent: ${(e as Error).message}`);
 				return undefined;
 			}
 		}
@@ -650,7 +655,7 @@ export class Agents implements vscode.Disposable {
 		// Double quotes work in bash, zsh, PowerShell and cmd alike.
 		const quote = (x: string) => `"${x}"`;
 		// --mcp-config takes any number of files, so it goes last; it adds to the user's own MCP servers (no --strict-mcp-config).
-		// The `axle` tools find this window by its folder, so a worktree agent gets the main folder's config.
+		// The `insilode` tools find this window by its folder, so a worktree agent gets the main folder's config.
 		const mcp = cli === 'claude' ? await this.mcpConfig(folder, id) : undefined;
 		const codexHooks = cli === 'codex' && await this.codexTakesHooks();
 		const profile = codexHooks ? ` -p ${CODEX_PROFILE}` : '';
@@ -692,7 +697,7 @@ export class Agents implements vscode.Disposable {
 		if (codexHooks) {
 			setTimeout(() => {
 				if (session.state === 'unknown' && !session.activity) {
-					session.activity = 'No status yet: run /hooks in Codex and trust Axle\'s hooks';
+					session.activity = 'No status yet: run /hooks in Codex and trust Insilode\'s hooks';
 					this.changed.fire();
 				}
 			}, 20_000);
@@ -864,7 +869,7 @@ export class Agents implements vscode.Disposable {
 	/** Removes a finished agent from the list (its terminal, if any, closes too). */
 	forget(id: string) {
 		if (this.dir) {
-			void fs.rm(path.join(this.dir, `axle-mcp-${id}.json`), { force: true }).catch(() => undefined);
+			void fs.rm(path.join(this.dir, `insilode-mcp-${id}.json`), { force: true }).catch(() => undefined);
 		}
 		this.terminals.get(id)?.dispose();
 		this.terminals.delete(id);
@@ -1007,7 +1012,7 @@ export class Agents implements vscode.Disposable {
 
 	/**
 	 * The agent a hook event belongs to. /clear and /resume can give the conversation a new session id,
-	 * but the terminal still carries the id Axle chose (FLOW_AGENT_SESSION): remember the new one for it.
+	 * but the terminal still carries the id Insilode chose (FLOW_AGENT_SESSION): remember the new one for it.
 	 */
 	private sessionFor(id: string | undefined, agent: string) {
 		const known = id ? this.sessions.get(id) ?? this.sessions.get(this.aliases.get(id) ?? '') : undefined;
@@ -1034,7 +1039,7 @@ export class Agents implements vscode.Disposable {
 		const s = this.sessionFor(p.session_id, agent);
 		let context: { event: string; text: string } | undefined;
 		if (!s) {
-			return; // a session Axle did not start (or forgot): stay out of it
+			return; // a session Insilode did not start (or forgot): stay out of it
 		}
 		this.heard.add(s.id);
 		if (p.cwd && p.cwd !== s.cwd) {
@@ -1179,7 +1184,7 @@ export class Agents implements vscode.Disposable {
 	}
 
 	/**
-	 * An agent left plan mode: its plan (Markdown) becomes a board in Axle. Claude Code puts the plan into the hook input
+	 * An agent left plan mode: its plan (Markdown) becomes a board in Insilode. Claude Code puts the plan into the hook input
 	 * (`tool_input.plan` before approval, `tool_response.plan` after); older versions may give only a file path. Fire and
 	 * forget: the hook runs before the approval prompt appears, so nothing here may delay it. One board per session, so a
 	 * revised plan replaces the old one.
@@ -1249,17 +1254,17 @@ export class Agents implements vscode.Disposable {
 		const s = this.sessions.get(id);
 		const files = [...(this.touched.get(id) ?? [])];
 		if (!s || !this.canExplain(s)) {
-			void vscode.window.showInformationMessage(s && canExplain(files.length) ? `Axle: ${s.name} is not at its prompt: choose Explain this again when it is.` : 'Axle: nothing to explain: this agent has not edited a file since its last prompt.');
+			void vscode.window.showInformationMessage(s && canExplain(files.length) ? `Insilode: ${s.name} is not at its prompt: choose Explain this again when it is.` : 'Insilode: nothing to explain: this agent has not edited a file since its last prompt.');
 			return;
 		}
 		const text = explainPrompt(files, this.turns.get(id)?.impact, this.rootOf(s));
 		if (!this.typeInto(id, text, true, customs)) {
 			const now = this.askSessions().find(x => x.id === id);
-			void vscode.window.showInformationMessage(`Axle: ${now ? notReady(now) : `${s.name} has closed`}: choose Explain this again when it is back at its prompt.`);
+			void vscode.window.showInformationMessage(`Insilode: ${now ? notReady(now) : `${s.name} has closed`}: choose Explain this again when it is back at its prompt.`);
 		}
 	}
 
-	/** Agents switched on or off by hand; any other follows the setting `axle.skeletonFirst.enabled`. In memory: a reload starts over. */
+	/** Agents switched on or off by hand; any other follows the setting `insilode.skeletonFirst.enabled`. In memory: a reload starts over. */
 	private readonly skeletonSwitch = new Map<string, boolean>();
 
 	/** Whether skeleton first is on for this agent. */

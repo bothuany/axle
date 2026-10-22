@@ -63,7 +63,7 @@ function decide(what: 'keep' | 'undo') {
     edited = false
     kept = false
   }
-  say({ source: 'axle-canvas', type: 'decided', what })
+  say({ source: 'insilode-canvas', type: 'decided', what })
   setTimeout(() => window.dispatchEvent(new MessageEvent('message', { data: { type: 'refresh' } })), 30)
 }
 
@@ -130,7 +130,7 @@ const host = {
     }
     // Opening a file or handing the flow to an agent needs the app, not the browser: the page around the canvas says so.
     if ((m.type === 'open' || m.type === 'reveal') && typeof m.file === 'string' && typeof m.line === 'number') {
-      say({ source: 'axle-canvas', type: m.type, file: m.file, line: m.line })
+      say({ source: 'insilode-canvas', type: m.type, file: m.file, line: m.line })
       return
     }
     const what: Record<string, string> = {
@@ -139,7 +139,7 @@ const host = {
       pointAsk: `In the ${NAME} app the agent you picked gets the selected lines: it answers with a tour, or its edit comes back as a change to keep or undo.`,
       answer: `In the ${NAME} app you accept or reject what an agent wants to edit here.`,
     }
-    if (what[m.type]) say({ source: 'axle-canvas', type: 'note', text: what[m.type] })
+    if (what[m.type]) say({ source: 'insilode-canvas', type: 'note', text: what[m.type] })
   },
 }
 
@@ -151,4 +151,4 @@ const entries = (edited ? data.after : data.before).entries
 const entry = entries.find(e => e.id === wanted) ?? entries.find(e => e.http === 'POST /orders') ?? entries[0]
 const first: { target: Target; label: string } = wanted === 'changes' ? { target: { kind: 'changes', id: '1' }, label: data.changes.label } : { target: { kind: 'poly', id: entry.id }, label: entryLabel(entry) }
 ;(window as unknown as { __FLOW__: unknown }).__FLOW__ = { ...first, dark: true }
-say({ source: 'axle-canvas', type: 'ready' })
+say({ source: 'insilode-canvas', type: 'ready' })

@@ -82,8 +82,8 @@ test('a path or a label with a control character cannot put one into the prompt'
 test('the prompt for pointing at code asks for a tour that starts there, and a text answer when there are no tools', () => {
 	const text = a.pointAskPrompt({ label: 'OrderService.Place', where: a.place('src/Orders/OrderService.cs', 71, 76), flow: 'POST /orders', question: 'What does this do?' })
 	assert.match(text, /points at OrderService\.Place \(src\/Orders\/OrderService\.cs:71-76\) on the flow "POST \/orders" and asks, in their own words: "What does this do\?"/)
-	assert.match(text, /axle tool `tour` with 1 to 5 steps starting at that code \(leave `flow` out/)
-	assert.match(text, /cannot call mcp__axle__tour, answer in text/)
+	assert.match(text, /insilode tool `tour` with 1 to 5 steps starting at that code \(leave `flow` out/)
+	assert.match(text, /cannot call mcp__insilode__tour, answer in text/)
 	assert.doesNotMatch(a.pointAskPrompt({ label: 'M', where: 'a.cs:1', question: 'q' }), /on the flow/)
 	assert.equal(a.place('a.cs', 5, 5), 'a.cs:5')
 })
@@ -115,7 +115,7 @@ test('the edit prompt quotes the instruction, limits the change to the lines and
 test('the explain prompt asks for a tour that starts at the selection', () => {
 	const text = a.explainPrompt({ label: 'M', where: 'a.cs:1-3', flow: 'POST /orders' })
 	assert.match(text, /selected M \(a\.cs:1-3\) on the flow "POST \/orders" and asks you to explain it/)
-	assert.match(text, /axle tool `tour` with 1 to 5 steps starting at that code/)
+	assert.match(text, /insilode tool `tour` with 1 to 5 steps starting at that code/)
 	assert.doesNotMatch(a.explainPrompt({ label: 'M', where: 'a.cs:1' }), /on the flow/)
 	assert.doesNotMatch(text, /[\r\n]/)
 })

@@ -5,7 +5,7 @@ import { defineConfig, type Plugin } from 'vite'
 import { NAME, REPO } from './src/brand.ts'
 
 /** Where the site is served from: pages that must name their own address (the canonical link, the social cards, the sitemap) use it. */
-const SITE = (process.env.SITE_URL ?? 'https://bothuany.github.io/axle').replace(/\/$/, '')
+const SITE = (process.env.SITE_URL || 'https://insilode.dev').replace(/\/$/, '')
 /** The documentation pages scripts/docs-pages.mjs has written (docs/ and docs/<page>/). */
 const DOC_PAGES = existsSync(resolve(import.meta.dirname, 'docs'))
   ? ['docs/', ...readdirSync(resolve(import.meta.dirname, 'docs'), { withFileTypes: true }).filter(d => d.isDirectory()).map(d => `docs/${d.name}/`)]
@@ -20,10 +20,16 @@ function site(): Plugin {
   const sitemap = (lastmod?: string) =>
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${PAGES.map(p => `  <url><loc>${SITE}/${p}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}</url>`).join('\n')}\n</urlset>\n`
   return {
-    name: 'axle-site',
+    name: 'insilode-site',
     transformIndexHtml: html => html.replaceAll('{{site}}', SITE).replaceAll('{{name}}', NAME).replaceAll('{{repo}}', REPO),
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemap(new Date().toISOString().slice(0, 10)) })
+      // GitHub Pages keeps a custom domain only while the published folder carries a CNAME file: without it a deploy drops the domain. Not on <owner>.github.io.
+      const host = new URL(SITE).hostname
+      if (!host.endsWith('.github.io')) {
+        this.emitFile({ type: 'asset', fileName: 'CNAME', source: `${host}
+` })
+      }
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
@@ -35,7 +41,7 @@ function site(): Plugin {
   }
 }
 
-// Served from https://<owner>.github.io/axle/: every URL is relative. The canvas page imports ui/ (a webview that expects the editor's
+// Served from the root of https://insilode.dev (GitHub Pages, custom domain), and still correct under a sub-path such as <owner>.github.io/<repo>/: every URL is relative. The canvas page imports ui/ (a webview that expects the editor's
 // globals, which src/host.ts supplies), so the dev server may read the repository root.
 export default defineConfig({
   base: './',

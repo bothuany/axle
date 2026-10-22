@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle boards generated from code: the board shape the generators build. It is BoardSpec plus exactly the optional
+ *  Insilode boards generated from code: the board shape the generators build. It is BoardSpec plus exactly the optional
  *  fields of research section 7.3 (docs/research/agent-diagrams.md): node `symbol`, `tech`, `shape`; edge `order`,
  *  `style`, `async`, `guard`; group `kind`, `tech`; board `level`, `legend`, `focus`, and the `state` kind. When
  *  board/spec.ts declares these fields, this file shrinks to re-exports and nothing else changes. Pure: no `vscode`.

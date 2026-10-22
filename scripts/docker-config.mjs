@@ -2,12 +2,12 @@
 // test/e2e-desktop/unit tests the promise that matters: nothing of the host's screen, network or input is shared with the container.
 import { createHash } from 'node:crypto'
 
-/** The named volume that holds the copy of Axle and the VS Code build between runs. */
-export const WORK_VOLUME = 'axle-e2e-work'
+/** The named volume that holds the copy of Insilode and the VS Code build between runs. */
+export const WORK_VOLUME = 'insilode-e2e-work'
 
 /** The image's tag: it changes with the Dockerfile and the entrypoint, so an edit to either rebuilds it. */
 export function imageTag(dockerfile, entrypoint) {
-	return `axle-e2e:${createHash('sha256').update(dockerfile).update(entrypoint).digest('hex').slice(0, 12)}`
+	return `insilode-e2e:${createHash('sha256').update(dockerfile).update(entrypoint).digest('hex').slice(0, 12)}`
 }
 
 /**
@@ -18,7 +18,7 @@ export function dockerRunArgs({ image, name, repo, ctl, out, probeDir, mode, mod
 	return [
 		'run', '--rm', '--name', name,
 		'--shm-size', '2g', '--memory', memory,
-		'-v', `${volume ?? WORK_VOLUME}:/work/axle`,
+		'-v', `${volume ?? WORK_VOLUME}:/work/insilode`,
 		'-v', `${repo}:/src:ro`,
 		'-v', `${ctl}:/ctl:ro`,
 		'-v', `${out}:/out`,

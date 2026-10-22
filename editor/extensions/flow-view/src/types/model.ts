@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle type model: every type of the workspace (classes, interfaces, enums, records, structs)
+ *  Insilode type model: every type of the workspace (classes, interfaces, enums, records, structs)
  *  with its fields and methods, where each field and method signature points at other types of
  *  the workspace by id. Built from the polyglot facts and the C# analyzer; the DTO relation
  *  board, the architecture board and the type chips on cards are all drawn from this one graph.

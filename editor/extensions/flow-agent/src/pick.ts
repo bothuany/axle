@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: choosing which agent to start. Claude Code and Codex, any agent CLI found on PATH, and
+ *  Insilode: choosing which agent to start. Claude Code and Codex, any agent CLI found on PATH, and
  *  commands you saved yourself; a custom agent is just a command run in its own terminal.
  *--------------------------------------------------------------------------------------------*/
 
@@ -54,13 +54,13 @@ export async function pickAgent(agents: Agents) {
 	const saved = savedAgents();
 	const found = (await Promise.all(KNOWN.filter(k => !saved.some(s => s.command.split(/\s+/)[0] === k.command)).map(async k => (await onPath(k.command) ? k : undefined)))).filter((k): k is CustomAgent => !!k);
 	const items: Item[] = [
-		{ label: '$(sparkle) Claude Code', detail: 'Status, permissions, diffs and context show up in Axle', run: () => agents.spawn('claude') },
+		{ label: '$(sparkle) Claude Code', detail: 'Status, permissions, diffs and context show up in Insilode', run: () => agents.spawn('claude') },
 		{ label: '$(history) Resume a Claude Session…', detail: 'Continue an earlier conversation of this folder (claude --resume)', run: () => startOrResume(agents, 'claude', false) },
 		{ label: '$(history) Resume a Codex Session…', detail: 'Continue an earlier conversation of this folder (codex resume)', run: () => startOrResume(agents, 'codex', false) },
 		{ label: '$(hubot) Codex', detail: 'Status and edits through read-only hooks (trust them once with /hooks)', run: () => agents.spawn('codex') },
 		{ label: 'In a worktree', kind: vscode.QuickPickItemKind.Separator },
-		{ label: '$(git-branch) Claude Code in a Worktree', detail: 'A checkout and branch of its own (.axle/worktrees): agents working in parallel never write over each other', run: () => agents.spawn('claude', undefined, undefined, 'worktree') },
-		{ label: '$(git-branch) Codex in a Worktree', detail: 'A checkout and branch of its own (.axle/worktrees)', run: () => agents.spawn('codex', undefined, undefined, 'worktree') },
+		{ label: '$(git-branch) Claude Code in a Worktree', detail: 'A checkout and branch of its own (.insilode/worktrees): agents working in parallel never write over each other', run: () => agents.spawn('claude', undefined, undefined, 'worktree') },
+		{ label: '$(git-branch) Codex in a Worktree', detail: 'A checkout and branch of its own (.insilode/worktrees)', run: () => agents.spawn('codex', undefined, undefined, 'worktree') },
 	];
 	if (saved.length) {
 		items.push({ label: 'Your agents', kind: vscode.QuickPickItemKind.Separator });

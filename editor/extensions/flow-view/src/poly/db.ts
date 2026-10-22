@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: databases. Tables read from the code that declares them (JPA entities,
+ *  Insilode polyglot index: databases. Tables read from the code that declares them (JPA entities,
  *  SQLAlchemy and Django models, TypeORM entities, Prisma models) and the calls that reach them
  *  (Spring Data repositories, EntityManager, JDBC, SQLAlchemy sessions, Django managers, TypeORM
  *  repositories, Prisma clients, raw SQL).

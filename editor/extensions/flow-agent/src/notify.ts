@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: tells you when an agent starts needing you while you look elsewhere. A VS Code
+ *  Insilode: tells you when an agent starts needing you while you look elsewhere. A VS Code
  *  notification (which the OS shows as well when the window is in the background, if VS Code is
  *  set up to), with a button that brings the agent's terminal up. Nothing here takes focus by
  *  itself: only the button does, when you press it.

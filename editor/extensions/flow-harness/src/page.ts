@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the shell of the harness's webview pages (the "Why?" view, the context X-ray).
+ *  Insilode Harness: the shell of the harness's webview pages (the "Why?" view, the context X-ray).
  *  Every page gets a Content-Security-Policy from default-src 'none' and runs only the one
  *  script it was given, by nonce, so markup injected through data can neither load nor run code.
  *  Pages render data with textContent; nothing they receive is ever parsed as HTML.

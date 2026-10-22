@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: what an agent says about its context window and its plan's usage limits, read from what
+ *  Insilode: what an agent says about its context window and its plan's usage limits, read from what
  *  the CLI itself reports. Nothing here guesses a window size: a number the CLI did not give stays
  *  unknown, and the views show the tokens without a percentage.
  *
@@ -13,7 +13,7 @@
  *    `info.last_token_usage`, `info.model_context_window`, and `rate_limits.primary` / `secondary`
  *    with `used_percent`, `window_minutes` and `resets_at` (epoch seconds).
  *
- *  Also here: Axle's status-line script for Claude, and the small rules around these numbers (when
+ *  Also here: Insilode's status-line script for Claude, and the small rules around these numbers (when
  *  Compact may type into a terminal, when a report is stale, whether the user has a status line of
  *  their own). No vscode, so all of it is tested on its own.
  *--------------------------------------------------------------------------------------------*/
@@ -134,7 +134,7 @@ export function claudeTranscriptUsage(lines: string[]): ContextUsage | undefined
 /**
  * Codex leaves this many tokens out when it says how full the window is: the system prompt and tools that every
  * request carries and no compaction frees. Codex's own TUI computes the share as (used - baseline) / (window -
- * baseline) (`BASELINE_TOKENS` in codex-rs protocol), so Axle shows the same figure the CLI does.
+ * baseline) (`BASELINE_TOKENS` in codex-rs protocol), so Insilode shows the same figure the CLI does.
  */
 export const CODEX_BASELINE_TOKENS = 12_000;
 
@@ -238,7 +238,7 @@ export function endUsage(s: UsageHolder) {
 
 /**
  * Whether the user set a status line of their own anywhere Claude reads it for this workspace: their user settings
- * and every folder's project and local settings. Axle's status line would take its place, so Axle adds none then.
+ * and every folder's project and local settings. Insilode's status line would take its place, so Insilode adds none then.
  * A file that cannot be read or parsed counts as having none.
  */
 export function hasOwnStatusLine(configDir: string, folders: string[]): boolean {
@@ -296,7 +296,7 @@ export class LimitsSender {
 }
 
 /**
- * The line Axle's status line shows under Claude's prompt: `Sonnet 5.5 · ctx 7% · 5h 32% · wk 61%`, only what
+ * The line Insilode's status line shows under Claude's prompt: `Sonnet 5.5 · ctx 7% · 5h 32% · wk 61%`, only what
  * the CLI told (the tokens, not a share, when there is no window). Self-contained: its source is copied into the
  * status-line script as it is, so it may use nothing from outside.
  */
@@ -320,14 +320,14 @@ export function statusText(p: unknown): string {
 }
 
 /**
- * Axle's status-line command for Claude. It prints `statusText` (Claude shows a custom status line in place of its
- * own footer hints, so the line should be worth its place), then forwards the JSON to the Axle window that owns the
+ * Insilode's status-line command for Claude. It prints `statusText` (Claude shows a custom status line in place of its
+ * own footer hints, so the line should be worth its place), then forwards the JSON to the Insilode window that owns the
  * folder now, but only when the numbers changed since the last forward that went through: Claude runs the command on
  * every refresh, and most refreshes change nothing. The marker sits in `stateDir`, per agent, and holds the port, so
  * a reloaded window (a new port) hears the current numbers again.
  */
 export function statusScript(portFile: string, tokenFile: string, stateDir: string): string {
-	return `// Written by Axle: the status line of an Axle agent. Prints a short line and forwards the status JSON to Axle (observe only).
+	return `// Written by Insilode: the status line of an Insilode agent. Prints a short line and forwards the status JSON to Insilode (observe only).
 const fs = require('fs'), http = require('http'), path = require('path');
 const statusText = ${statusText.toString()};
 const done = () => process.exit(0);

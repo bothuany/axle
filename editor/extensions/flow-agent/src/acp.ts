@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: one ACP adapter process per agent kind, many sessions over it.
+ *  Insilode: one ACP adapter process per agent kind, many sessions over it.
  *--------------------------------------------------------------------------------------------*/
 
 import { spawn, type ChildProcess } from 'child_process';

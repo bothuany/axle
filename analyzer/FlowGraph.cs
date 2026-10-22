@@ -461,7 +461,7 @@ public sealed class FlowGraph
     }
 
     /// <summary>
-    /// Brings the snapshot in line with disk for files changed outside Axle (agent, Rider, git): edits are re-read,
+    /// Brings the snapshot in line with disk for files changed outside Insilode (agent, Rider, git): edits are re-read,
     /// new .cs files join the project whose folder holds them, deleted ones leave the solution.
     /// </summary>
     public async Task<int> RefreshAsync(IEnumerable<string> files)

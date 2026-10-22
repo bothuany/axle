@@ -1,6 +1,6 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the context X-ray. What fills a running session's context window, from its
- *  transcript (measured usage, Claude Code's own /context estimate when it was run, Axle's
+ *  Insilode Harness: the context X-ray. What fills a running session's context window, from its
+ *  transcript (measured usage, Claude Code's own /context estimate when it was run, Insilode's
  *  estimates otherwise), and what looks like waste, each with a fix that never changes your
  *  configuration without showing the change and asking first.
  *--------------------------------------------------------------------------------------------*/
@@ -72,7 +72,7 @@ export class XrayView implements vscode.Disposable {
 		await this.render();
 	}
 
-	/** The running agents Axle knows, the newest Claude Code session of this folder, or the harness alone. */
+	/** The running agents Insilode knows, the newest Claude Code session of this folder, or the harness alone. */
 	private async pick(): Promise<XraySession | undefined> {
 		const h = this.harness();
 		const picks: (vscode.QuickPickItem & { s: XraySession })[] = [...this.live.sessions.values()]
@@ -176,7 +176,7 @@ export class XrayView implements vscode.Disposable {
 			'not-ready': `${name} has not said it is at its prompt yet.`,
 			unsupported: `${name} does not take ${command}.`,
 		};
-		void vscode.window.showInformationMessage(why[r] ?? `Run ${command} in the session yourself; Axle has no terminal for it.`);
+		void vscode.window.showInformationMessage(why[r] ?? `Run ${command} in the session yourself; Insilode has no terminal for it.`);
 		void this.render();
 	}
 
@@ -185,7 +185,7 @@ export class XrayView implements vscode.Disposable {
 <div class="row"><div class="grow"><h1 id="title">Context X-ray</h1><p class="sub" id="sub"></p></div><button id="refresh">Refresh</button></div>
 <div id="total"></div><div class="bar" id="bar"></div><div id="segments"></div>
 <h2>Looks like waste</h2><div id="waste"></div>
-<p class="muted" id="legend"><span class="tag measured">measured</span> the API's own token count · <span class="tag">Claude Code's estimate</span> from /context · <span class="tag est">estimate</span> Axle's, about 4 characters per token · <span class="tag est">derived</span> a measured total minus estimates</p>`, /* js */ `
+<p class="muted" id="legend"><span class="tag measured">measured</span> the API's own token count · <span class="tag">Claude Code's estimate</span> from /context · <span class="tag est">estimate</span> Insilode's, about 4 characters per token · <span class="tag est">derived</span> a measured total minus estimates</p>`, /* js */ `
 const $ = id => document.getElementById(id);
 const COLORS = ['#6f86ff', '#b88cff', '#ffb454', '#5fe0a1', '#4fd6d0', '#f0a6ca', '#f2a170', '#9aa4bf'];
 const HOW = { measured: ['measured', 'tag measured'], 'claude-estimate': ["Claude Code's estimate", 'tag'], estimate: ['estimate', 'tag est'], derived: ['derived', 'tag est'] };

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Axle's prerm (the same as VS Code's).
+# Insilode's prerm (the same as VS Code's).
 
 update-alternatives --remove editor /usr/bin/@@NAME@@
 

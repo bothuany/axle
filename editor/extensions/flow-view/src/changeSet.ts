@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the flow canvas for a whole change set ("show the changes in flow"). The target names no method:
+ *  Insilode: the flow canvas for a whole change set ("show the changes in flow"). The target names no method:
  *  every time the canvas asks, the endpoints the changed files reach are traced again and cut down to the
  *  paths that lead to a changed card (changeSetTree.ts), next to the changed methods no endpoint reaches.
  *--------------------------------------------------------------------------------------------*/

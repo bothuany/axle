@@ -1,8 +1,8 @@
-"""Builds Axle's app icon files in editor/branding/ (icon.png, icon.ico, icon.icns).
+"""Builds Insilode's app icon files in editor/branding/ (icon.png, icon.ico, icon.icns).
 
-Large sizes come from the generated artwork (concepts/axle-source.png: a rounded tile on a plain background,
+Large sizes come from the generated artwork (concepts/insilode-source.png: a rounded tile on a plain background,
 cropped and masked here). Its strokes are too fine to read at 16 to 48 pixels, so those sizes are drawn bolder
-from the same idea: an axle hub with three spokes to a triangle, a diamond and a circle. Needs Pillow.
+from the same idea: an insilode hub with three spokes to a triangle, a diamond and a circle. Needs Pillow.
 """
 import struct
 from io import BytesIO
@@ -12,7 +12,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 BRANDING = Path(__file__).resolve().parent.parent / 'editor' / 'branding'
-SOURCE = BRANDING / 'concepts' / 'axle-source.png'
+SOURCE = BRANDING / 'concepts' / 'insilode-source.png'
 ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
 BOLD_BELOW = 64  # sizes under this are drawn, not scaled from the artwork
 

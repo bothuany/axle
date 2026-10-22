@@ -63,13 +63,13 @@ function lf(dir) {
 /** The demo project as two commits in two folders: the services as they are (`before`), then what an agent changed (`after`: site/demo/changed over base). */
 function assemble() {
 	// The real name of the folder: a Windows runner's temp folder has an 8.3 short name the index would not report back.
-	const before = realpathSync.native(mkdtempSync(join(tmpdir(), 'axle-site-')))
+	const before = realpathSync.native(mkdtempSync(join(tmpdir(), 'insilode-site-')))
 	cpSync(join(DEMO, 'base'), before, { recursive: true })
 	lf(before)
 	git(before, 'init', '-q', '-b', 'main')
 	git(before, 'add', '-A')
 	git(before, 'commit', '-q', '-m', 'Orders, billing and shipping services')
-	const after = realpathSync.native(mkdtempSync(join(tmpdir(), 'axle-site-')))
+	const after = realpathSync.native(mkdtempSync(join(tmpdir(), 'insilode-site-')))
 	cpSync(before, after, { recursive: true })
 	cpSync(join(DEMO, 'changed'), after, { recursive: true })
 	lf(after)
@@ -223,7 +223,7 @@ const WEBVIEW_BASE = `:root{--vscode-font-family:"Segoe UI Variable Text","Segoe
 function dockPage(dockHtml, themeCss) {
 	// The dock page listens to every window that can post to it: it hears only the page around it (a site that frames this one could not feed it).
 	const guard = `<script>(function(){var add=window.addEventListener.bind(window);window.addEventListener=function(t,f,o){if(t==='message'){var g=f;f=function(e){if(e.source===parent&&e.origin===location.origin)g(e)}}add(t,f,o)}})()</script>`
-	const shim = `${guard}<script>window.acquireVsCodeApi=function(){return{postMessage:function(m){parent.postMessage({source:'axle-dock',message:m},location.origin)}}}</script>`
+	const shim = `${guard}<script>window.acquireVsCodeApi=function(){return{postMessage:function(m){parent.postMessage({source:'insilode-dock',message:m},location.origin)}}}</script>`
 	const head = `<meta name="robots" content="noindex"><style>${themeCss}</style><style>${WEBVIEW_BASE}</style>${shim}`
 	if (!dockHtml.includes('<head>')) {
 		throw new Error('The dock page has no <head>: flow-agent/src/dockPage.ts changed shape, and the site has to follow.')
@@ -234,7 +234,7 @@ function dockPage(dockHtml, themeCss) {
 /** The desktop status overlay page: it is a string inside the core patch, so it is cut out of the patch's added lines. */
 function islandPage(avatars) {
 	const patch = readFileSync(join(ROOT, 'editor', 'patches', 'flow-desktop.patch'), 'utf8').replace(/\r\n/g, '\n')
-	const from = patch.indexOf('+++ b/src/vs/platform/axleDesktop/electron-main/axleOverlayMainService.ts')
+	const from = patch.indexOf('+++ b/src/vs/platform/insilodeDesktop/electron-main/insilodeOverlayMainService.ts')
 	const to = patch.indexOf('\ndiff --git', from)
 	if (from < 0 || to < 0) {
 		throw new Error('The overlay service is not in flow-desktop.patch any more: the site cannot draw the notch from it.')
@@ -253,7 +253,7 @@ function islandPage(avatars) {
 	const MARKER = new Function(`return ${marker[1]}`)()
 	const page = new Function('AVATAR_CSS', 'AVATAR_SCRIPT', 'MARKER', `return \`${template}\``)(avatars.AVATAR_CSS, avatars.AVATAR_SCRIPT, MARKER)
 	// The page speaks to the main process through console.info lines with a marker: here they go to the page around it.
-	const shim = `<script>(function(){var info=console.info.bind(console),M=${JSON.stringify(MARKER)};console.info=function(m){if(typeof m==='string'&&m.indexOf(M)===0){try{parent.postMessage({source:'axle-island',message:JSON.parse(m.slice(M.length))},location.origin)}catch(e){}}else{info.apply(null,arguments)}}})()</script>`
+	const shim = `<script>(function(){var info=console.info.bind(console),M=${JSON.stringify(MARKER)};console.info=function(m){if(typeof m==='string'&&m.indexOf(M)===0){try{parent.postMessage({source:'insilode-island',message:JSON.parse(m.slice(M.length))},location.origin)}catch(e){}}else{info.apply(null,arguments)}}})()</script>`
 	if (!page.includes('<head>')) {
 		throw new Error('The overlay page has no <head>.')
 	}
@@ -317,7 +317,7 @@ export default { workspace }
 	const outfile = join(tmp, 'harness-scan.mjs')
 	// The ESM build of jsonc-parser: its UMD main cannot be bundled into an ES module.
 	await build({ entryPoints: [join(EXTENSIONS, 'flow-harness', 'src', 'scan.ts')], bundle: true, platform: 'node', format: 'esm', outfile, logLevel: 'silent', alias: { vscode: stub }, mainFields: ['module', 'main'] })
-	const home = mkdtempSync(join(tmpdir(), 'axle-site-home-'))
+	const home = mkdtempSync(join(tmpdir(), 'insilode-site-home-'))
 	const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR, CODEX_HOME: process.env.CODEX_HOME }
 	// scan.ts reads the home folder when it loads: it must be the empty one by then.
 	process.env.HOME = home
@@ -383,7 +383,7 @@ function guidedTours(version) {
 	})
 }
 
-const scratch = mkdtempSync(join(tmpdir(), 'axle-site-work-'))
+const scratch = mkdtempSync(join(tmpdir(), 'insilode-site-work-'))
 const indexBefore = new Index(dirs.before, scratch)
 const indexAfter = new Index(dirs.after, scratch)
 try {

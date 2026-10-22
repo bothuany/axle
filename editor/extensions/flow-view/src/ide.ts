@@ -1,10 +1,10 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle as a Claude Code IDE. `claude` in any terminal finds Axle through a lock file in
+ *  Insilode as a Claude Code IDE. `claude` in any terminal finds Insilode through a lock file in
  *  ~/.claude/ide and talks to it over a local WebSocket (MCP, JSON-RPC). Claude's edits arrive as
- *  `openDiff`: Axle shows the diff, marks the methods on the canvas, and answers with the user's
- *  Accept or Reject. Selections and @-mentions flow the other way, from Axle to the CLI.
+ *  `openDiff`: Insilode shows the diff, marks the methods on the canvas, and answers with the user's
+ *  Accept or Reject. Selections and @-mentions flow the other way, from Insilode to the CLI.
  *  Note: Claude Code only shows a model getDiagnostics (and executeCode) of this channel; the tools a model
- *  can call to open files, show flows or draw boards live in the separate `axle` MCP server (./mcp).
+ *  can call to open files, show flows or draw boards live in the separate `insilode` MCP server (./mcp).
  *--------------------------------------------------------------------------------------------*/
 
 import { randomBytes, timingSafeEqual } from 'crypto';
@@ -40,7 +40,7 @@ interface PendingDiff {
 	resolve: (accepted: boolean) => void;
 }
 
-/** Hooks into the rest of Axle: the canvas (to mark what a diff touches) and the agent-change tracker. */
+/** Hooks into the rest of Insilode: the canvas (to mark what a diff touches) and the agent-change tracker. */
 export interface IdeHost {
 	propose(p: { id: string; agent: string; title: string; files: string[]; spans: { file: string; start: number; end: number }[] }): void;
 	proposalDone(id: string): void;
@@ -86,7 +86,7 @@ export class ClaudeIdeBridge implements vscode.Disposable {
 			}),
 			vscode.workspace.onDidChangeConfiguration(e => {
 				if (e.affectsConfiguration('flow.ide.enabled')) {
-					void vscode.window.showInformationMessage('Axle: reload the window to apply the Claude Code connection setting.', 'Reload Window')
+					void vscode.window.showInformationMessage('Insilode: reload the window to apply the Claude Code connection setting.', 'Reload Window')
 						.then(pick => pick && vscode.commands.executeCommand('workbench.action.reloadWindow'));
 				}
 			}),
@@ -97,7 +97,7 @@ export class ClaudeIdeBridge implements vscode.Disposable {
 	private disposed = false;
 	private readonly timers = new Set<NodeJS.Timeout>();
 
-	/** Starts the bridge; a failure (an unwritable ~/.claude/ide, no free port) is logged and leaves Axle working without it. */
+	/** Starts the bridge; a failure (an unwritable ~/.claude/ide, no free port) is logged and leaves Insilode working without it. */
 	async start(log?: vscode.LogOutputChannel) {
 		// Off by choice: no server, no lock file, and no port left in new terminals from an earlier run.
 		if (!vscode.workspace.getConfiguration('flow').get<boolean>('ide.enabled', true)) {
@@ -150,7 +150,7 @@ export class ClaudeIdeBridge implements vscode.Disposable {
 		if (this.disposed) {
 			return;
 		}
-		// `claude` started in an Axle terminal connects straight away.
+		// `claude` started in an Insilode terminal connects straight away.
 		this.context.environmentVariableCollection.replace('CLAUDE_CODE_SSE_PORT', String(this.port));
 		this.context.environmentVariableCollection.replace('ENABLE_IDE_INTEGRATION', 'true');
 		this.disposables.push(vscode.workspace.onDidChangeWorkspaceFolders(() => [...this.servers.keys()].forEach(p => void this.writeLock(p).catch(() => undefined))));
@@ -232,14 +232,14 @@ export class ClaudeIdeBridge implements vscode.Disposable {
 	private async writeLock(port: number) {
 		const dir = this.lockDir;
 		await fs.mkdir(dir, { recursive: true, mode: 0o700 });
-		// A Axle that was killed could not delete its lock: remove ours whose process is gone.
+		// A Insilode that was killed could not delete its lock: remove ours whose process is gone.
 		for (const name of await fs.readdir(dir).catch(() => [] as string[])) {
 			if (!name.endsWith('.lock')) {
 				continue;
 			}
 			try {
 				const lock = JSON.parse(await fs.readFile(path.join(dir, name), 'utf8')) as { ideName?: string; pid?: number };
-				if (lock.ideName === 'Axle' && lock.pid && lock.pid !== process.pid) {
+				if (lock.ideName === 'Insilode' && lock.pid && lock.pid !== process.pid) {
 					try {
 						process.kill(lock.pid, 0);
 					} catch (e) {
@@ -257,7 +257,7 @@ export class ClaudeIdeBridge implements vscode.Disposable {
 		const lock = {
 			pid: process.pid,
 			workspaceFolders: (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath),
-			ideName: 'Axle',
+			ideName: 'Insilode',
 			transport: 'ws',
 			runningInWindows: process.platform === 'win32',
 			authToken: this.token,
@@ -272,8 +272,8 @@ export class ClaudeIdeBridge implements vscode.Disposable {
 		this.status.text = n ? '$(plug) Claude' : '$(debug-disconnect) Claude';
 		this.status.color = n ? new vscode.ThemeColor('flowView.get') : undefined;
 		this.status.tooltip = n
-			? `Claude Code is connected to Axle (${n}). Its diffs open here and on the canvas.`
-			: 'No Claude Code terminal connected. Run `claude` in an Axle terminal, or `/ide` in any terminal and pick Axle.';
+			? `Claude Code is connected to Insilode (${n}). Its diffs open here and on the canvas.`
+			: 'No Claude Code terminal connected. Run `claude` in an Insilode terminal, or `/ide` in any terminal and pick Insilode.';
 		this.status.show();
 	}
 
@@ -435,7 +435,7 @@ export class ClaudeIdeBridge implements vscode.Disposable {
 				return this.text({ success: true, filePath: doc.uri.fsPath, saved: true, message: 'Document saved' });
 			}
 			case 'close_tab': {
-				// The CLI names the diff it opened by its tab_name; Axle titles those "<name> (Claude) ⟷ Accept or Reject".
+				// The CLI names the diff it opened by its tab_name; Insilode titles those "<name> (Claude) ⟷ Accept or Reject".
 				const name = String(a.tab_name ?? '');
 				const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs).filter(t => name !== '' && t.label.includes(name) && (t.input as { modified?: vscode.Uri })?.modified?.scheme === SCHEME);
 				await vscode.window.tabGroups.close(tabs);
@@ -553,7 +553,7 @@ export class ClaudeIdeBridge implements vscode.Disposable {
 	/** Puts a file and line range into Claude's prompt in the terminal, like @-mentioning it. */
 	mention(file: string, startLine: number, endLine: number) {
 		if (!this.clients.size) {
-			void vscode.window.showInformationMessage('No Claude Code terminal is connected. Run `claude` in an Axle terminal first.', 'Open Terminal').then(p => p && vscode.commands.executeCommand('workbench.action.terminal.new'));
+			void vscode.window.showInformationMessage('No Claude Code terminal is connected. Run `claude` in an Insilode terminal first.', 'Open Terminal').then(p => p && vscode.commands.executeCommand('workbench.action.terminal.new'));
 			return;
 		}
 		this.broadcast('at_mentioned', { filePath: file, lineStart: startLine, lineEnd: endLine });

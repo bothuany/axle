@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the board canvas (ui/src/board, built to ui/dist-webview/board.js) in an editor tab: DTO relations, the
+ *  Insilode: the board canvas (ui/src/board, built to ui/dist-webview/board.js) in an editor tab: DTO relations, the
  *  architecture view, and later plans and agent boards. Like panel.ts the page is one inlined script, a nonce CSP
  *  and a JSON bootstrap, because the shell's webviews run without a service worker. The page never reads the
  *  workspace: it posts what the user did ('open', 'rebuild', 'export') and this host answers, checking each field.
@@ -115,7 +115,7 @@ export class BoardPanel implements vscode.Disposable {
 		panel.webview.onDidReceiveMessage(m => {
 			this.onMessage(created, m).catch(e => {
 				this.log?.warn(`board: ${(e as Error).message ?? e}`);
-				void vscode.window.showErrorMessage(`Axle: ${(e as Error).message ?? e}`);
+				void vscode.window.showErrorMessage(`Insilode: ${(e as Error).message ?? e}`);
 			});
 		});
 		this.changed.fire(this.activeKey());
@@ -212,7 +212,7 @@ export class BoardPanel implements vscode.Disposable {
 				// A click on a C4 box that zooms into another board: the id is cleaned and must be a board the store holds.
 				const id = cleanBoardId(m.board);
 				if (!id || !this.store || !(await this.store.present(id))) {
-					void vscode.window.showWarningMessage(`Axle: there is no board "${String(m.board).slice(0, 64)}" to open.`);
+					void vscode.window.showWarningMessage(`Insilode: there is no board "${String(m.board).slice(0, 64)}" to open.`);
 				}
 				return;
 			}
@@ -249,7 +249,7 @@ export class BoardPanel implements vscode.Disposable {
 			const text = this.text(tab, 'mermaid');
 			if (text) {
 				await vscode.env.clipboard.writeText(text);
-				void vscode.window.showInformationMessage('Axle: the diagram is on the clipboard as Mermaid.');
+				void vscode.window.showInformationMessage('Insilode: the diagram is on the clipboard as Mermaid.');
 			}
 			return;
 		}
@@ -261,7 +261,7 @@ export class BoardPanel implements vscode.Disposable {
 			filters = { PlantUML: ['puml'] };
 			ext = 'puml';
 			if (!content) {
-				void vscode.window.showWarningMessage('Axle: PlantUML export is not available for this board.');
+				void vscode.window.showWarningMessage('Insilode: PlantUML export is not available for this board.');
 				return;
 			}
 		} else if (format === 'json') {
@@ -274,7 +274,7 @@ export class BoardPanel implements vscode.Disposable {
 			filters = format === 'svg' ? { SVG: ['svg'] } : { PNG: ['png'] };
 			ext = format;
 			if (content === undefined) {
-				void vscode.window.showWarningMessage(`Axle: the ${format.toUpperCase()} export did not work.`);
+				void vscode.window.showWarningMessage(`Insilode: the ${format.toUpperCase()} export did not work.`);
 				return;
 			}
 		}
@@ -284,7 +284,7 @@ export class BoardPanel implements vscode.Disposable {
 			return;
 		}
 		await fs.writeFile(target.fsPath, content);
-		void vscode.window.showInformationMessage(`Axle: saved ${path.basename(target.fsPath)}.`);
+		void vscode.window.showInformationMessage(`Insilode: saved ${path.basename(target.fsPath)}.`);
 	}
 
 	private text(tab: Tab, format: 'mermaid' | 'plantuml'): string | undefined {

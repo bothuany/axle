@@ -55,7 +55,7 @@ test('stdio: a server that never answers is killed at the timeout; one that exit
 	const c = await m.checkStdio({ command: process.execPath, args: [join(tmp, 'crash.mjs')], env: {} }, { timeoutMs: 8000, isFile })
 	assert.match(c.status, /Exited with code 3/)
 	assert.match(c.stderr, /boom/)
-	const n = await m.checkStdio({ command: 'surely-not-a-program-axle', args: [], env: {} }, { timeoutMs: 8000, isFile })
+	const n = await m.checkStdio({ command: 'surely-not-a-program-insilode', args: [], env: {} }, { timeoutMs: 8000, isFile })
 	assert.match(n.status, /not found on PATH/)
 })
 
@@ -68,7 +68,7 @@ test('a bare command resolves on PATH only (never a program in the folder), and 
 	assert.deepEqual(m.resolveCommand(w`C:\x\run.bat`, {}, 'win32', () => false), { file: w`C:\x\run.bat`, script: true })
 	assert.deepEqual(m.resolveCommand('node', { PATH: '/usr/bin' }, 'linux', f => f === '/usr/bin/node'), { file: '/usr/bin/node', script: false })
 	assert.deepEqual(m.resolveCommand('ghost', { PATH: w`C:\node` }, 'win32', has), { script: false })
-	// Claude Code starts a .cmd shim itself (checked with 2.1.302); Axle does not start cmd.exe, so the caller asks the CLI.
+	// Claude Code starts a .cmd shim itself (checked with 2.1.302); Insilode does not start cmd.exe, so the caller asks the CLI.
 	const r = await m.checkStdio({ command: 'npx', args: ['-y', 'x'], env: {} }, { platform: 'win32', env: { PATH: w`C:\node` }, isFile: has })
 	assert.equal(r.needsShell, true)
 	assert.equal(r.how, 'not run')

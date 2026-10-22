@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: "what applies here" — for one file, the instructions, rules, hooks and skills an agent
+ *  Insilode: "what applies here" — for one file, the instructions, rules, hooks and skills an agent
  *  would pick up when it works on that file, across Claude Code, Codex and Cursor conventions.
  *--------------------------------------------------------------------------------------------*/
 

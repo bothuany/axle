@@ -1,8 +1,8 @@
 // The product's name and where it lives, in one place: the pages (through vite.config.ts's `{{name}}`), the scripts, the alt texts and
 // the release assets the download buttons look for all read it from here, so a rename is a change to this file.
 
-export const NAME = 'Axle'
-export const REPO = 'bothuany/axle'
+export const NAME = 'Insilode'
+export const REPO = 'bothuany/insilode'
 export const GITHUB = `https://github.com/${REPO}`
 export const RELEASES = `${GITHUB}/releases/latest`
 

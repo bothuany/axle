@@ -1,4 +1,4 @@
-// Codex's observe-only hooks: the profile Axle writes and the command it runs (src/codexHooks.ts).
+// Codex's observe-only hooks: the profile Insilode writes and the command it runs (src/codexHooks.ts).
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { build } from 'esbuild'
@@ -21,20 +21,20 @@ after(() => rmSync(tmp, { recursive: true, force: true }))
 test('codex home: CODEX_HOME wins, else ~/.codex; the profile sits in it', () => {
 	assert.equal(c.codexHome({ CODEX_HOME: '/x/codex' }), '/x/codex')
 	assert.equal(c.codexHome({}), join(homedir(), '.codex'))
-	assert.equal(c.codexProfileFile({ CODEX_HOME: join('/x', 'codex') }), join('/x', 'codex', 'axle.config.toml'))
+	assert.equal(c.codexProfileFile({ CODEX_HOME: join('/x', 'codex') }), join('/x', 'codex', 'insilode.config.toml'))
 })
 
 test('windows command: PowerShell call with literal strings', () => {
 	assert.equal(
-		c.codexHookCommand('win32', 'C:\\Users\\A B\\Axle\\Axle.exe', 'C:\\data\\codex-hook.js', true),
-		"$env:ELECTRON_RUN_AS_NODE=1; & 'C:\\Users\\A B\\Axle\\Axle.exe' 'C:\\data\\codex-hook.js'")
+		c.codexHookCommand('win32', 'C:\\Users\\A B\\Insilode\\Insilode.exe', 'C:\\data\\codex-hook.js', true),
+		"$env:ELECTRON_RUN_AS_NODE=1; & 'C:\\Users\\A B\\Insilode\\Insilode.exe' 'C:\\data\\codex-hook.js'")
 	assert.equal(c.codexHookCommand('win32', 'C:\\node.exe', 'C:\\h.js', false), "& 'C:\\node.exe' 'C:\\h.js'")
-	assert.equal(c.codexHookCommand('win32', "C:\\O'Brien\\Axle.exe", 'C:\\h.js', false), "& 'C:\\O''Brien\\Axle.exe' 'C:\\h.js'")
+	assert.equal(c.codexHookCommand('win32', "C:\\O'Brien\\Insilode.exe", 'C:\\h.js', false), "& 'C:\\O''Brien\\Insilode.exe' 'C:\\h.js'")
 })
 
 test('posix command: sh with single quotes', () => {
-	assert.equal(c.codexHookCommand('darwin', '/Applications/Axle.app/Contents/MacOS/Axle', '/home/a/h.js', true),
-		"ELECTRON_RUN_AS_NODE=1 '/Applications/Axle.app/Contents/MacOS/Axle' '/home/a/h.js'")
+	assert.equal(c.codexHookCommand('darwin', '/Applications/Insilode.app/Contents/MacOS/Insilode', '/home/a/h.js', true),
+		"ELECTRON_RUN_AS_NODE=1 '/Applications/Insilode.app/Contents/MacOS/Insilode' '/home/a/h.js'")
 	assert.equal(c.codexHookCommand('linux', "/opt/it's/node", '/h.js', false), "'/opt/it'\\''s/node' '/h.js'")
 })
 
@@ -45,7 +45,7 @@ test('toml strings escape backslashes, quotes and control characters', () => {
 })
 
 test('the profile has every event once, the edit matcher on PreToolUse only, and the same command everywhere', () => {
-	const cmd = "$env:ELECTRON_RUN_AS_NODE=1; & 'C:\\Axle\\Axle.exe' 'C:\\g\\codex-hook.js'"
+	const cmd = "$env:ELECTRON_RUN_AS_NODE=1; & 'C:\\Insilode\\Insilode.exe' 'C:\\g\\codex-hook.js'"
 	const toml = c.codexProfile(cmd)
 	for (const [event] of c.CODEX_EVENTS) {
 		assert.equal(toml.split('\n').filter(l => l === `[[hooks.${event}]]`).length, 1, event)

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Runs Axle's desktop end-to-end scenarios, or one probe script, inside a Docker container: Axle from source on a virtual display
+// Runs Insilode's desktop end-to-end scenarios, or one probe script, inside a Docker container: Insilode from source on a virtual display
 // (xvfb), so nothing opens on your screen, takes your pointer or shares your network ports.
 //   npm run docker:e2e                                   the desktop scenarios (test/e2e-desktop) on the working tree
 //   npm run docker:e2e -- --scenario island,canvas-tour  only these
 //   npm run docker:e2e -- --probe my-probe.mjs [args]    a Playwright script: see test/e2e-desktop/lib/probe.mjs
 //   options: --out <dir>  --reset-volume (throw the VS Code build away)  --rebuild-image  --volume <name> (another build volume, e.g. to measure a cold run)
 // The first run builds the image and the VS Code checkout (20 to 40 minutes); the checkout lives in the named volume
-// axle-e2e-work, so later runs take minutes. Screenshots, results.json and logs go to the output folder, which is printed.
+// insilode-e2e-work, so later runs take minutes. Screenshots, results.json and logs go to the output folder, which is printed.
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -36,7 +36,7 @@ export function sourceFiles(root = ROOT) {
 }
 
 /** What the last run copied into the volume, per volume (its creation time too: a recreated volume starts empty). */
-const STATE = join(tmpdir(), 'axle-docker-e2e-state.json')
+const STATE = join(tmpdir(), 'insilode-docker-e2e-state.json')
 const readState = () => {
 	try {
 		return JSON.parse(readFileSync(STATE, 'utf8'))
@@ -95,7 +95,7 @@ async function main() {
 	}
 
 	const volume = o.volume ?? WORK_VOLUME
-	const work = mkdtempSync(join(tmpdir(), 'axle-docker-e2e-'))
+	const work = mkdtempSync(join(tmpdir(), 'insilode-docker-e2e-'))
 	const ctl = join(work, 'ctl')
 	mkdirSync(ctl)
 	// Only what changed since the last run goes into the volume (all of it for a new volume): stat-ing every file through the bind mount is slow.
@@ -113,7 +113,7 @@ async function main() {
 
 	const modeArgs = o.probe ? [basename(o.probe), ...o.rest] : o.scenario ? ['--only', o.scenario] : []
 	const args = dockerRunArgs({
-		image, name: `axle-e2e-${Date.now()}`, repo: ROOT, ctl, out, mode: o.probe ? 'probe' : 'run', modeArgs, volume: o.volume,
+		image, name: `insilode-e2e-${Date.now()}`, repo: ROOT, ctl, out, mode: o.probe ? 'probe' : 'run', modeArgs, volume: o.volume,
 		probeDir: o.probe ? dirname(resolve(o.probe)) : undefined,
 	})
 	console.log(`Running in Docker (no ports, display or input shared with this machine)\n  output  ${out}`)

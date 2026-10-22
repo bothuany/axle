@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle harness: what this project has not set up. The health score counts what is broken, so a
+ *  Insilode harness: what this project has not set up. The health score counts what is broken, so a
  *  project with no harness at all scored 100 ("Nothing broken") while a rich one scored the same:
  *  the number could not tell a newcomer anything. Missing project instructions cost points, since
  *  agents then start without the project's conventions; missing hooks or permission rules are only

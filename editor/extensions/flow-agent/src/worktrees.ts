@@ -1,11 +1,11 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: a git worktree per agent. An agent started "in a worktree" gets its own checkout and its
+ *  Insilode: a git worktree per agent. An agent started "in a worktree" gets its own checkout and its
  *  own branch, so two agents never write over each other's files. The worktrees live inside the
- *  repository, at <repo>/.axle/worktrees/<slug>, on branch axle/<slug>:
+ *  repository, at <repo>/.insilode/worktrees/<slug>, on branch insilode/<slug>:
  *  - inside a workspace folder, so flow-view's diff and flow tools (which only read files of this
  *    window's folders) can show a worktree's changes, and the path is predictable;
  *  - git-ignored through the repository's own info/exclude (never the user's tracked .gitignore),
- *    which keeps them out of `git status`, VS Code's search and Axle's code index (it asks git
+ *    which keeps them out of `git status`, VS Code's search and Insilode's code index (it asks git
  *    which paths are ignored), so the index does not list every symbol twice.
  *  This file only builds git argument arrays, parses git's output and runs git without a shell;
  *  it never imports vscode, so node tests run it against real repositories.
@@ -19,7 +19,7 @@ import * as path from 'path';
 export interface Worktree {
 	/** The worktree's folder (absolute). */
 	path: string;
-	/** The branch the agent works on, e.g. axle/claude-3f9a. */
+	/** The branch the agent works on, e.g. insilode/claude-3f9a. */
 	branch: string;
 	/** The branch it was cut from and merges back into, e.g. main. */
 	base: string;
@@ -33,9 +33,9 @@ export interface GitResult {
 	stderr: string;
 }
 
-/** The folder under a repository's root that holds Axle's worktrees, and the line that git-ignores it. */
-export const WORKTREE_DIR = path.join('.axle', 'worktrees');
-export const EXCLUDE_LINE = '/.axle/';
+/** The folder under a repository's root that holds Insilode's worktrees, and the line that git-ignores it. */
+export const WORKTREE_DIR = path.join('.insilode', 'worktrees');
+export const EXCLUDE_LINE = '/.insilode/';
 
 /** A branch-safe slug: lower case letters, digits and dashes, at most 40 characters. */
 export function slugify(text: string): string {
@@ -47,12 +47,12 @@ export function worktreeSlug(cli: string, random: string): string {
 	return slugify(`${cli}-${random}`) || `agent-${slugify(random)}`;
 }
 
-export const branchFor = (slug: string) => `axle/${slug}`;
+export const branchFor = (slug: string) => `insilode/${slug}`;
 export const worktreePath = (root: string, slug: string) => path.join(root, WORKTREE_DIR, slug);
 
 /**
  * A branch name git accepts and that cannot be read as an option: what `git check-ref-format --branch` allows, minus the
- * rarely used characters. Checked before any name reaches git, also names read back from Axle's own saved list.
+ * rarely used characters. Checked before any name reaches git, also names read back from Insilode's own saved list.
  */
 export function validBranch(name: string): boolean {
 	return /^[A-Za-z0-9._/-]{1,200}$/.test(name) && !name.startsWith('-') && !name.startsWith('/') && !name.endsWith('/') && !name.endsWith('.')
@@ -61,7 +61,7 @@ export function validBranch(name: string): boolean {
 
 function branch(name: string) {
 	if (!validBranch(name)) {
-		throw new Error(`"${name}" is not a branch name Axle uses`);
+		throw new Error(`"${name}" is not a branch name Insilode uses`);
 	}
 	return name;
 }
@@ -155,14 +155,14 @@ export function parseWorktreeList(out: string): WorktreeEntry[] {
 	return list;
 }
 
-/** The exclude file with Axle's line added, or undefined when it is there already. */
+/** The exclude file with Insilode's line added, or undefined when it is there already. */
 export function withExclude(text: string): string | undefined {
 	const lines = text.split(/\r?\n/).map(l => l.trim());
-	if (lines.includes(EXCLUDE_LINE) || lines.includes('.axle/') || lines.includes('/.axle') || lines.includes('.axle')) {
+	if (lines.includes(EXCLUDE_LINE) || lines.includes('.insilode/') || lines.includes('/.insilode') || lines.includes('.insilode')) {
 		return undefined;
 	}
 	const sep = text && !text.endsWith('\n') ? '\n' : '';
-	return `${text}${sep}# Axle: agent worktrees (see flow-agent/src/worktrees.ts)\n${EXCLUDE_LINE}\n`;
+	return `${text}${sep}# Insilode: agent worktrees (see flow-agent/src/worktrees.ts)\n${EXCLUDE_LINE}\n`;
 }
 
 // ── Running git ──────────────────────────────────────────────────────────────────────────────────
@@ -197,7 +197,7 @@ export async function repoInfo(cwd: string): Promise<{ root: string; branch: str
 		return 'HEAD is detached: check out a branch first';
 	}
 	if (!validBranch(name)) {
-		return `the branch "${name}" has a name Axle does not pass to git`;
+		return `the branch "${name}" has a name Insilode does not pass to git`;
 	}
 	return { root: path.normalize(top.stdout.trim()), branch: name };
 }
@@ -212,7 +212,7 @@ export function sameDir(a: string, b: string, platform: NodeJS.Platform = proces
 	return n(a) === n(b);
 }
 
-/** Adds Axle's line to <common git dir>/info/exclude, so every worktree of the repository ignores .axle too. */
+/** Adds Insilode's line to <common git dir>/info/exclude, so every worktree of the repository ignores .insilode too. */
 export async function ensureExcluded(root: string): Promise<void> {
 	const common = await git(root, commonDirArgs());
 	if (common.code !== 0) {
@@ -227,7 +227,7 @@ export async function ensureExcluded(root: string): Promise<void> {
 	}
 }
 
-/** Creates a worktree for a new agent: ignores .axle, then `git worktree add -b axle/<slug> <dir> <base>`. */
+/** Creates a worktree for a new agent: ignores .insilode, then `git worktree add -b insilode/<slug> <dir> <base>`. */
 export async function createWorktree(cwd: string, slug: string): Promise<Worktree> {
 	const info = await repoInfo(cwd);
 	if (typeof info === 'string') {
@@ -305,7 +305,7 @@ export async function planMerge(wt: Worktree): Promise<MergePlan> {
 
 /** Runs the merge the plan described, in the main checkout. A merge that stops on a conflict is aborted: no half-merged tree is left. */
 export async function merge(wt: Worktree, kind: 'fast-forward' | 'merge'): Promise<{ ok: true } | { ok: false; reason: string }> {
-	const r = await git(wt.root, kind === 'fast-forward' ? fastForwardArgs(wt.branch) : mergeArgs(wt.branch, `Merge ${wt.branch} (Axle agent worktree)`), 120_000);
+	const r = await git(wt.root, kind === 'fast-forward' ? fastForwardArgs(wt.branch) : mergeArgs(wt.branch, `Merge ${wt.branch} (Insilode agent worktree)`), 120_000);
 	if (r.code === 0) {
 		return { ok: true };
 	}

@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: does a code name still exist? Text outside the code (an agent's memory,
+ *  Insilode polyglot index: does a code name still exist? Text outside the code (an agent's memory,
  *  a note) names things like `UserService`, `Project.callers` or `buildIndex()`; this answers
  *  from the index's types and functions whether each one is still there. Pure, so it is tested on
  *  its own; the host adds what the language servers know for languages the index does not read.

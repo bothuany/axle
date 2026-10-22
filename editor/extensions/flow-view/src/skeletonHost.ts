@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle skeleton first, in the window: each agent session's stage, the plan board recoloured from the type index after every
+ *  Insilode skeleton first, in the window: each agent session's stage, the plan board recoloured from the type index after every
  *  save, and the warnings when an agent changes a declaration the developer wrote. The developer drives it by talking to the agent
  *  ("I'll write it", "check", "hand over", "just do it"); the agent moves the stage with `check_skeleton` steps. Whether it is on
  *  is the agent's switch in the dock (`flow.agents.skeletonOn`). Revert is the developer's own command, never the agent's tool.
@@ -19,7 +19,7 @@ import { drawnAnswer, newSession, toolAnswer, type SkeletonSession, type Skeleto
 import type { TypeService } from './types/typeService';
 
 /** Declared by flow-agent (the starting value of each agent's switch); without flow-agent it reads as its default, off. */
-const SETTING = 'axle.skeletonFirst';
+const SETTING = 'insilode.skeletonFirst';
 /** Agent sessions with a stage at once: more is a caller making up ids. */
 const MAX_SESSIONS = 20;
 const RECOMPUTE_MS = 250;
@@ -33,7 +33,7 @@ const CODE_FILE = /\.(cs|ts|tsx|js|jsx|mjs|cjs|java|kt|py|go|rs|php|rb)$/i;
 const same = (a: string, b: string) => a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
 const fileKey = (f: string) => f.replace(/\\/g, '/').toLowerCase();
 
-/** The default for an agent nobody switched, and the answer for an agent Axle did not start (it has no switch in the dock). */
+/** The default for an agent nobody switched, and the answer for an agent Insilode did not start (it has no switch in the dock). */
 export const skeletonDefault = () => vscode.workspace.getConfiguration(SETTING).get<boolean>('enabled', false) === true;
 
 export class SkeletonHost implements SkeletonTools, vscode.Disposable {
@@ -53,7 +53,7 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		boards.setDecorator((id, spec) => {
 			const s = this.byBoard(id);
 			return s && s.stage !== 'design' && s.diff ? decorate(spec, s.diff, [
-				...s.warnings.map(w => ({ owner: w.owner, name: w.name, text: `${warningText(w)}\nTo put yours back: ask the agent, or run "Axle: Revert an Agent's Change to Your Declaration".` })),
+				...s.warnings.map(w => ({ owner: w.owner, name: w.name, text: `${warningText(w)}\nTo put yours back: ask the agent, or run "Insilode: Revert an Agent's Change to Your Declaration".` })),
 				// A keep the agent passed on stays visible: the developer can see what was kept, not only what is still open.
 				...s.accepted.map(w => ({ owner: w.owner, name: w.name, text: `Kept (the agent was told to keep it): ${warningText(w)}` })),
 			], f => vscode.workspace.asRelativePath(f, false)) : spec;
@@ -167,8 +167,8 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 			return toolAnswer(false, undefined);
 		}
 		if (step && !id) {
-			// An agent Axle did not start has no switch and no row of its own: it may check, but not move a stage that others share.
-			return 'Skeleton first steps are only for agents started from the Axle Agents dock: do what the developer asks as usual.';
+			// An agent Insilode did not start has no switch and no row of its own: it may check, but not move a stage that others share.
+			return 'Skeleton first steps are only for agents started from the Insilode Agents dock: do what the developer asks as usual.';
 		}
 		if (step) {
 			this.log.info(`skeleton: agent ${id} asked for step ${step}${warning ? ` (warning ${warning})` : ''}`);
@@ -293,11 +293,11 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		s.accepted.push(w);
 	}
 
-	/** "Axle: Revert an Agent's Change to Your Declaration": the developer picks a warning and their declaration goes back; the body stays. */
+	/** "Insilode: Revert an Agent's Change to Your Declaration": the developer picks a warning and their declaration goes back; the body stays. */
 	private async revertPicked() {
 		const all = [...this.sessions.values()].flatMap(s => s.warnings.filter(w => w.reason !== 'removed' && w.after !== undefined).map(w => ({ s, w })));
 		if (!all.length) {
-			void vscode.window.showInformationMessage('Axle: no declaration of yours was changed by an agent.');
+			void vscode.window.showInformationMessage('Insilode: no declaration of yours was changed by an agent.');
 			return;
 		}
 		const pick = await vscode.window.showQuickPick(all.map(x => ({ label: x.w.name ? `${x.w.owner}.${x.w.name}` : x.w.owner, detail: warningText(x.w), description: vscode.workspace.asRelativePath(x.w.file), x })), { title: 'Revert an agent\'s change to your declaration', placeHolder: 'The declaration goes back to what you wrote; the body the agent filled stays' });
@@ -308,12 +308,12 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(w.file));
 		if (doc.isDirty) {
 			// Saving after the revert would also save the developer's unsaved work in that file.
-			void vscode.window.showWarningMessage(`Axle: ${vscode.workspace.asRelativePath(doc.uri)} has unsaved changes: save or undo them, then revert.`);
+			void vscode.window.showWarningMessage(`Insilode: ${vscode.workspace.asRelativePath(doc.uri)} has unsaved changes: save or undo them, then revert.`);
 			return;
 		}
 		const range = revertRange(doc.getText(), w);
 		if (!range) {
-			void vscode.window.showWarningMessage('Axle: that declaration changed again since the warning; revert it by hand.');
+			void vscode.window.showWarningMessage('Insilode: that declaration changed again since the warning; revert it by hand.');
 			return;
 		}
 		const edit = new vscode.WorkspaceEdit();
@@ -437,7 +437,7 @@ export class SkeletonHost implements SkeletonTools, vscode.Disposable {
 		const uri = vscode.Uri.file(r.target.file);
 		const shown = vscode.workspace.asRelativePath(uri, false);
 		if (!vscode.workspace.getWorkspaceFolder(uri)) {
-			void vscode.window.showWarningMessage(`Axle: ${shown} is outside the open folders, so it is not created.`);
+			void vscode.window.showWarningMessage(`Insilode: ${shown} is outside the open folders, so it is not created.`);
 			return;
 		}
 		const exists = await Promise.resolve(vscode.workspace.fs.stat(uri)).then(() => true, () => false);

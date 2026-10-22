@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the trail in the status bar. Wherever the cursor is in C#, it shows the call path that
+ *  Insilode: the trail in the status bar. Wherever the cursor is in C#, it shows the call path that
  *  leads there from an entry point (▶ endpoint › ◆ handler › ● method), in the canvas' colours.
  *--------------------------------------------------------------------------------------------*/
 

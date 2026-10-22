@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process'
 export function pointerCommand(platform, x, y) {
 	const [px, py] = [Math.round(x), Math.round(y)]
 	if (platform === 'win32') {
-		const script = `Add-Type -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);' -Name W -Namespace Axle; [Axle.W]::SetCursorPos(${px}, ${py}) | Out-Null`
+		const script = `Add-Type -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);' -Name W -Namespace Insilode; [Insilode.W]::SetCursorPos(${px}, ${py}) | Out-Null`
 		return ['powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script]]
 	}
 	if (platform === 'linux') {

@@ -25,7 +25,7 @@ const files = readdirSync(extensions)
 	.map(path => ({ path: relative(repo, path), text: readFileSync(path, 'utf8') }));
 const all = files.map(f => f.text).join('\n');
 
-// Commands that VS Code core registers, through a workbench contribution in an Axle patch (editor/patches), rather than
+// Commands that VS Code core registers, through a workbench contribution in an Insilode patch (editor/patches), rather than
 // an extension. The extensions may invoke these too; the last test checks that a patch really registers each one.
 // flow.desktop.*: the app badge and the desktop status overlay (flow-desktop.patch). They exist in the desktop app only,
 // so flow-agent (src/desktop.ts) looks them up with getCommands() before calling them.

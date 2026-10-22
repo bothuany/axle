@@ -1,9 +1,9 @@
-# Builds Axle when a version tag is pushed and attaches the result to the GitHub release:
-#   Windows  the installer (npm run installer)                      Axle-Setup-<version>-x64.exe
-#   macOS    the app for Apple silicon and Intel (npm run package)  Axle-<version>-darwin-{arm64,x64}.{zip,dmg}
-#   Linux    the Debian package, an RPM and a tarball               axle_<version>_amd64.deb, axle-<version>-1.x86_64.rpm, Axle-<version>-linux-x64.tar.gz
-# plus SHA256SUMS.txt over all of them (what packaging/homebrew/axle.rb and packaging/winget need) and the
-# update-<platform>-axle.json files that a running Axle reads to learn of this release (scripts/update-manifests.mjs,
+# Builds Insilode when a version tag is pushed and attaches the result to the GitHub release:
+#   Windows  the installer (npm run installer)                      Insilode-Setup-<version>-x64.exe
+#   macOS    the app for Apple silicon and Intel (npm run package)  Insilode-<version>-darwin-{arm64,x64}.{zip,dmg}
+#   Linux    the Debian package, an RPM and a tarball               insilode_<version>_amd64.deb, insilode-<version>-1.x86_64.rpm, Insilode-<version>-linux-x64.tar.gz
+# plus SHA256SUMS.txt over all of them (what packaging/homebrew/insilode.rb and packaging/winget need) and the
+# update-<platform>-insilode.json files that a running Insilode reads to learn of this release (scripts/update-manifests.mjs,
 # packaging/README.md "Updates").
 # Each build needs the full `npm run setup` (a VS Code checkout, `npm ci`, native modules) and VS Code's production build,
 # so it is slow: plan for 60 to 90 minutes. A manual run (no tag) keeps the files as build artifacts instead.
@@ -40,13 +40,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --title "Axle ${GITHUB_REF_NAME#v}" --generate-notes
+        run: gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --title "Insilode ${GITHUB_REF_NAME#v}" --generate-notes
 
   installer:
     name: Windows installer
     needs: release
     # windows-2022 rather than windows-latest (Visual Studio 2026): VS Code 1.141's preinstall accepts only Visual Studio
-    # 2019 and 2022, as VS Code's own Windows CI has. Move on when Axle moves to a VS Code that knows 2026.
+    # 2019 and 2022, as VS Code's own Windows CI has. Move on when Insilode moves to a VS Code that knows 2026.
     runs-on: windows-2022
     timeout-minutes: 150
     defaults:
@@ -84,7 +84,7 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Axle
+      - name: Set up Insilode
         run: npm run setup
 
       - name: Build the installer
@@ -95,15 +95,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --title "Axle ${GITHUB_REF_NAME#v}" --generate-notes
-          gh release upload "${GITHUB_REF_NAME}" dist/Axle-Setup-*.exe --clobber
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --title "Insilode ${GITHUB_REF_NAME#v}" --generate-notes
+          gh release upload "${GITHUB_REF_NAME}" dist/Insilode-Setup-*.exe --clobber
 
       # A manual run (no tag) keeps the installer as a build artifact instead.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         with:
-          name: axle-installer
-          path: dist/Axle-Setup-*.exe
+          name: insilode-installer
+          path: dist/Insilode-Setup-*.exe
           retention-days: 7
 
   packages:
@@ -118,18 +118,18 @@ jobs:
           - name: macOS (Apple silicon)
             runner: macos-latest
             arch: arm64
-            files: dist/Axle-*-darwin-arm64.zip dist/Axle-*-darwin-arm64.dmg
+            files: dist/Insilode-*-darwin-arm64.zip dist/Insilode-*-darwin-arm64.dmg
           # An Intel runner, so that the native modules are built for the processor they run on (no cross-compiling).
           - name: macOS (Intel)
             runner: macos-15-intel
             arch: x64
-            files: dist/Axle-*-darwin-x64.zip dist/Axle-*-darwin-x64.dmg
+            files: dist/Insilode-*-darwin-x64.zip dist/Insilode-*-darwin-x64.dmg
           # 22.04 rather than ubuntu-latest: the native modules are compiled here and need this machine's glibc (2.35) or
           # newer, so the .deb also installs on Ubuntu 22.04 and Debian 12. Move to ubuntu-latest when 22.04 is retired.
           - name: Linux (x64)
             runner: ubuntu-22.04
             arch: x64
-            files: dist/axle_*_amd64.deb dist/axle-*.rpm dist/Axle-*-linux-x64.tar.gz
+            files: dist/insilode_*_amd64.deb dist/insilode-*.rpm dist/Insilode-*-linux-x64.tar.gz
     defaults:
       run:
         shell: bash
@@ -137,7 +137,7 @@ jobs:
       # VS Code's build downloads Electron, built-in extensions and (Linux) sysroots from GitHub: authenticated, it is not rate limited.
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      # The runner has about 14 GB free and the build needs about 20: toolchains Axle does not use go first.
+      # The runner has about 14 GB free and the build needs about 20: toolchains Insilode does not use go first.
       - name: Free disk space
         if: runner.os == 'Linux'
         run: |
@@ -169,7 +169,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Set up Axle
+      - name: Set up Insilode
         run: npm run setup
 
       - name: Build the packages
@@ -190,7 +190,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         with:
-          name: axle-${{ runner.os }}-${{ matrix.arch }}
+          name: insilode-${{ runner.os }}-${{ matrix.arch }}
           path: |
             dist/*.zip
             dist/*.dmg
@@ -215,18 +215,18 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           mkdir assets && cd assets
-          gh release download "${GITHUB_REF_NAME}" --pattern 'Axle-*' --pattern 'axle*'
+          gh release download "${GITHUB_REF_NAME}" --pattern 'Insilode-*' --pattern 'insilode*'
           sha256sum -- * | tee ../SHA256SUMS.txt
           gh release upload "${GITHUB_REF_NAME}" ../SHA256SUMS.txt --clobber
 
       # After the checksums, and only when every platform's file is on the release: the script fails on a missing one.
-      # releases/latest/download serves these files to every running Axle, which compares productVersion with its own.
+      # releases/latest/download serves these files to every running Insilode, which compares productVersion with its own.
       - name: Update files
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           mkdir update-assets update-files
-          gh release download "${GITHUB_REF_NAME}" --dir update-assets --pattern 'Axle-*' --pattern 'axle_*'
+          gh release download "${GITHUB_REF_NAME}" --dir update-assets --pattern 'Insilode-*' --pattern 'insilode_*'
           node scripts/update-manifests.mjs --dir update-assets --out update-files --version "${GITHUB_REF_NAME#v}" --commit "${GITHUB_SHA}" --repo "${GITHUB_REPOSITORY}"
           gh release upload "${GITHUB_REF_NAME}" update-files/*.json --clobber

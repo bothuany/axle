@@ -2,8 +2,8 @@
 
 ```bash
 npm run sonar:up      # SonarQube Community in Docker on http://localhost:9000
-npm run sonar         # scan the TypeScript/JavaScript side (project `axle`)
-npm run sonar -- --dotnet   # also the C# analyzer (project `axle-analyzer`)
+npm run sonar         # scan the TypeScript/JavaScript side (project `insilode`)
+npm run sonar -- --dotnet   # also the C# analyzer (project `insilode-analyzer`)
 npm run sonar:down
 ```
 

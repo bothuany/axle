@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: Go, PHP, Ruby and Rust. These extractors only need to know two things:
+ *  Insilode polyglot index: Go, PHP, Ruby and Rust. These extractors only need to know two things:
  *  where the functions and their call sites are, and which functions are registered as routes
  *  (Gin/Echo/Fiber/chi/net-http, Laravel/Symfony, Rails/Sinatra, axum/actix/Rocket). The links
  *  between functions are made by the shared resolver where it can, and by the language server

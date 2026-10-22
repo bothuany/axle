@@ -1,9 +1,9 @@
 function pages(csp: string) {
-	// ruleid: axle-webview-html-without-csp
+	// ruleid: insilode-webview-html-without-csp
 	const bad = `<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>`;
-	// ok: axle-webview-html-without-csp
+	// ok: insilode-webview-html-without-csp
 	const good = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"></head></html>`;
-	// ruleid: axle-webview-html-without-csp
+	// ruleid: insilode-webview-html-without-csp
 	const upper = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body></body></html>`;
 	return [bad, good, upper];
 }

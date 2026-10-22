@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import puppeteer from 'puppeteer-core'
 
-const base = (process.argv[2] ?? 'http://127.0.0.1:4173/axle/').replace(/\/?$/, '/')
+const base = (process.argv[2] ?? 'http://127.0.0.1:4173/insilode/').replace(/\/?$/, '/')
 const out = fileURLToPath(new URL('../public/media/', import.meta.url))
 const CHROMES = [process.env.CHROME_PATH, '/usr/bin/google-chrome', '/usr/bin/chromium', 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].filter(Boolean)
 const chrome = CHROMES.find(p => existsSync(p))

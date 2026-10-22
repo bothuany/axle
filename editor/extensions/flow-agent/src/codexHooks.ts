@@ -1,7 +1,7 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: Codex's observe-only hooks. Claude Code takes them per run (--settings); Codex reads hooks
- *  only from its config layers, so Axle writes its own profile, $CODEX_HOME/axle.config.toml, and
- *  starts Codex with `-p axle`: the user's config.toml is never touched, and a Codex started by hand
+ *  Insilode: Codex's observe-only hooks. Claude Code takes them per run (--settings); Codex reads hooks
+ *  only from its config layers, so Insilode writes its own profile, $CODEX_HOME/insilode.config.toml, and
+ *  starts Codex with `-p insilode`: the user's config.toml is never touched, and a Codex started by hand
  *  never sees these hooks.
  *
  *  Codex runs a hook only after the user trusted it (/hooks), and records that trust against the
@@ -15,7 +15,7 @@
 import * as os from 'os';
 import * as path from 'path';
 
-export const CODEX_PROFILE = 'axle';
+export const CODEX_PROFILE = 'insilode';
 
 /** Where Codex keeps its config, sessions and profiles. */
 export function codexHome(env: NodeJS.ProcessEnv = process.env) {
@@ -27,7 +27,7 @@ export function codexProfileFile(env: NodeJS.ProcessEnv = process.env) {
 }
 
 /**
- * The events Axle listens to, and the tools each one is limited to. PreToolUse only needs the edits
+ * The events Insilode listens to, and the tools each one is limited to. PreToolUse only needs the edits
  * (to keep the file as it was); Codex reports every edit as apply_patch.
  */
 export const CODEX_EVENTS: [event: string, matcher?: string][] = [
@@ -42,7 +42,7 @@ export const CODEX_EVENTS: [event: string, matcher?: string][] = [
 
 /**
  * The hook's command line. Codex runs hooks through PowerShell on Windows and sh elsewhere. In the
- * desktop editor `execPath` is the Axle executable itself, which runs a script only with
+ * desktop editor `execPath` is the Insilode executable itself, which runs a script only with
  * ELECTRON_RUN_AS_NODE set (else it opens a window); each hook is its own shell, so setting it
  * there touches nothing else.
  */
@@ -60,12 +60,12 @@ export function tomlString(s: string) {
 	return `"${s.replace(/[\\"]/g, c => `\\${c}`).replace(/[\u0000-\u001f\u007f]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)}"`;
 }
 
-/** The profile Axle writes. Deterministic: the same command gives the same bytes, so trust given once holds. */
+/** The profile Insilode writes. Deterministic: the same command gives the same bytes, so trust given once holds. */
 export function codexProfile(command: string, timeout = 5): string {
 	const lines = [
-		'# Written by Axle. Used only when Axle starts Codex (codex -p axle): read-only hooks that tell',
-		'# Axle\'s Agents dock what the agent is doing. They print nothing, so they never decide anything.',
-		'# Your own config.toml stays as it is. Delete this file to stop it; Axle writes it again when',
+		'# Written by Insilode. Used only when Insilode starts Codex (codex -p insilode): read-only hooks that tell',
+		'# Insilode\'s Agents dock what the agent is doing. They print nothing, so they never decide anything.',
+		'# Your own config.toml stays as it is. Delete this file to stop it; Insilode writes it again when',
 		'# it starts Codex.',
 	];
 	for (const [event, matcher] of CODEX_EVENTS) {
@@ -79,10 +79,10 @@ export function codexProfile(command: string, timeout = 5): string {
 }
 
 /**
- * The shared hook script: posts the event to the Axle window named by the terminal's FLOW_HOOK_DIR,
+ * The shared hook script: posts the event to the Insilode window named by the terminal's FLOW_HOOK_DIR,
  * and prints nothing (Codex then takes no decision from it; Stop treats empty output as success).
  */
-export const CODEX_HOOK_SCRIPT = `// Written by Axle: forwards Codex hook events to the Axle window that started the agent (observe only).
+export const CODEX_HOOK_SCRIPT = `// Written by Insilode: forwards Codex hook events to the Insilode window that started the agent (observe only).
 const fs = require('fs'), http = require('http'), path = require('path');
 const dir = process.env.FLOW_HOOK_DIR;
 if (!dir) process.exit(0);

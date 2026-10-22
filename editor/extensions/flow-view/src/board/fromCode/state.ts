@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle boards generated from code: an enum and the transitions between its values as a state diagram. The index records calls,
+ *  Insilode boards generated from code: an enum and the transitions between its values as a state diagram. The index records calls,
  *  not assignments or conditions, so transitions are read from the source text of methods and only where the code is clear:
  *  a method assigns one of the enum's values (`x.status = Status.PAID`, `setStatus(Status.PAID)`) and the same method checks
  *  the state it comes from (`status == Status.NEW`, `case Status.NEW`, `.equals(Status.NEW)`). An assignment without such a
@@ -11,7 +11,7 @@ import { byCode, type TypeGraph, type TypeInfo } from '../../types/model';
 import { MAX_LIST, skip, type GenBoard, type GenEdge, type GenNode, type Generated } from './board';
 
 export interface StateScope {
-	/** The enum: `OrderStatus`, or `Order.status` (the field's type). Omit to let Axle look for the one enum with clear transitions. */
+	/** The enum: `OrderStatus`, or `Order.status` (the field's type). Omit to let Insilode look for the one enum with clear transitions. */
 	enum?: string;
 }
 

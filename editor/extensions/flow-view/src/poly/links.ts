@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: calls that cross a process boundary. An HTTP client call names its target
+ *  Insilode polyglot index: calls that cross a process boundary. An HTTP client call names its target
  *  only as a string ("/api/orders/{…}"); when an endpoint of the same index serves that route, the
  *  flow can go on into it. Matching is by the literal path segments, so it is always a guess: the
  *  base URL (often an environment variable) and which service answers are not known statically.

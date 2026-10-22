@@ -52,7 +52,7 @@ test('headers: a method to its body, a field on its line, an abstract method wit
 // Run once per line ending: a Windows checkout (core.autocrlf) hands the fixture over with CRLF, and a developer's files may have
 // either, so the copy is rewritten to each one and the agent's edits keep the file's own line ending.
 for (const eol of ['\n', '\r\n']) test(`an agent edit (${eol === '\n' ? 'LF' : 'CRLF'}): a changed signature and a renamed field are warned about, a reformatted line and a new body are not`, async () => {
-	const dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'axle-skeleton-')))
+	const dir = realpathSync.native(mkdtempSync(join(tmpdir(), 'insilode-skeleton-')))
 	try {
 		cpSync(join(FIXTURES, 'skeleton-ts'), dir, { recursive: true })
 		const src = join(dir, 'src', 'checkout')

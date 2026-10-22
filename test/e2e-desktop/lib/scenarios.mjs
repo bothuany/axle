@@ -1,4 +1,4 @@
-// The scenarios that run against a started Axle (an installed build, or a source checkout). Each returns
+// The scenarios that run against a started Insilode (an installed build, or a source checkout). Each returns
 // `{ status: 'pass' | 'skip', detail, shots }` or throws; run.mjs records it, retrying a throw once from a fresh app.
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -12,7 +12,7 @@ const pass = (detail, shots = []) => ({ status: 'pass', detail, shots })
 export function tourFile(folder) {
 	const file = join(folder, 'e2e.tour.json')
 	writeFileSync(file, JSON.stringify({
-		axleTour: 1,
+		insilodeTour: 1,
 		id: 'e2e',
 		title: 'E2E tour',
 		flow: { http: 'POST /api/orders' },
@@ -24,10 +24,10 @@ export function tourFile(folder) {
 	return file
 }
 
-/** Branding and onboarding: the window says Axle, nothing says Code - OSS, and no Welcome or Get Started page opened itself. */
+/** Branding and onboarding: the window says Insilode, nothing says Code - OSS, and no Welcome or Get Started page opened itself. */
 export async function branding(ctx) {
 	const page = await ctx.app.workbench()
-	await until('the window title to say Axle', async () => /Axle/.test(await page.title()), { ms: 30000 })
+	await until('the window title to say Insilode', async () => /Insilode/.test(await page.title()), { ms: 30000 })
 	const title = await page.title()
 	if (/Code - OSS|Visual Studio Code/.test(title)) {
 		throw new Error(`The window title still carries another product's name: "${title}"`)
@@ -37,7 +37,7 @@ export async function branding(ctx) {
 	const tabs = await tabTitles(page)
 	const picture = await shot(page, ctx.results, 'branding')
 	if (await welcomeDialog(page)) {
-		throw new Error(`VS Code's first-run Welcome dialog ("Welcome to VS Code", sign in to use GitHub Copilot) opens over Axle: ${picture}`)
+		throw new Error(`VS Code's first-run Welcome dialog ("Welcome to VS Code", sign in to use GitHub Copilot) opens over Insilode: ${picture}`)
 	}
 	const onboarding = tabs.filter(t => /welcome|get started|walkthrough/i.test(t))
 	if (onboarding.length || await page.locator('.gettingStartedContainer').count()) {
@@ -57,7 +57,7 @@ export async function canvasTour(ctx) {
 		if ((await tabTitles(page)).some(t => /^Flow:/.test(t))) {
 			return true
 		}
-		await runCommand(page, 'Axle: Play Tour from File').catch(() => page.keyboard.press('Escape'))
+		await runCommand(page, 'Insilode: Play Tour from File').catch(() => page.keyboard.press('Escape'))
 		// The picker lists the tour file we wrote; the palette's own rows must not be taken for it.
 		const row = page.locator('.quick-input-list .monaco-list-row', { hasText: 'e2e.tour.json' })
 		if (await row.first().waitFor({ timeout: 6000 }).then(() => true, () => false)) {
@@ -82,7 +82,7 @@ export async function canvasTour(ctx) {
 	return pass(`${asTab ? 'canvas opened as an editor tab' : 'canvas opened beside the editor (not an editor tab in this build)'}; caption: "${caption.slice(0, 60)}"`, [await shot(page, ctx.results, 'canvas-tour')])
 }
 
-const OVERLAY_TITLE = 'Axle Agents'
+const OVERLAY_TITLE = 'Insilode Agents'
 const overlayInfo = ctx => ctx.app.main(({ BrowserWindow }, title) => {
 	const w = BrowserWindow.getAllWindows().find(x => x.getTitle() === title && !x.isDestroyed())
 	return w ? { visible: w.isVisible(), bounds: w.getBounds() } : null
@@ -94,7 +94,7 @@ async function saveOverlayShot(ctx, overlay, name) {
 	return file
 }
 
-/** The status island: it appears with the fake agents, and (where this build has the controls) minimizes, drags, closes and hides while Axle is focused. */
+/** The status island: it appears with the fake agents, and (where this build has the controls) minimizes, drags, closes and hides while Insilode is focused. */
 export async function island(ctx) {
 	const page = await ctx.app.workbench()
 	await dismissWelcome(page)
@@ -155,15 +155,15 @@ export async function island(ctx) {
 		}
 	}
 
-	// Hidden while Axle is focused: the setting is live, and a window has to be focused for real.
+	// Hidden while Insilode is focused: the setting is live, and a window has to be focused for real.
 	if (direct) {
-		ctx.setSettings({ 'flow.agents.desktop.overlay.autoHide': { noAgents: true, axleFocused: true } })
+		ctx.setSettings({ 'flow.agents.desktop.overlay.autoHide': { noAgents: true, insilodeFocused: true } })
 		const focused = await ctx.app.main(({ BrowserWindow }, title) => {
 			BrowserWindow.getAllWindows().find(x => x.getTitle() !== title && !x.isDestroyed())?.focus()
 			return !!BrowserWindow.getFocusedWindow()
 		}, OVERLAY_TITLE)
 		if (focused) {
-			await until('the island to hide while Axle is focused', async () => !(await overlayInfo(ctx))?.visible, { ms: 15000 })
+			await until('the island to hide while Insilode is focused', async () => !(await overlayInfo(ctx))?.visible, { ms: 15000 })
 			steps.push('hidden while focused')
 		} else {
 			steps.push('hide-while-focused skipped (this OS gave the window no focus)')
@@ -172,7 +172,7 @@ export async function island(ctx) {
 		await sleep(3000)
 		let n = 0
 		await until('the island to come back', async () => {
-			ctx.setSettings({ 'flow.agents.desktop.overlay.autoHide': { noAgents: true, axleFocused: false }, 'flow.e2e.nonce': ++n })
+			ctx.setSettings({ 'flow.agents.desktop.overlay.autoHide': { noAgents: true, insilodeFocused: false }, 'flow.e2e.nonce': ++n })
 			await sleep(2000)
 			return (await overlayInfo(ctx))?.visible
 		}, { ms: 40000, every: 500 })
@@ -188,7 +188,7 @@ export async function island(ctx) {
 }
 
 export const APP_SCENARIOS = [
-	{ id: 'branding', title: 'Starts with Axle branding, no VS Code onboarding', run: branding },
+	{ id: 'branding', title: 'Starts with Insilode branding, no VS Code onboarding', run: branding },
 	{ id: 'canvas-tour', title: 'Flow canvas opens and a tour plays', run: canvasTour },
 	{ id: 'island', title: 'Status island: shows, minimizes, drags, hides, closes', run: island },
 ]

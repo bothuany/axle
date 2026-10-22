@@ -1,10 +1,10 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the agent avatars (themes "gyro" and "pixel"), drawn by the Agents dock and by the
+ *  Insilode: the agent avatars (themes "gyro" and "pixel"), drawn by the Agents dock and by the
  *  desktop status overlay. This file is copied byte for byte into the core patch
- *  (src/vs/platform/axleDesktop/common/axleAvatars.ts in editor/patches/flow-desktop.patch);
+ *  (src/vs/platform/insilodeDesktop/common/insilodeAvatars.ts in editor/patches/flow-desktop.patch);
  *  test/arch/avatars.test.mjs fails when the two differ. It imports nothing for that reason.
  *
- *  AVATAR_SCRIPT defines axleAvatar(kind, cli, state, context, size) in the page it is put in.
+ *  AVATAR_SCRIPT defines insilodeAvatar(kind, cli, state, context, size) in the page it is put in.
  *  Every argument is checked against a fixed list or clamped to a number, and the SVG it returns
  *  is built from constants only: no text from an agent ever reaches it.
  *--------------------------------------------------------------------------------------------*/
@@ -108,7 +108,7 @@ export const AVATAR_SCRIPT = String.raw`
 		return '<svg class="ax" width="' + z + '" height="' + z + '" viewBox="-1 -6 15 16" shape-rendering="crispEdges" aria-hidden="true"><g transform="translate(0 1)"><g class="' + anim + '">' + body + blush + e + '</g></g>' + deco + '</svg>';
 	}
 
-	window.axleAvatar = function (kind, cli, state, context, size) {
+	window.insilodeAvatar = function (kind, cli, state, context, size) {
 		var c = Object.prototype.hasOwnProperty.call(COL, cli) ? cli : 'custom';
 		var s = STATES.indexOf(state) >= 0 ? state : 'idle';
 		var z = typeof size === 'number' && isFinite(size) ? Math.min(96, Math.max(12, Math.round(size))) : 24;

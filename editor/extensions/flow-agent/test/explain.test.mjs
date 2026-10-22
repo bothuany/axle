@@ -23,7 +23,7 @@ before(async () => {
 })
 after(() => rmSync(tmp, { recursive: true, force: true }))
 
-const root = resolve(tmpdir(), 'axle-explain-root')
+const root = resolve(tmpdir(), 'insilode-explain-root')
 const at = (...p) => join(root, ...p)
 
 test('the prompt asks for a tour on the change set, names what changed, and is one line', () => {
@@ -40,7 +40,7 @@ test('the prompt asks for a tour on the change set, names what changed, and is o
 	assert.match(text, /Changed: OrderService\.Place \(src\/Orders\/OrderService\.cs\), PriceCalculator\.Total \(src\/Pricing\/PriceCalculator\.cs\); table orders \(migration AddDiscount\), table invoices \(entity Invoice\)\./)
 	assert.match(text, /Endpoints they reach: POST \/orders, PUT \/orders\/\{id\} and 3 more\./)
 	assert.match(text, /caption-only step on the risks/)
-	assert.match(text, /If you cannot call mcp__axle__tour, explain it in text/)
+	assert.match(text, /If you cannot call mcp__insilode__tour, explain it in text/)
 })
 
 test('without an impact (Codex without hooks, a check that timed out) the prompt names the files the turn edited', () => {

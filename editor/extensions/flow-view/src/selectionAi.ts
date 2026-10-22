@@ -1,7 +1,7 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: selection actions in the editor. With code selected the user can ask the agent about it, have it
+ *  Insilode: selection actions in the editor. With code selected the user can ask the agent about it, have it
  *  explained as a tour, or ask the agent to change it (docs/research/inline-ai.md). They are the same three
- *  things the canvas offers on a card (`pointAsk`), and they share one prompt builder (tour/ask.ts): Axle has
+ *  things the canvas offers on a card (`pointAsk`), and they share one prompt builder (tour/ask.ts): Insilode has
  *  no model of its own, so each is a prompt with a file and lines, sent to the agent the user chose
  *  (flow.agents.ask). An edit comes back as the usual reviewable change; nothing here shows a diff itself.
  *--------------------------------------------------------------------------------------------*/
@@ -53,7 +53,7 @@ async function run(kind: PointKind): Promise<void> {
 
 /** The lightbulb on a selection: the selection hint. */
 class SelectionActions implements vscode.CodeActionProvider {
-	static readonly kinds = [vscode.CodeActionKind.RefactorRewrite.append('axle')];
+	static readonly kinds = [vscode.CodeActionKind.RefactorRewrite.append('insilode')];
 
 	provideCodeActions(document: vscode.TextDocument, range: vscode.Range | vscode.Selection): vscode.CodeAction[] {
 		if (range.isEmpty || document.uri.scheme !== 'file') {
@@ -66,9 +66,9 @@ class SelectionActions implements vscode.CodeActionProvider {
 		};
 		const [rewrite] = SelectionActions.kinds;
 		return [
-			make('Axle: Edit with agent…', SelectionCommand.edit, rewrite),
-			make('Axle: Ask agent about this…', SelectionCommand.ask, vscode.CodeActionKind.Empty.append('axle').append('ask')),
-			make('Axle: Explain with a tour', SelectionCommand.explain, vscode.CodeActionKind.Empty.append('axle').append('explain')),
+			make('Insilode: Edit with agent…', SelectionCommand.edit, rewrite),
+			make('Insilode: Ask agent about this…', SelectionCommand.ask, vscode.CodeActionKind.Empty.append('insilode').append('ask')),
+			make('Insilode: Explain with a tour', SelectionCommand.explain, vscode.CodeActionKind.Empty.append('insilode').append('explain')),
 		];
 	}
 }
@@ -79,7 +79,7 @@ export function registerSelectionActions(): vscode.Disposable[] {
 		vscode.commands.registerCommand(SelectionCommand.explain, () => run('explain')),
 		vscode.commands.registerCommand(SelectionCommand.edit, () => run('edit')),
 		vscode.languages.registerCodeActionsProvider({ scheme: 'file' }, new SelectionActions(), {
-			providedCodeActionKinds: [vscode.CodeActionKind.RefactorRewrite.append('axle'), vscode.CodeActionKind.Empty.append('axle')],
+			providedCodeActionKinds: [vscode.CodeActionKind.RefactorRewrite.append('insilode'), vscode.CodeActionKind.Empty.append('insilode')],
 		}),
 	];
 }

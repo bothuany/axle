@@ -1,12 +1,15 @@
 // The site in a real browser (headless Chrome): the home page with its live canvas, tour and downloads, the Try page's stories and
 // agents, and what search engines read. Run after `npm run build` (and `node scripts/site-data.mjs` before that): `npm run test:e2e`.
-// It serves dist/ the way GitHub Pages does, under /axle/, and fails on any console error, 4xx/5xx response or page error. GitHub's
+// It serves dist/ the way GitHub Pages does, at the root of the site (https://insilode.dev), and fails on any console error, 4xx/5xx response or page error. GitHub's
 // API is answered from fixtures here (a rate-limited CI runner would otherwise get 403s), and one test makes it fail on purpose.
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { preview } from 'vite'
 import puppeteer from 'puppeteer-core'
+
+// The address the build was made for (SITE_URL, as in vite.config.ts).
+const SITE_URL = (process.env.SITE_URL || 'https://insilode.dev').replace(/\/$/, '')
 
 const CHROMES = [process.env.CHROME_PATH, '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser', 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].filter(Boolean)
 const chrome = CHROMES.find(p => existsSync(p))
@@ -18,12 +21,12 @@ const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 
 const PHONE = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36'
 
 /** What GitHub's API answers, in the shape it has. The asset names are the real ones of a release. */
-const asset = (name, size) => ({ name, size, browser_download_url: `https://github.com/bothuany/axle/releases/download/v9.9.9/${name}` })
+const asset = (name, size) => ({ name, size, browser_download_url: `https://github.com/bothuany/insilode/releases/download/v9.9.9/${name}` })
 const RELEASE = {
 	tag_name: 'v9.9.9',
 	published_at: '2026-10-20T10:00:00Z',
-	html_url: 'https://github.com/bothuany/axle/releases/tag/v9.9.9',
-	assets: [asset('Axle-Setup-9.9.9-x64.exe', 140_000_000), asset('Axle-9.9.9-darwin-arm64.dmg', 160_000_000), asset('Axle-9.9.9-darwin-x64.dmg', 165_000_000), asset('axle_9.9.9_amd64.deb', 120_000_000), asset('axle-9.9.9-1.x86_64.rpm', 121_000_000), asset('Axle-9.9.9-linux-x64.tar.gz', 150_000_000), asset('SHA256SUMS.txt', 1000)],
+	html_url: 'https://github.com/bothuany/insilode/releases/tag/v9.9.9',
+	assets: [asset('Insilode-Setup-9.9.9-x64.exe', 140_000_000), asset('Insilode-9.9.9-darwin-arm64.dmg', 160_000_000), asset('Insilode-9.9.9-darwin-x64.dmg', 165_000_000), asset('insilode_9.9.9_amd64.deb', 120_000_000), asset('insilode-9.9.9-1.x86_64.rpm', 121_000_000), asset('Insilode-9.9.9-linux-x64.tar.gz', 150_000_000), asset('SHA256SUMS.txt', 1000)],
 }
 
 let server
@@ -33,7 +36,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms))
 
 before(async () => {
 	if (skip) return
-	server = await preview({ base: '/axle/', preview: { port: 0, host: '127.0.0.1', strictPort: false } })
+	server = await preview({ base: '/', preview: { port: 0, host: '127.0.0.1', strictPort: false } })
 	url = `${server.resolvedUrls.local[0].replace(/\/$/, '')}/`
 	browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: ['--no-first-run', '--disable-gpu', '--no-sandbox'] })
 })
@@ -135,7 +138,7 @@ test('home: the download button names the visitor\'s system and points at its fi
 	assert.match(await page.$eval('.hero [data-platforms]', p => p.textContent), /^Version 9\.9\.9, free and open source\. Also for macOS and Linux\.$/)
 	assert.equal(await page.$eval('.nav [data-stars]', s => (s.hidden ? '' : s.textContent)), '1,234')
 	const list = await page.$$eval('[data-download-list] li a', as => as.map(a => a.href.split('/').pop()))
-	assert.deepEqual(list, ['Axle-Setup-9.9.9-x64.exe', 'Axle-9.9.9-darwin-arm64.dmg', 'Axle-9.9.9-darwin-x64.dmg', 'axle_9.9.9_amd64.deb', 'axle-9.9.9-1.x86_64.rpm', 'Axle-9.9.9-linux-x64.tar.gz'])
+	assert.deepEqual(list, ['Insilode-Setup-9.9.9-x64.exe', 'Insilode-9.9.9-darwin-arm64.dmg', 'Insilode-9.9.9-darwin-x64.dmg', 'insilode_9.9.9_amd64.deb', 'insilode-9.9.9-1.x86_64.rpm', 'Insilode-9.9.9-linux-x64.tar.gz'])
 	assert.match(await page.$eval('[data-release]', p => p.textContent), /^Version 9\.9\.9, released October 20, 2026\.$/)
 	await page.close()
 
@@ -150,9 +153,9 @@ test('home: the download button names the visitor\'s system and points at its fi
 test('home: when GitHub does not answer, the buttons lead to the releases page and no count is shown', { skip }, async () => {
 	const { page, problems } = await open('', { github: false })
 	await wait(1500)
-	assert.equal(await page.$eval('.hero [data-download]', a => a.href), 'https://github.com/bothuany/axle/releases/latest')
+	assert.equal(await page.$eval('.hero [data-download]', a => a.href), 'https://github.com/bothuany/insilode/releases/latest')
 	assert.equal(await page.$eval('.nav [data-stars]', s => s.hidden), true)
-	assert.ok((await page.$$eval('[data-download-list] li a', as => as.map(a => a.href))).every(h => h === 'https://github.com/bothuany/axle/releases/latest'))
+	assert.ok((await page.$$eval('[data-download-list] li a', as => as.map(a => a.href))).every(h => h === 'https://github.com/bothuany/insilode/releases/latest'))
 	assert.deepEqual(problems, [])
 	await page.close()
 })
@@ -244,8 +247,8 @@ test('docs: the documents of the repository are pages of the site, linked to eac
 	assert.deepEqual(await page.$$eval('.doc-nav a', as => as.map(a => a.textContent)), ['Overview', 'Install and build', 'Languages', 'Agent tools', 'Boards'])
 	// A link between documents stays on the site; a link to another file of the repository goes to GitHub.
 	const links = await page.$$eval('.doc-body a', as => as.map(a => a.href))
-	assert.ok(links.some(h => h.endsWith('/axle/docs/languages/')), 'the support table link opens the Languages page')
-	assert.ok(links.some(h => h === 'https://github.com/bothuany/axle/blob/main/CONTRIBUTING.md'))
+	assert.ok(links.some(h => h.endsWith('/docs/languages/')), 'the support table link opens the Languages page')
+	assert.ok(links.some(h => h === 'https://github.com/bothuany/insilode/blob/main/CONTRIBUTING.md'))
 	await page.click('.doc-nav a[href$="docs/languages/"]')
 	await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'Languages')
 	assert.match(await page.$eval('.doc-body', b => b.textContent), /Tables and entities/)
@@ -282,7 +285,7 @@ test('the pages can be found: titles, descriptions, canonical addresses and a si
 		})
 		assert.ok(head.title.length <= 60, `"${head.title}" fits a search result`)
 		assert.ok(head.description.length >= 70 && head.description.length <= 160, `the description of /${path} fits a search result (${head.description.length} characters)`)
-		assert.equal(head.canonical, `https://bothuany.github.io/axle/${path}`)
+		assert.equal(head.canonical, `${SITE_URL}/${path}`)
 		assert.equal(head.ogUrl, head.canonical)
 		assert.match(head.csp, /default-src 'none'/)
 		assert.equal(head.h1, 1)
@@ -292,7 +295,7 @@ test('the pages can be found: titles, descriptions, canonical addresses and a si
 	}
 	const sitemap = await (await fetch(new URL('sitemap.xml', url))).text()
 	const pages = ['', 'try/', 'docs/', 'docs/agent-tools/', 'docs/boards/', 'docs/install/', 'docs/languages/']
-	assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1]).sort(), pages.map(p => `https://bothuany.github.io/axle/${p}`).sort())
+	assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1]).sort(), pages.map(p => `${SITE_URL}/${p}`).sort())
 	for (const part of ['canvas.html', 'pages/dock.html', 'pages/island.html']) {
 		assert.match(await (await fetch(new URL(part, url))).text(), /<meta name="robots" content="noindex"/, `${part} asks not to be indexed`)
 	}

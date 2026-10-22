@@ -1,8 +1,8 @@
-# Kept apart from axle.yml: a `generic` rule is tested against its own fixture (webview-csp.txt).
+# Kept apart from insilode.yml: a `generic` rule is tested against its own fixture (webview-csp.txt).
 rules:
-  - id: axle-webview-html-without-csp
+  - id: insilode-webview-html-without-csp
     message: >-
-      This webview page has no Content-Security-Policy. Every Axle webview sets one starting from default-src 'none',
+      This webview page has no Content-Security-Policy. Every Insilode webview sets one starting from default-src 'none',
       so injected markup in the page cannot load anything from outside it.
     severity: ERROR
     languages: [generic]

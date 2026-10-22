@@ -1,5 +1,5 @@
-// Runs Semgrep the same way locally and in CI: the registry rulesets for the languages Axle is written in, plus
-// .semgrep/rules (Axle's own).
+// Runs Semgrep the same way locally and in CI: the registry rulesets for the languages Insilode is written in, plus
+// .semgrep/rules (Insilode's own).
 //   npm run semgrep              findings as text
 //   npm run semgrep -- <args>    extra arguments go to `semgrep scan`
 // ERROR findings fail the run; WARNING findings are printed but do not. Files git does not track yet are scanned too
@@ -13,7 +13,7 @@ import { ROOT, launchSync } from './lib.mjs'
 const IMAGE = 'semgrep/semgrep:1.181.0'
 const CONFIGS = ['p/typescript', 'p/javascript', 'p/react', 'p/nodejs', 'p/csharp', 'p/secrets', 'p/github-actions', '.semgrep/rules']
 
-const out = mkdtempSync(join(tmpdir(), 'axle-semgrep-'))
+const out = mkdtempSync(join(tmpdir(), 'insilode-semgrep-'))
 const local = launchSync('semgrep', ['--version'], { windowsHide: true }).status === 0
 const json = local ? join(out, 'results.json') : '/out/results.json'
 const args = ['scan', '--metrics=off', '--no-git-ignore', `--json-output=${json}`, ...CONFIGS.flatMap(c => ['--config', c]), ...process.argv.slice(2)]

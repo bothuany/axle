@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: a tour file (a hand-written JSON, later a saved tour or a tour from a pull request) turned into the Tour the canvas
+ *  Insilode: a tour file (a hand-written JSON, later a saved tour or a tour from a pull request) turned into the Tour the canvas
  *  plays. A tour file is untrusted input, like any tool call: paths stay inside the workspace, limits are checked, captions
  *  are plain text with control characters stripped, and every field that is not part of the format is dropped (there are
  *  deliberately no commands and no URIs in a tour). Pure: no `vscode`, so it is tested under plain Node and the MCP `tour`
@@ -78,7 +78,7 @@ const STEP_KEYS = ['title', 'caption', 'file', 'method', 'line', 'lines', 'table
 const TOUR_KEYS = ['id', 'title', 'flow', 'steps', 'start'];
 const BASES: readonly string[] = ['uncommitted', 'branch', 'last_commit'];
 
-/** In a tool call a field Axle does not know is a mistake the agent should hear about; in a file it is dropped. */
+/** In a tool call a field Insilode does not know is a mistake the agent should hear about; in a file it is dropped. */
 function noStrangers(what: string, raw: Record<string, unknown>, known: readonly string[], strict: boolean) {
 	const strange = Object.keys(raw).filter(k => !known.includes(k));
 	if (strict && strange.length) {
@@ -204,7 +204,7 @@ function parseSteps(rawSteps: unknown, host: TourFileHost, strict: boolean): { s
 	const notes: (string | undefined)[] = [];
 	rawSteps.forEach((raw, i) => {
 		const { input, given, abs } = cleanStep(raw, i, host, strict);
-		// A step Axle cannot place is shown greyed with its caption, and never points at a wrong card.
+		// A step Insilode cannot place is shown greyed with its caption, and never points at a wrong card.
 		const placed = given && !abs
 			? { step: { title: input.title ?? '', caption: input.caption, state: 'missing' as const, at: { file: '', startLine: input.line ?? 0, endLine: input.line ?? 0, label: input.method || path.basename(given) } }, note: 'the file is outside the workspace' }
 			: placeStep(input, { file: abs, methods: abs ? host.methodsIn?.(abs) : undefined, text: abs ? readText(abs) : undefined, base: abs ? path.basename(abs) : undefined });
@@ -220,8 +220,10 @@ export function parseTourFile(raw: unknown, host: TourFileHost): ParsedTour {
 	if (!isObject(raw)) {
 		throw new TourFileError('A tour file is a JSON object.');
 	}
-	if (raw.axleTour !== 1) {
-		throw new TourFileError(`"axleTour": 1 is missing (this file says ${JSON.stringify(raw.axleTour)}): not a tour file, or one from a newer Axle.`);
+	// Tour files saved before the rename (Axle) carry "axleTour": they are the users' own files, so they keep loading.
+	const format = raw.insilodeTour ?? raw.axleTour;
+	if (format !== 1) {
+		throw new TourFileError(`"insilodeTour": 1 is missing (this file says ${JSON.stringify(format)}): not a tour file, or one from a newer Insilode.`);
 	}
 	const id = plain(raw.id);
 	if (!/^[\w.-]{1,64}$/.test(id)) {
@@ -250,7 +252,7 @@ export function parseTourFile(raw: unknown, host: TourFileHost): ParsedTour {
 	return { tour, flow: parseFlow(raw.flow, host, false), notes };
 }
 
-/** The arguments of the MCP `tour` tool. A field Axle does not know, or a path outside the workspace, is an error naming it. */
+/** The arguments of the MCP `tour` tool. A field Insilode does not know, or a path outside the workspace, is an error naming it. */
 export function parseTourArgs(raw: unknown, host: TourFileHost, origin: string): ParsedTour {
 	if (!isObject(raw)) {
 		throw new TourFileError('The arguments of `tour` are an object.');

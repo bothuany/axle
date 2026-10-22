@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle board: a traced flow kept as a board. Boards used to come only from an agent (draw_board,
+ *  Insilode board: a traced flow kept as a board. Boards used to come only from an agent (draw_board,
  *  plan mode), so without one the feature was empty. "Pin Flow as Board" keeps the flow on the canvas
  *  as a board that stays in the board list and exports to Mermaid: each card a node that still opens
  *  its file and line, each call, HTTP guess and table access an edge. Pure (no vscode).

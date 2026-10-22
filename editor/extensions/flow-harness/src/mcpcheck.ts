@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: "Check" for one MCP server. It does what an agent does at session start, once, on
+ *  Insilode Harness: "Check" for one MCP server. It does what an agent does at session start, once, on
  *  the user's click: starts the server (a stdio process from its own command and argument array, never
  *  through a shell, with no window) or POSTs to its URL, sends `initialize`, `notifications/initialized`
  *  and `tools/list` (following nextCursor), and reports whether that worked, how many tools came back
@@ -22,7 +22,7 @@ import * as path from 'path';
 
 export interface CheckResult {
 	ok: boolean;
-	/** How the answer was got: Axle's own handshake, or an agent's CLI. */
+	/** How the answer was got: Insilode's own handshake, or an agent's CLI. */
 	how: 'handshake' | 'claude mcp get' | 'not run';
 	/** One line for the page. */
 	status: string;
@@ -34,7 +34,7 @@ export interface CheckResult {
 	ms: number;
 	/** An HTTP server that wants a sign-in first (401). */
 	needsAuth?: boolean;
-	/** A Windows .cmd/.bat script: only cmd.exe runs one, and Axle does not start a shell; the caller may ask the agent's CLI instead. */
+	/** A Windows .cmd/.bat script: only cmd.exe runs one, and Insilode does not start a shell; the caller may ask the agent's CLI instead. */
 	needsShell?: boolean;
 	/** The last lines the server wrote to stderr, secrets masked by the caller. */
 	stderr?: string;
@@ -42,7 +42,7 @@ export interface CheckResult {
 }
 
 const PROTOCOL = '2025-06-18';
-const CLIENT = { name: 'axle-harness', version: '0.1.0' };
+const CLIENT = { name: 'insilode-harness', version: '0.1.0' };
 export const DEFAULT_TIMEOUT = 30_000;
 
 /** `${VAR}` and `${VAR:-default}`, as Claude Code expands them in command, args, env, url and headers. */
@@ -119,7 +119,7 @@ export function checkStdio(def: StdioDef, opts: { timeoutMs?: number; env?: Node
 		return Promise.resolve(done({ ok: false, status: `Could not start ${command}: not found on PATH` }));
 	}
 	if (program.script) {
-		return Promise.resolve({ ...done({ ok: false, status: `${path.basename(program.file)} is a script only cmd.exe runs, and Axle does not start a shell` }), how: 'not run', needsShell: true });
+		return Promise.resolve({ ...done({ ok: false, status: `${path.basename(program.file)} is a script only cmd.exe runs, and Insilode does not start a shell` }), how: 'not run', needsShell: true });
 	}
 	return new Promise(resolve => {
 		let child: ChildProcess;

@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle polyglot index: the extension host side. Starts the worker for the open folders, sends
+ *  Insilode polyglot index: the extension host side. Starts the worker for the open folders, sends
  *  it file changes, and serves its answers as a FlowProvider and a list of entry points.
  *--------------------------------------------------------------------------------------------*/
 

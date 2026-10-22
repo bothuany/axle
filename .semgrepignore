@@ -8,7 +8,7 @@ brag-output*/
 editor/branding/
 docs/media/
 
-# Sample projects the analyzers parse in tests: they are deliberately small apps in eight languages, not Axle code.
+# Sample projects the analyzers parse in tests: they are deliberately small apps in eight languages, not Insilode code.
 editor/extensions/flow-view/test/fixtures/
 editor/extensions/flow-view/test/types-fixtures/
 editor/extensions/flow-view/test/expected/

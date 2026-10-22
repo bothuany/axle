@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: just enough TOML for Codex's config.toml. It reads the whole file (tables, dotted
+ *  Insilode Harness: just enough TOML for Codex's config.toml. It reads the whole file (tables, dotted
  *  keys, every string form, arrays and inline tables) and remembers which lines each table and key
  *  sits on, so an MCP server can be changed by rewriting only its own lines: every other key, and
  *  every comment outside that server, stays as the user wrote it. A server written in a form these

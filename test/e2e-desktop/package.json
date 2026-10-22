@@ -1,7 +1,7 @@
 {
-	"name": "axle-e2e-desktop",
+	"name": "insilode-e2e-desktop",
 	"private": true,
-	"description": "Desktop end-to-end tests: Axle's Electron app driven by Playwright, only ever on a CI runner or in Windows Sandbox.",
+	"description": "Desktop end-to-end tests: Insilode's Electron app driven by Playwright, only ever on a CI runner or in Windows Sandbox.",
 	"type": "module",
 	"scripts": {
 		"start": "node run.mjs"

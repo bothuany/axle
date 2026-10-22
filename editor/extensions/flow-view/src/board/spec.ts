@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle board: one diagram format for everything that is drawn on its own canvas rather than
+ *  Insilode board: one diagram format for everything that is drawn on its own canvas rather than
  *  traced from the code: the DTO relations, the architecture (UML) view, and flows or plans an
  *  agent draws. Hosts build a BoardSpec, the canvas renders it. Keep this file identical to
  *  ui/src/board/spec.ts (a test compares them).

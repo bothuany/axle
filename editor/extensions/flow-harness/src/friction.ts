@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the friction inbox. What keeps going wrong between you and your agents, turned
+ *  Insilode Harness: the friction inbox. What keeps going wrong between you and your agents, turned
  *  into a fix you can review: a correction you keep typing ("don't use X", "always run Y", in
  *  English or Turkish) becomes a proposed CLAUDE.md / AGENTS.md line; a tool call that keeps
  *  failing the same way becomes a proposed guard hook. Each proposal carries its evidence: which
@@ -232,7 +232,7 @@ export function failureProposals(failures: readonly FailureRecord[], min = 3): P
 
 /** The guard hook script for a proposal: a PreToolUse hook that stops `prefix` commands and tells the agent why (exit 2). */
 export function guardScript(prefix: string, reason: string): string {
-	return `// PreToolUse (Bash): written by Axle's friction inbox. Stops \`${prefix}\` before it fails the same way again; exit 2 sends the reason back to the agent.
+	return `// PreToolUse (Bash): written by Insilode's friction inbox. Stops \`${prefix}\` before it fails the same way again; exit 2 sends the reason back to the agent.
 let input = ''
 process.stdin.on('data', d => input += d)
 process.stdin.on('end', () => {
@@ -282,8 +282,8 @@ export function appendInstruction(text: string, line: string): string {
 	return `${text}${text.endsWith('\n') ? '' : '\n'}${line}\n`;
 }
 
-/** A file name for a guard script: `axle-guard-npm-test.mjs`. */
-export const guardFileName = (prefix: string) => `axle-guard-${prefix.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'command'}.mjs`;
+/** A file name for a guard script: `insilode-guard-npm-test.mjs`. */
+export const guardFileName = (prefix: string) => `insilode-guard-${prefix.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'command'}.mjs`;
 
 /**
  * Secrets that end up in prompts and commands (a pasted token, `export API_KEY=…`) are blanked before anything is stored,

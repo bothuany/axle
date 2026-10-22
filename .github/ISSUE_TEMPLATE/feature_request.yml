@@ -1,11 +1,11 @@
 name: Feature request
-description: An idea for something Axle should do, or do better.
+description: An idea for something Insilode should do, or do better.
 labels: [enhancement]
 body:
   - type: markdown
     attributes:
       value: |
-        Ideas are welcome. If you are not sure it is a good fit yet, start a conversation in [Discussions](https://github.com/bothuany/axle/discussions/categories/ideas) instead.
+        Ideas are welcome. If you are not sure it is a good fit yet, start a conversation in [Discussions](https://github.com/bothuany/insilode/discussions/categories/ideas) instead.
   - type: textarea
     id: problem
     attributes:

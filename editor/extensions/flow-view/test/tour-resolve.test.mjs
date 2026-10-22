@@ -152,7 +152,7 @@ test('markOffFlow: a placed step no drawn card holds is offflow, one a card hold
 
 // ---- the arguments of the tour tool -------------------------------------------------------------------------------------
 
-const work = resolve(tmpdir(), 'axle-tour-args')
+const work = resolve(tmpdir(), 'insilode-tour-args')
 const host = { roots: [work], readText: () => text, methodsIn: () => methods }
 const args = (extra = {}) => ({ title: 'T', steps: [{ caption: 'one' }], ...extra })
 const parse = (raw, h = host) => v.parseTourArgs(raw, h, 'Agent tour')

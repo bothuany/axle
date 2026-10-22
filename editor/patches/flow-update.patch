@@ -6,8 +6,8 @@ index 0767bb78..d3153534 100644
  
  	readonly downloadUrl?: string;
  	readonly updateUrl?: string;
-+	/** Axle's own version, which the update check compares with the release's (`version` is VS Code's). */
-+	readonly axleVersion?: string;
++	/** Insilode's own version, which the update check compares with the release's (`version` is VS Code's). */
++	readonly insilodeVersion?: string;
  	readonly webUrl?: string;
  	readonly webEndpointUrlTemplate?: string;
  	readonly webviewContentExternalBaseUrlTemplate?: string;
@@ -20,7 +20,7 @@ index 2749d7be..1bda736c 100644
  import { ITelemetryService } from '../../telemetry/common/telemetry.js';
  import { AvailableForDownload, DisablementReason, IUpdate, IUpdateService, State, StateType, UpdateType } from '../common/update.js';
 +import { asJson, IRequestContext } from '../../request/common/request.js';
-+import { createAxleUpdateURL, parseAxleUpdate, resolveAxleUpdateBaseUrl } from './axleUpdate.js';
++import { createInsilodeUpdateURL, parseInsilodeUpdate, resolveInsilodeUpdateBaseUrl } from './insilodeUpdate.js';
  
  const LAST_KNOWN_VERSION_STORAGE_KEY = 'abstractUpdateService/lastKnownVersion';
  
@@ -39,11 +39,11 @@ index 2749d7be..1bda736c 100644
 -
 -	return url.toString();
 +/**
-+ * Axle: the update file of a platform on the release (see axleUpdate.ts). The commit and the options of VS Code's
++ * Insilode: the update file of a platform on the release (see insilodeUpdate.ts). The commit and the options of VS Code's
 + * update server API are not part of it: the file is static and the client decides whether it is newer.
 + */
 +export function createUpdateURL(baseUpdateUrl: string, platform: string, quality: string, _commit?: string, _options?: IUpdateURLOptions): string {
-+	return new URL(createAxleUpdateURL(resolveAxleUpdateBaseUrl(baseUpdateUrl, process.env['AXLE_UPDATE_URL']), platform, quality)).toString();
++	return new URL(createInsilodeUpdateURL(resolveInsilodeUpdateBaseUrl(baseUpdateUrl, process.env['INSILODE_UPDATE_URL']), platform, quality)).toString();
  }
  
  /**
@@ -66,27 +66,27 @@ index 2749d7be..1bda736c 100644
  		return UpdateType.Archive;
  	}
  
-+	/** The version Axle compares with the update file: the app's own `version` is VS Code's, so the build stamps Axle's. */
++	/** The version Insilode compares with the update file: the app's own `version` is VS Code's, so the build stamps Insilode's. */
 +	protected get currentProductVersion(): string {
-+		return this.productService.axleVersion ?? this.productService.version;
++		return this.productService.insilodeVersion ?? this.productService.version;
 +	}
 +
 +	/** The update the file describes, or `null` when it is not newer than this app. */
 +	protected async readUpdate(context: IRequestContext): Promise<IUpdate | null> {
-+		return parseAxleUpdate(await asJson<unknown>(context), this.currentProductVersion);
++		return parseInsilodeUpdate(await asJson<unknown>(context), this.currentProductVersion);
 +	}
 +
  	protected doQuitAndInstall(): void {
  		// noop
  	}
-diff --git a/src/vs/platform/update/electron-main/axleUpdate.ts b/src/vs/platform/update/electron-main/axleUpdate.ts
+diff --git a/src/vs/platform/update/electron-main/insilodeUpdate.ts b/src/vs/platform/update/electron-main/insilodeUpdate.ts
 new file mode 100644
 index 00000000..a337ecdb
 --- /dev/null
-+++ b/src/vs/platform/update/electron-main/axleUpdate.ts
++++ b/src/vs/platform/update/electron-main/insilodeUpdate.ts
 @@ -0,0 +1,105 @@
 +/*---------------------------------------------------------------------------------------------
-+ *  Axle: updates from static JSON files on a GitHub release, instead of Microsoft's update server.
++ *  Insilode: updates from static JSON files on a GitHub release, instead of Microsoft's update server.
 + *--------------------------------------------------------------------------------------------*/
 +
 +import type { IUpdate } from '../common/update.js';
@@ -95,7 +95,7 @@ index 00000000..a337ecdb
 + * The file that describes the newest release for one platform: `<updateUrl>/update-<platform>-<quality>.json`.
 + * With the product's updateUrl on `releases/latest/download`, GitHub redirects it to the newest release's assets.
 + */
-+export function createAxleUpdateURL(baseUpdateUrl: string, platform: string, quality: string): string {
++export function createInsilodeUpdateURL(baseUpdateUrl: string, platform: string, quality: string): string {
 +	return `${baseUpdateUrl.replace(/\/+$/, '')}/update-${platform}-${quality}.json`;
 +}
 +
@@ -103,7 +103,7 @@ index 00000000..a337ecdb
 + * The environment may point the updater at another folder of update files (a local server, to test an update). Only
 + * https, or http on this machine, is accepted: anything else keeps the product's own URL.
 + */
-+export function resolveAxleUpdateBaseUrl(productUpdateUrl: string, override: string | undefined): string {
++export function resolveInsilodeUpdateBaseUrl(productUpdateUrl: string, override: string | undefined): string {
 +	if (override) {
 +		try {
 +			const url = new URL(override);
@@ -179,7 +179,7 @@ index 00000000..a337ecdb
 + * What the update file says, as an update, or `null` when there is nothing to install: no file content, a missing
 + * field, a version that is not newer than this one (the static file has no 204 to say so) or one that is not a version.
 + */
-+export function parseAxleUpdate(raw: unknown, currentVersion: string): IUpdate | null {
++export function parseInsilodeUpdate(raw: unknown, currentVersion: string): IUpdate | null {
 +	if (!raw || typeof raw !== 'object') {
 +		return null;
 +	}
@@ -319,7 +319,7 @@ index 06092f10..62110f30 100644
  
  const RELAUNCH_ARGUMENTS_FILE_PREFIX = 'relaunch-args-';
  
-+// Axle never updates in the background: that mode stages the new build next to the old one and lets inno_updater swap
++// Insilode never updates in the background: that mode stages the new build next to the old one and lets inno_updater swap
 +// them, which only works in the versioned install layout, and that needs a custom Electron build (an Electron from
 +// electronjs.org cannot start from it). Without it the update is installed when the app restarts (Restart to Update).
  export class Win32UpdateService extends AbstractUpdateService implements IRelaunchHandler {
@@ -330,7 +330,7 @@ index 06092f10..62110f30 100644
  
  	private get cachePathSync(): string {
 -		return path.join(tmpdir(), `vscode-${this.productService.quality}-${this.productService.target}-${process.arch}`);
-+		return path.join(tmpdir(), `axle-${this.productService.quality}-${this.productService.target}-${process.arch}`);
++		return path.join(tmpdir(), `insilode-${this.productService.quality}-${this.productService.target}-${process.arch}`);
  	}
  
  	@memoize
@@ -388,7 +388,7 @@ index f00f77df..bb81c19d 100644
  			title: localize('enableWindowsBackgroundUpdatesTitle', "Enable Background Updates"),
  			description: localize('enableWindowsBackgroundUpdates', "Enable to download and install new VS Code versions in the background."),
 -			included: isWindows && !isWeb
-+			included: false // Axle: the Windows update is installed when the app restarts (see updateService.win32.ts)
++			included: false // Insilode: the Windows update is installed when the app restarts (see updateService.win32.ts)
  		},
  		'update.showReleaseNotes': {
  			type: 'boolean',

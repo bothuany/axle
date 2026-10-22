@@ -1,8 +1,8 @@
-/* The theme of the real Axle (Axle's default dark theme from flow-theme, with VS Code's defaults for what the theme leaves out),
-   captured from a running Axle 0.3.1 in web mode: every --vscode-* variable its workbench defines that the playground uses.
+/* The theme of the real Insilode (Insilode's default dark theme from flow-theme, with VS Code's defaults for what the theme leaves out),
+   captured from a running Insilode 0.3.1 in web mode: every --vscode-* variable its workbench defines that the playground uses.
    The playground's own pages and the dock and notch pages read these, so the colours are the product's, not copies of them.
    To capture again: run `npm run web`, open the console and print the workbench's computed --vscode-* variables
-   (see playground/README.md). Axle's own colours are in editor/extensions/flow-theme/themes. */
+   (see playground/README.md). Insilode's own colours are in editor/extensions/flow-theme/themes. */
 :root {
   --vscode-activeSessionView-background: #0c0c0c;
   --vscode-activeSessionView-foreground: #b8b8b8;

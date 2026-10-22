@@ -1,10 +1,12 @@
-# Axle Contributor License Agreement
+# Insilode Contributor License Agreement
 
-Thank you for contributing to Axle. This agreement makes clear what rights you give the project when you contribute, so that Axle can keep being maintained, and its licence changed later if that is ever needed, without asking every contributor again.
+Thank you for contributing to Insilode. This agreement makes clear what rights you give the project when you contribute, so that Insilode can keep being maintained, and its licence changed later if that is ever needed, without asking every contributor again.
+
+This project was called Axle until 0.4.x. A signature given while it was called Axle covers your Contributions to Insilode in the same way: the project is the same, only the name changed.
 
 By signing (commenting the sentence the CLA bot asks for on your pull request), you agree to the following for every contribution you submit to this repository, now or later.
 
-1. **Definitions.** "You" means the person signing. "Maintainer" means Recep Batuhan Dikmen, the owner of the Axle project, and anyone the project is later transferred to. A "Contribution" is any code, documentation or other material you submit to the project, for example in a pull request, an issue or a patch.
+1. **Definitions.** "You" means the person signing. "Maintainer" means Recep Batuhan Dikmen, the owner of the Insilode project, and anyone the project is later transferred to. A "Contribution" is any code, documentation or other material you submit to the project, for example in a pull request, an issue or a patch.
 
 2. **You keep your copyright.** You still own your Contribution. Nothing here transfers ownership.
 

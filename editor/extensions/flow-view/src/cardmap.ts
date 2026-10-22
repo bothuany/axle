@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: pure position helpers between a card's text (what the canvas editor shows) and the real
+ *  Insilode: pure position helpers between a card's text (what the canvas editor shows) and the real
  *  document. No `vscode` import, so they can be tested on their own.
  *
  *  A card holds whole lines of a file, from `startLine` (1-based, the file's line number of the card's

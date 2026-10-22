@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle agent bridge: the HTTP hop between the `axle` MCP server (a separate process) and the Axle
+ *  Insilode agent bridge: the HTTP hop between the `insilode` MCP server (a separate process) and the Insilode
  *  window. The window listens on 127.0.0.1 only, on a random port, and answers requests that carry
  *  its token; like the analyzer, it refuses anything with an Origin header (a web page cannot reach
  *  it) and a Host that is not itself (DNS rebinding). Pure Node: no `vscode`.
@@ -11,7 +11,7 @@ import type { AddressInfo } from 'net';
 import type { BridgeInfo } from './registry';
 import type { ToolResult } from './protocol';
 
-export const TOKEN_HEADER = 'x-axle-token';
+export const TOKEN_HEADER = 'x-insilode-token';
 const MAX_BODY = 4 * 1024 * 1024;
 
 /** Constant-time comparison; false for anything that is not a string of the same length. */
@@ -28,7 +28,7 @@ export interface Caller {
 
 export type Handler = (tool: string, args: Record<string, unknown>, caller: Caller) => Promise<ToolResult>;
 
-export const SESSION_HEADER = 'x-axle-session';
+export const SESSION_HEADER = 'x-insilode-session';
 const SESSION = /^[A-Za-z0-9_-]{1,64}$/;
 
 export interface BridgeServer {
@@ -137,20 +137,20 @@ export function callBridge(info: Pick<BridgeInfo, 'port' | 'token'>, tool: strin
 			res.on('data', d => body += d);
 			res.on('end', () => {
 				if (res.statusCode === 401 || res.statusCode === 403) {
-					return reject(new Unreachable('the Axle window refused the request (it was restarted?)'));
+					return reject(new Unreachable('the Insilode window refused the request (it was restarted?)'));
 				}
 				try {
 					const result = JSON.parse(body) as ToolResult;
 					if (res.statusCode !== 200 || !Array.isArray(result?.content)) {
-						return reject(new Error(`the Axle window answered ${res.statusCode}`));
+						return reject(new Error(`the Insilode window answered ${res.statusCode}`));
 					}
 					resolve(result);
 				} catch {
-					reject(new Error(`the Axle window sent something unreadable (${res.statusCode})`));
+					reject(new Error(`the Insilode window sent something unreadable (${res.statusCode})`));
 				}
 			});
 		});
-		req.on('timeout', () => req.destroy(new Error(`the Axle window did not answer within ${Math.round(timeoutMs / 1000)}s`)));
+		req.on('timeout', () => req.destroy(new Error(`the Insilode window did not answer within ${Math.round(timeoutMs / 1000)}s`)));
 		req.on('error', e => reject((e as NodeJS.ErrnoException).code === 'ECONNREFUSED' || (e as NodeJS.ErrnoException).code === 'ECONNRESET' ? new Unreachable(e.message) : e));
 		req.end(payload);
 	});

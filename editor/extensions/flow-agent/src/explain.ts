@@ -1,7 +1,7 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the prompt behind the dock's "Explain this" button. The author explains its own change, so the prompt goes to that same
+ *  Insilode: the prompt behind the dock's "Explain this" button. The author explains its own change, so the prompt goes to that same
  *  session, and it says what the turn touched (the methods, the tables, the flows, taken from the turn-end impact) so the agent
- *  does not have to work that out again. It asks for a tour on the change set, through the `axle` MCP server's `tour` tool.
+ *  does not have to work that out again. It asks for a tour on the change set, through the `insilode` MCP server's `tour` tool.
  *  Pure (no vscode): tested on its own (test/explain.test.mjs); agents.ts types it into the session.
  *--------------------------------------------------------------------------------------------*/
 
@@ -41,10 +41,10 @@ export function explainPrompt(files: readonly string[], impact: ExplainImpact | 
 	const tables = impact?.tables ?? [];
 	const flows = (impact?.flows ?? []).slice(0, MAX_FLOWS);
 	const lines = [
-		'Explain the change you just made as a tour, so I can follow it on the Axle canvas.',
-		'Call the axle tool `tour` with flow {"changes": true}: one step per changed method, in the order a request runs through them (the entry first), a `table` step for each changed table, and captions that say why it changed and what could break, in the language I am writing to you in.',
+		'Explain the change you just made as a tour, so I can follow it on the Insilode canvas.',
+		'Call the insilode tool `tour` with flow {"changes": true}: one step per changed method, in the order a request runs through them (the entry first), a `table` step for each changed table, and captions that say why it changed and what could break, in the language I am writing to you in.',
 		'End with a caption-only step on the risks and what you did not test.',
-		'If you cannot call mcp__axle__tour, explain it in text instead.',
+		'If you cannot call mcp__insilode__tour, explain it in text instead.',
 	];
 	if (methods.length || tables.length) {
 		const m = methods.map(x => `${x.name} (${shown(x.file, root)})`).join(', ');

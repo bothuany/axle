@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle type model: what a type is for. Roles (controller, handler, service, repository,
+ *  Insilode type model: what a type is for. Roles (controller, handler, service, repository,
  *  entity, dto, interface, enum, class) and the DTO heuristic, written down in one place so it
  *  can be read, configured and tested: name suffixes, data-only shapes (records, dataclasses,
  *  Pydantic models, structs with only fields), and the types an endpoint takes or returns.

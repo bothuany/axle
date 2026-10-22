@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle type model: the shapes the two sources send. `GET /api/types` of the C# analyzer
+ *  Insilode type model: the shapes the two sources send. `GET /api/types` of the C# analyzer
  *  (analyzer/Types.cs writes exactly these names) and the code index's `typeFacts` (poly/graph.ts).
  *  Types only: both ends import them, nothing runs here.
  *--------------------------------------------------------------------------------------------*/

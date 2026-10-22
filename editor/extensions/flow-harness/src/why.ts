@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle Harness: the "Why?" view. For one file (the active editor, or one you pick): which
+ *  Insilode Harness: the "Why?" view. For one file (the active editor, or one you pick): which
  *  instructions and path-scoped rules an agent working on it reads, which value of each setting
  *  wins and what it overrides, and a permission simulator that says what Claude Code (or Codex)
  *  would do with a tool call, and which rule decided.

@@ -1,6 +1,6 @@
 # The website
 
-https://bothuany.github.io/axle/: the home page and the Try page, with the real canvas on a fictional demo project (`demo/`: orders and shipping in Java, billing in Python). A static site: no backend, and the only third-party request is GitHub's public API (the star count and the latest release). The design and its reasoning are in [docs/site/direction](../docs/site/direction/README.md) (direction A, "Light table").
+https://insilode.dev/: the home page and the Try page, with the real canvas on a fictional demo project (`demo/`: orders and shipping in Java, billing in Python). A static site: no backend, and the only third-party request is GitHub's public API (the star count and the latest release). The design and its reasoning are in [docs/site/direction](../docs/site/direction/README.md) (direction A, "Light table").
 
 ## The pages
 
@@ -9,7 +9,7 @@ https://bothuany.github.io/axle/: the home page and the Try page, with the real 
 - **Docs** (`docs/`, `src/docs.ts`): the repository's own Markdown as pages of the site: `README.md` (from its first section) and `docs/building.md`, `languages.md`, `agent-tools.md` and `boards.md`. `scripts/docs-pages.mjs` writes them before every build and dev start (generated, not committed); links between these documents stay on the site, links to any other file go to it on GitHub.
 - **canvas.html**: the iframe page both use. It imports `ui/` after `src/host.ts` has set the globals the webview reads.
 
-## What is Axle's own, and what is not
+## What is Insilode's own, and what is not
 
 | Part | Where it comes from |
 | --- | --- |
@@ -32,7 +32,16 @@ https://bothuany.github.io/axle/: the home page and the Try page, with the real 
 
 ## Being found
 
-Each page sets its title, description, canonical address, Open Graph tags and a Content-Security-Policy; the home page adds `SoftwareApplication` JSON-LD and the `google-site-verification` tag. `{{site}}` comes from `SITE_URL` (default `https://bothuany.github.io/axle`). The build emits `sitemap.xml` with both pages. The framed pages (`canvas.html`, `pages/dock.html`, `pages/island.html`) carry `noindex`. There is no `robots.txt`: on a project site it would have to sit at the domain's root.
+Each page sets its title, description, canonical address, Open Graph tags and a Content-Security-Policy; the home page adds `SoftwareApplication` JSON-LD and the `google-site-verification` tag. `{{site}}` comes from `SITE_URL` (default `https://insilode.dev`). The build emits `sitemap.xml` with both pages. The framed pages (`canvas.html`, `pages/dock.html`, `pages/island.html`) carry `noindex`. There is no `robots.txt`: on a project site it would have to sit at the domain's root.
+
+## The domain (insilode.dev)
+
+The site is served from the root of https://insilode.dev through GitHub Pages with a custom domain. The build writes `CNAME` (the host of `SITE_URL`) into `dist/`, so a deploy never drops the domain, and every URL in the pages is relative, so the site also works under a sub-path. Owner's steps (nothing in the repository does them):
+1. DNS at the registrar: the apex `insilode.dev` points at GitHub Pages (four `A` records, optionally the `AAAA` ones; see GitHub's "Managing a custom domain for your GitHub Pages site"). Verify the domain in GitHub (Settings, Pages) first, so nobody else can claim it.
+2. Settings, Pages: custom domain `insilode.dev`, then Enforce HTTPS once the certificate is issued.
+3. The old address `https://bothuany.github.io/axle/` is redirected to the domain by GitHub once the custom domain is set, and the repository `bothuany/axle` redirects to `bothuany/insilode` (never create a repository of the old name again: installed 0.4.x apps rely on that redirect).
+
+To serve a fork or a preview from elsewhere set `SITE_URL` (the repository variable of the same name in the workflow, or the environment variable locally): `{{site}}` and the sitemap follow it, and `CNAME` is written only for hosts that are not `*.github.io`.
 
 ## Run it
 
@@ -44,15 +53,15 @@ node scripts/site-data.mjs              # public/data and public/pages
 cd site && npm ci
 npm run typecheck && npm run build
 npm run test:e2e                        # headless Chrome (CHROME_PATH if it is not found)
-npm run preview                         # http://127.0.0.1:4173/axle/
+npm run preview                         # http://127.0.0.1:4173/insilode/
 node scripts/capture-media.mjs          # with the preview running: the stills in public/media/
 ```
 
-`npm run dev` serves it with hot reload (at `/`, not `/axle/`). In Git Bash on Windows `/axle/` in the preview script is rewritten to a path: run it from PowerShell or set `MSYS_NO_PATHCONV=1`.
+`npm run dev` serves it with hot reload (at `/`, not `/insilode/`). In Git Bash on Windows `/insilode/` in the preview script is rewritten to a path: run it from PowerShell or set `MSYS_NO_PATHCONV=1`.
 
 ## Capturing the theme again
 
-`src/theme/vscode-theme.css` was captured from Axle 0.3.1. To refresh it after a theme change, run `npm run web`, open the workbench and run this in the browser console, then keep the `--vscode-*` entries the file already has:
+`src/theme/vscode-theme.css` was captured from Insilode 0.3.1. To refresh it after a theme change, run `npm run web`, open the workbench and run this in the browser console, then keep the `--vscode-*` entries the file already has:
 
 ```js
 const cs = getComputedStyle(document.querySelector('.monaco-workbench'))

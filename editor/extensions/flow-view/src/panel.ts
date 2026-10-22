@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: the canvas (custom-ide/ui, webview build) in one reusable editor tab. The webview never
+ *  Insilode: the canvas (custom-ide/ui, webview build) in one reusable editor tab. The webview never
  *  talks to a backend itself: it asks this host, which routes to the provider for the target.
  *--------------------------------------------------------------------------------------------*/
 
@@ -160,7 +160,7 @@ export class FlowPanel implements vscode.Disposable {
 				this.postRecentGaze();
 				this.listening.splice(0).forEach(done => done());
 			}
-			this.onMessage(m).catch(e => vscode.window.showErrorMessage(`Axle: ${(e as Error).message ?? e}`));
+			this.onMessage(m).catch(e => vscode.window.showErrorMessage(`Insilode: ${(e as Error).message ?? e}`));
 		});
 		this.panel = panel;
 	}
@@ -591,7 +591,7 @@ export class FlowPanel implements vscode.Disposable {
 	}
 
 	/**
-	 * Everything inline: in the Axle shell (WKWebView) webviews run without a service worker, so they
+	 * Everything inline: in the Insilode shell (WKWebView) webviews run without a service worker, so they
 	 * cannot load side files. The canvas is built as one JS + one CSS file for exactly this.
 	 */
 	private async html(webview: vscode.Webview, target: FlowTarget, label: string) {

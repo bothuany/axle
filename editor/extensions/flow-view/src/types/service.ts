@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle type model: which module (microservice) a source file belongs to: the nearest folder
+ *  Insilode type model: which module (microservice) a source file belongs to: the nearest folder
  *  with a build manifest, else the workspace folder. The only place the type model reads the
  *  disk, so everything else stays a pure function.
  *--------------------------------------------------------------------------------------------*/

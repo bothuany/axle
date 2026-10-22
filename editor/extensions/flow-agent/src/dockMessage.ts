@@ -1,5 +1,5 @@
 /*---------------------------------------------------------------------------------------------
- *  Axle: what the Agents dock page may ask the host for. The page is not trusted: each message is
+ *  Insilode: what the Agents dock page may ask the host for. The page is not trusted: each message is
  *  checked here for its type and the shape of every field, and only then becomes one of these
  *  actions; anything else is dropped. Pure (no vscode), so the routing is tested on its own
  *  (test/dockMessage.test.mjs); dock.ts carries the actions out.
