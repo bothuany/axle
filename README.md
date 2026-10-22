@@ -27,8 +27,7 @@ Insilode is a fork of VS Code (Code - OSS, the open-source core of VS Code), so 
 
 - **Extensions** install from [Open VSX](https://open-vsx.org/), the open registry VS Code forks use. A few of Microsoft's own extensions (Pylance, C# Dev Kit, the Remote - SSH / WSL / Dev Containers family, GitHub Copilot) are licensed for Microsoft's builds only and are not there; open alternatives are.
 - **Themes, keybindings and settings** work the same: the same commands, shortcuts and `settings.json`.
-- **Bring your setup:** in VS Code, run **Profiles: Export Profile…** to save your settings, keybindings, snippets and extension list to a file; in Insilode, choose **Import Profile…** in **Preferences: Open Profiles (UI)**.
-<!-- TODO(import-from-vscode): the one-click "Import from VS Code" is in PR #28, not released. When it ships, replace the line above with: "Import your settings, keybindings, snippets and theme from VS Code or Cursor; extensions available on Open VSX are installed, the rest are listed." Never "all your extensions". Same in site/index.html and docs/design/messaging.md. -->
+- **Import from VS Code:** on first launch, or with **Insilode: Import from VS Code…**, import your settings, keybindings, snippets and theme from VS Code or Cursor; extensions available on Open VSX are installed, the rest are listed. Your Insilode settings are backed up first. [How it works →](docs/import-from-vscode.md)
 
 ## See how your code runs
 

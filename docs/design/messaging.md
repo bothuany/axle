@@ -33,9 +33,7 @@ Every marketing visual is dark: the website (dark by default, and the only theme
 
 1. **Your extensions**, from Open VSX, the open extension registry VS Code forks use.
 2. **Your themes, keybindings and settings**: the same commands, shortcuts and `settings.json`.
-3. **Your profile**: export it in VS Code with **Profiles: Export Profile…**, import it in Insilode with **Import Profile…** in **Preferences: Open Profiles (UI)**.
-
-<!-- TODO(import-from-vscode): the one-click "Import from VS Code" is in PR #28, not released. When it ships, claim 3 becomes: "Import your settings, keybindings, snippets and theme from VS Code or Cursor; extensions available on Open VSX are installed, the rest are listed." -->
+3. **Import from VS Code** (from 0.5.1): Import your settings, keybindings, snippets and theme from VS Code or Cursor; extensions available on Open VSX are installed, the rest are listed. Never "all your extensions".
 
 Never say "all your extensions": only the ones on Open VSX install.
 
