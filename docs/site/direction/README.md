@@ -66,8 +66,8 @@ Diff green and red appear only inside the canvas, where they mean added and remo
 
 **Type**
 
-- Archivo, one variable family on two widths: headlines at width 125 and weight 650 (wide, like engraved lettering on a part),
-  body at width 100 and weight 400. Scale 16 / 20 / 28 / 44 / 72 (ratio about 1.6 at display sizes), body 17px on 1.55.
+- Instrument Sans (since 2026-10-22, replacing Archivo; see docs/design/messaging.md): headlines at weight 650 with slightly tight
+  tracking, body at weight 400. Scale 16 / 20 / 28 / 44 / 72 (ratio about 1.6 at display sizes), body 17px on 1.55.
 - JetBrains Mono only where the page shows code or a command (file names, `npm run web`). Never for labels.
 - Sentence case everywhere; no eyebrows above headlines.
 

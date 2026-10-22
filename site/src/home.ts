@@ -1,20 +1,24 @@
-// The home page: the download buttons, the live canvas in the hero, the problem sections' clips and the harness scan.
+// The home page: the download buttons, the hero loop, the live canvas, the problem sections' clips and the harness scan.
 import './site.css'
 import type { DemoData } from './demo'
 import { mountClips, mountHarness } from './clips'
 import { wireDownloads } from './download'
 import { Stage } from './stage'
+import { mountLoop } from './loop'
+import { mountFilm } from './film'
 
 wireDownloads()
 mountClips()
+mountLoop(document.querySelector<HTMLVideoElement>('[data-loop]'))
+mountFilm(document.querySelector<HTMLElement>('[data-film-open]'), document.querySelector<HTMLDialogElement>('[data-film]'))
 
 let data: Promise<DemoData> | undefined
 const demo = () => (data ??= fetch('./data/demo.json').then(r => r.json() as Promise<DemoData>))
 
-// The hero: the canvas loads once the page is idle on a wide screen, where it shows at once; on a phone only when asked, full screen.
+// The live canvas: it loads once the page is idle on a wide screen, zoomed so the flow fills it; on a phone only when asked, full screen.
 const root = document.querySelector<HTMLElement>('[data-stage]')!
 const narrow = matchMedia('(max-width: 760px)')
-const stage = new Stage(root, { src: './canvas.html', wheel: 'page', tabbable: false })
+const stage = new Stage(root, { src: './canvas.html', wheel: 'page', tabbable: false, fill: true })
 if (!narrow.matches) stage.loadWhenIdle()
 
 root.querySelector('[data-play]')?.addEventListener('click', async e => {

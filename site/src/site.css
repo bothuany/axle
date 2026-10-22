@@ -3,13 +3,23 @@
    Dark is the only theme: every marketing visual is dark (docs/design/messaging.md). Contrast on the page: --ink 16:1, --ink-2 8.8:1,
    --link 8.5:1, white on the --signal button 6.4:1 (WCAG AA wants 4.5:1 for body text). */
 
+/* Type: Instrument Sans for headings and text, JetBrains Mono for code-ish accents (both OFL-1.1, self-hosted from Fontsource; the
+   rule is in docs/design/messaging.md). Latin only: the page is in English. */
 @font-face {
-  font-family: Archivo;
+  font-family: 'Instrument Sans';
   font-style: normal;
   font-display: swap;
-  font-weight: 100 900;
-  font-stretch: 62% 125%;
-  src: url('@fontsource-variable/archivo/files/archivo-latin-standard-normal.woff2') format('woff2-variations');
+  font-weight: 400 700;
+  src: url('@fontsource-variable/instrument-sans/files/instrument-sans-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
@@ -36,8 +46,9 @@
   --max: 1360px;
   --radius: 10px;
 
-  --display: 650 1rem/1.04 Archivo, system-ui, sans-serif;
-  --mono: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
+  --sans: 'Instrument Sans', system-ui, sans-serif;
+  --display: 650 1rem/1.04 var(--sans);
+  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, Consolas, monospace;
   color-scheme: dark;
 }
 
@@ -56,7 +67,7 @@ body {
   margin: 0;
   background: var(--film);
   color: var(--ink);
-  font: 400 17px/1.55 Archivo, system-ui, sans-serif;
+  font: 400 17px/1.55 var(--sans);
 }
 
 body.is-locked {
@@ -121,7 +132,6 @@ code {
   color: var(--ink);
   text-decoration: none;
   font-weight: 650;
-  font-stretch: 125%;
   font-size: 20px;
 }
 
@@ -251,27 +261,35 @@ h1,
 h2,
 h3 {
   font: var(--display);
-  font-stretch: 125%;
   margin: 0;
 }
 
 h1 {
   font-size: clamp(44px, 6vw, 80px);
   line-height: 1.02;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.012em;
   max-width: 11ch;
 }
 
 h2 {
   font-size: clamp(30px, 3.4vw, 46px);
   line-height: 1.08;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.008em;
   max-width: 18ch;
 }
 
 h3 {
   font-size: 20px;
   line-height: 1.25;
+}
+
+/* No word left alone on the last line of a heading or a short paragraph. */
+h2,
+h3,
+.lede,
+.prose p,
+figcaption {
+  text-wrap: pretty;
 }
 
 .lede {
@@ -314,7 +332,7 @@ h3 {
   padding: 0 24px;
   border-radius: var(--radius);
   border: 0;
-  font: 600 17px/1 Archivo, system-ui, sans-serif;
+  font: 600 17px/1 var(--sans);
   text-decoration: none;
   cursor: pointer;
 }
@@ -364,29 +382,36 @@ h3 {
 }
 
 /* The headline names the category ("code editor"), so it runs longer than the old one: a wider measure keeps it to three lines. */
+/* The slogan: two sentences, each from a new line, wrapped evenly so no word is left alone on a line. The product's name is in the
+   light accent blue (8.5:1 on the page). */
 .hero h1 {
-  max-width: 16ch;
-  font-size: clamp(40px, 5.4vw, 74px);
+  max-width: none;
+  font-size: clamp(36px, 4.5vw, 64px);
+  line-height: 1.04;
+  letter-spacing: -0.012em;
+}
+
+.hero h1 > span {
+  display: block;
+  text-wrap: balance;
+}
+
+.hero h1 .accent {
+  color: var(--link);
+  font-weight: inherit;
+  white-space: nowrap;
 }
 
 .hero .lede {
   max-width: 46ch;
 }
 
-/* The editor window: a capture of the real workbench, the first thing that says "this is an editor". It is a link to the live demo. */
+/* The editor window: a silent loop captured from the real workbench, the first thing that says "this is an editor". It is wider than
+   the text column (it takes the gutter too, over the trace), so the editor's text is shown near its own size. A link to the demo. */
 .shot {
   position: relative;
-  margin: 56px 0 0;
-}
-
-.shot::before {
-  content: '';
-  position: absolute;
-  left: calc(-1 * var(--gutter) + 23px);
-  top: 64px;
-  width: calc(var(--gutter) - 23px);
-  height: 2px;
-  background: var(--signal);
+  z-index: 1;
+  margin: 48px 0 0 calc(-1 * var(--gutter) + 8px);
 }
 
 .shot-window {
@@ -400,10 +425,32 @@ h3 {
   transition: box-shadow 200ms, transform 200ms;
 }
 
-.shot-window img {
+.shot-video {
   display: block;
   width: 100%;
   height: auto;
+  aspect-ratio: 1920 / 1200;
+  background: #1f1f1f;
+}
+
+/* Works with: the agents, named in a row under the window. Plain names, not logos: the marks belong to their owners. */
+.works {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 28px;
+  margin: 28px 0 0;
+  padding: 0;
+  list-style: none;
+  font: 600 18px/1.2 var(--sans);
+  color: var(--ink);
+}
+
+.works .works-label {
+  font: 500 13px/1 var(--mono);
+  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .shot-window:hover {
@@ -438,6 +485,124 @@ h3 {
 
 .shot-window:hover .shot-cta .arrow {
   transform: translateX(3px);
+}
+
+/* Watch the film: a quiet third action beside the two buttons, and the modal player it opens. */
+.film-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: 600 17px/1 var(--sans);
+  cursor: pointer;
+}
+
+.film-open svg {
+  width: 30px;
+  height: 30px;
+  padding: 9px 8px 9px 10px;
+  border-radius: 50%;
+  background: var(--film-2);
+  box-shadow: 0 0 0 1px var(--rule);
+  fill: var(--link);
+}
+
+.film-open .film-length {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.film-open:hover svg {
+  background: var(--signal);
+  fill: #fff;
+}
+
+.film {
+  width: min(1200px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--window-edge), 0 40px 120px rgba(0, 0, 0, 0.7);
+  overflow: auto;
+}
+
+.film::backdrop {
+  background: rgba(4, 6, 14, 0.82);
+}
+
+.film-box {
+  padding: 14px 16px 16px;
+}
+
+.film-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.film-head h2 {
+  font-size: 20px;
+  max-width: none;
+}
+
+.film-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--film-2);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.film-close svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.film-close:hover {
+  background: var(--signal);
+}
+
+.film-video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: #000;
+}
+
+.film-transcript {
+  margin: 12px 0 0;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.film-transcript summary {
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.film-transcript p {
+  margin: 8px 0 0;
+  max-width: 80ch;
 }
 
 /* ---- built on VS Code --------------------------------------------------------------------------------------------------------- */
@@ -524,6 +689,11 @@ h3 {
 
 .adds {
   padding: 136px 0 0;
+}
+
+/* The POST /orders flow is wide and low: a wider frame than the Try page's, so the cards fill it instead of empty canvas. */
+.adds .stage {
+  aspect-ratio: 16 / 7.4;
 }
 
 .stage-wrap {
@@ -641,7 +811,7 @@ h3 {
 
 .problem {
   display: grid;
-  grid-template-columns: 5fr 7fr;
+  grid-template-columns: 4fr 8fr;
   gap: 56px;
   padding: 136px 0 0;
   align-items: start;
@@ -700,12 +870,7 @@ figcaption {
 }
 
 .hx-score b {
-  /* Longhands: the minifier folds a percentage font-stretch into the shorthand, which browsers then reject. */
-  font-family: Archivo, sans-serif;
-  font-size: 34px;
-  font-weight: 650;
-  line-height: 1;
-  font-stretch: 125%;
+  font: 650 34px/1 var(--sans);
 }
 
 .hx-score span {
@@ -774,25 +939,11 @@ figcaption {
   padding: 136px 0 0;
 }
 
-.with-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 40px;
-  margin: 40px 0 0;
-  padding: 32px 0 0;
-  border-top: 2px solid var(--ink);
-}
-
-.with-grid p {
-  margin: 10px 0 0;
-  color: var(--ink-2);
-}
-
 .mcp {
   display: grid;
   grid-template-columns: 5fr 7fr;
   gap: 56px;
-  margin: 72px 0 0;
+  margin: 0;
   align-items: start;
 }
 
@@ -868,7 +1019,6 @@ figcaption {
 .dl-group[data-mine] h3::after {
   content: ' (this computer)';
   font-weight: 400;
-  font-stretch: 100%;
   font-size: 15px;
   color: var(--ink-2);
 }
@@ -1256,7 +1406,6 @@ figcaption {
     gap: 28px;
   }
 
-  .with-grid,
   .carry,
   .dl-list {
     grid-template-columns: 1fr;
@@ -1337,19 +1486,35 @@ figcaption {
     width: 100%;
   }
 
-  .stage-wrap::before,
-  .shot::before {
+  .film-open {
+    min-height: 44px;
+  }
+
+  .stage-wrap::before {
     left: calc(-1 * var(--gutter) + 7px);
     width: calc(var(--gutter) - 7px);
     top: 48px;
   }
 
   .hero h1 {
-    font-size: 36px;
+    font-size: 32px;
+  }
+
+  .hero .lede {
+    margin-top: 16px;
+  }
+
+  .hero .ctas {
+    margin-top: 24px;
   }
 
   .shot {
-    margin-top: 40px;
+    margin: 28px 0 0;
+  }
+
+  .works {
+    gap: 8px 18px;
+    font-size: 16px;
   }
 
   /* On a phone the button sits under the window, not on it: the window is small enough that it would hide the terminal. */
@@ -1370,7 +1535,8 @@ figcaption {
     padding: 22px 18px;
   }
 
-  .stage {
+  .stage,
+  .adds .stage {
     aspect-ratio: 3 / 4;
   }
 
@@ -1452,4 +1618,4 @@ figcaption {
   }
 }
 
-.brand .tm { font-size: 0.55em; font-weight: 500; margin-left: 0.1em; vertical-align: super; opacity: 0.7; }
+.brand .tm { font-size: 0.5em; font-weight: 500; margin-left: 0.06em; vertical-align: 0.9em; line-height: 0; opacity: 0.75; }
