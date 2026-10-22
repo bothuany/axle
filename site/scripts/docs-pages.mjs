@@ -14,11 +14,11 @@ const BLOB = 'https://github.com/{{repo}}/blob/main/'
 
 /** The pages, in the order the sidebar lists them. `slug` '' is the overview, at docs/. `from`: where the page's text starts. */
 export const DOCS = [
-	{ slug: '', file: 'README.md', title: 'Overview', from: /^## /m },
-	{ slug: 'install', file: 'docs/building.md', title: 'Install and build' },
-	{ slug: 'languages', file: 'docs/languages.md', title: 'Languages' },
-	{ slug: 'agent-tools', file: 'docs/agent-tools.md', title: 'Agent tools' },
-	{ slug: 'boards', file: 'docs/boards.md', title: 'Boards' },
+	{ slug: '', file: 'README.md', title: 'Overview', from: /^## /m, seo: '{{name}} docs: a code editor built on VS Code' },
+	{ slug: 'install', file: 'docs/building.md', title: 'Install and build', seo: 'Install and build {{name}} on Windows, macOS, Linux' },
+	{ slug: 'languages', file: 'docs/languages.md', title: 'Languages', seo: 'Languages and frameworks: call flows in {{name}}' },
+	{ slug: 'agent-tools', file: 'docs/agent-tools.md', title: 'Agent tools', seo: 'Agent tools: the {{name}} MCP server for Claude Code, Codex' },
+	{ slug: 'boards', file: 'docs/boards.md', title: 'Boards', seo: 'Boards: diagrams of your code in {{name}}' },
 ]
 
 const escape = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -83,16 +83,25 @@ function page(doc, { body, toc, description }) {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.github.com; base-uri 'none'; form-action 'none'" />
-    <title>${escape(doc.title)}: {{name}} docs</title>
+    <title>${escape(doc.seo)}</title>
     <meta name="description" content="${escape(description)}" />
     <link rel="canonical" href="{{site}}/docs/${doc.slug ? `${doc.slug}/` : ''}" />
     <link rel="icon" href="${depth}icon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#0c1020" />
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="{{name}}" />
-    <meta property="og:title" content="${escape(doc.title)}: {{name}} docs" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content="${escape(doc.seo)}" />
+    <meta property="og:description" content="${escape(description)}" />
     <meta property="og:url" content="{{site}}/docs/${doc.slug ? `${doc.slug}/` : ''}" />
-    <meta property="og:image" content="{{site}}/media/hero.jpg" />
+    <meta property="og:image" content="{{site}}/media/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escape(doc.seo)}" />
+    <meta name="twitter:description" content="${escape(description)}" />
+    <meta name="twitter:image" content="{{site}}/media/og.jpg" />
   </head>
   <body>
     <a class="skip" href="#main">Skip to the content</a>

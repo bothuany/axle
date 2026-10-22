@@ -155,7 +155,7 @@ test('home: under reduced motion the hero loop stays on its poster and loads not
 	await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }])
 	await page.reload({ waitUntil: 'networkidle0' })
 	await wait(1200)
-	assert.deepEqual(await page.$eval('.shot video', v => ({ paused: v.paused, poster: v.poster.split('/').pop(), loaded: v.readyState })), { paused: true, poster: 'hero-loop-poster.jpg', loaded: 0 })
+	assert.deepEqual(await page.$eval('.shot video', v => ({ paused: v.paused, poster: v.poster.split('/').pop(), loaded: v.readyState })), { paused: true, poster: 'hero-loop-poster.webp', loaded: 0 })
 	assert.deepEqual(problems, [])
 	await page.close()
 })
@@ -266,7 +266,7 @@ test('home on a phone: no canvas until asked, then full screen; the page has no 
 	const fold = await page.$eval('.shot video', v => ({ top: Math.round(v.getBoundingClientRect().top + scrollY), screen: innerHeight }))
 	assert.equal(fold.screen, 812)
 	assert.ok(fold.top + 300 <= fold.screen, `the hero loop starts at ${fold.top} px: too low for the first screen of a phone`)
-	assert.equal(await page.$eval('.shot video', v => v.poster.split('/').pop()), 'hero-loop-narrow-poster.jpg', 'a phone gets the crop of the window')
+	assert.equal(await page.$eval('.shot video', v => v.poster.split('/').pop()), 'hero-loop-narrow-poster.webp', 'a phone gets the crop of the window')
 	await wait(1500)
 	assert.equal(await page.$('.stage-frame'), null, 'the phone loads no canvas by itself')
 	assert.equal(await page.$eval('.hero [data-download]', a => a.getAttribute('href')), '#download', 'a phone is sent to the list of files')
@@ -366,36 +366,89 @@ test('try: the agents can be drawn in either avatar style of the app', { skip },
 	await page.close()
 })
 
-test('the pages can be found: titles, descriptions, canonical addresses and a sitemap that lists them', { skip }, async () => {
-	for (const path of ['', 'try/', 'docs/', 'docs/languages/']) {
+test('the pages can be found: every page in the sitemap has its title, description, canonical address and social card; robots.txt points at the sitemap', { skip }, async () => {
+	// The sitemap lists every page, and each of them is checked: a page missing from it, or missing a tag, fails here.
+	const sitemap = await fetch(new URL('sitemap.xml', url))
+	assert.equal(sitemap.status, 200, 'sitemap.xml is served')
+	const listed = [...(await sitemap.text()).matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1])
+	const pages = ['', 'try/', 'docs/', 'docs/agent-tools/', 'docs/boards/', 'docs/install/', 'docs/languages/']
+	assert.deepEqual([...listed].sort(), pages.map(p => `${SITE_URL}/${p}`).sort())
+	const robots = await fetch(new URL('robots.txt', url))
+	assert.equal(robots.status, 200, 'robots.txt is served')
+	const rules = await robots.text()
+	assert.match(rules, /^User-agent: \*$/m)
+	assert.doesNotMatch(rules, /^Disallow: \/$/m, 'nothing is shut out')
+	assert.ok(rules.split('\n').includes(`Sitemap: ${SITE_URL}/sitemap.xml`), 'robots.txt names the sitemap')
+
+	const titles = new Set()
+	for (const path of pages) {
 		const { page, problems } = await open(path)
 		const head = await page.evaluate(() => {
 			const meta = s => document.querySelector(s)?.getAttribute('content') ?? ''
 			return {
+				lang: document.documentElement.lang,
 				title: document.title,
 				description: meta('meta[name="description"]'),
 				canonical: document.querySelector('link[rel="canonical"]')?.href,
+				robots: meta('meta[name="robots"]'),
 				csp: meta('meta[http-equiv="Content-Security-Policy"]'),
 				ogUrl: meta('meta[property="og:url"]'),
+				ogTitle: meta('meta[property="og:title"]'),
+				ogDescription: meta('meta[property="og:description"]'),
+				ogImage: meta('meta[property="og:image"]'),
+				twitterCard: meta('meta[name="twitter:card"]'),
+				twitterImage: meta('meta[name="twitter:image"]'),
 				h1: document.querySelectorAll('h1').length,
 			}
 		})
-		assert.ok(head.title.length <= 60, `"${head.title}" fits a search result`)
-		assert.ok(head.description.length >= 70 && head.description.length <= 160, `the description of /${path} fits a search result (${head.description.length} characters)`)
+		assert.equal(head.lang, 'en')
+		assert.ok(head.title.length >= 20 && head.title.length <= 60, `"${head.title}" fits a search result`)
+		assert.ok(!titles.has(head.title), `/${path} has a title of its own`)
+		titles.add(head.title)
+		assert.ok(head.description.length >= 70 && head.description.length <= 155, `the description of /${path} fits a search result (${head.description.length} characters)`)
 		assert.equal(head.canonical, `${SITE_URL}/${path}`)
+		assert.doesNotMatch(head.robots, /noindex/, `/${path} may be indexed`)
 		assert.equal(head.ogUrl, head.canonical)
+		assert.ok(head.ogTitle && head.ogDescription, `/${path} has an Open Graph title and description`)
+		assert.equal(head.ogImage, `${SITE_URL}/media/og.jpg`)
+		assert.equal(head.twitterCard, 'summary_large_image')
+		assert.equal(head.twitterImage, head.ogImage)
 		assert.match(head.csp, /default-src 'none'/)
 		assert.equal(head.h1, 1)
-		assert.doesNotMatch(await page.content(), /\{\{(name|site|repo)\}\}/, 'every placeholder is filled')
+		assert.doesNotMatch(await page.content(), /\{\{(name|site|repo|version)\}\}/, 'every placeholder is filled')
 		assert.deepEqual(problems, [])
 		await page.close()
 	}
-	const sitemap = await (await fetch(new URL('sitemap.xml', url))).text()
-	const pages = ['', 'try/', 'docs/', 'docs/agent-tools/', 'docs/boards/', 'docs/install/', 'docs/languages/']
-	assert.deepEqual([...sitemap.matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1]).sort(), pages.map(p => `${SITE_URL}/${p}`).sort())
+	// The social card is a 1200x630 JPEG the site serves: read its size from the JPEG's frame header.
+	const card = Buffer.from(await (await fetch(new URL('media/og.jpg', url))).arrayBuffer())
+	let i = 2
+	while (i < card.length && !(card[i] === 0xff && card[i + 1] >= 0xc0 && card[i + 1] <= 0xc2)) i += 2 + card.readUInt16BE(i + 2)
+	assert.deepEqual([card.readUInt16BE(i + 7), card.readUInt16BE(i + 5)], [1200, 630], 'og.jpg is 1200x630')
 	for (const part of ['canvas.html', 'pages/dock.html', 'pages/island.html']) {
 		assert.match(await (await fetch(new URL(part, url))).text(), /<meta name="robots" content="noindex"/, `${part} asks not to be indexed`)
 	}
+})
+
+test('the home page describes the product for search engines: structured data and crawlable text', { skip }, async () => {
+	const { page, problems } = await open()
+	const graph = await page.$eval('script[type="application/ld+json"]', s => JSON.parse(s.textContent)['@graph'])
+	const local = address => address.replace(SITE_URL + '/', url)
+	const app = graph.find(n => n['@type'] === 'SoftwareApplication')
+	assert.equal(app.applicationCategory, 'DeveloperApplication')
+	assert.match(app.softwareVersion, /^\d+\.\d+\.\d+$/)
+	assert.match(app.license, /agpl/)
+	assert.equal(app.offers.price, '0')
+	assert.equal((await fetch(local(app.screenshot))).status, 200, 'the screenshot is served')
+	const org = graph.find(n => n['@type'] === 'Organization')
+	assert.equal((await fetch(local(org.logo))).status, 200, 'the logo is served')
+	assert.ok(graph.some(n => n['@type'] === 'WebSite'))
+	// What it is, in the HTML itself, not only in the video or the scripts.
+	const text = await page.evaluate(() => document.querySelector('main').innerText)
+	for (const term of ['code editor', 'VS Code', 'Code - OSS', 'Open VSX', 'call-flow canvas', 'Claude Code', 'Codex', 'Spring', 'FastAPI', 'NestJS', 'Go', 'Rust', 'PHP', 'Ruby', '.NET']) {
+		assert.ok(text.includes(term), `the home page says "${term}"`)
+	}
+	assert.deepEqual(problems, [])
+	await page.close()
 })
 
 test('a keyboard user can skip to the content, and every image says what it shows', { skip }, async () => {
