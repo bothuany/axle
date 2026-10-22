@@ -1,6 +1,5 @@
-// Mixes the film's sound with ffmpeg: the voice lines at their times, the music bed (silent under the hook, in on
-// the turn's downbeat, ducked under the voice, down under the held frame), and the effects; then loudness to
-// about -14 LUFS with peaks under -1 dBTP.
+// Mixes the film's sound with ffmpeg: the voice lines at their times, the music bed (from the first frame, ducked under
+// the voice, faded out at the end), and the effects; then loudness to about -14 LUFS with peaks under -1 dBTP.
 //   node mix.mjs <shots dir> <music.wav>      writes <shots>/audio/mix.wav
 import { spawnSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
@@ -25,11 +24,11 @@ voIds.forEach((id, i) => {
 graph.push(`${voIds.map((_, i) => `[v${i}]`).join('')}amix=inputs=${voIds.length}:normalize=0,apad=whole_dur=${MUSIC.end}[voice]`)
 graph.push(`[voice]asplit=2[voiceOut][voiceKey]`)
 
-// Music: starts at its own 0 on the turn's downbeat, fades under the held frame and out at the end.
+// Music: runs with the film from MUSIC.in and fades out at the end.
 const m = add(music)
-const { in: mIn, heldFrom, heldTo, end } = MUSIC
+const { in: mIn, end } = MUSIC
 graph.push(`[${m}]aresample=48000,aformat=channel_layouts=stereo,atrim=0:${end - mIn},adelay=${mIn * 1000}|${mIn * 1000},` +
-	`volume='if(between(t,${heldFrom},${heldTo}),0.35,1)':eval=frame,afade=t=in:st=${mIn}:d=0.25,afade=t=out:st=${end - 2.5}:d=2.5,volume=0.55,apad=whole_dur=${end}[bed]`)
+	`afade=t=in:st=${mIn}:d=0.4,afade=t=out:st=${end - 2.5}:d=2.5,volume=0.55,apad=whole_dur=${end}[bed]`)
 // Ducking: the bed drops about 8 dB while the voice speaks.
 graph.push(`[bed][voiceKey]sidechaincompress=threshold=0.03:ratio=6:attack=20:release=350:makeup=1[ducked]`)
 

@@ -1,60 +1,21 @@
 {
-  "voice": "kokoro-82m bm_george (the user pick); Chatterbox takes stay available with tools/vo.py",
+  "voice": {
+    "model": "Chatterbox (ResembleAI/chatterbox, MIT), run locally on the GPU",
+    "reference": "Karen Savage, LibriVox 'Pride and Prejudice' (version 3), chapter 2, 2:00-2:12, public domain: pride_prejudice_krs_librivox/pride_and_prejudice_02_austen_64kb.mp3 on archive.org",
+    "temperature": 0.8,
+    "note": "Each line is one take (seed, exaggeration, cfg below). tools/vo-finish.mjs trims it, adds the pauses, stretches it to a calm pace with rubberband (pitch and formants kept), normalizes it and transcribes it for the word times."
+  },
   "lines": [
-    {
-      "id": "01a",
-      "text": "Your agent just changed fourteen files."
-    },
-    {
-      "id": "01b",
-      "text": "Where?",
-      "say": "But where?",
-      "keepFrom": "where"
-    },
-    {
-      "id": "02",
-      "text": "A diff tells you which lines. Not what they reach.",
-      "speed": 0.9
-    },
-    {
-      "id": "03",
-      "text": "Now see the change on how your code runs: every endpoint it touches, cut down to the methods that changed."
-    },
-    {
-      "id": "04",
-      "text": "Across services and languages. From the controller, over HTTP and Kafka, to the table it writes."
-    },
-    {
-      "id": "05",
-      "text": "Ask how something works, and the agent walks you through it, on the real code, step by step."
-    },
-    {
-      "id": "06a",
-      "text": "Run Claude Code and Codex side by side. See which one needs you, and why."
-    },
-    {
-      "id": "06c",
-      "text": "Or switch them to pixel pets."
-    },
-    {
-      "id": "06b",
-      "text": "Even when the editor is in the background."
-    },
-    {
-      "id": "07",
-      "text": "Sequence, ER and architecture diagrams, read straight from the code. Nothing invented."
-    },
-    {
-      "id": "08",
-      "text": "Draw the skeleton, write it yourself, and hand it over. Your harness, scored."
-    },
-    {
-      "id": "09",
-      "text": "See how your code runs."
-    },
-    {
-      "id": "10",
-      "text": "{spokenName}. Free and open source."
-    }
+    { "id": "01", "text": "{productName} is a code editor, built on VS Code.", "say": "{spokenName} is a code editor... built on VS Code.", "seed": 31, "exaggeration": 0.3, "cfg": 0.15 },
+    { "id": "02", "text": "Your extensions, themes and keybindings work.", "seed": 7, "exaggeration": 0.4, "cfg": 0.4 },
+    { "id": "03", "text": "Open an endpoint, and a tab shows how the request runs.", "say": "Open an endpoint... and a tab shows how the request runs.", "seed": 23, "exaggeration": 0.3, "cfg": 0.15, "tempo": 0.9 },
+    { "id": "04", "text": "Over HTTP into billing. Over Kafka into shipping.", "seed": 23, "exaggeration": 0.4, "cfg": 0.4 },
+    { "id": "05a", "text": "Now let Claude Code make a change.", "say": "Now... let Claude Code make a change.", "seed": 23, "exaggeration": 0.3, "cfg": 0.15 },
+    { "id": "05b", "text": "You don't get a wall of diffs. You see where it lands, on how the request runs.", "say": "You don't get a wall of diffs. You see where it lands... on how the request runs.", "seed": 31, "exaggeration": 0.3, "cfg": 0.15, "tempo": 0.86, "pauses": [["diffs", 0.45], ["lands", 0.2]] },
+    { "id": "06", "text": "Run Claude Code and Codex side by side. The dock shows who's working, and who needs you.", "say": "Run Claude Code and Codex, side by side. The dock shows who's working... and who needs you.", "seed": 23, "exaggeration": 0.4, "cfg": 0.3 },
+    { "id": "07", "text": "And the harness map shows what your agents load, and what to fix.", "say": "And the harness map shows what your agents load... and what to fix.", "seed": 23, "exaggeration": 0.3, "cfg": 0.15, "tempo": 0.86, "pauses": [["load", 0.3]] },
+    { "id": "08", "text": "Every code editor shows your files. {productName} shows how your code runs.", "say": "Every code editor shows your files. {spokenName} shows how your code runs.", "seed": 7, "exaggeration": 0.4, "cfg": 0.3 },
+    { "id": "09", "text": "It's free, and it's open source.", "say": "It's free... and it's open source.", "seed": 31, "exaggeration": 0.3, "cfg": 0.15 },
+    { "id": "09alt", "text": "It's free, and the source is open.", "say": "It's free... and the source is open.", "seed": 7, "exaggeration": 0.3, "cfg": 0.15, "tempo": 0.9, "alt": "the end line if the licence becomes FSL; not in the film" }
   ]
 }

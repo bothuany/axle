@@ -1,9 +1,11 @@
 {
   "productName": "Insilode",
-  "spokenName": "Insilode",
-  "tagline": "A harness-first code editor.",
+  "spokenName": "Insihlode",
+  "tagline": "Every code editor shows your files. {productName} shows how your code runs.",
+  "headline": "Every code editor shows your files. {productName} shows how your code runs.",
   "repoUrl": "github.com/bothuany/insilode",
-  "download": "Download for Windows · macOS · Linux",
-  "spokenPhonemes": "ˈɪnsɪlˌəʊd",
-  "pronunciation": "IN-sih-lohd (insight + in silico + lode)"
+  "siteUrl": "insilode.dev",
+  "download": "Download for Windows, macOS, Linux",
+  "freeLine": "Free and open source.",
+  "pronunciation": "IN-sih-lohd (insight + in silico + lode); spokenName is the spelling the voice model says closest to it"
 }
