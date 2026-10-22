@@ -1,6 +1,6 @@
 {
   "name": "insilode",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "private": true,
   "description": "Insilode: a harness-first code editor. Call-flow canvas, terminal agents with live status, and tools for Claude Code harness engineering.",
   "license": "MIT",
