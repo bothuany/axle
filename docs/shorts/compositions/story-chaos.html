@@ -26,7 +26,7 @@
 			background-size: 23px 19px, 31px 27px; background-position: 0 0, 11px 7px; box-shadow: inset 0 0 0 16px #6e4a29, inset 0 0 60px rgba(40, 20, 0, .55); }
 		#c-strings { position: absolute; left: 0; top: 0; width: 972px; height: 810px; overflow: visible; }
 		#c-strings line { stroke: #d01e2a; stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .45)); }
-		.tab { position: absolute; left: 0; top: 0; width: 380px; height: 110px; margin-left: -190px; margin-top: -55px; }
+		.tab { position: absolute; left: 0; top: 0; width: 470px; height: 110px; margin-left: -235px; margin-top: -55px; }
 		.tab .body { position: absolute; inset: 0; background: #f3ead6; border-radius: 6px 14px 14px 14px; box-shadow: 0 10px 22px rgba(0, 0, 0, .45); display: flex; align-items: center; padding: 0 26px; }
 		.tab .ear { position: absolute; left: 0; top: -26px; width: 150px; height: 30px; background: #f3ead6; border-radius: 12px 12px 0 0; }
 		.tab b { font-family: var(--mono); font-weight: 650; font-size: 32px; color: #2a2318; white-space: nowrap; letter-spacing: -0.01em; }
@@ -94,8 +94,8 @@
 			var items = [
 				{ id: 'ctrl', name: 'OrderController.java', pile: [300, 95, -4], board: [235, 120, -4], node: [0.172, 0.322, 0.294, 0.402] },
 				{ id: 'svc', name: 'OrderService.java', pile: [560, 205, 5], board: [720, 150, 3], node: [0.325, 0.374, 0.425, 0.472] },
-				{ id: 'repo', name: 'OrderRepository.java', pile: [330, 320, -2], board: [250, 350, 2], node: [0.454, 0.409, 0.558, 0.502] },
-				{ id: 'bill', name: 'BillingClient.java', pile: [610, 430, 6], board: [730, 360, -3], node: [0.456, 0.522, 0.644, 0.589] },
+				{ id: 'repo', name: 'OrderRepository.java', pile: [300, 320, -2], board: [250, 350, 2], node: [0.454, 0.409, 0.558, 0.502] },
+				{ id: 'bill', name: 'BillingClient.java', pile: [740, 430, 6], board: [730, 360, -3], node: [0.456, 0.522, 0.644, 0.589] },
 				{ id: 'py', name: 'main.py', py: true, pile: [400, 545, -5], board: [270, 640, 5], node: [0.672, 0.558, 0.766, 0.606] },
 				{ id: 'ev', name: 'OrderEvents.java', pile: [620, 660, 3], board: [735, 650, -2], node: [0.622, 0.667, 0.772, 0.731] },
 				{ id: 'topic', sticky: 'order.placed → ???', board: [500, 500, -6], node: [0.456, 0.631, 0.593, 0.698] }
@@ -192,7 +192,7 @@
 			tl.to(byId.why.el, { y: 900 + byId.why.board[1], duration: 0.4, ease: 'power2.in' }, s)
 			items.forEach(function (it) {
 				var nb = box(it.node)
-				var w = it.sticky ? 250 : 380, h = it.sticky ? 180 : 110
+				var w = it.sticky ? 250 : 470, h = it.sticky ? 180 : 110
 				tl.to(it.el.querySelector('.pin'), { scale: 0, duration: 0.15, ease: 'power2.in' }, s)
 				tl.to(it.el, { x: nb.x, y: nb.y, rotation: 0, scaleX: nb.w / w, scaleY: nb.h / h, duration: 0.7, ease: 'power3.inOut' }, s + 0.1)
 			})
