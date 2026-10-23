@@ -1,0 +1,100 @@
+<!doctype html>
+<!-- Story scene "evidence" (voiced story, episode 07-context-crime): the reveal on a real capture of the Harness map on
+     the demo project. The camera settles on the map's tree, a ring marks the row the voice names, and two drawn stamps and
+     one witness bubble are the case file's own graphics laid over the real picture (the picture under them is untouched).
+     Times are the scene's own (0 = the cut). The stamps are placed from the final camera key, so they sit beside the rows. -->
+<html lang="en" data-composition-variables='[
+{"id":"captureUrl","type":"string","label":"Harness map capture","default":"assets/captures/E-harness.jpg"},
+{"id":"cam","type":"string","label":"Camera keys (JSON)","default":"[{\"t\":0,\"cx\":0.1,\"cy\":0.24,\"w\":0.2}]"},
+{"id":"rings","type":"string","label":"Rings (JSON: t, d, cx, cy, w, h)","default":"[]"},
+{"id":"texts","type":"string","label":"Big text beats (JSON: t, text with | and *accent*)","default":"[]"},
+{"id":"stamps","type":"string","label":"Stamps (JSON: t, word, kind allow|ask, fx, fy: the row in window fractions, dx: panel px from the row end)","default":"[]"},
+{"id":"bubble","type":"string","label":"Witness bubble (JSON: t, out, text, who)","default":"{}"},
+{"id":"duration","type":"number","label":"Scene length (s)","default":20}
+]'>
+<body>
+<template id="story-evidence-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#v-texts .q { font-size: 100px; }
+		#v-panel { left: var(--px); top: 480px; width: var(--pw); height: 810px; }
+		.stamp { font-size: 64px; padding: 8px 26px 12px; border-width: 10px; z-index: 12; white-space: nowrap; }
+		#v-bubble { position: absolute; z-index: 14; left: 330px; top: 636px; width: 600px; padding: 16px 28px 20px; background: #fff; border-radius: 28px; opacity: 0; }
+		#v-bubble::after { content: ""; position: absolute; left: 60px; top: -22px; border: 14px solid transparent; border-bottom-color: #fff; border-top-width: 8px; }
+		#v-bubble .who { display: block; font-family: var(--mono); font-weight: 700; font-size: 28px; color: #8a5a00; margin-bottom: 4px; }
+		#v-bubble .say { display: block; font-family: var(--sans); font-weight: 700; font-size: 44px; line-height: 1.08; color: #2a2318; letter-spacing: -0.02em; }
+	</style>
+	<div id="root" data-composition-id="story-evidence" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="v-texts"></div>
+		<div id="v-panel" class="panel">
+			<div id="v-cam" class="cam" data-layout-allow-overflow><img data-var-src="captureUrl" src="assets/blank.png#v" alt=""></div>
+			<div id="v-stamps" data-layout-allow-overflow></div>
+			<div id="v-bubble" data-layout-allow-overflow data-layout-allow-occlusion><span class="who"></span><span class="say"></span></div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('story-evidence'), S = Shorts
+			var tl = gsap.timeline({ paused: true })
+			var $ = function (id) { return document.getElementById(id) }
+			var dur = V.duration
+			var keys = S.json(V.cam, [])
+			S.camera(tl, '#v-cam', keys, 972, 810)
+			S.rings(tl, $('v-cam'), S.json(V.rings, []))
+
+			// Big text: each beat rises into its own clip box and leaves upward before the next one.
+			var texts = S.json(V.texts, [])
+			texts.forEach(function (b, i) {
+				var box = document.createElement('div')
+				box.className = 'q hl'
+				box.setAttribute('data-layout-allow-overlap', '')
+				box.setAttribute('data-layout-allow-occlusion', '')
+				$('v-texts').appendChild(box)
+				var spans = S.lines(box, b.text, 'v-t' + i)
+				spans.forEach(function (sp) { [sp].concat([].slice.call(sp.querySelectorAll('*'))).forEach(function (e) { e.setAttribute('data-layout-allow-occlusion', '') }) })
+				tl.set(spans, { yPercent: 108 }, 0)
+				S.rise(tl, spans, b.t)
+				var next = texts[i + 1]
+				S.leave(tl, spans, next ? next.t - 0.4 : dur - 0.4)
+			})
+
+			// A point of the window (fractions) in panel pixels under the camera's last key.
+			var last = keys[keys.length - 1]
+			var f = S.fit(last, 972, 810)
+			var at = function (fx, fy) { return { x: f.x + f.scale * fx * S.IW, y: f.y + f.scale * fy * S.IH } }
+
+			// Stamps: they land at the right end of a row (the row's text stops short of the sidebar's edge), 4 px shake.
+			S.json(V.stamps, []).forEach(function (s, i) {
+				var p = at(s.fx, s.fy)
+				var el = document.createElement('div')
+				el.className = 'stamp ' + s.kind
+				el.id = 'v-stamp' + i
+				el.textContent = s.word
+				el.setAttribute('data-layout-allow-overflow', '')
+				el.setAttribute('data-layout-allow-overlap', '')
+				el.setAttribute('data-layout-allow-occlusion', '')
+				$('v-stamps').appendChild(el)
+				gsap.set(el, { left: s.x, top: p.y + (s.dy || 0) - 40, rotation: -7, opacity: 0 })
+				tl.fromTo(el, { opacity: 0, scale: 1.5 }, { opacity: 1, scale: 1, duration: 0.14, ease: 'power3.out' }, s.t)
+				tl.to(el, { x: 4, duration: 0.04, yoyo: true, repeat: 3 }, s.t + 0.14)
+				if (s.out) tl.to(el, { y: 700, duration: 0.3, ease: 'power2.in' }, s.out)
+			})
+
+			// The witness: a rule that matches no file speaks up from below the panel.
+			var wb = S.json(V.bubble, {})
+			if (wb.t) {
+				var bub = $('v-bubble')
+				bub.querySelector('.who').textContent = wb.who
+				bub.querySelector('.say').textContent = wb.text
+				tl.fromTo(bub, { y: 500, opacity: 1 }, { y: 0, opacity: 1, duration: 0.4, ease: 'power3.out', immediateRender: false }, wb.t)
+				tl.to(bub, { y: 500, duration: 0.3, ease: 'power2.in' }, wb.out)
+				tl.set(bub, { opacity: 0 }, wb.out + 0.31)
+			}
+			tl.to({}, { duration: dur }, 0)
+			window.__timelines['story-evidence'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

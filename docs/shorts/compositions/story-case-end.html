@@ -1,0 +1,52 @@
+<!doctype html>
+<!-- Story scene "case-end" (episode 07-context-crime): the loop frame. The closed case folder under the hook, exactly the
+     first frame of story-case, held still under the end tag, so a replay starts where the video ends. -->
+<html lang="en" data-composition-variables='[
+{"id":"question","type":"string","label":"Hook, lines split by |, *accent*","default":"Who ate my|context *window*?"},
+{"id":"duration","type":"number","label":"Scene length (s)","default":2.5}
+]'>
+<body>
+<template id="story-case-end-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#e-q { font-size: 100px; }
+		#e-panel { left: var(--px); top: 480px; width: var(--pw); height: 810px; background: #2a1f17; }
+		#e-desk { position: absolute; inset: 0; background-color: #2a1f17; background-image: repeating-linear-gradient(90deg, rgba(0, 0, 0, .18) 0 3px, transparent 3px 61px), radial-gradient(ellipse at 50% 40%, rgba(255, 220, 160, .12), transparent 70%); }
+		#e-folder { position: absolute; left: 130px; top: 130px; width: 712px; height: 560px; }
+		#e-folder .tab { position: absolute; left: 0; top: -46px; width: 250px; height: 56px; background: #dcbd76; border-radius: 16px 16px 0 0; font-family: var(--mono); font-weight: 700; font-size: 30px; color: #3a2b10; padding: 10px 22px; }
+		#e-folder .body { position: absolute; inset: 0; background: #ecd08f; border-radius: 4px 20px 20px 20px; box-shadow: 0 24px 40px rgba(0, 0, 0, .55); }
+		#e-folder .label { position: absolute; left: 60px; top: 70px; width: 592px; height: 190px; background: #f7f0dc; transform: rotate(-1.5deg); padding: 24px 30px; box-shadow: 0 4px 8px rgba(0, 0, 0, .25); }
+		#e-folder .label b { display: block; font-family: var(--mono); font-weight: 700; font-size: 44px; color: #2a2318; letter-spacing: -0.01em; }
+		#e-folder .label span { display: block; margin-top: 14px; font-family: var(--mono); font-weight: 500; font-size: 32px; line-height: 1.2; color: #4a3d28; }
+		#e-folder .unsolved { position: absolute; right: 50px; bottom: 60px; font-family: var(--mono); font-weight: 700; font-size: 60px; color: #c4202c; border: 10px solid #c4202c; border-radius: 16px; padding: 6px 24px 10px; transform: rotate(-8deg); letter-spacing: .02em; }
+		#e-folder .coffee { position: absolute; left: 70px; bottom: 50px; width: 150px; height: 150px; border: 14px solid rgba(110, 70, 30, .28); border-radius: 50%; }
+	</style>
+	<div id="root" data-composition-id="story-case-end" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="e-q" class="q hl"></div>
+		<div id="e-panel" class="panel">
+			<div id="e-desk" data-layout-allow-occlusion></div>
+			<div id="e-folder" data-layout-allow-overflow data-layout-allow-occlusion>
+				<div class="tab">CASE 07</div>
+				<div class="body">
+					<i class="coffee" data-layout-allow-occlusion></i>
+					<div class="label"><b>CASE 07</b><span>WHO ATE THE<br>CONTEXT WINDOW?</span></div>
+					<div class="unsolved">UNSOLVED</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('story-case-end'), S = Shorts
+			var tl = gsap.timeline({ paused: true })
+			var spans = S.lines(document.getElementById('e-q'), V.question, 'e-q')
+			// The hook rises back in as the folder comes back; the picture itself is the first frame's.
+			S.rise(tl, spans, 0.05)
+			tl.to({}, { duration: V.duration }, 0)
+			window.__timelines['story-case-end'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

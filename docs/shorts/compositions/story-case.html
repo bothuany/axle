@@ -1,0 +1,171 @@
+<!doctype html>
+<!-- Story scene "case" (voiced story, episode 07-context-crime): a true-crime case file, all of it drawn (a manila folder,
+     two sticky notes, a bar that stands for the context window, four suspect cards, red thread). It is a parody of a
+     documentary, so nothing here imitates Insilode's UI and nothing in it is data: the suspects are folklore and the cards
+     say "rumour". The first frame is the closed folder under the hook; compositions/story-case-end.html is that frame again.
+     Times come from the episode (`beats`); the layout lives here. -->
+<html lang="en" data-composition-variables='[
+{"id":"question","type":"string","label":"Hook, lines split by |, *accent*","default":"Who ate my|context *window*?"},
+{"id":"suspectsText","type":"string","label":"Big text over the suspects","default":"Four|*suspects*."},
+{"id":"beats","type":"string","label":"Times (JSON: mon, fri, scrawl, folderOut, bar, chomp[], hookOut, suspectsText, cards[], out)","default":"{}"},
+{"id":"duration","type":"number","label":"Scene length (s)","default":25}
+]'>
+<body>
+<template id="story-case-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#k-q, #k-s { font-size: 100px; }
+		#k-panel { left: var(--px); top: 480px; width: var(--pw); height: 810px; background: #2a1f17; }
+		#k-desk { position: absolute; inset: 0; background-color: #2a1f17; background-image: repeating-linear-gradient(90deg, rgba(0, 0, 0, .18) 0 3px, transparent 3px 61px), radial-gradient(ellipse at 50% 40%, rgba(255, 220, 160, .12), transparent 70%); }
+		#k-folder { position: absolute; left: 130px; top: 130px; width: 712px; height: 560px; }
+		#k-folder .tab { position: absolute; left: 0; top: -46px; width: 250px; height: 56px; background: #dcbd76; border-radius: 16px 16px 0 0; font-family: var(--mono); font-weight: 700; font-size: 30px; color: #3a2b10; padding: 10px 22px; }
+		#k-folder .body { position: absolute; inset: 0; background: #ecd08f; border-radius: 4px 20px 20px 20px; box-shadow: 0 24px 40px rgba(0, 0, 0, .55); }
+		#k-folder .label { position: absolute; left: 60px; top: 70px; width: 592px; height: 190px; background: #f7f0dc; transform: rotate(-1.5deg); padding: 24px 30px; box-shadow: 0 4px 8px rgba(0, 0, 0, .25); }
+		#k-folder .label b { display: block; font-family: var(--mono); font-weight: 700; font-size: 44px; color: #2a2318; letter-spacing: -0.01em; }
+		#k-folder .label span { display: block; margin-top: 14px; font-family: var(--mono); font-weight: 500; font-size: 32px; line-height: 1.2; color: #4a3d28; }
+		#k-folder .unsolved { position: absolute; right: 50px; bottom: 60px; font-family: var(--mono); font-weight: 700; font-size: 60px; color: #c4202c; border: 10px solid #c4202c; border-radius: 16px; padding: 6px 24px 10px; transform: rotate(-8deg); letter-spacing: .02em; }
+		#k-folder .coffee { position: absolute; left: 70px; bottom: 50px; width: 150px; height: 150px; border: 14px solid rgba(110, 70, 30, .28); border-radius: 50%; }
+		.note { position: absolute; left: 0; top: 0; width: 300px; height: 200px; margin-left: -150px; margin-top: -100px; padding: 22px 24px; box-shadow: 0 14px 22px rgba(0, 0, 0, .45); display: flex; flex-direction: column; justify-content: center; }
+		.note i { font-style: normal; font-family: var(--mono); font-weight: 700; font-size: 30px; color: #6a5a2a; }
+		.note b { font-family: var(--sans); font-weight: 700; font-size: 50px; line-height: 1.02; color: #2a2318; letter-spacing: -0.02em; }
+		#k-mon { background: #ffe56b; }
+		#k-fri { background: #ff9fae; }
+		#k-fri .x { position: absolute; right: -16px; top: -34px; font-family: var(--sans); font-weight: 700; font-size: 58px; color: #c4202c; transform: rotate(10deg); opacity: 0; }
+		#k-bar { position: absolute; left: 36px; top: 30px; width: 900px; height: 110px; display: flex; gap: 8px; }
+		#k-bar .blk { flex: 1 1 0; border-radius: 10px; background: #cbd0e0; }
+		#k-bar .blk:nth-child(3n) { background: #b4bbd3; }
+		#k-bar .blk.rule { flex: 0 0 120px; background: #ff6b7d; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-weight: 700; font-size: 28px; color: #2a0a10; }
+		#k-gap { position: absolute; left: 36px; top: 30px; width: 900px; height: 110px; border: 4px dashed rgba(255, 255, 255, .35); border-radius: 14px; opacity: 0; }
+		#k-barlabel { position: absolute; left: 36px; top: 148px; font-family: var(--mono); font-size: 28px; font-weight: 500; color: #d8c9ae; white-space: nowrap; }
+		.card { position: absolute; width: 440px; height: 290px; background: #f3ead6; border-radius: 8px 16px 16px 16px; box-shadow: 0 14px 24px rgba(0, 0, 0, .5); padding: 22px 26px; }
+		.card .h { font-family: var(--mono); font-weight: 700; font-size: 28px; color: #b36a00; letter-spacing: .04em; }
+		.card .n { margin-top: 10px; font-family: var(--mono); font-weight: 700; font-size: 44px; color: #2a2318; letter-spacing: -0.02em; white-space: nowrap; }
+		.card .d { margin-top: 12px; font-family: var(--sans); font-weight: 650; font-size: 34px; line-height: 1.1; color: #3a2f1e; letter-spacing: -0.015em; }
+		.card .r { margin-top: 18px; display: flex; align-items: center; gap: 12px; font-family: var(--mono); font-size: 28px; color: #4a3d28; white-space: nowrap; }
+		.card .r s { display: block; width: 170px; height: 30px; background: #151515; text-decoration: none; }
+		.card .pin { position: absolute; width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ff8a8a 0 18%, #d01e2a 40%, #7d0f16 100%); box-shadow: 0 4px 6px rgba(0, 0, 0, .5); }
+		#k-threads { position: absolute; left: 0; top: 0; width: 972px; height: 810px; overflow: visible; z-index: 30; }
+		#k-threads line { stroke: #e0212e; stroke-width: 6; stroke-linecap: round; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .5)); }
+	</style>
+	<div id="root" data-composition-id="story-case" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="k-q" class="q hl" data-layout-allow-overlap></div>
+		<div id="k-s" class="q hl" data-layout-allow-overlap></div>
+		<div id="k-panel" class="panel">
+			<div id="k-desk" data-layout-allow-occlusion></div>
+			<div id="k-folder" data-layout-allow-overflow data-layout-allow-occlusion>
+				<div class="tab">CASE 07</div>
+				<div class="body">
+					<i class="coffee" data-layout-allow-occlusion></i>
+					<div class="label"><b>CASE 07</b><span>WHO ATE THE|CONTEXT WINDOW?</span></div>
+					<div class="unsolved" data-layout-allow-overlap>UNSOLVED</div>
+				</div>
+			</div>
+			<div id="k-mon" class="note" data-layout-allow-overlap data-layout-allow-overflow data-layout-allow-occlusion><i>MON</i><b>nailed it</b></div>
+			<div id="k-fri" class="note" data-layout-allow-overlap data-layout-allow-overflow data-layout-allow-occlusion><i>FRI</i><b>forgot the rule</b><span class="x" data-layout-allow-occlusion>?!</span></div>
+			<div id="k-bar" data-layout-allow-overflow data-layout-allow-occlusion></div>
+			<div id="k-gap" data-layout-allow-occlusion></div>
+			<div id="k-barlabel" data-layout-allow-overflow>context window, drawn, not to scale</div>
+			<svg id="k-threads" viewBox="0 0 972 810" data-layout-allow-overflow></svg>
+			<div id="k-cards" data-layout-allow-overflow></div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('story-case'), S = Shorts
+			var tl = gsap.timeline({ paused: true })
+			var $ = function (id) { return document.getElementById(id) }
+			var B = S.json(V.beats, {})
+			var dur = V.duration
+			var NS = 'http://www.w3.org/2000/svg'
+
+			// The folder's label has two lines (the | in its text).
+			var lab = document.querySelector('#k-folder .label span')
+			lab.innerHTML = lab.textContent.split('|').map(S.esc).join('<br>')
+
+			// The hook is on screen, fully formed, at frame 0.
+			var q = S.lines($('k-q'), V.question, 'k-q')
+			var st = S.lines($('k-s'), V.suspectsText, 'k-s')
+			st.forEach(function (sp) { [sp].concat([].slice.call(sp.querySelectorAll("*"))).forEach(function (e) { e.setAttribute("data-layout-allow-occlusion", "") }) })
+			tl.set(st, { yPercent: 108 }, 0)
+
+			// 1. Monday and Friday: two sticky notes rise through the panel's bottom edge onto the folder.
+			gsap.set('#k-mon', { x: 280, y: 960, rotation: -5 })
+			gsap.set('#k-fri', { x: 690, y: 960, rotation: 4 })
+			tl.to('#k-mon', { y: 470, duration: 0.45, ease: 'power3.out' }, B.mon)
+			tl.to('#k-fri', { y: 520, duration: 0.45, ease: 'power3.out' }, B.fri)
+			tl.set('#k-fri .x', { opacity: 1 }, B.scrawl)
+			tl.to('#k-folder', { y: 900, duration: 0.45, ease: 'power2.in' }, B.folderOut)
+			tl.to('#k-mon', { y: 1100, duration: 0.45, ease: 'power2.in' }, B.folderOut)
+			tl.to('#k-fri', { y: 1100, duration: 0.45, ease: 'power2.in' }, B.folderOut)
+
+			// 2. The context window, drawn as a bar of blocks; the last one is "the rule", and it gets eaten.
+			var bar = $('k-bar')
+			var blocks = []
+			for (var i = 0; i < 12; i++) {
+				var b = document.createElement('i')
+				b.className = 'blk' + (i === 11 ? ' rule' : '')
+				b.id = 'k-blk' + i
+				b.setAttribute('data-layout-allow-occlusion', '')
+				if (i === 11) b.innerHTML = '<span data-layout-ignore>RULE</span>'
+				bar.appendChild(b)
+				blocks.push(b)
+			}
+			gsap.set(['#k-bar', '#k-barlabel'], { y: -260 })
+			tl.to(['#k-bar', '#k-barlabel'], { y: 0, duration: 0.5, ease: 'power3.out' }, B.bar)
+			// Blocks vanish from the right, the rule last. They drop out through the bar's own bottom edge.
+			;(B.chomp || []).forEach(function (t, k) {
+				var idx = k === (B.chomp.length - 1) ? 11 : 10 - k
+				tl.to(blocks[idx], { yPercent: 130, opacity: 0, duration: 0.2, ease: 'power2.in' }, t)
+			})
+			tl.to('#k-gap', { opacity: 1, duration: 0.01 }, B.chomp[B.chomp.length - 1] + 0.2)
+
+			// 3. The hook leaves, "Four suspects" comes in, and four rumour cards land on the desk.
+			tl.to(q, { yPercent: -108, duration: 0.35, ease: 'power2.in', stagger: 0.05 }, B.hookOut)
+			tl.to(st, { yPercent: 0, duration: 0.45, ease: 'power3.out', stagger: 0.09 }, B.suspectsText)
+			var cards = [
+				{ h: 'SUSPECT 1', n: 'CLAUDE.md', d: '~6,000 tokens (rumour)', r: 'last read:', x: 36, y: 190, rot: -2 },
+				{ h: 'SUSPECT 2', n: '3 skills', d: 'never fire (rumour)', r: 'seen near:', x: 496, y: 190, rot: 2 },
+				{ h: 'SUSPECT 3', n: 'AGENTS.md', d: 'the same rule, twice (rumour)', r: 'alias:', x: 36, y: 500, rot: 1.5 },
+				{ h: 'SUSPECT 4', n: 'a hook', d: 'silent since March (rumour)', r: 'whereabouts:', x: 496, y: 500, rot: -1.5 }
+			]
+			// Pin corners that face the middle of the desk, where the threads meet.
+			var hub = { x: 486, y: 484 }
+			var pinAt = [{ x: 36 + 440 - 6, y: 190 + 290 - 6 }, { x: 496 + 6, y: 190 + 290 - 6 }, { x: 36 + 440 - 6, y: 500 + 6 }, { x: 496 + 6, y: 500 + 6 }]
+			cards.forEach(function (c, i) {
+				var el = document.createElement('div')
+				el.className = 'card'
+				el.id = 'k-card' + i
+				el.setAttribute('data-layout-allow-overflow', '')
+				el.setAttribute('data-layout-allow-occlusion', '')
+				el.innerHTML = '<div class="h">' + S.esc(c.h) + '</div><div class="n">' + S.esc(c.n) + '</div><div class="d">' + S.esc(c.d) + '</div><div class="r">' + S.esc(c.r) + ' <s></s></div>'
+				$('k-cards').appendChild(el)
+				gsap.set(el, { x: c.x, y: c.y + 900, rotation: c.rot })
+				tl.to(el, { y: c.y, duration: 0.45, ease: 'power3.out' }, B.cards[i])
+				tl.to(el, { y: c.y + 900, duration: 0.35, ease: 'power2.in' }, B.out)
+			})
+			// Red thread from each card's inner corner to the hub, then one up to the bar.
+			var seg = function (id, a, b, at) {
+				var l = document.createElementNS(NS, 'line')
+				l.setAttribute('id', id)
+				l.setAttribute('x1', a.x); l.setAttribute('y1', a.y); l.setAttribute('x2', b.x); l.setAttribute('y2', b.y)
+				var len = Math.hypot(b.x - a.x, b.y - a.y)
+				l.setAttribute('stroke-dasharray', len + ' ' + len)
+				l.setAttribute('stroke-dashoffset', len)
+				$('k-threads').appendChild(l)
+				tl.to(l, { attr: { 'stroke-dashoffset': 0 }, duration: 0.3, ease: 'power2.out' }, at)
+				tl.to(l, { attr: { 'stroke-dashoffset': len }, duration: 0.3, ease: 'power2.in' }, B.out)
+			}
+			pinAt.forEach(function (p, i) { seg('k-th' + i, p, hub, B.cards[i] + 0.35) })
+			seg('k-thbar', hub, { x: 486, y: 150 }, B.cards[0] + 0.7)
+			tl.to('#k-bar', { y: -260, duration: 0.35, ease: 'power2.in' }, B.out)
+			tl.to('#k-barlabel', { y: -260, duration: 0.35, ease: 'power2.in' }, B.out)
+			tl.to('#k-gap', { y: -260, duration: 0.35, ease: 'power2.in' }, B.out)
+			tl.to(st, { yPercent: -108, duration: 0.35, ease: 'power2.in', stagger: 0.05 }, B.out)
+			tl.to({}, { duration: dur }, 0)
+			window.__timelines['story-case'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

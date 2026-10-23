@@ -155,7 +155,7 @@ docs/shorts/
   hyperframes.json
   assets/brand.css, shorts.js tokens and the shared helpers (camera, text, countdown)
   assets/fonts/               Instrument Sans + JetBrains Mono (variable, latin) and their OFL texts
-  compositions/               tpl-a..tpl-e, captions, tag; story-chaos, story-flow, story-end (the voiced story's scenes)
+  compositions/               tpl-a..tpl-e, captions, tag; story-chaos, story-flow, story-end (the voiced story scenes); story-case, story-evidence, story-case-end (episode 07)
   episodes/NN-slug.json       the data: one file per episode
   tools/setup.mjs             captures -> JPEG, pets, icon (works files, git-ignored)
   tools/vo.mjs, vo.py         a voiced episode's lines -> work/<id>/voice.wav and the word times (Chatterbox, local)
@@ -267,3 +267,12 @@ Every voiced episode's description says "Voice: synthetic (AI-generated)", and t
 - Beats: a phone buzzing on the nightstand (drawn) → a sleepy grep for "invoice", results scrolling past → the narrator opens POST /orders: the order calls billing over HTTP, a different service in a different language → "Now you know which service to look at, and who to wake up." → back to bed, the pet asleep on the keyboard.
 - The joke: the on-call panic, and the pet asleep at the end.
 - Risk: it must not claim the canvas *finds* the bug; it shows where the request goes, which is where to look.
+
+### Episode 07: the context crime (built)
+
+[episodes/07-context-crime.json](../shorts/episodes/07-context-crime.json), 48 s, voiced. A different format and a different feature from the flow-canvas stories: a **true-crime case file** about the **harness map** (flow-harness).
+
+- **Format.** A hushed documentary narrator (the film's "male" reference reading, Chatterbox, exaggeration .65, tempo .93: deliberately not the female voice of episodes 02-04) and a second voice, the "witness" (the model's built-in voice). The picture is drawn, as the voiced-story rules ask: a manila folder, two sticky notes, a bar that stands for the context window (labelled "drawn, not to scale"), four suspect cards, red thread, redaction bars (`story-case`). The middle is the real harness map capture (`E-harness`, demo project) with rings, two stamps (INNOCENT, SUSPECT) and the witness bubble (`story-evidence`). The loop frame is the closed folder (`story-case-end`), the same picture as frame 0.
+- **The story.** "Monday the agent was brilliant, by Friday it forgot the one rule." Four rumoured suspects (a 6,000-token instructions file, skills that never fire, the same rule twice, a hook silent since March); each card says "(rumour)": they are folklore, not data. The map clears the first (Instructions: 324 tokens), a rule that matches no file speaks as a witness ("**/*.graphql matches no file", real in the capture), and the prime suspect is Skills: 23 of them, 2.4k tokens of the 2.8k that load before the first prompt. The twist joke: "The lint needs no LLM. No model was harmed." (true: the lint is rule-based, README "Keep your harness healthy").
+- **Honesty.** Every number on the real UI (96, 2.8k, 324, 2.4k, 63k) is from `E-harness`; the suspects the voice names are not in the demo and are drawn as rumour; "prime suspect" is the joke's verdict, not a claim that skills made an agent forget. The duplicate-rule and silent-hook lints exist (README) but are not shown on a capture. The Context X-ray and the "Why?" view are not shown (no X-ray capture exists yet).
+- **Build.** `node tools/vo.mjs episodes/07-context-crime.json`, then `node tools/episode.mjs ...`. The product name is spelled "In sill lode" for the voice (the ASR hears "in SIL load"). Music: bpm 78 (slower, tense) with the usual duck.

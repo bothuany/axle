@@ -1,0 +1,331 @@
+{
+	"id": "07-context-crime",
+	"series": "Dry Run",
+	"no": 7,
+	"title": "Who ate my context window?",
+	"duration": 48,
+	"loop": 2.5,
+	"vo": {
+		"voices": {
+			"narrator": {
+				"ref": "%LOCALAPPDATA%/Temp/insilode-film-v3/audition/_refs/male.wav",
+				"exaggeration": 0.65,
+				"cfg": 0.3,
+				"seed": 21
+			},
+			"witness": {
+				"ref": null,
+				"exaggeration": 0.6,
+				"cfg": 0.3,
+				"seed": 5
+			}
+		},
+		"lines": [
+			{
+				"id": "n1",
+				"t": 0.1,
+				"tempo": 0.93,
+				"text": "Monday, the agent was *brilliant*. By Friday, it forgot the one rule that mattered."
+			},
+			{
+				"id": "n2",
+				"t": 5.5,
+				"tempo": 0.9,
+				"text": "Somebody was eating its *context window*."
+			},
+			{
+				"id": "n3",
+				"t": 9.5,
+				"tempo": 0.93,
+				"text": "Suspect one. A six-thousand-token instructions file. *Unread*."
+			},
+			{
+				"id": "n4",
+				"t": 14.1,
+				"tempo": 0.93,
+				"text": "Suspect two. Skills that never *fire*.",
+				"seed": 4
+			},
+			{
+				"id": "n5",
+				"t": 17.5,
+				"tempo": 0.93,
+				"text": "Suspect three. The same rule. *Twice*."
+			},
+			{
+				"id": "n6",
+				"t": 21.4,
+				"tempo": 0.93,
+				"text": "Suspect four. A hook silent since *March*."
+			},
+			{
+				"id": "n7",
+				"t": 25.1,
+				"tempo": 0.93,
+				"text": "So I opened the *harness map*, in Insilode.",
+				"say": "So I opened the harness map, in In sill lode."
+			},
+			{
+				"id": "n8",
+				"t": 28.4,
+				"tempo": 0.93,
+				"text": "Instructions: three hundred twenty-four tokens. *Innocent*."
+			},
+			{
+				"id": "w1",
+				"who": "witness",
+				"t": 32.7,
+				"text": "I match *no file*. I was never in the room."
+			},
+			{
+				"id": "n9",
+				"t": 35,
+				"tempo": 0.93,
+				"text": "Skills. Twenty-three. Most of what loads before your first prompt. *Prime* suspect."
+			},
+			{
+				"id": "n10",
+				"t": 41,
+				"tempo": 0.93,
+				"text": "The lint needs no LLM. No *model* was harmed."
+			}
+		]
+	},
+	"scenes": [
+		{
+			"src": "story-case",
+			"start": 0,
+			"duration": 25,
+			"vars": {
+				"question": "Who ate my|context *window*?",
+				"suspectsText": "Four|*suspects*.",
+				"beats": {
+					"mon": 0.9,
+					"fri": 2.8,
+					"scrawl": 4.3,
+					"folderOut": 5.2,
+					"bar": 5.5,
+					"chomp": [
+						6.9,
+						7.3,
+						7.7,
+						8.1,
+						8.45
+					],
+					"hookOut": 9,
+					"suspectsText": 9.35,
+					"cards": [
+						10.2,
+						14.9,
+						18.6,
+						22
+					],
+					"out": 24.5
+				}
+			}
+		},
+		{
+			"src": "story-evidence",
+			"start": 25,
+			"duration": 20.5,
+			"captures": {
+				"captureUrl": "E-harness"
+			},
+			"vars": {
+				"cam": [
+					{
+						"t": 0,
+						"cx": 0.17,
+						"cy": 0.24,
+						"w": 0.34
+					},
+					{
+						"t": 2.4,
+						"cx": 0.1,
+						"cy": 0.24,
+						"w": 0.2
+					}
+				],
+				"rings": [
+					{
+						"t": 3.4,
+						"d": 3,
+						"cx": 0.067,
+						"cy": 0.1876,
+						"w": 0.13,
+						"h": 0.027
+					},
+					{
+						"t": 7.8,
+						"d": 2,
+						"cx": 0.085,
+						"cy": 0.239,
+						"w": 0.15,
+						"h": 0.052
+					},
+					{
+						"t": 10,
+						"d": 5.2,
+						"cx": 0.07,
+						"cy": 0.31,
+						"w": 0.13,
+						"h": 0.028
+					},
+					{
+						"t": 16,
+						"d": 3.4,
+						"cx": 0.06,
+						"cy": 0.106,
+						"w": 0.14,
+						"h": 0.026
+					}
+				],
+				"texts": [
+					{
+						"t": 0.1,
+						"text": "One map of|the *harness*."
+					},
+					{
+						"t": 3.2,
+						"text": "Instructions:|*324* tok."
+					},
+					{
+						"t": 7.6,
+						"text": "*No file*|matched."
+					},
+					{
+						"t": 9.9,
+						"text": "Skills:|*2.4k* tok."
+					},
+					{
+						"t": 16,
+						"text": "No LLM|*needed*."
+					}
+				],
+				"stamps": [
+					{
+						"t": 6.5,
+						"word": "INNOCENT",
+						"kind": "allow",
+						"fx": 0.094,
+						"fy": 0.1876,
+						"x": 500,
+						"out": 9.6
+					},
+					{
+						"t": 15.3,
+						"word": "SUSPECT",
+						"kind": "ask",
+						"fx": 0.136,
+						"fy": 0.31,
+						"x": 540,
+						"dy": 95
+					}
+				],
+				"bubble": {
+					"t": 7.7,
+					"out": 11.2,
+					"who": "graphql-schema.md:",
+					"text": "I match no file. I was never in the room."
+				}
+			}
+		},
+		{
+			"src": "story-case-end",
+			"start": 45.5,
+			"duration": 2.5,
+			"vars": {
+				"question": "Who ate my|context *window*?"
+			}
+		}
+	],
+	"music": {
+		"bpm": 78
+	},
+	"sfx": [
+		{
+			"t": 0.9,
+			"kind": "tick"
+		},
+		{
+			"t": 2.8,
+			"kind": "tick"
+		},
+		{
+			"t": 4.35,
+			"kind": "thud"
+		},
+		{
+			"t": 5.5,
+			"kind": "whoosh"
+		},
+		{
+			"t": 6.9,
+			"kind": "tick"
+		},
+		{
+			"t": 7.3,
+			"kind": "tick"
+		},
+		{
+			"t": 7.7,
+			"kind": "tick"
+		},
+		{
+			"t": 8.1,
+			"kind": "tick"
+		},
+		{
+			"t": 8.45,
+			"kind": "thud"
+		},
+		{
+			"t": 10.2,
+			"kind": "tick"
+		},
+		{
+			"t": 14.9,
+			"kind": "tick"
+		},
+		{
+			"t": 18.6,
+			"kind": "tick"
+		},
+		{
+			"t": 22,
+			"kind": "tick"
+		},
+		{
+			"t": 25,
+			"kind": "whoosh"
+		},
+		{
+			"t": 25.2,
+			"kind": "pop"
+		},
+		{
+			"t": 31.5,
+			"kind": "thud"
+		},
+		{
+			"t": 32.7,
+			"kind": "tick"
+		},
+		{
+			"t": 36,
+			"kind": "note",
+			"pitch": 0
+		},
+		{
+			"t": 40.3,
+			"kind": "thud"
+		}
+	],
+	"description": "Who ate my context window? A true-crime parody: four rumoured suspects (drawn, folklore, not data), then the real harness map on the demo project: Instructions 324 tokens, a rule that matches no file, and Skills as most of what loads before the first prompt (2.4k of 2.8k). The lint is rule-based, no LLM. Demo project (Harbor Goods). Real captures of Insilode, a code editor built on VS Code. Voice: synthetic (AI-generated). Music composed in code. Free and open source: insilode.dev",
+	"hashtags": [
+		"#dryrun",
+		"#claudecode",
+		"#aiagents",
+		"#devtools"
+	]
+}
