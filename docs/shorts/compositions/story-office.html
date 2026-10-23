@@ -1,0 +1,211 @@
+<!doctype html>
+<!-- Story scene "office" (voiced stories, episode 06-agent-waits): a sitcom cold open in a drawn office. Three agents are
+     drawn as monitors with their real pixel pets from the Agents dock (the pets are the app's own avatars, cut from the
+     dock page; the office, the clock, the sticky note and the developer's monitor are drawn props and look drawn). The
+     camera cuts, as a sitcom's does, between the wide shot, close-ups with a documentary lower third, and the developer's
+     monitor with six terminal tabs. Times come from the episode (`cuts`, `texts`); the layout lives here. -->
+<html lang="en" data-composition-variables='[
+{"id":"petBrenda","type":"string","label":"Brenda (the waiting agent)","default":"assets/pets/bunny-wait.png"},
+{"id":"petGary","type":"string","label":"Gary (working)","default":"assets/pets/cat-work.png"},
+{"id":"petDana","type":"string","label":"Dana (done, asleep)","default":"assets/pets/cat-done.png"},
+{"id":"cuts","type":"string","label":"Camera cuts (JSON: t, shot wide|brenda|gary|dev)","default":"[]"},
+{"id":"texts","type":"string","label":"Big text beats (JSON: t, text with | and *accent*)","default":"[]"},
+{"id":"marks","type":"string","label":"Times (JSON: shake, ahem, fourth)","default":"{}"},
+{"id":"still","type":"number","label":"1: the clock and the first text are still (the loop frame)","default":0},
+{"id":"duration","type":"number","label":"Scene length (s)","default":19.4}
+]'>
+<body>
+<template id="story-office-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#o-texts .q { font-size: 100px; }
+		#o-panel { left: var(--px); top: 480px; width: var(--pw); height: 810px; background: #232c4b; }
+		#o-stage { position: absolute; left: 0; top: 0; width: 972px; height: 810px; transform-origin: 0 0; }
+		#o-wall { position: absolute; left: 0; top: 0; width: 972px; height: 650px; background: #232c4b; }
+		#o-wall::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 14px; background: #3a4468; }
+		#o-floor { position: absolute; left: 0; top: 650px; width: 972px; height: 160px; background: #171c30; }
+		#o-poster { position: absolute; left: 86px; top: 56px; width: 190px; height: 130px; background: #f3ead6; transform: rotate(-3deg); box-shadow: 0 8px 14px rgba(0, 0, 0, .35); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+		#o-poster b { font-family: var(--mono); font-weight: 700; font-size: 30px; color: #2a2318; line-height: 1; }
+		#o-poster i { font-style: normal; font-family: var(--mono); font-weight: 700; font-size: 30px; color: #d01e2a; line-height: 1; }
+		#o-clock { position: absolute; left: 424px; top: 48px; width: 124px; height: 124px; border-radius: 50%; background: #f3ead6; border: 8px solid #3a4468; box-shadow: 0 8px 14px rgba(0, 0, 0, .35); }
+		#o-clock .h { position: absolute; left: 50%; top: 50%; width: 6px; border-radius: 3px; background: #2a2318; transform-origin: 50% 100%; margin-left: -3px; }
+		#o-clock .dot { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #d01e2a; }
+		.desk { position: absolute; top: 560px; width: 320px; height: 36px; margin-left: -160px; background: #8a6540; border-radius: 6px; box-shadow: 0 10px 14px rgba(0, 0, 0, .35); }
+		.front { position: absolute; top: 596px; width: 280px; height: 70px; margin-left: -140px; background: #5f4329; display: flex; align-items: center; justify-content: center; }
+		.front b { font-family: var(--mono); font-weight: 700; font-size: 30px; color: #f3ead6; letter-spacing: .04em; }
+		.neck { position: absolute; top: 518px; width: 30px; height: 44px; margin-left: -15px; background: #3a4468; }
+		.bezel { position: absolute; top: 322px; width: 236px; height: 200px; margin-left: -118px; background: #0b0f1f; border: 10px solid #3a4468; border-radius: 22px; display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 18px rgba(0, 0, 0, .4); }
+		.bezel img { width: 150px; height: 150px; image-rendering: pixelated; border-radius: 28px; }
+		#o-sticky { position: absolute; left: 0; top: 0; width: 160px; height: 92px; margin-left: -80px; margin-top: -46px; background: #ffe56b; box-shadow: 0 10px 16px rgba(0, 0, 0, .4); display: flex; align-items: center; justify-content: center; transform: rotate(7deg); }
+		#o-sticky b { font-family: var(--sans); font-weight: 700; font-size: 34px; color: #2a2318; letter-spacing: -0.02em; }
+		#o-dots { position: absolute; left: 292px; top: 296px; width: 90px; margin-left: -45px; display: flex; gap: 14px; justify-content: center; }
+		#o-dots i { display: block; width: 16px; height: 16px; border-radius: 50%; background: #f3ead6; opacity: .25; }
+		#o-mug { position: absolute; left: 596px; top: 520px; width: 44px; height: 40px; background: #f3ead6; border-radius: 4px 4px 12px 12px; }
+		#o-mug::after { content: ""; position: absolute; right: -14px; top: 8px; width: 16px; height: 18px; border: 5px solid #f3ead6; border-left: 0; border-radius: 0 10px 10px 0; }
+		#o-zzz { position: absolute; left: 836px; top: 280px; font-family: var(--sans); font-weight: 700; font-size: 46px; color: #a9b1c9; }
+		#o-bang { position: absolute; left: 520px; top: 252px; font-family: var(--sans); font-weight: 800; font-size: 64px; color: #ff6b7d; opacity: 0; }
+		.lt { position: absolute; left: 0; bottom: 34px; padding: 12px 36px 16px 34px; background: rgba(16, 20, 42, .94); border-left: 10px solid var(--entry); display: none; }
+		.lt b { display: block; font-family: var(--sans); font-weight: 700; font-size: 56px; color: #fff; letter-spacing: -0.02em; line-height: 1.05; }
+		.lt span { display: block; font-family: var(--mono); font-weight: 500; font-size: 28px; color: var(--ink-2); margin-top: 4px; }
+		#o-dev { position: absolute; inset: 0; background: #1c2540; display: none; }
+		#o-dev .screen { position: absolute; left: 66px; top: 70px; width: 840px; height: 520px; background: #0b0f1f; border: 14px solid #3a4468; border-radius: 26px; overflow: hidden; }
+		#o-dev .strip { display: flex; height: 64px; background: #1a2140; border-bottom: 3px solid #2a3352; }
+		#o-dev .tab { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--mono); font-weight: 500; font-size: 28px; color: #a9b1c9; border-right: 3px solid #2a3352; }
+		#o-dev .tab.on { background: #0b0f1f; color: #fff; }
+		#o-dev .tab i { width: 14px; height: 14px; border-radius: 50%; background: var(--entry); }
+		#o-dev .lines { padding: 28px 30px; display: flex; flex-direction: column; gap: 22px; }
+		#o-dev .lines i { display: block; height: 14px; border-radius: 7px; background: #2a3352; }
+		#o-dev .cursor { display: block; width: 18px; height: 30px; background: #5fe0a1; margin: 4px 0 0 0; }
+		#o-dev .stand { position: absolute; left: 456px; top: 592px; width: 60px; height: 70px; background: #3a4468; }
+		#o-dev .foot { position: absolute; left: 376px; top: 660px; width: 220px; height: 22px; border-radius: 10px; background: #3a4468; }
+		#o-flag { position: absolute; left: 0; top: 0; padding: 4px 18px 8px; background: var(--entry); border-radius: 12px; font-family: var(--mono); font-weight: 700; font-size: 32px; color: #2a2318; opacity: 0; }
+		#o-flag::after { content: ""; position: absolute; left: 50%; bottom: -14px; margin-left: -12px; border: 12px solid transparent; border-top-color: var(--entry); border-bottom: 0; }
+	</style>
+	<div id="root" data-composition-id="story-office" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="o-texts"></div>
+		<div id="o-panel" class="panel">
+			<div id="o-stage" data-layout-allow-overflow>
+				<div id="o-wall"></div>
+				<div id="o-floor"></div>
+				<div id="o-poster"><b>RELEASE</b><i>FRIDAY</i></div>
+				<div id="o-clock"><i class="h" id="o-hm" style="height:44px"></i><i class="h" id="o-hh" style="height:30px; width:8px"></i><i class="dot"></i></div>
+			</div>
+			<div id="o-lt-brenda" class="lt"><b>BRENDA</b><span>Codex agent</span></div>
+			<div id="o-lt-gary" class="lt"><b>GARY</b><span>Claude Code agent</span></div>
+			<div id="o-dev" data-layout-allow-overflow>
+				<div class="screen">
+					<div class="strip"><div class="tab"><span data-layout-ignore>zsh</span></div><div class="tab"><span data-layout-ignore>zsh</span></div><div class="tab"><span data-layout-ignore>claude</span></div><div class="tab on" id="o-tab4"><i id="o-tabdot" data-layout-allow-overflow></i><span data-layout-ignore>codex</span></div><div class="tab"><span data-layout-ignore>zsh</span></div><div class="tab"><span data-layout-ignore>dev</span></div></div>
+					<div class="lines"><i style="width: 70%"></i><i style="width: 52%"></i><i style="width: 84%"></i><i style="width: 38%"></i><i style="width: 61%"></i><span class="cursor" id="o-cursor"></span></div>
+				</div>
+				<div class="stand"></div><div class="foot"></div>
+				<div id="o-flag" data-layout-allow-overflow>Brenda</div>
+			</div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('story-office'), S = Shorts
+			var tl = gsap.timeline({ paused: true })
+			var $ = function (id) { return document.getElementById(id) }
+			var dur = V.duration
+			var M = S.json(V.marks, {})
+			var stage = $('o-stage')
+
+			// The office: three monitors, each an agent. x is the desk's centre in the stage.
+			var cast = [
+				{ id: 'b', x: 190, name: 'BRENDA', pet: V.petBrenda },
+				{ id: 'g', x: 486, name: 'GARY', pet: V.petGary },
+				{ id: 'd', x: 782, name: 'DANA', pet: V.petDana }
+			]
+			cast.forEach(function (c) {
+				var html = '<div class="desk" id="o-desk-' + c.id + '" style="left:' + c.x + 'px"></div>' +
+					'<div class="front" style="left:' + c.x + 'px"><b data-layout-ignore>' + c.name + '</b></div>' +
+					'<div class="neck" style="left:' + c.x + 'px"></div>' +
+					'<div class="bezel" id="o-bz-' + c.id + '" style="left:' + c.x + 'px"><img id="o-pet-' + c.id + '" src="' + c.pet + '" alt=""></div>'
+				var wrap = document.createElement('div')
+				wrap.id = 'o-set-' + c.id
+				wrap.innerHTML = html
+				wrap.setAttribute('data-layout-allow-overflow', '')
+				stage.appendChild(wrap)
+			})
+			// Brenda's sticky note, her three waiting dots, Gary's mug, Dana's snore.
+			stage.insertAdjacentHTML('beforeend', '<div id="o-sticky" data-layout-allow-overflow><b data-layout-ignore>ask first</b></div><div id="o-dots"><i></i><i></i><i></i></div><div id="o-mug"></div><div id="o-zzz" data-layout-allow-overflow>z z</div><div id="o-bang" data-layout-allow-overflow>!</div>')
+			gsap.set('#o-sticky', { x: 134, y: 338 })
+			gsap.set('#o-mug', { x: 0 })
+			gsap.set('#o-bang', { x: 0 })
+
+			// The clock: a minute hand that runs the whole film, an hour hand that creeps. It is a prop.
+			gsap.set('#o-hm', { rotation: 0 })
+			if (!V.still) {
+				tl.to('#o-hm', { rotation: 360 * 3.2, duration: dur, ease: 'none' }, 0)
+				tl.to('#o-hh', { rotation: 360 * 3.2 / 12, duration: dur, ease: 'none' }, 0)
+			}
+
+			// The waiting dots (Brenda): one lights after the other, all the time.
+			var dots = stage.querySelectorAll('#o-dots i')
+			for (var t = 0; t < dur; t += 1.2) {
+				;[].forEach.call(dots, function (d, i) { tl.fromTo(d, { opacity: 0.25 }, { opacity: 1, duration: 0.2, yoyo: true, repeat: 1, ease: 'sine.inOut' }, t + i * 0.25) })
+			}
+			// Dana's snore floats up and starts again.
+			for (var z = 0; z < dur; z += 2.4) tl.fromTo('#o-zzz', { y: 0, opacity: 0.9 }, { y: -30, opacity: 0, duration: 2.2, ease: 'sine.out' }, z)
+
+			// The camera: a sitcom cuts. A shot is a transform of the stage; a close-up drifts a little while it is held.
+			var SHOTS = {
+				wide: { s: 1.08, fx: 486, fy: 400, drift: 1.03 },
+				brenda: { s: 2.5, fx: 190, fy: 440, drift: 1.07 },
+				gary: { s: 2.5, fx: 486, fy: 440, drift: 1.07 }
+			}
+			var place = function (sh, k) {
+				var s = sh.s * (k || 1)
+				return sh.fx === undefined ? { scale: s, x: 0, y: 0 } : { scale: s, x: 486 - s * sh.fx, y: 405 - s * sh.fy }
+			}
+			var cuts = S.json(V.cuts, [])
+			cuts.forEach(function (c, i) {
+				var end = cuts[i + 1] ? cuts[i + 1].t : dur
+				var sh = SHOTS[c.shot]
+				tl.set('#o-dev', { display: c.shot === 'dev' ? 'block' : 'none' }, c.t)
+				tl.set(stage, { display: c.shot === 'dev' ? 'none' : 'block' }, c.t)
+				if (c.shot !== 'dev') {
+					tl.set(stage, Object.assign({ transformOrigin: '0 0' }, place(sh)), c.t)
+					tl.to(stage, Object.assign({ duration: Math.max(0.1, end - c.t), ease: 'none' }, place(sh, sh.drift)), c.t)
+				}
+				// The documentary lower third of a close-up slides in from the panel's left edge and leaves the same way.
+				;['brenda', 'gary'].forEach(function (who) {
+					var el = '#o-lt-' + who
+					if (c.shot !== who) { tl.set(el, { display: 'none' }, c.t); return }
+					tl.set(el, { display: 'block' }, c.t)
+					tl.fromTo(el, { xPercent: -105 }, { xPercent: 0, duration: 0.3, ease: 'power3.out', immediateRender: false }, c.t + 0.05)
+					tl.to(el, { xPercent: -105, duration: 0.25, ease: 'power2.in' }, end - 0.3)
+				})
+			})
+
+			// Gary bangs the desk when he says "blocking"; Brenda bobs with her "ahem".
+			if (M.shake) {
+				tl.fromTo('#o-set-g', { y: 0 }, { y: 7, duration: 0.07, yoyo: true, repeat: 3, ease: 'none' }, M.shake)
+				tl.fromTo('#o-bang', { opacity: 1, y: 0, scale: 0.6 }, { opacity: 0, y: -26, scale: 1.2, duration: 0.7, ease: 'power2.out' }, M.shake)
+			}
+			if (M.ahem) {
+				tl.fromTo('#o-bz-b', { y: 0 }, { y: -10, duration: 0.14, yoyo: true, repeat: 1, ease: 'power2.out' }, M.ahem)
+				tl.fromTo('#o-bz-b', { y: 0 }, { y: -10, duration: 0.14, yoyo: true, repeat: 1, ease: 'power2.out' }, M.ahem + 0.9)
+			}
+			// The developer's monitor: the cursor blinks, the amber dot in tab four pulses, a flag names whose tab it is.
+			for (var b = 0; b < dur; b += 0.8) tl.set('#o-cursor', { opacity: (b / 0.8) % 2 === 0 ? 1 : 0 }, b)
+			for (var p = 0; p < dur; p += 1) tl.fromTo('#o-tabdot', { scale: 1 }, { scale: 1.5, duration: 0.5, yoyo: true, repeat: 1, ease: 'sine.inOut' }, p)
+			if (M.fourth) {
+				gsap.set('#o-flag', { x: 478, y: 14 })
+				tl.fromTo('#o-flag', { opacity: 0, y: 60 }, { opacity: 1, y: 14, duration: 0.3, ease: 'power3.out' }, M.fourth)
+				tl.to('#o-flag', { opacity: 0, y: 60, duration: 0.25, ease: 'power2.in' }, M.fourth + 1.4)
+			}
+
+			// Big text: each beat rises into its own clip box and leaves upward before the next one.
+			var texts = S.json(V.texts, [])
+			texts.forEach(function (b, i) {
+				var box = document.createElement('div')
+				box.className = 'q hl'
+				box.setAttribute('data-layout-allow-overlap', '')
+				box.setAttribute('data-layout-allow-occlusion', '')
+				$('o-texts').appendChild(box)
+				var spans = S.lines(box, b.text, 'o-t' + i)
+				spans.forEach(function (sp) { [sp].concat([].slice.call(sp.querySelectorAll('*'))).forEach(function (e) { e.setAttribute('data-layout-allow-occlusion', '') }) })
+				if (i === 0) {
+					// The hook is on screen, fully formed, at frame 0. On the loop frame (still) it rises back in and stays.
+					var next0 = texts[1]
+					if (V.still) { tl.set(spans, { yPercent: 108 }, 0); S.rise(tl, spans, 0.05) }
+					else S.leave(tl, spans, next0 ? next0.t - 0.4 : dur - 0.4)
+				} else {
+					tl.set(spans, { yPercent: 108 }, 0)
+					S.rise(tl, spans, b.t)
+					var next = texts[i + 1]
+					S.leave(tl, spans, next ? next.t - 0.4 : dur - 0.4)
+				}
+			})
+			// Shot 0 is the wide shot, at frame 0.
+			tl.set(stage, Object.assign({ transformOrigin: '0 0' }, place(SHOTS.wide)), 0)
+			tl.to({}, { duration: dur }, 0)
+			window.__timelines['story-office'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>
