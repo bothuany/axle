@@ -1,0 +1,165 @@
+<!doctype html>
+<!-- Story scene "story-2am-close" (voiced story, episode 04-flow-2am): the DRAWN 2 a.m. bedroom. Nothing here is Insilode's UI: a
+     phone with a made-up on-call notice, an alarm clock, a mug, the pixel cat, and (open mode) paper cards for the
+     service names, the grep and the first hit. The service names, the file name, the grep count (31 matches of
+     `grep -rni invoice` over the demo project) and the code lines are the demo project's real ones.
+     The three scenes story-2am-night (open), story-2am-close and story-2am-end share this room; the mode is close.
+     Times come from the episode (`beats`); the layout lives here. -->
+<html lang="en" data-composition-variables='[
+{"id":"texts","type":"string","label":"Big text beats (JSON: t, text with | and *accent*)","default":"[]"},
+{"id":"petUrl","type":"string","label":"Pet","default":"assets/pets/cat.png"},
+{"id":"beats","type":"string","label":"Times (JSON)","default":"{}"},
+{"id":"duration","type":"number","label":"Scene length (s)","default":10}
+]'>
+<body>
+<template id="story-2am-close-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#cl-t .q { font-size: 100px; }
+		#cl-panel { left: var(--px); top: 480px; width: var(--pw); height: 810px; background: #141d42; }
+		#cl-room { position: absolute; left: 0; top: 0; width: 972px; height: 810px; }
+		#cl-phone { position: absolute; left: 100px; top: 60px; width: 310px; height: 480px; border-radius: 40px; background: #0a0e1c; border: 8px solid #3b4670; transform-origin: 50% 100%; }
+		#cl-screen { position: absolute; inset: 18px 14px 18px 14px; border-radius: 24px; background: #1d2a63; display: flex; align-items: center; justify-content: center; }
+		#cl-card { width: 252px; padding: 18px 16px 20px; border-radius: 18px; background: #f4f6ff; color: #1a1f3a; }
+		#cl-card .tag { display: inline-block; font-family: var(--mono); font-weight: 700; font-size: 28px; color: #fff; background: #d01e2a; border-radius: 8px; padding: 2px 12px 4px; margin-bottom: 12px; }
+		#cl-card .msg { font-family: var(--sans); font-weight: 700; font-size: 36px; line-height: 1.08; letter-spacing: -0.02em; }
+		#cl-card .msg i { font-style: normal; color: #d01e2a; }
+		#cl-buzz { position: absolute; left: 60px; top: 140px; width: 400px; height: 300px; }
+		#cl-buzz path { fill: none; stroke: #e3a23b; stroke-width: 7; stroke-linecap: round; opacity: 0; }
+		#cl-clock { position: absolute; left: 560px; top: 150px; width: 340px; height: 200px; border-radius: 26px; background: #0a0e1c; border: 8px solid #3b4670; display: flex; align-items: center; justify-content: center; }
+		#cl-clock b { font-family: var(--mono); font-weight: 700; font-size: 110px; letter-spacing: -0.04em; color: #ff4a3d; line-height: 1; }
+		#cl-pet { position: absolute; z-index: 20; left: 740px; top: 470px; width: 176px; height: 176px; image-rendering: pixelated; border-radius: 26px; transform-origin: 50% 100%; }
+		#cl-bub { position: absolute; z-index: 21; left: 540px; top: 690px; padding: 8px 30px 14px; font-family: var(--sans); font-weight: 700; font-size: 64px; line-height: 1; color: #2a2318; background: #fff; border-radius: 28px; opacity: 0; }
+		#cl-bub2 { position: absolute; z-index: 21; left: 570px; top: 690px; padding: 8px 34px 14px; font-family: var(--sans); font-weight: 700; font-size: 64px; line-height: 1; color: #2a2318; background: #fff; border-radius: 28px; opacity: 0; }
+		#cl-bub2::after { content: ""; position: absolute; right: -14px; bottom: 20px; border: 14px solid transparent; border-left-color: #fff; }
+		#cl-bub::after { content: ""; position: absolute; right: -14px; bottom: 20px; border: 14px solid transparent; border-left-color: #fff; }
+		#cl-zz { position: absolute; z-index: 20; left: 630px; top: 520px; font-family: var(--sans); font-weight: 700; font-size: 64px; color: #cfd6ff; opacity: 0; }
+
+		.l2 { position: absolute; left: 0; top: 0; width: 972px; height: 810px; background: #1b1b22; }
+		.l2 .stk { z-index: 5; position: absolute; left: 800px; top: 36px; width: 150px; padding: 6px 0 8px; text-align: center; font-family: var(--mono); font-weight: 700; font-size: 44px; line-height: 1; color: #ff4a3d; background: #0a0e1c; border: 4px solid #3b4670; border-radius: 12px; transform: rotate(4deg); }
+		.svc { position: absolute; left: 44px; width: 740px; height: 150px; background: #f3ead6; border-radius: 8px 18px 18px 18px; box-shadow: 0 10px 22px rgba(0, 0, 0, .45); display: flex; align-items: center; padding: 0 28px; }
+		.qq { position: absolute; left: 60px; top: 590px; font-family: var(--mono); font-weight: 700; font-size: 150px; line-height: 1; color: #d01e2a; transform: rotate(-6deg); }
+		.svc b { font-family: var(--mono); font-weight: 650; font-size: 46px; color: #2a2318; letter-spacing: -0.02em; white-space: nowrap; }
+		#cl-ptr { opacity: 0; position: absolute; left: 6px; top: 0; width: 0; height: 0; border: 24px solid transparent; border-left: 34px solid #e3a23b; border-right: 0; margin-top: -24px; }
+		#cl-grep { position: absolute; left: 36px; top: 30px; width: 880px; height: 740px; background: #f3ead6; border-radius: 8px 18px 18px 18px; box-shadow: 0 10px 22px rgba(0, 0, 0, .45); padding: 24px 26px; transform: rotate(-1deg); }
+		#cl-grep .cmd { font-family: var(--mono); font-weight: 700; font-size: 32px; color: #2a2318; margin-bottom: 14px; white-space: nowrap; }
+		#cl-grep .row { font-family: var(--mono); font-size: 28px; line-height: 1; padding: 9px 8px 11px; color: #2a2318; white-space: nowrap; opacity: 0; letter-spacing: -0.03em; }
+		#cl-grep .row.first { position: relative; }
+		#cl-hl { position: absolute; left: 14px; top: 0; width: 840px; height: 50px; background: #ffe56b; opacity: 0; z-index: 0; border-radius: 6px; }
+		#cl-grep .row { position: relative; z-index: 1; }
+		#cl-count { position: absolute; left: 26px; bottom: 26px; font-family: var(--sans); font-weight: 700; font-size: 72px; line-height: 1; color: #d01e2a; letter-spacing: -0.02em; padding: 4px 26px 12px; border: 7px solid #d01e2a; border-radius: 50%; opacity: 0; transform: rotate(-3deg); }
+		.tabear { position: absolute; left: 44px; top: 44px; width: 560px; height: 90px; background: #f3ead6; border-radius: 12px 12px 0 0; display: flex; align-items: center; padding: 0 26px; }
+		.tabear b { font-family: var(--mono); font-weight: 650; font-size: 38px; color: #2a2318; white-space: nowrap; letter-spacing: -0.02em; }
+		#cl-hit .body { position: absolute; left: 44px; top: 134px; width: 740px; height: 330px; background: #f3ead6; border-radius: 0 18px 18px 18px; box-shadow: 0 10px 22px rgba(0, 0, 0, .45); padding: 30px 28px; }
+		#cl-hit .code { font-family: var(--mono); font-size: 30px; line-height: 1.5; color: #2a2318; white-space: pre; letter-spacing: -0.03em; }
+		#cl-hit .code mark { background: #ffe56b; color: #2a2318; padding: 0 4px; }
+		#cl-stamp { position: absolute; left: 150px; top: 520px; font-family: var(--mono); font-weight: 700; font-size: 72px; line-height: 1; letter-spacing: .02em; color: #ff6b7d; border: 12px solid #ff6b7d; border-radius: 22px; padding: 12px 30px 18px; background: rgba(27, 27, 34, .94); opacity: 0; transform: rotate(-7deg); }
+	</style>
+	<div id="root" data-composition-id="story-2am-close" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="cl-t"></div>
+		<div id="cl-panel" class="panel">
+			<div id="cl-roomg" style="position: absolute; inset: 0;">
+			<svg id="cl-room" viewBox="0 0 972 810" aria-hidden="true">
+				<rect x="60" y="50" width="250" height="300" rx="10" fill="#0b1230" stroke="#6b4a2b" stroke-width="14"/>
+				<line x1="185" y1="50" x2="185" y2="350" stroke="#6b4a2b" stroke-width="10"/>
+				<line x1="60" y1="200" x2="310" y2="200" stroke="#6b4a2b" stroke-width="10"/>
+				<circle cx="125" cy="120" r="34" fill="#f5e7b0"/><circle cx="139" cy="110" r="30" fill="#0b1230"/>
+				<circle cx="240" cy="110" r="4" fill="#f5e7b0"/><circle cx="260" cy="270" r="4" fill="#f5e7b0"/><circle cx="120" cy="290" r="4" fill="#f5e7b0"/>
+				<path d="M600 650 Q 760 610 972 640 V810 H600Z" fill="#26356e" stroke="#0a0e1c" stroke-width="6"/>
+				<path d="M640 700 Q 780 680 972 700" fill="none" stroke="#3b4a8c" stroke-width="6"/>
+				<rect x="40" y="560" width="580" height="250" fill="#5a3d25" stroke="#0a0e1c" stroke-width="6"/>
+				<rect x="20" y="540" width="620" height="36" rx="6" fill="#7a5333" stroke="#0a0e1c" stroke-width="6"/>
+				<rect x="470" y="450" width="104" height="90" rx="10" fill="#e8e2d2" stroke="#0a0e1c" stroke-width="6"/>
+				<path d="M574 470 q 38 4 30 36 q -6 18 -30 16" fill="none" stroke="#e8e2d2" stroke-width="12"/>
+				<ellipse cx="522" cy="462" rx="44" ry="8" fill="#4a3320"/>
+				<path d="M60 600 h 520" stroke="#3d2916" stroke-width="5"/>
+				<rect x="300" y="720" width="120" height="14" rx="7" fill="#3d2916"/>
+			</svg>
+			<div id="cl-phone"><div id="cl-screen"><div id="cl-card"><span class="tag">ON-CALL</span><div class="msg">invoice missing for order <i>#4711</i></div></div></div></div>
+			<svg id="cl-buzz" viewBox="0 0 400 300" aria-hidden="true">
+				<path id="cl-bz1" d="M30 70 q -26 80 0 160"/><path id="cl-bz2" d="M-4 40 q -50 110 0 220"/>
+				<path id="cl-bz3" d="M370 70 q 26 80 0 160"/><path id="cl-bz4" d="M404 40 q 50 110 0 220"/>
+			</svg>
+			<div id="cl-clock"><b id="cl-time">2:14</b></div>
+			</div>
+			<div id="cl-l2a" class="l2" data-layout-allow-overflow data-layout-allow-occlusion>
+				<span class="stk">2:08</span>
+				<div class="svc" style="top: 40px"><b>orders-service</b></div>
+				<div class="svc" style="top: 220px"><b>billing-service</b></div>
+				<div class="svc" style="top: 400px"><b>shipping-service</b></div>
+				<i id="cl-ptr"></i><span class="qq">???</span>
+			</div>
+			<div id="cl-l2b" class="l2" data-layout-allow-overflow data-layout-allow-occlusion>
+				<span class="stk" style="top: 6px; left: 800px">2:10</span>
+				<div id="cl-grep"><div id="cl-hl"></div><div class="cmd">$ grep -rni invoice .</div>
+					<div class="row first">OrderController.java:35  invoiceFor(id)</div>
+					<div class="row">OrderService.java:24  createInvoice(saved)</div>
+					<div class="row">BillingClient.java:20  /api/invoices</div>
+					<div class="row">main.py:10  def create_invoice(body)</div>
+					<div class="row">service.py:6  class InvoiceService</div>
+					<div class="row">models.py:9  __tablename__ = "invoices"</div>
+					<div class="row">tasks.py:5  def send_receipt(invoice_id)</div>
+					<div class="row">billing-python.md:9  InvoiceService</div>
+					<div id="cl-count">31 matches</div>
+				</div>
+			</div>
+			<div id="cl-l2c" class="l2" data-layout-allow-overflow data-layout-allow-occlusion><span class="stk" style="left: 800px; top: 36px">2:12</span>
+				<div id="cl-hit">
+					<div class="tabear"><b>OrderController.java</b></div>
+					<div class="body"><div class="code">@GetMapping("/orders/{id}/invoice")
+public String invoice(Long id) {
+    return service.<mark>invoiceFor</mark>(id);
+}</div></div>
+				</div>
+				<div id="cl-stamp">READS ONLY</div>
+			</div>
+			<img id="cl-pet" data-layout-allow-overflow data-var-src="petUrl" src="assets/blank.png#cl" alt="">
+			<div id="cl-bub">...</div>
+			<div id="cl-bub2">!</div>
+			<div id="cl-zz">z z Z</div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('story-2am-close'), S = Shorts
+			var tl = gsap.timeline({ paused: true })
+			var $ = function (id) { return document.getElementById(id) }
+			var MODE = 'close'
+			var B = S.json(V.beats, {})
+			var dur = V.duration
+
+			// Big text: the first beat is fully formed at frame 0; later beats rise into their own clip box and leave upward.
+			var texts = S.json(V.texts, [])
+			texts.forEach(function (b, i) {
+				var box = document.createElement('div')
+				box.className = 'q hl'
+				box.setAttribute('data-layout-allow-overlap', '')
+				box.setAttribute('data-layout-allow-occlusion', '')
+				$('cl-t').appendChild(box)
+				var spans = S.lines(box, b.text, 'cl-t' + i)
+				if (i > 0) {
+					spans.forEach(function (sp) { [sp].concat([].slice.call(sp.querySelectorAll('*'))).forEach(function (e) { e.setAttribute('data-layout-allow-occlusion', '') }) })
+					tl.set(spans, { yPercent: 108 }, 0)
+					S.rise(tl, spans, b.t)
+				}
+				var next = texts[i + 1]
+				if (next) S.leave(tl, spans, next.t - 0.4)
+			})
+
+			// The layers (service names, grep, first hit) wait below the panel's bottom edge.
+			gsap.set(['#cl-l2a', '#cl-l2b', '#cl-l2c'], { yPercent: 102, visibility: 'hidden' })
+
+			if (MODE === 'close') {
+				// Asleep: the phone's screen is dark, the cat lies down, z's rise through the room.
+				gsap.set('#cl-card', { opacity: 0 })
+				gsap.set('#cl-pet', { rotation: 90, y: 30, x: -80 })
+				tl.fromTo('#cl-zz', { y: 0, opacity: 1 }, { y: -140, opacity: 1, duration: 1.6, ease: 'none', repeat: 3, immediateRender: false }, 0.2)
+			}
+			tl.to({}, { duration: dur }, 0)
+			window.__timelines['story-2am-close'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

@@ -1,0 +1,460 @@
+{
+	"id": "04-flow-2am",
+	"series": "Dry Run",
+	"no": 4,
+	"title": "2 a.m.",
+	"duration": 43.5,
+	"loop": 2.5,
+	"vo": {
+		"voices": {
+			"narrator": {
+				"ref": "%LOCALAPPDATA%/Temp/insilode-film-v3/audition/_refs/female-savage.wav",
+				"exaggeration": 0.4,
+				"cfg": 0.4,
+				"seed": 7
+			},
+			"cat": {
+				"ref": null,
+				"exaggeration": 0.5,
+				"cfg": 0.3,
+				"seed": 7
+			}
+		},
+		"lines": [
+			{
+				"id": "n1",
+				"t": 0.1,
+				"tempo": 0.95,
+				"text": "Two oh seven a.m. Orders go through. Nobody gets an *invoice*.",
+				"say": "Two oh seven A M. Orders go through. Nobody gets an invoice."
+			},
+			{
+				"id": "n2",
+				"t": 4.8,
+				"text": "Which of our three services even *sends* invoices?"
+			},
+			{
+				"id": "c1",
+				"who": "cat",
+				"t": 7.9,
+				"text": "You have no idea, do you?"
+			},
+			{
+				"id": "n3",
+				"t": 9.4,
+				"text": "I wrote one of them. *Allegedly*."
+			},
+			{
+				"id": "n4",
+				"t": 12.1,
+				"text": "So I grep. Thirty one results. All *plausible*.",
+				"seed": 11,
+				"say": "So I grehp. Thirty one results. All plausible."
+			},
+			{
+				"id": "n5",
+				"t": 16,
+				"text": "The first hit just *reads* invoices. Great."
+			},
+			{
+				"id": "c2",
+				"who": "cat",
+				"t": 19.4,
+				"text": "Just open the *endpoint*, genius.",
+				"seed": 11
+			},
+			{
+				"id": "n6",
+				"t": 21.6,
+				"tempo": 0.95,
+				"text": "Fine. In Insilode, the endpoint draws where the order actually *goes*.",
+				"say": "Fine. In sill lode... the endpoint draws where the order actually goes.",
+				"seed": 11
+			},
+			{
+				"id": "n7",
+				"t": 27.1,
+				"text": "Controller. Service. Orders table. HTTP into *billing*. Kafka into shipping.",
+				"say": "Controller. Service. Orders table. H T T P into billing. Kafka into shipping."
+			},
+			{
+				"id": "n8",
+				"t": 34.7,
+				"text": "It won't find the bug. It shows me where to *look*."
+			},
+			{
+				"id": "n9",
+				"t": 38.2,
+				"text": "Found it. Two fourteen. Back to *sleep*.",
+				"say": "Found it. Two fourteen. Back to sleep."
+			}
+		]
+	},
+	"scenes": [
+		{
+			"src": "story-2am-night",
+			"start": 0,
+			"duration": 21.6,
+			"pets": {
+				"petUrl": "cat"
+			},
+			"vars": {
+				"texts": [
+					{
+						"t": 0,
+						"text": "2:07 a.m.|No *invoice*."
+					},
+					{
+						"t": 4.7,
+						"text": "Which one|*sends* it?"
+					},
+					{
+						"t": 11.9,
+						"text": "*31* results.|All plausible."
+					},
+					{
+						"t": 15.9,
+						"text": "The first hit|only *reads*."
+					}
+				],
+				"beats": {
+					"buzz": [
+						0.4,
+						2.8,
+						4.1
+					],
+					"catTilt": 3.6,
+					"services": 4.7,
+					"eeny": [
+						5.3,
+						5.7,
+						6.1,
+						6.5,
+						6.9,
+						10.5
+					],
+					"c1": 7.9,
+					"c1d": 1.3,
+					"grep": 11.9,
+					"count": 13.62,
+					"hit": 15.9,
+					"stamp": 16.95,
+					"c2": 19.45,
+					"c2d": 1.5
+				}
+			}
+		},
+		{
+			"src": "story-flow",
+			"start": 21.6,
+			"duration": 16.3,
+			"captures": {
+				"captureUrl": "B3-sidebar"
+			},
+			"vars": {
+				"cam": [
+					{
+						"t": 0,
+						"cx": 0.47,
+						"cy": 0.52,
+						"w": 0.64
+					},
+					{
+						"t": 1.2,
+						"cx": 0.16,
+						"cy": 0.3,
+						"w": 0.34
+					},
+					{
+						"t": 3.2,
+						"cx": 0.16,
+						"cy": 0.3,
+						"w": 0.34
+					},
+					{
+						"t": 4.3,
+						"cx": 0.47,
+						"cy": 0.52,
+						"w": 0.64
+					},
+					{
+						"t": 5.4,
+						"cx": 0.235,
+						"cy": 0.37,
+						"w": 0.2
+					},
+					{
+						"t": 6.4,
+						"cx": 0.375,
+						"cy": 0.425,
+						"w": 0.2
+					},
+					{
+						"t": 7.5,
+						"cx": 0.5,
+						"cy": 0.455,
+						"w": 0.2
+					},
+					{
+						"t": 9,
+						"cx": 0.61,
+						"cy": 0.565,
+						"w": 0.34
+					},
+					{
+						"t": 10.9,
+						"cx": 0.614,
+						"cy": 0.68,
+						"w": 0.34
+					},
+					{
+						"t": 12.1,
+						"cx": 0.614,
+						"cy": 0.68,
+						"w": 0.34
+					},
+					{
+						"t": 13.2,
+						"cx": 0.47,
+						"cy": 0.52,
+						"w": 0.64
+					},
+					{
+						"t": 16.3,
+						"cx": 0.47,
+						"cy": 0.52,
+						"w": 0.64
+					}
+				],
+				"rings": [
+					{
+						"t": 0.5,
+						"d": 1.8,
+						"cx": 0.04,
+						"cy": 0.25,
+						"w": 0.065,
+						"h": 0.03
+					},
+					{
+						"t": 7.5,
+						"d": 1.2,
+						"cx": 0.506,
+						"cy": 0.456,
+						"w": 0.11,
+						"h": 0.1
+					},
+					{
+						"t": 9.1,
+						"d": 1.8,
+						"cx": 0.55,
+						"cy": 0.555,
+						"w": 0.2,
+						"h": 0.075
+					},
+					{
+						"t": 9.5,
+						"d": 1.5,
+						"cx": 0.719,
+						"cy": 0.582,
+						"w": 0.1,
+						"h": 0.055
+					},
+					{
+						"t": 10.9,
+						"d": 1.2,
+						"cx": 0.697,
+						"cy": 0.699,
+						"w": 0.155,
+						"h": 0.07
+					}
+				],
+				"hops": [
+					{
+						"t": 5.4,
+						"label": "POST /orders",
+						"out": 12.9
+					},
+					{
+						"t": 7.5,
+						"label": "writes orders",
+						"out": 12.9
+					},
+					{
+						"t": 9.1,
+						"label": "HTTP → create_invoice (Python)",
+						"out": 12.9
+					},
+					{
+						"t": 10.9,
+						"label": "Kafka → shipping",
+						"out": 12.9
+					}
+				],
+				"texts": [
+					{
+						"t": 0.2,
+						"text": "Open the|*endpoint*."
+					},
+					{
+						"t": 4.2,
+						"text": "Follow it|*in order*."
+					},
+					{
+						"t": 9,
+						"text": "The invoice|step is *here*."
+					},
+					{
+						"t": 13,
+						"text": "A map,|not an *answer*."
+					}
+				]
+			}
+		},
+		{
+			"src": "story-2am-close",
+			"start": 37.9,
+			"duration": 3.1,
+			"pets": {
+				"petUrl": "cat"
+			},
+			"vars": {
+				"texts": [
+					{
+						"t": 0,
+						"text": "*2:14* a.m."
+					}
+				],
+				"beats": {}
+			}
+		},
+		{
+			"src": "story-2am-end",
+			"start": 41,
+			"duration": 2.5,
+			"pets": {
+				"petUrl": "cat"
+			},
+			"vars": {
+				"texts": [
+					{
+						"t": 0,
+						"text": "2:07 a.m.|No *invoice*."
+					}
+				],
+				"beats": {}
+			}
+		}
+	],
+	"sfx": [
+		{
+			"t": 0.4,
+			"kind": "tick"
+		},
+		{
+			"t": 0.49,
+			"kind": "tick"
+		},
+		{
+			"t": 0.58,
+			"kind": "tick"
+		},
+		{
+			"t": 0.67,
+			"kind": "tick"
+		},
+		{
+			"t": 2.8,
+			"kind": "tick"
+		},
+		{
+			"t": 2.89,
+			"kind": "tick"
+		},
+		{
+			"t": 2.98,
+			"kind": "tick"
+		},
+		{
+			"t": 3.07,
+			"kind": "tick"
+		},
+		{
+			"t": 4.1,
+			"kind": "tick"
+		},
+		{
+			"t": 4.19,
+			"kind": "tick"
+		},
+		{
+			"t": 4.28,
+			"kind": "tick"
+		},
+		{
+			"t": 4.37,
+			"kind": "tick"
+		},
+		{
+			"t": 4.7,
+			"kind": "whoosh"
+		},
+		{
+			"t": 7.9,
+			"kind": "pop"
+		},
+		{
+			"t": 11.9,
+			"kind": "whoosh"
+		},
+		{
+			"t": 15.9,
+			"kind": "whoosh"
+		},
+		{
+			"t": 16.95,
+			"kind": "thud"
+		},
+		{
+			"t": 19.45,
+			"kind": "pop"
+		},
+		{
+			"t": 21.6,
+			"kind": "pop"
+		},
+		{
+			"t": 27,
+			"kind": "note",
+			"pitch": 0
+		},
+		{
+			"t": 29.2,
+			"kind": "note",
+			"pitch": 2
+		},
+		{
+			"t": 30.7,
+			"kind": "note",
+			"pitch": 4
+		},
+		{
+			"t": 32.5,
+			"kind": "note",
+			"pitch": 6
+		},
+		{
+			"t": 38.3,
+			"kind": "ok"
+		}
+	],
+	"music": {
+		"bpm": 80
+	},
+	"description": "A page at 2:07 a.m.: orders go through, nobody gets an invoice, and nobody on call knows which of the three services sends invoices. A grep, a wrong guess, a judgmental cat, and then the canvas draws where the order actually goes: controller, service, the orders table, HTTP into billing (Python), Kafka into shipping. It does not find the bug; it shows where to look. Demo project (Harbor Goods). Real captures of Insilode, a code editor built on VS Code. Voice: synthetic (AI-generated). Music composed in code. Free and open source: insilode.dev",
+	"hashtags": [
+		"#dryrun",
+		"#oncall",
+		"#backend",
+		"#devtools"
+	]
+}

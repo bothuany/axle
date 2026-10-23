@@ -261,7 +261,10 @@ Every voiced episode's description says "Voice: synthetic (AI-generated)", and t
 - The joke: the bus-factor senior, and the canvas as the colleague who never leaves.
 - Risk: the joke leans on a person; it must stay warm (Dave is not the villain).
 
-**C. 2 a.m.**
+**C. 2 a.m.** (built: [episodes/04-flow-2am.json](../shorts/episodes/04-flow-2am.json), 43.5 s, voiced; scenes `story-2am-night`, `story-flow` reused from 02, `story-2am-close`, `story-2am-end`)
+
+- As built: the hook is the page (a drawn phone, a made-up on-call notice, a red alarm clock, the pixel cat). Which of three services sends invoices (the demo project's real folder names), a grep drawn on paper with the real count (31 matches of `grep -rni invoice` over `site/demo/base`) and real lines, the first hit (`OrderController.invoice`, a GET: "reads only"), the cat's "Just open the endpoint, genius", then the real canvas on `B3-sidebar`: controller, service, orders table, HTTP into `create_invoice` (Python), Kafka into shipping. The honest line is spoken and written: "It won't find the bug. It shows me where to look." Then the sleeping room (2:14), and a hard cut back to the first frame under the end tag. The room is drawn; nothing drawn imitates Insilode's UI. The three room scenes share one drawing (the same markup in each file, because one composition id may appear once per timeline).
+- Original pitch:
 
 - Hook: "2:07 a.m. Orders go through. Nobody gets an invoice."
 - Beats: a phone buzzing on the nightstand (drawn) → a sleepy grep for "invoice", results scrolling past → the narrator opens POST /orders: the order calls billing over HTTP, a different service in a different language → "Now you know which service to look at, and who to wake up." → back to bed, the pet asleep on the keyboard.
