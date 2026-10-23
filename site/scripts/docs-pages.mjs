@@ -19,6 +19,7 @@ export const DOCS = [
 	{ slug: 'languages', file: 'docs/languages.md', title: 'Languages', seo: 'Languages and frameworks: call flows in {{name}}' },
 	{ slug: 'agent-tools', file: 'docs/agent-tools.md', title: 'Agent tools', seo: 'Agent tools: the {{name}} MCP server for Claude Code, Codex' },
 	{ slug: 'boards', file: 'docs/boards.md', title: 'Boards', seo: 'Boards: diagrams of your code in {{name}}' },
+	{ slug: 'privacy', file: 'docs/privacy.md', title: 'Privacy', seo: 'Privacy: what {{name}} and insilode.dev collect' },
 ]
 
 const escape = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -140,7 +141,7 @@ ${body}
     <footer class="footer">
       <div class="footer-inner">
         <p>{{name}} is open source under the GNU AGPL v3 and builds on <a href="https://github.com/microsoft/vscode">VS Code</a>. The Claude and Codex marks belong to their owners.</p>
-        <p><a href="https://github.com/{{repo}}">GitHub</a> &nbsp; <a href="https://github.com/{{repo}}/blob/main/CONTRIBUTING.md">Contributing</a> &nbsp; <a href="https://github.com/{{repo}}/blob/main/SECURITY.md">Security</a></p>
+        <p><a href="https://github.com/{{repo}}">GitHub</a> &nbsp; <a href="https://github.com/{{repo}}/blob/main/CONTRIBUTING.md">Contributing</a> &nbsp; <a href="https://github.com/{{repo}}/blob/main/SECURITY.md">Security</a> &nbsp; <a href="${depth}docs/privacy/">Privacy</a></p>
       </div>
     </footer>
     <script type="module" src="/src/docs.ts"></script>
