@@ -1,0 +1,144 @@
+<!doctype html>
+<!-- Story scene "changes" (voiced stories, episode 05-agent-review): the payoff on two real captures of the change set
+     (Show Git Changes in Flow, "Changes since HEAD~1"): the overview (A) and OrderService.place with its removed and added
+     lines (B). B comes up through the panel's bottom edge over A and leaves the same way. Rings are green where lines
+     arrived and red where one left. The drawn stamp is the manager's, the drawn card is the agent's own review of itself:
+     neither is Insilode's UI. Times are the scene's own (0 = the cut). -->
+<html lang="en" data-composition-variables='[
+{"id":"captureA","type":"string","label":"Overview capture","default":"assets/captures/C3-changes.jpg"},
+{"id":"captureB","type":"string","label":"Detail capture","default":"assets/captures/C4-place.jpg"},
+{"id":"petUrl","type":"string","label":"Pet","default":"assets/pets/cat.png"},
+{"id":"camA","type":"string","label":"Overview camera keys (JSON)","default":"[]"},
+{"id":"camB","type":"string","label":"Detail camera keys (JSON)","default":"[]"},
+{"id":"rings","type":"string","label":"Rings (JSON: layer a|b, tone, t, d, cx, cy, w, h)","default":"[]"},
+{"id":"chips","type":"string","label":"Chips (JSON: t, out, tone, label)","default":"[]"},
+{"id":"texts","type":"string","label":"Big text beats (JSON: t, text, tone)","default":"[]"},
+{"id":"beats","type":"string","label":"Times (JSON: swapIn, swapOut, stamp, card, pet, leave)","default":"{}"},
+{"id":"duration","type":"number","label":"Scene length (s)","default":21}
+]'>
+<body>
+<template id="story-changes-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#h-texts .q { font-size: 100px; }
+		#h-texts .red .k { color: var(--removed); }
+		#h-texts .green .k { color: var(--added); }
+		#h-panel { left: var(--px); top: 480px; width: var(--pw); height: 810px; }
+		.layer { position: absolute; inset: 0; overflow: hidden; }
+		.ring2 { position: absolute; border: 7px solid var(--accent); border-radius: 14px; opacity: 0; box-shadow: 0 0 0 5px rgba(12, 16, 32, .6); }
+		.ring2.red { border-color: var(--removed); }
+		.ring2.green { border-color: var(--added); }
+		#h-chips { position: absolute; left: 22px; bottom: 22px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; z-index: 5; }
+		#h-chips .chip { font-size: 32px; background: rgba(12, 16, 32, .92); }
+		#h-stamp { left: 210px; top: 250px; font-size: 84px; text-align: center; transform: rotate(-7deg); z-index: 6; }
+		#h-card { position: absolute; left: 86px; top: 50px; width: 800px; height: 500px; background: #f3ead6; border-radius: 10px; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); padding: 28px 40px; z-index: 7; transform: rotate(1.5deg); }
+		#h-card .t { font-family: var(--mono); font-weight: 600; font-size: 30px; color: #6b5d44; border-bottom: 4px solid #2a2318; padding-bottom: 12px; white-space: nowrap; }
+		#h-card .big { font-family: var(--mono); font-weight: 700; font-size: 66px; line-height: 1.12; color: #1f7a4a; margin-top: 34px; white-space: nowrap; }
+		#h-card .sig { position: absolute; left: 40px; bottom: 30px; font-family: var(--sans); font-weight: 700; font-style: italic; font-size: 40px; color: #1d2f7a; white-space: nowrap; }
+		#h-card .chk { position: absolute; right: 52px; bottom: 44px; width: 64px; height: 64px; border: 6px solid #1f7a4a; border-radius: 12px; }
+		#h-card .chk::after { content: ""; position: absolute; left: 18px; top: -12px; width: 18px; height: 40px; border: solid #1f7a4a; border-width: 0 9px 9px 0; transform: rotate(40deg); }
+		#h-pet { position: absolute; z-index: 20; right: 40px; bottom: -220px; width: 176px; height: 176px; image-rendering: pixelated; border-radius: 26px; }
+		#h-bubble { position: absolute; z-index: 21; right: 232px; bottom: 70px; padding: 8px 26px 12px; font-family: var(--sans); font-weight: 700; font-size: 64px; color: #2a2318; background: #fff; border-radius: 28px; opacity: 0; white-space: nowrap; }
+		#h-bubble::after { content: ""; position: absolute; right: -14px; bottom: 18px; border: 14px solid transparent; border-left-color: #fff; }
+	</style>
+	<div id="root" data-composition-id="story-changes" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="h-texts"></div>
+		<div id="h-panel" class="panel">
+			<div id="h-la" class="layer" data-layout-allow-overflow data-layout-allow-occlusion><div id="h-ca" class="cam" data-layout-allow-overflow><img data-var-src="captureA" src="assets/blank.png#a" alt=""></div></div>
+			<div id="h-lb" class="layer" data-layout-allow-overflow data-layout-allow-occlusion><div id="h-cb" class="cam" data-layout-allow-overflow><img data-var-src="captureB" src="assets/blank.png#b" alt=""></div></div>
+			<div id="h-chips"></div>
+			<div id="h-stamp" class="stamp ask" data-layout-allow-overflow data-layout-allow-occlusion>STILL<br>YOUR CALL</div>
+			<div id="h-card" data-layout-allow-overflow data-layout-allow-occlusion>
+				<div class="t">SELF-ASSESSMENT</div>
+				<div class="big">EXCEEDS<br>EXPECTATIONS</div>
+				<div class="sig">&mdash; the agent, about the agent</div>
+				<i class="chk"></i>
+			</div>
+			<img id="h-pet" data-var-src="petUrl" src="assets/blank.png#p" alt="" data-layout-allow-overflow>
+			<div id="h-bubble" data-layout-allow-overflow>Obviously.</div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('story-changes'), S = Shorts
+			var tl = gsap.timeline({ paused: true })
+			var $ = function (id) { return document.getElementById(id) }
+			var B = S.json(V.beats, {})
+			var dur = V.duration
+			var PW = 972, PH = 810
+			S.camera(tl, '#h-ca', S.json(V.camA, []), PW, PH)
+			S.camera(tl, '#h-cb', S.json(V.camB, []), PW, PH)
+
+			// The detail layer rises through the panel's bottom edge over the overview, and leaves the same way.
+			gsap.set('#h-lb', { yPercent: 102 })
+			tl.to('#h-lb', { yPercent: 0, duration: 0.5, ease: 'power3.out' }, B.swapIn)
+			tl.to('#h-lb', { yPercent: 102, duration: 0.5, ease: 'power2.in' }, B.swapOut)
+
+			// Rings, in the camera's own space: red where a line left, green where lines arrived, blue for the rest.
+			S.json(V.rings, []).forEach(function (r, i) {
+				var host = $(r.layer === 'b' ? 'h-cb' : 'h-ca')
+				var el = document.createElement('div')
+				el.className = 'ring2 ' + (r.tone || '')
+				el.id = 'h-ring' + i
+				el.style.left = (r.cx - r.w / 2) * S.IW + 'px'
+				el.style.top = (r.cy - r.h / 2) * S.IH + 'px'
+				el.style.width = r.w * S.IW + 'px'
+				el.style.height = r.h * S.IH + 'px'
+				host.appendChild(el)
+				tl.fromTo(el, { opacity: 0 }, { opacity: 1, duration: 0.25, ease: 'power2.out' }, r.t)
+				tl.to(el, { opacity: 0, duration: 0.3, ease: 'power2.in' }, r.t + r.d)
+			})
+
+			// Big text: each beat rises into its own clip box and leaves upward before the next one.
+			var texts = S.json(V.texts, [])
+			texts.forEach(function (b, i) {
+				var box = document.createElement('div')
+				box.className = 'q hl ' + (b.tone || '')
+				box.setAttribute('data-layout-allow-overlap', '')
+				box.setAttribute('data-layout-allow-occlusion', '')
+				$('h-texts').appendChild(box)
+				var spans = S.lines(box, b.text, 'h-t' + i)
+				spans.forEach(function (sp) { [sp].concat([].slice.call(sp.querySelectorAll('*'))).forEach(function (e) { e.setAttribute('data-layout-allow-occlusion', '') }) })
+				tl.set(spans, { yPercent: 108 }, 0)
+				S.rise(tl, spans, b.t)
+				var next = texts[i + 1]
+				S.leave(tl, spans, next ? next.t - 0.4 : B.leave)
+			})
+
+			// A chip per change, stacked bottom-left; they leave down through the panel's edge together.
+			S.json(V.chips, []).forEach(function (h, i) {
+				var chip = document.createElement('span')
+				chip.className = 'chip ' + (h.tone || '')
+				chip.id = 'h-chip' + i
+				chip.setAttribute('data-layout-allow-occlusion', '')
+				chip.setAttribute('data-layout-allow-overflow', '')
+				chip.textContent = h.label
+				$('h-chips').appendChild(chip)
+				tl.fromTo(chip, { y: 300 }, { y: 0, duration: 0.4, ease: 'power3.out' }, h.t)
+				tl.to(chip, { y: 300, duration: 0.3, ease: 'power2.in' }, h.out)
+			})
+
+			// The manager's stamp: tilted, lands in 0.14 s, a four-pixel shake, leaves down through the edge.
+			gsap.set('#h-stamp', { scale: 1.6, opacity: 0 })
+			tl.to('#h-stamp', { scale: 1, opacity: 1, duration: 0.14, ease: 'power3.in' }, B.stamp)
+			tl.fromTo('#h-stamp', { x: 0 }, { x: 4, duration: 0.04, yoyo: true, repeat: 4, ease: 'none', immediateRender: false }, B.stamp + 0.14)
+			tl.to('#h-stamp', { y: 900, duration: 0.4, ease: 'power2.in' }, B.stampOut)
+
+			// The agent's own review of itself comes up through the bottom edge.
+			gsap.set('#h-card', { y: 1000 })
+			tl.to('#h-card', { y: 0, duration: 0.5, ease: 'power3.out' }, B.card)
+			tl.to('#h-card', { y: 1000, duration: 0.4, ease: 'power2.in' }, B.leave)
+
+			// HR: "Obviously."
+			tl.to('#h-pet', { y: -250, duration: 0.4, ease: 'power3.out' }, B.pet - 0.3)
+			tl.set('#h-bubble', { opacity: 1 }, B.pet)
+			tl.set('#h-bubble', { opacity: 0 }, B.leave)
+			tl.to('#h-pet', { y: 0, duration: 0.3, ease: 'power2.in' }, B.leave)
+			tl.to({}, { duration: dur }, 0)
+			window.__timelines['story-changes'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

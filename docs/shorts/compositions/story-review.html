@@ -1,0 +1,213 @@
+<!doctype html>
+<!-- Story scene "review" (voiced stories, episode 05-agent-review): the first frame is the real editor with the agent's
+     real commit in the terminal ("14 files changed, 112 insertions(+), 16 deletions(-)"). A drawn HR form (paper, a pen
+     font, a rubber stamp) comes up over it, then the manager scrolls a drawn printout of the 14 files while the scrollbar
+     shrinks to a pixel. Everything drawn here looks drawn (paper, sticky notes, a pencil track): it never imitates
+     Insilode's UI. The 14 file names are the real changed files of the demo commit. Times come from the episode (`beats`). -->
+<html lang="en" data-composition-variables='[
+{"id":"question","type":"string","label":"Hook, lines split by |, *accent*","default":"Q3 review:|*the agent.*"},
+{"id":"captureUrl","type":"string","label":"Editor capture","default":"assets/captures/C1-commit.jpg"},
+{"id":"petUrl","type":"string","label":"Pet","default":"assets/pets/cat.png"},
+{"id":"cam","type":"string","label":"Editor camera key (JSON)","default":"{\"cx\":0.275,\"cy\":0.8,\"w\":0.26}"},
+{"id":"texts","type":"string","label":"Big text beats after the hook (JSON: t, text)","default":"[]"},
+{"id":"beats","type":"string","label":"Times (JSON)","default":"{}"},
+{"id":"duration","type":"number","label":"Scene length (s)","default":22.4}
+]'>
+<body>
+<template id="story-review-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#r-q, #r-texts .q { font-size: 100px; }
+		#r-panel { left: var(--px); top: 480px; width: var(--pw); height: 810px; }
+
+		/* The form: cream paper, a little crooked, typed in a pen font (the app's sans, heavy). */
+		#r-form { position: absolute; left: 46px; top: 20px; width: 880px; height: 590px; background: #f3ead6; border-radius: 10px; box-shadow: 0 18px 40px rgba(0, 0, 0, .5); padding: 30px 44px; }
+		#r-form h2 { font-family: var(--mono); font-weight: 700; font-size: 40px; color: #2a2318; letter-spacing: -0.01em; white-space: nowrap; }
+		#r-form .sub { font-family: var(--mono); font-size: 28px; color: #6b5d44; margin-top: 6px; border-bottom: 4px solid #2a2318; padding-bottom: 14px; white-space: nowrap; }
+		.row { display: flex; align-items: center; height: 80px; border-bottom: 2px solid #cdbf9e; }
+		.row .lb { width: 220px; flex: none; font-family: var(--mono); font-weight: 600; font-size: 28px; color: #6b5d44; white-space: nowrap; }
+		.row .vl { position: relative; overflow: hidden; flex: 1; height: 56px; }
+		.row .vl span { position: absolute; left: 0; top: 0; font-family: var(--sans); font-weight: 700; font-size: 34px; line-height: 56px; color: #1d2f7a; white-space: nowrap; }
+		.row .vl span i { font-style: normal; color: #1f7a4a; }
+		.row .vl span u { text-decoration: none; color: #b02a3a; }
+		.row.rate .opts { display: flex; gap: 30px; flex: 1; }
+		.opt { display: flex; align-items: center; gap: 12px; font-family: var(--sans); font-weight: 650; font-size: 32px; color: #2a2318; white-space: nowrap; }
+		.opt b { display: block; width: 34px; height: 34px; border: 4px solid #2a2318; border-radius: 6px; position: relative; }
+
+		/* The printout: 14 blocks, one per file. The lines are drawn bars (green added, red removed, grey context). */
+		#r-desk { position: absolute; inset: 0; background: #11152a; }
+		#r-wallbox { position: absolute; left: 36px; top: 18px; width: 826px; height: 774px; overflow: hidden; border-radius: 12px; }
+		#r-wall { position: absolute; left: 0; top: 0; width: 826px; }
+		.blk { height: 360px; background: #f7f1e1; border-bottom: 6px dashed #cdbf9e; padding: 0 0 0 0; }
+		.blk .hd { height: 64px; background: #e5d9bd; display: flex; align-items: center; padding: 0 24px; font-family: var(--mono); font-weight: 700; font-size: 32px; color: #2a2318; white-space: nowrap; }
+		.blk .ln2 { height: 26px; margin: 14px 24px 0; border-radius: 6px; background: #cfc4a8; }
+		.blk .ln2.g { background: #6fbf8e; }
+		.blk .ln2.r { background: #e07a86; }
+		#r-track { position: absolute; left: 872px; top: 18px; width: 30px; height: 774px; border-radius: 15px; background: rgba(0, 0, 0, .55); box-shadow: inset 0 0 0 3px #f3ead6; }
+		#r-thumb { position: absolute; left: 4px; top: 4px; width: 22px; height: 119px; border-radius: 11px; background: #f3ead6; }
+		.note { position: absolute; font-family: var(--mono); font-weight: 700; font-size: 30px; color: #2a2318; background: #f3ead6; border-radius: 12px; padding: 8px 20px; box-shadow: 0 6px 14px rgba(0, 0, 0, .45); white-space: nowrap; }
+		#r-count { left: 60px; bottom: 28px; opacity: 0; }
+		#r-clock { left: 60px; top: 30px; opacity: 0; }
+		#r-sticky { position: absolute; left: 0; top: 0; width: 300px; height: 190px; margin-left: -150px; margin-top: -95px; background: #ffe56b; box-shadow: 0 12px 20px rgba(0, 0, 0, .4); padding: 20px 24px; display: flex; align-items: center; }
+		#r-sticky b { font-family: var(--sans); font-weight: 700; font-size: 38px; line-height: 1.05; color: #2a2318; letter-spacing: -0.02em; }
+		#r-stamp { background: #0c1020; left: 330px; top: 300px; font-size: 96px; transform: rotate(-8deg); }
+		#r-pet { position: absolute; z-index: 20; right: 40px; bottom: -220px; width: 176px; height: 176px; image-rendering: pixelated; border-radius: 26px; }
+		#r-bubble { position: absolute; z-index: 21; right: 232px; bottom: 70px; padding: 8px 26px 12px; font-family: var(--sans); font-weight: 700; font-size: 56px; color: #2a2318; background: #fff; border-radius: 28px; opacity: 0; white-space: nowrap; }
+		#r-bubble::after { content: ""; position: absolute; right: -14px; bottom: 18px; border: 14px solid transparent; border-left-color: #fff; }
+	</style>
+	<div id="root" data-composition-id="story-review" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="r-q" class="q hl" data-layout-allow-overlap></div>
+		<div id="r-texts"></div>
+		<div id="r-panel" class="panel">
+			<div id="r-cam" class="cam" data-layout-allow-overflow><img data-var-src="captureUrl" src="assets/blank.png#r" alt=""></div>
+			<div id="r-desk" data-layout-allow-overflow data-layout-allow-occlusion></div>
+			<div id="r-wallbox" data-layout-allow-overflow data-layout-allow-occlusion><div id="r-wall" data-layout-allow-overflow></div></div>
+			<div id="r-track" data-layout-allow-overflow data-layout-allow-occlusion><div id="r-thumb"></div></div>
+			<div id="r-form" data-layout-allow-overflow data-layout-allow-occlusion>
+				<h2>PERFORMANCE REVIEW</h2>
+				<div class="sub">Q3 &middot; confidential</div>
+				<div class="row"><span class="lb">EMPLOYEE</span><div class="vl"><span id="r-v0" data-layout-allow-overflow>The agent (intern)</span></div></div>
+				<div class="row"><span class="lb">OUTPUT</span><div class="vl"><span id="r-v1" data-layout-allow-overflow>14 files &nbsp;<i>+112</i> <u>&minus;16</u></span></div></div>
+				<div class="row"><span class="lb">COMMIT</span><div class="vl"><span id="r-v2" data-layout-allow-overflow>Add discount codes to orders</span></div></div>
+				<div class="row"><span class="lb">REVIEWER</span><div class="vl"><span id="r-v3" data-layout-allow-overflow>me (tired)</span></div></div>
+				<div class="row rate" style="border-bottom: 0"><span class="lb">RATING</span><div class="opts"><span class="opt"><b></b>Exceeds</span><span class="opt"><b></b>Meets</span><span class="opt"><b id="r-ticked"></b>Unclear</span></div></div>
+			</div>
+			<span id="r-count" class="note" data-layout-allow-overflow data-layout-allow-occlusion>file 1/14</span>
+			<span id="r-clock" class="note" data-layout-allow-overflow data-layout-allow-occlusion>Tue 09:00</span>
+			<div id="r-sticky" data-layout-allow-overflow data-layout-allow-occlusion data-layout-allow-overlap><b>I have been here since Tuesday</b></div>
+			<div id="r-stamp" class="stamp ask" data-layout-allow-overlap data-layout-allow-overflow data-layout-allow-occlusion>UNCLEAR</div>
+			<img id="r-pet" data-var-src="petUrl" src="assets/blank.png#p" alt="" data-layout-allow-overflow>
+			<div id="r-bubble" data-layout-allow-overflow>Meets expectations?</div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('story-review'), S = Shorts
+			var tl = gsap.timeline({ paused: true })
+			var $ = function (id) { return document.getElementById(id) }
+			var B = S.json(V.beats, {})
+			var dur = V.duration
+			var PW = 972, PH = 810
+
+			// The hook is on screen, fully formed, at frame 0, over the real editor.
+			var q = S.lines($('r-q'), V.question, 'r-q')
+			S.camera(tl, '#r-cam', [Object.assign({ t: 0 }, S.json(V.cam, {}))], PW, PH)
+
+			// Big text beats after the hook: each rises into its own clip box and leaves upward before the next one.
+			var texts = S.json(V.texts, [])
+			S.leave(tl, q, texts[0].t - 0.4)
+			texts.forEach(function (b, i) {
+				var box = document.createElement('div')
+				box.className = 'q hl'
+				box.setAttribute('data-layout-allow-overlap', '')
+				box.setAttribute('data-layout-allow-occlusion', '')
+				$('r-texts').appendChild(box)
+				var spans = S.lines(box, b.text, 'r-t' + i)
+				spans.forEach(function (sp) { [sp].concat([].slice.call(sp.querySelectorAll('*'))).forEach(function (e) { e.setAttribute('data-layout-allow-occlusion', '') }) })
+				tl.set(spans, { yPercent: 108 }, 0)
+				S.rise(tl, spans, b.t)
+				var next = texts[i + 1]
+				if (next) S.leave(tl, spans, next.t - 0.4)
+				else S.leave(tl, spans, dur - 0.5)
+				// "14 files." is crossed out with one pen stroke when the voice says it.
+				if (b.strike) tl.set(spans[1], { textDecorationLine: 'line-through', textDecorationColor: '#ff6b7d', textDecorationThickness: '10px' }, b.strike)
+			})
+
+			// The printout: one block per real changed file.
+			var files = ['OrderController.java', 'OrderService.java', 'OrderRepository.java', 'Order.java', 'DiscountCode.java', 'DiscountRepository.java', 'BillingClient.java', 'main.py', 'models.py', 'service.py', 'tasks.py', 'OrderEvents.java', 'Shipment.java', 'ShipmentService.java']
+			var pat = [0, 0, 2, 1, 1, 0, 2, 0, 1, 1, 0, 0, 2, 1, 0]
+			var wall = $('r-wall')
+			files.forEach(function (f, i) {
+				var b = document.createElement('div')
+				b.className = 'blk'
+				var h = '<div class="hd" data-layout-ignore>' + S.esc(f) + '</div>'
+				for (var k = 0; k < 7; k++) {
+					var kind = pat[(i * 3 + k) % pat.length]
+					var w = 38 + ((i * 37 + k * 53) % 55)
+					h += '<div class="ln2' + (kind === 1 ? ' g' : kind === 2 ? ' r' : '') + '" style="width:' + w + '%"></div>'
+				}
+				b.innerHTML = h
+				wall.appendChild(b)
+			})
+			var TOTAL = files.length * 360, VIEW = 774, MAXS = TOTAL - VIEW
+			var thumb = function (scroll, h) { return { height: h, y: Math.round(scroll / MAXS * (VIEW - 8 - h)) } }
+
+			// 0. The form comes up over the editor and fills in as the voice reads the first lines.
+			var f0 = B.form
+			gsap.set('#r-form', { y: 900, rotation: -1.4 })
+			gsap.set('#r-desk', { y: 900 })
+			tl.to('#r-desk', { y: 0, duration: 0.5, ease: 'power3.out' }, f0)
+			tl.to('#r-form', { y: 0, duration: 0.5, ease: 'power3.out' }, f0)
+			var typed = [[B.v0, 'r-v0'], [B.v1, 'r-v1'], [B.v2, 'r-v2'], [B.v3, 'r-v3']]
+			typed.forEach(function (p) {
+				tl.fromTo('#' + p[1], { yPercent: 130 }, { yPercent: 0, duration: 0.3, ease: 'power3.out' }, p[0])
+			})
+			tl.set(['#r-v0', '#r-v1', '#r-v2', '#r-v3'], { yPercent: 130 }, 0)
+			// The form leaves down through the panel's edge; the printout comes up through it.
+			var w0 = B.wall
+			tl.to('#r-form', { y: 900, duration: 0.4, ease: 'power2.in' }, w0 - 0.1)
+			gsap.set(['#r-wallbox', '#r-track'], { y: 900 })
+			tl.to(['#r-wallbox', '#r-track'], { y: 0, duration: 0.5, ease: 'power3.out' }, w0 + 0.15)
+			var th = $('r-thumb')
+			var thumbKeys = B.thumb || []
+			gsap.set(th, thumb(0, 119))
+			// Scroll: slow through file one, then faster and faster. The thumb shrinks to a pixel.
+			var scr = B.scroll || []
+			var sc = { s: 0 }
+			var apply = function () { gsap.set(wall, { y: -sc.s }) }
+			scr.forEach(function (k, i) {
+				var prev = i ? scr[i - 1] : { t: w0 + 0.6, s: 0 }
+				tl.to(sc, { s: k.s, duration: k.t - prev.t, ease: 'power1.inOut', onUpdate: apply }, prev.t)
+			})
+			thumbKeys.forEach(function (k, i) {
+				var prev = i ? thumbKeys[i - 1] : { t: w0 + 0.6, s: 0, h: 119 }
+				var from = thumb(prev.s, prev.h), to = thumb(k.s, k.h)
+				tl.to(th, { height: to.height, y: to.y, duration: k.t - prev.t, ease: 'power1.inOut' }, prev.t)
+			})
+			// Counter and clock: drawn paper labels, swapped hard on the voice's words.
+			// (Stacked spans, one visible at a time: seek-safe, unlike rewriting the text.)
+			var swapper = function (el, items, first) {
+				el.textContent = ''
+				el.style.display = 'grid'
+				var all = [{ t: 0, text: first }].concat(items)
+				all.forEach(function (c, i) {
+					var sp = document.createElement('span')
+					sp.textContent = c.text
+					sp.style.gridArea = '1 / 1'
+					sp.setAttribute('data-layout-allow-overlap', ''); sp.setAttribute('data-layout-allow-occlusion', '')
+					el.appendChild(sp)
+					tl.set(sp, { opacity: i === 0 ? 1 : 0 }, 0)
+					if (i) { tl.set(all[i - 1].sp, { opacity: 0 }, c.t); tl.set(sp, { opacity: 1 }, c.t) }
+					c.sp = sp
+				})
+			}
+			swapper($('r-count'), B.counts || [], 'file 1/14')
+			swapper($('r-clock'), B.clocks || [], 'Tue 09:00')
+			tl.set(['#r-count', '#r-clock'], { opacity: 1 }, w0 + 0.3)
+			// The sticky note slaps on at the bottom right.
+			gsap.set('#r-sticky', { x: 740, y: 1000, rotation: 7 })
+			tl.to('#r-sticky', { y: 610, duration: 0.4, ease: 'power3.out' }, B.sticky)
+			tl.to('#r-sticky', { y: 1000, duration: 0.35, ease: 'power2.in' }, B.back - 0.1)
+
+			// 2. The printout leaves, the form comes back with its rating row, the cat from HR peeks in and asks.
+			tl.to(['#r-wallbox', '#r-track', '#r-count', '#r-clock'], { y: 900, duration: 0.4, ease: 'power2.in' }, B.back - 0.1)
+			tl.to('#r-form', { y: 0, duration: 0.5, ease: 'power3.out' }, B.back + 0.2)
+			tl.to('#r-pet', { y: -250, duration: 0.4, ease: 'power3.out' }, B.hr - 0.3)
+			tl.set('#r-bubble', { opacity: 1 }, B.hr)
+			tl.set('#r-bubble', { opacity: 0 }, B.stamp - 0.3)
+			// The stamp: UNCLEAR, tilted, with a four-pixel shake.
+			gsap.set('#r-stamp', { scale: 1.6, opacity: 0 })
+			tl.to('#r-stamp', { scale: 1, opacity: 1, duration: 0.14, ease: 'power3.in' }, B.stamp)
+			tl.fromTo('#r-stamp', { x: 0 }, { x: 4, duration: 0.04, yoyo: true, repeat: 4, ease: 'none', immediateRender: false }, B.stamp + 0.14)
+			tl.set('#r-ticked', { backgroundColor: '#e07a86' }, B.stamp)
+			// 3. Everything leaves through the panel's bottom edge: the form, the stamp, the cat.
+			tl.to(['#r-form', '#r-stamp', '#r-desk'], { y: 900, duration: 0.4, ease: 'power2.in' }, B.leave)
+			tl.to('#r-pet', { y: 0, duration: 0.3, ease: 'power2.in' }, B.leave)
+			tl.to({}, { duration: dur }, 0)
+			window.__timelines['story-review'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

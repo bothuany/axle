@@ -1,0 +1,544 @@
+{
+  "id": "05-agent-review",
+  "series": "Dry Run",
+  "no": 5,
+  "title": "Performance review: the agent",
+  "duration": 46,
+  "loop": 2.5,
+  "vo": {
+    "voices": {
+      "narrator": {
+        "ref": "%LOCALAPPDATA%/Temp/insilode-film-v3/audition/_refs/male.wav",
+        "exaggeration": 0.3,
+        "cfg": 0.35,
+        "seed": 7
+      },
+      "HR": {
+        "ref": null,
+        "exaggeration": 0.5,
+        "cfg": 0.3,
+        "seed": 7
+      }
+    },
+    "lines": [
+      {
+        "id": "n1",
+        "t": 0.1,
+        "text": "Third quarter performance review. Employee: the agent. Output: fourteen files."
+      },
+      {
+        "id": "n2",
+        "t": 6.4,
+        "text": "Let's read the diff. File one. File four. File *nine*.",
+        "say": "Let's read the diff. File one. File four. File nine."
+      },
+      {
+        "id": "n3",
+        "t": 11.4,
+        "text": "I've started reading it out loud. The scrollbar is a *pixel*."
+      },
+      {
+        "id": "c1",
+        "who": "HR",
+        "t": 15.35,
+        "text": "Meets *expectations*?"
+      },
+      {
+        "id": "n4",
+        "t": 16.85,
+        "text": "Hm. I didn't finish.",
+        "say": "I didn't finish."
+      },
+      {
+        "id": "n5",
+        "t": 19.3,
+        "text": "So. I don't read fourteen files. I read what changed in how the request *runs*."
+      },
+      {
+        "id": "n6",
+        "t": 25.6,
+        "text": "Show what the agent did, in Insilode.",
+                "say": "Show what the agent did, in Insylode.",
+                "seed": 11
+      },
+      {
+        "id": "n7",
+        "t": 28.8,
+        "text": "Post orders. One line left. Two arrived. And apply discount is *new*."
+      },
+      {
+        "id": "n8",
+        "t": 34.5,
+        "text": "Is it right? It doesn't say. It shows me *what to read*."
+      },
+      {
+        "id": "n9",
+        "t": 38.85,
+        "text": "Self-assessment: *exceeds* expectations."
+      },
+      {
+        "id": "c2",
+        "who": "HR",
+        "t": 41.85,
+        "text": "Obviously."
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "src": "story-review",
+      "start": 0,
+      "duration": 22.6,
+      "captures": {
+        "captureUrl": "C1-commit"
+      },
+      "pets": {
+        "petUrl": "cat"
+      },
+      "vars": {
+        "question": "Q3 review:|*the agent.*",
+        "cam": {
+          "w": 0.26,
+          "cx": 0.275,
+          "cy": 0.8
+        },
+        "texts": [
+          {
+            "text": "Read the|*diff.*",
+            "t": 6.9
+          },
+          {
+            "text": "File *9*|of 14.",
+            "t": 10.1
+          },
+          {
+            "text": "Meets|*expectations?*",
+            "t": 15.3
+          },
+          {
+            "t": 19.8,
+            "text": "I don't read|*14 files.*",
+            "strike": 21.7
+          }
+        ],
+        "beats": {
+          "form": 0.9,
+          "v0": 2.95,
+          "v1": 4.1,
+          "v2": 5.2,
+          "v3": 5.7,
+          "wall": 6.4,
+          "scroll": [
+            {
+              "s": 150,
+              "t": 8.2
+            },
+            {
+              "s": 1000,
+              "t": 9.2
+            },
+            {
+              "s": 2800,
+              "t": 10.3
+            },
+            {
+              "s": 3900,
+              "t": 13.4
+            },
+            {
+              "s": 4266,
+              "t": 14.7
+            }
+          ],
+          "thumb": [
+            {
+              "s": 150,
+              "t": 8.2,
+              "h": 110
+            },
+            {
+              "s": 1000,
+              "t": 9.2,
+              "h": 60
+            },
+            {
+              "s": 2800,
+              "t": 10.3,
+              "h": 24
+            },
+            {
+              "s": 3900,
+              "t": 13.4,
+              "h": 12
+            },
+            {
+              "s": 4266,
+              "t": 14.7,
+              "h": 6
+            }
+          ],
+          "counts": [
+            {
+              "text": "file 4/14",
+              "t": 9.2
+            },
+            {
+              "text": "file 9/14",
+              "t": 10.24
+            }
+          ],
+          "clocks": [
+            {
+              "text": "Tue 13:40",
+              "t": 9.2
+            },
+            {
+              "text": "Wed 09:15",
+              "t": 10.24
+            },
+            {
+              "text": "Thu 16:48",
+              "t": 12.76
+            }
+          ],
+          "sticky": 11.6,
+          "back": 15.0,
+          "hr": 15.35,
+          "stamp": 18.3,
+          "leave": 19.5
+        }
+      }
+    },
+    {
+      "src": "story-changes",
+      "start": 22.6,
+      "duration": 20.9,
+      "captures": {
+        "captureA": "C3-changes",
+        "captureB": "C4-place"
+      },
+      "pets": {
+        "petUrl": "cat"
+      },
+      "vars": {
+        "camA": [
+          {
+            "w": 0.62,
+            "t": 0,
+            "cx": 0.47,
+            "cy": 0.45
+          },
+          {
+            "w": 0.62,
+            "t": 2.6,
+            "cx": 0.47,
+            "cy": 0.45
+          },
+          {
+            "w": 0.26,
+            "t": 3.6,
+            "cx": 0.41,
+            "cy": 0.12
+          },
+          {
+            "w": 0.26,
+            "t": 5.8,
+            "cx": 0.41,
+            "cy": 0.12
+          },
+          {
+            "w": 0.62,
+            "t": 7,
+            "cx": 0.47,
+            "cy": 0.45
+          },
+          {
+            "w": 0.62,
+            "t": 14.3,
+            "cx": 0.47,
+            "cy": 0.45
+          },
+          {
+            "w": 0.56,
+            "t": 20.4,
+            "cx": 0.47,
+            "cy": 0.42
+          }
+        ],
+        "camB": [
+          {
+            "w": 0.4,
+            "t": 0,
+            "cx": 0.42,
+            "cy": 0.27
+          },
+          {
+            "w": 0.4,
+            "t": 6.4,
+            "cx": 0.42,
+            "cy": 0.27
+          },
+          {
+            "w": 0.22,
+            "t": 7.3,
+            "cx": 0.53,
+            "cy": 0.34
+          },
+          {
+            "w": 0.22,
+            "t": 9.7,
+            "cx": 0.53,
+            "cy": 0.34
+          },
+          {
+            "w": 0.22,
+            "t": 10.6,
+            "cx": 0.7,
+            "cy": 0.43
+          },
+          {
+            "w": 0.22,
+            "t": 14.3,
+            "cx": 0.7,
+            "cy": 0.43
+          }
+        ],
+        "rings": [
+          {
+            "cx": 0.2425,
+            "cy": 0.145,
+            "tone": "",
+            "w": 0.125,
+            "t": 0.8,
+            "h": 0.04,
+            "layer": "a",
+            "d": 1.7
+          },
+          {
+            "cx": 0.329,
+            "cy": 0.082,
+            "tone": "",
+            "w": 0.08,
+            "t": 4.0,
+            "h": 0.03,
+            "layer": "a",
+            "d": 1.8
+          },
+          {
+            "cx": 0.535,
+            "cy": 0.3253,
+            "tone": "red",
+            "w": 0.135,
+            "t": 7.4,
+            "h": 0.018,
+            "layer": "b",
+            "d": 1.5
+          },
+          {
+            "cx": 0.543,
+            "cy": 0.3458,
+            "tone": "green",
+            "w": 0.13,
+            "t": 8.6,
+            "h": 0.034,
+            "layer": "b",
+            "d": 1.4
+          },
+          {
+            "cx": 0.723,
+            "cy": 0.428,
+            "tone": "green",
+            "w": 0.135,
+            "t": 10.6,
+            "h": 0.215,
+            "layer": "b",
+            "d": 2.6
+          }
+        ],
+        "chips": [
+          {
+            "label": "place  −1",
+            "out": 14.0,
+            "t": 7.5,
+            "tone": "red"
+          },
+          {
+            "label": "place  +2",
+            "out": 14.0,
+            "t": 8.7,
+            "tone": "green"
+          },
+          {
+            "label": "applyDiscount  +11 −0",
+            "out": 14.0,
+            "t": 10.1,
+            "tone": "green"
+          },
+          {
+            "label": "Affects 10 endpoints",
+            "out": 16.1,
+            "t": 14.6,
+            "tone": "amber"
+          }
+        ],
+        "texts": [
+          {
+            "text": "I read what|*changed.*",
+            "t": 0.2
+          },
+          {
+            "text": "The whole|*change set.*",
+            "t": 3.2
+          },
+          {
+            "t": 7.4,
+            "text": "One line|*left.*",
+            "tone": "red"
+          },
+          {
+            "t": 8.6,
+            "text": "Two|*arrived.*",
+            "tone": "green"
+          },
+          {
+            "t": 9.9,
+            "text": "*applyDiscount*|is new.",
+            "tone": "green"
+          },
+          {
+            "text": "Is it|*right?*",
+            "t": 11.9
+          },
+          {
+            "text": "It shows|*what to read.*",
+            "t": 14.4
+          },
+          {
+            "text": "Self-rated:|*exceeds.*",
+            "t": 16.4
+          }
+        ],
+        "beats": {
+          "swapIn": 6.0,
+          "swapOut": 14.3,
+          "stamp": 13.4,
+          "stampOut": 14.3,
+          "card": 16.33,
+          "pet": 19.5,
+          "leave": 20.4
+        }
+      }
+    },
+    {
+      "src": "story-end",
+      "start": 43.5,
+      "duration": 2.5,
+      "captures": {
+        "captureUrl": "C1-commit"
+      },
+      "vars": {
+        "question": "Q3 review:|*the agent.*",
+        "cam": {
+          "w": 0.26,
+          "cx": 0.275,
+          "cy": 0.8
+        }
+      }
+    }
+  ],
+  "music": {
+    "bpm": 84
+  },
+  "sfx": [
+    {
+      "kind": "pop",
+      "t": 0.9
+    },
+    {
+      "kind": "type",
+      "t": 2.95
+    },
+    {
+      "kind": "type",
+      "t": 4.1
+    },
+    {
+      "kind": "type",
+      "t": 5.2
+    },
+    {
+      "kind": "whoosh",
+      "t": 6.4
+    },
+    {
+      "kind": "tick",
+      "t": 8.2
+    },
+    {
+      "kind": "tick",
+      "t": 9.2
+    },
+    {
+      "kind": "tick",
+      "t": 10.24
+    },
+    {
+      "kind": "pop",
+      "t": 11.6
+    },
+    {
+      "kind": "whoosh",
+      "t": 15.0
+    },
+    {
+      "kind": "thud",
+      "t": 18.3
+    },
+    {
+      "kind": "pop",
+      "t": 22.6
+    },
+    {
+      "kind": "whoosh",
+      "t": 28.6
+    },
+    {
+      "kind": "note",
+      "t": 30.0,
+      "pitch": 0
+    },
+    {
+      "kind": "note",
+      "t": 31.2,
+      "pitch": 2
+    },
+    {
+      "kind": "note",
+      "t": 32.6,
+      "pitch": 4
+    },
+    {
+      "kind": "thud",
+      "t": 36.0
+    },
+    {
+      "kind": "whoosh",
+      "t": 37.0
+    },
+    {
+      "kind": "pop",
+      "t": 39.0
+    },
+    {
+      "kind": "pop",
+      "t": 42.1
+    }
+  ],
+  "description": "Performance review of an AI agent: 14 files, 112 added, 16 removed, and a manager who has stopped reading. Insilode's Show Git Changes in Flow puts the whole change on one canvas: every endpoint the changed code reaches, cut down to the changed methods, added lines green and removed lines red. It shows what changed, not whether it is right. Demo project (Harbor Goods). The commit is staged for the demo. Real captures of Insilode, a code editor built on VS Code. Voice: synthetic (AI-generated). Music composed in code. Free and open source: insilode.dev",
+  "hashtags": [
+    "#dryrun",
+    "#codereview",
+    "#aiagents",
+    "#devtools"
+  ]
+}
