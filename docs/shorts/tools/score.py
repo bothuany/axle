@@ -97,20 +97,38 @@ fade = np.ones(N)
 fade[-int(1.2 * SR):] = np.linspace(1, 0.55, int(1.2 * SR))
 bed *= fade
 
+# Normalized before the duck, so the duck is a real drop against the bed's level, not undone by the normalization.
+bed = bed / (np.max(np.abs(bed)) * 1.05) * 0.85
+DUCK_DB = float(cfg.get("duckDb", -9))
 if voice_path:
     with wave.open(voice_path) as w:
+        if w.getframerate() != SR or w.getsampwidth() != 2:
+            sys.exit(f"voice must be 48 kHz 16-bit PCM, got {w.getframerate()} Hz, {8 * w.getsampwidth()} bit")
         raw = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(float) / 32768
         if w.getnchannels() == 2:
             raw = raw.reshape(-1, 2).mean(axis=1)
-    env = np.zeros(N)
-    env[: min(N, len(raw))] = np.abs(raw[:N])
-    win = int(0.12 * SR)
-    env = np.convolve(env, np.ones(win) / win, mode="same")
-    env = np.minimum(1, env / (np.percentile(env[env > 0], 90) if (env > 0).any() else 1))
-    env = np.convolve(env, np.ones(int(0.25 * SR)) / int(0.25 * SR), mode="same")
-    bed *= 1 - 0.65 * env  # about -9 dB under speech
-
-bed = bed / (np.max(np.abs(bed)) * 1.05) * 0.85
+    # Where the voice speaks: a 50 ms RMS over -40 dBFS, held across the pauses inside a phrase (0.9 s) so the bed
+    # does not pump, then ramped (0.12 s down before the word, 0.5 s back up after the phrase).
+    hop = int(0.01 * SR)
+    v = np.zeros(N)
+    v[: min(N, len(raw))] = raw[:N]
+    frames = len(v) // hop
+    rms = np.sqrt(np.convolve(v[: frames * hop] ** 2, np.ones(5 * hop) / (5 * hop), mode="same")[::hop])
+    on = rms > 10 ** (-40 / 20)
+    hold = 90
+    idx = np.where(on)[0]
+    for a, b in zip(idx[:-1], idx[1:]):
+        if 1 < b - a <= hold:
+            on[a:b] = True
+    floor = 10 ** (DUCK_DB / 20)
+    g = np.where(on, floor, 1.0)
+    att, rel = 12, 50  # frames of 10 ms
+    for i in range(1, len(g)):  # release: rise back slowly
+        g[i] = min(g[i], g[i - 1] + (1 - floor) / rel)
+    for i in range(len(g) - 2, -1, -1):  # attack: start going down ahead of the word
+        g[i] = min(g[i], g[i + 1] + (1 - floor) / att)
+    duck = np.interp(np.arange(N) / hop, np.arange(len(g)), g)
+    bed *= duck
 
 # Sound effects.
 fx = np.zeros(N)

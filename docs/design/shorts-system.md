@@ -29,9 +29,9 @@ These are established short-form practice, written from experience. They are **n
 |---|---|
 | Canvas | 1080 x 1920 px, 9:16 |
 | Frame rate | 30 fps |
-| Length | 12-30 s per episode; aim for 15-20 s. YouTube Shorts may be up to 3 minutes, vertical or square (official docs); we stay short because the hook and the loop are the format. |
+| Length | 12-30 s for a silent episode, aim for 15-20 s; **30-50 s for a voiced story** (see "Voiced stories" below). YouTube Shorts may be up to 3 minutes, vertical or square (official docs); we stay short because the hook and the loop are the format. |
 | Codec of the delivered file | H.264 High, yuv420p, AAC 48 kHz, `-movflags +faststart`, about -16 to -14 LUFS, true peak under -1 dBFS |
-| Audio | music bed + sound effects, no voice by default |
+| Audio | music bed + sound effects; a voiced story adds a voiceover (the bed ducks under it) |
 
 ### Safe margins
 
@@ -125,11 +125,11 @@ Burned in, Instrument Sans 650, 56 px, **at most 2 lines**, left-aligned in x 10
 ## Audio
 
 - **Music bed composed in code** (`tools/score.py`: NumPy, no model, no samples; the short version of [docs/film/tools/score.py](../film/tools/score.py)): A minor, pad, a plucked arpeggio and a bass pulse at 84-96 BPM. It is already moving at frame 0 (no sting). In the 2.4 s before a reveal it thins to the pad (the guess) and the arpeggio comes back with the reveal.
-- **Ducked under the voice** if there is one (about -9 dB under speech; the code is exercised, no real voice take has been). A silent episode measures about -17 LUFS (bed plus effects); the phone copy is checked with `ebur128`.
+- **Ducked under the voice** if there is one: -9 dB while the voice speaks, held across pauses up to 0.9 s so the bed does not pump between words, 0.12 s down ahead of a word and 0.5 s back up after a phrase. Measured on episode 02's real voice track: the bed sits 9.0 dB under its undocked level inside every line, with no recovery inside a line. A silent episode measures about -17 LUFS (bed plus effects); the phone copy is checked with `ebur128`.
 - **Captions-first**: every video works muted. The sound adds, it never explains.
-- **Optional voice** is the model's **built-in Chatterbox voice, not a clone of a real person** (the film's cloned LibriVox reading is its own decision; the shorts do not reuse a clone). Put the 48 kHz wav in the episode's `voice` field and the bed ducks under it. Not used in the first series.
+- **Voice.** The silent quiz episodes have none. A **voiced story** (below) is narrated by the launch film's voice: Chatterbox run locally, conditioned on the public-domain LibriVox reading the film uses (Karen Savage, "Pride and Prejudice" v3), the "04 female" take of the film's voice audition; a second character may use the model's built-in voice with no reference. `tools/vo.mjs` makes the takes and places them; the episode's `vo` block holds the lines, and the bed ducks under the result. (The first draft of this document said the shorts would not reuse a cloned voice; the user picked the film's voice for the shorts on 2026-10-23.)
 - **Sound effects** (synthesized in `score.py`), one per UI action: `tick` (countdown, beat), `type` (a typed character), `thud` (DENY), `ok` (ALLOW, two rising bells), `ask` (ASK, two equal bells), `note` (a hop, pentatonic, rising), `pop` (a reveal), `whoosh` (a second picture arriving). `tools/episode.mjs` writes them from the template's data (the stamp times, the hop times); an episode can add its own under `sfx`.
-- **AI disclosure.** If a voice is used (a synthetic voice), say so in the description: "Voice: synthetic (AI-generated)". Platforms also have their own label setting for synthetic content; set it. The first series has no voice, music and effects are composed in code, and the pictures are real captures: nothing needs the label, and the description still says "Music composed in code".
+- **AI disclosure.** If a voice is used (a synthetic voice), say so in the description: "Voice: synthetic (AI-generated)". Platforms also have their own label setting for synthetic content; set it. The silent quiz episodes have no voice, music and effects are composed in code, and the pictures are real captures: nothing needs the label, and the description still says "Music composed in code". Every voiced story carries the line and the label.
 
 ## Honesty
 
@@ -155,11 +155,13 @@ docs/shorts/
   hyperframes.json
   assets/brand.css, shorts.js tokens and the shared helpers (camera, text, countdown)
   assets/fonts/               Instrument Sans + JetBrains Mono (variable, latin) and their OFL texts
-  compositions/               tpl-a..tpl-e, captions, tag
+  compositions/               tpl-a..tpl-e, captions, tag; story-chaos, story-flow, story-end (the voiced story's scenes)
   episodes/NN-slug.json       the data: one file per episode
   tools/setup.mjs             captures -> JPEG, pets, icon (works files, git-ignored)
+  tools/vo.mjs, vo.py         a voiced episode's lines -> work/<id>/voice.wav and the word times (Chatterbox, local)
   tools/episode.mjs           episode data -> a project in build/<id>/ (or --here)
-  tools/score.py              the bed and the effects, composed in code
+  tools/score.py              the bed and the effects, composed in code; the duck under the voice
+  tools/deliver.mjs           render -> the delivered file, the phone copy (-15 LUFS) and a contact sheet
 ```
 
 - **Naming:** `NN-slug` (`01-allow-or-deny`): two-digit order, a short slug; the same name for the data file, the project folder, the render (`renders/NN-slug.mp4`) and the phone copy (`NN-slug-phone.mp4`). Captures keep the film's names (`B3-sidebar`, `C3-changes`); new ones are named for what they show (`P2-sim-verdict`, `Q1-empty`).
@@ -227,3 +229,41 @@ Free and open source: insilode.dev
 ```
 
 Three to five tags, the series tag first. The hook line is also the title on YouTube. Do not use "IDE", "all your extensions" or a Microsoft endorsement; "built on VS Code" yes.
+
+## Voiced stories (2026-10-23)
+
+The first test (episode 1, ALLOW or DENY) was "fine but not fun enough": the quiz did not grab, and a silent cut with music felt flat. The direction from that feedback: **someone talks**, the video is about a **real need** a developer has lived, something **funny** happens on the way, and it tells a **small story** that ends on the call-flow canvas. Flow ("how your code runs") is the priority subject; the ALLOW/DENY episode stays as a lower-priority extra and is not built on.
+
+**The format.** 30-50 s, voiced, word-timed captions from the voice (one caption track, muted-first), the music ducked under the voice.
+
+1. **The pain** in the first 1-2 s: a line a developer has actually said, over the real editor.
+2. **The comic turn**, escalating: drawn graphics (paper tabs, sticky notes, red string, the pixel pet reacting). Drawn things look drawn (paper, cork, string); they never imitate Insilode's UI.
+3. **The reveal from real captures**, in one or two plain sentences: what the canvas shows and why it helps.
+4. **The loop**: the last frame hands back to the first; the end tag lands on it.
+
+Every voiced episode's description says "Voice: synthetic (AI-generated)", and the platform's synthetic-content label is set.
+
+**How it is built.** An episode with `scenes` (instead of one `template`) puts several scene compositions on one timeline, each with its own start; an episode with a `vo` block is voiced: `node tools/vo.mjs episodes/<id>.json` makes one take per line with the local Chatterbox model (`tools/vo.py`, run with the Chatterbox venv; `INSILODE_TTS_PYTHON` names its python), trims it, stretches it to the line's `tempo`, normalizes it and transcribes it for its word times, then places every line at its `t` in one 48 kHz voice track (`work/<id>/voice.wav`, git-ignored). `tools/episode.mjs` turns the placed words into the caption groups (at most 6 words each, the line's `*starred*` word in the accent colour) and ducks the bed under the voice.
+
+### Three pitches
+
+**A. The conspiracy board** (built: [episodes/02-flow-conspiracy-board.json](../shorts/episodes/02-flow-conspiracy-board.json))
+
+- Hook: "Day three at a new job. One ticket: what happens when someone places an order?"
+- Beats: the real editor on `@PostMapping("/orders")` → Ctrl+Click, Ctrl+Click: paper tabs pile up over the editor, one per real file of the request (OrderController, OrderService, OrderRepository, Order, BillingClient, then `main.py`: "wait, why is it Python now?", then OrderEvents) → "It sends a string into Kafka. Who listens to a string?" → a cork board with the tabs pinned and red string between them, the cat peeks at it → a coworker (second voice): "Hey. Are you okay?" "I'm fine. It's all connected." → "And it is." The cards snap into the layout of the flow and the board becomes the real canvas → the camera rides it: the controller, the service, the orders table it writes, HTTP into billing (Python), Kafka into shipping → "Three services. One tab." → back to the controller, which is the first frame, and the tag.
+- The joke: the string-and-pins conspiracy board every developer has drawn in their head, and the punchline that it *is* all connected; the editor draws it for you.
+- Why it was picked: the joke turns into the product picture (the board becomes the canvas), and the pain (the first week, the Ctrl+Click rabbit hole) is universal.
+
+**B. Ask Dave**
+
+- Hook: "How does checkout work?" "Ask Dave." "Dave left in March."
+- Beats: Dave's farewell card (drawn) → the only documentation Dave left is a sticky note: "it's complicated" → a search for "invoice" returns everything → the narrator opens the endpoint: the flow is drawn from the code as it is today → "Dave's in a tab now." The pet wears a tiny "Dave" name badge.
+- The joke: the bus-factor senior, and the canvas as the colleague who never leaves.
+- Risk: the joke leans on a person; it must stay warm (Dave is not the villain).
+
+**C. 2 a.m.**
+
+- Hook: "2:07 a.m. Orders go through. Nobody gets an invoice."
+- Beats: a phone buzzing on the nightstand (drawn) → a sleepy grep for "invoice", results scrolling past → the narrator opens POST /orders: the order calls billing over HTTP, a different service in a different language → "Now you know which service to look at, and who to wake up." → back to bed, the pet asleep on the keyboard.
+- The joke: the on-call panic, and the pet asleep at the end.
+- Risk: it must not claim the canvas *finds* the bug; it shows where the request goes, which is where to look.

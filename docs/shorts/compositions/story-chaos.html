@@ -1,0 +1,211 @@
+<!doctype html>
+<!-- Story scene "chaos" (voiced stories, episode 02-flow-conspiracy-board): the real editor on the request's entry point,
+     Ctrl+Click after Ctrl+Click piles paper tabs over it, the tabs get pinned to a cork board with red string, and at the
+     end they snap into the layout of the real call-flow canvas, so the next scene (the capture) lands on them.
+     Everything drawn here looks drawn (paper, cork, string): it never imitates Insilode's own UI. The tab names are the
+     real files of the request in the demo project. Times come from the episode (`beats`); the layout lives here. -->
+<html lang="en" data-composition-variables='[
+{"id":"question","type":"string","label":"Hook, lines split by |, *accent*","default":"Where does this|request *go*?"},
+{"id":"boardText","type":"string","label":"Big text over the board","default":"*Thursday.*"},
+{"id":"captureUrl","type":"string","label":"Editor capture","default":"assets/captures/A1-editor.jpg"},
+{"id":"petUrl","type":"string","label":"Pet","default":"assets/pets/cat.png"},
+{"id":"cam","type":"string","label":"Editor camera keys (JSON)","default":"[{\"t\":0,\"cx\":0.24,\"cy\":0.47,\"w\":0.26}]"},
+{"id":"flowKey","type":"string","label":"Camera key of the flow capture the cards snap to (JSON)","default":"{\"cx\":0.47,\"cy\":0.52,\"w\":0.64}"},
+{"id":"beats","type":"string","label":"Times (JSON: clicks[], tabs[], board, strings, bubble, snap)","default":"{}"},
+{"id":"duration","type":"number","label":"Scene length (s)","default":26}
+]'>
+<body>
+<template id="story-chaos-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#c-q, #c-b { font-size: 100px; }
+		#c-panel { left: var(--px); top: 480px; width: var(--pw); height: 810px; }
+		#c-dark { position: absolute; inset: 0; background: #181818; }
+		#c-cork { position: absolute; inset: 0; background-color: #b48655;
+			background-image: radial-gradient(rgba(70, 40, 10, .35) 1.5px, transparent 2px), radial-gradient(rgba(255, 230, 190, .25) 1px, transparent 1.6px);
+			background-size: 23px 19px, 31px 27px; background-position: 0 0, 11px 7px; box-shadow: inset 0 0 0 16px #6e4a29, inset 0 0 60px rgba(40, 20, 0, .55); }
+		#c-strings { position: absolute; left: 0; top: 0; width: 972px; height: 810px; overflow: visible; }
+		#c-strings line { stroke: #d01e2a; stroke-width: 5; stroke-linecap: round; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .45)); }
+		.tab { position: absolute; left: 0; top: 0; width: 380px; height: 110px; margin-left: -190px; margin-top: -55px; }
+		.tab .body { position: absolute; inset: 0; background: #f3ead6; border-radius: 6px 14px 14px 14px; box-shadow: 0 10px 22px rgba(0, 0, 0, .45); display: flex; align-items: center; padding: 0 26px; }
+		.tab .ear { position: absolute; left: 0; top: -26px; width: 150px; height: 30px; background: #f3ead6; border-radius: 12px 12px 0 0; }
+		.tab b { font-family: var(--mono); font-weight: 650; font-size: 32px; color: #2a2318; white-space: nowrap; letter-spacing: -0.01em; }
+		.tab.py .body, .tab.py .ear { background: #f6e3a0; }
+		.tab .scrawl { position: absolute; right: -14px; top: -40px; font-family: var(--sans); font-weight: 700; font-size: 64px; color: #d01e2a; transform: rotate(12deg); opacity: 0; }
+		.pin { position: absolute; left: 50%; top: -12px; width: 30px; height: 30px; margin-left: -15px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ff8a8a 0 18%, #d01e2a 40%, #7d0f16 100%); box-shadow: 0 4px 6px rgba(0, 0, 0, .5); opacity: 0; }
+		.sticky { position: absolute; left: 0; top: 0; width: 250px; height: 180px; margin-left: -125px; margin-top: -90px; background: #ffe56b; box-shadow: 0 12px 20px rgba(0, 0, 0, .4); padding: 22px 22px; display: flex; align-items: center; }
+		.sticky b { font-family: var(--sans); font-weight: 700; font-size: 38px; line-height: 1.05; color: #2a2318; letter-spacing: -0.02em; }
+		.sticky .pin { top: -10px; }
+		#c-click { position: absolute; left: 0; top: 0; width: 120px; height: 120px; margin: -60px 0 0 -60px; border: 8px solid var(--entry); border-radius: 50%; opacity: 0; }
+		#c-ctrl { position: absolute; left: 0; top: 0; font-size: 30px; padding: 6px 16px; opacity: 0; }
+		#c-pet { position: absolute; z-index: 20; right: 40px; bottom: -220px; width: 176px; height: 176px; image-rendering: pixelated; border-radius: 26px; }
+		#c-bubble { position: absolute; z-index: 21; right: 200px; bottom: 150px; padding: 8px 26px 12px; font-family: var(--sans); font-weight: 700; font-size: 64px; color: #2a2318; background: #fff; border-radius: 28px; opacity: 0; }
+		#c-bubble::after { content: ""; position: absolute; right: -14px; bottom: 18px; border: 14px solid transparent; border-left-color: #fff; }
+	</style>
+	<div id="root" data-composition-id="story-chaos" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="c-q" class="q hl" data-layout-allow-overlap></div>
+		<div id="c-b" class="q hl" data-layout-allow-overlap></div>
+		<div id="c-panel" class="panel">
+			<div id="c-cam" class="cam" data-layout-allow-overflow><img data-var-src="captureUrl" src="assets/blank.png#c" alt=""></div>
+			<div id="c-click"></div>
+			<span id="c-ctrl" class="chip amber">Ctrl+Click</span>
+			<div id="c-dark" data-layout-allow-occlusion></div>
+			<div id="c-cork" data-layout-allow-occlusion data-layout-allow-overflow></div>
+			<svg id="c-strings" viewBox="0 0 972 810" data-layout-allow-overflow></svg>
+			<div id="c-items" data-layout-allow-overflow style="position: absolute; inset: 0; z-index: 10;"></div>
+			<img id="c-pet" data-var-src="petUrl" src="assets/blank.png#p" alt="" data-layout-allow-overflow>
+			<div id="c-bubble" data-layout-allow-overflow>?</div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('story-chaos'), S = Shorts
+			var tl = gsap.timeline({ paused: true })
+			var $ = function (id) { return document.getElementById(id) }
+			var PW = 972, PH = 810
+			var B = S.json(V.beats, {})
+			var dur = V.duration
+
+			// The hook is on screen, fully formed, at frame 0.
+			var q = S.lines($('c-q'), V.question, 'c-q')
+			var bt = S.lines($('c-b'), V.boardText, 'c-b')
+			tl.set(bt, { yPercent: 108 }, 0)
+
+			// The editor camera: a slow push into the entry point.
+			var keys = S.json(V.cam, [])
+			S.camera(tl, '#c-cam', keys, PW, PH)
+			// A point of the window (fractions) in panel pixels, under a camera key.
+			var at = function (k, fx, fy) { var f = S.fit(k, PW, PH); return { x: f.x + f.scale * fx * S.IW, y: f.y + f.scale * fy * S.IH, s: f.scale } }
+
+			// Ctrl+Click on `service.place(order)`: a ring and the chord, once per click.
+			var call = at(keys[0], 0.275, 0.503)
+			gsap.set('#c-click', { x: call.x, y: call.y })
+			gsap.set('#c-ctrl', { x: call.x + 70, y: call.y - 110 })
+			;(B.clicks || []).forEach(function (t) {
+				tl.fromTo('#c-click', { scale: 0.4, opacity: 1 }, { scale: 1.4, opacity: 0, duration: 0.45, ease: 'power2.out', immediateRender: false }, t)
+				tl.set('#c-ctrl', { opacity: 1 }, t)
+				tl.set('#c-ctrl', { opacity: 0 }, t + 0.6)
+			})
+
+			// The items: six file tabs (the real files of POST /orders) and one sticky note. `pile` is where a tab lands over
+			// the editor, `board` where it is pinned, `node` the box of the canvas node it becomes (window fractions,
+			// measured on the B3 capture).
+			var items = [
+				{ id: 'ctrl', name: 'OrderController.java', pile: [300, 95, -4], board: [235, 120, -4], node: [0.172, 0.322, 0.294, 0.402] },
+				{ id: 'svc', name: 'OrderService.java', pile: [560, 205, 5], board: [720, 150, 3], node: [0.325, 0.374, 0.425, 0.472] },
+				{ id: 'repo', name: 'OrderRepository.java', pile: [330, 320, -2], board: [250, 350, 2], node: [0.454, 0.409, 0.558, 0.502] },
+				{ id: 'bill', name: 'BillingClient.java', pile: [610, 430, 6], board: [730, 360, -3], node: [0.456, 0.522, 0.644, 0.589] },
+				{ id: 'py', name: 'main.py', py: true, pile: [400, 545, -5], board: [270, 640, 5], node: [0.672, 0.558, 0.766, 0.606] },
+				{ id: 'ev', name: 'OrderEvents.java', pile: [620, 660, 3], board: [735, 650, -2], node: [0.622, 0.667, 0.772, 0.731] },
+				{ id: 'topic', sticky: 'order.placed → ???', board: [500, 500, -6], node: [0.456, 0.631, 0.593, 0.698] }
+			]
+			var extra = [{ id: 'why', sticky: 'Python?!', board: [130, 495, -9] }]
+			var byId = {}
+			var tabT = B.tabs || []
+			items.concat(extra).forEach(function (it, i) {
+				var el = document.createElement('div')
+				el.id = 'c-it-' + it.id
+				el.setAttribute('data-layout-allow-overflow', '')
+				el.setAttribute('data-layout-allow-occlusion', '')
+				el.setAttribute('data-layout-allow-overlap', '')
+				if (it.sticky) {
+					el.className = 'sticky'
+					el.innerHTML = '<b>' + S.esc(it.sticky) + '</b><i class="pin"></i>'
+				} else {
+					el.className = 'tab' + (it.py ? ' py' : '')
+					el.innerHTML = '<i class="ear"></i><div class="body"><b data-layout-ignore>' + S.esc(it.name) + '</b></div><i class="pin"></i>' + (it.py ? '<span class="scrawl" data-layout-allow-occlusion>?!</span>' : '')
+				}
+				// Later tabs lie on top of earlier ones.
+				el.style.zIndex = String(i + 1)
+				$('c-items').appendChild(el)
+				it.el = el
+				byId[it.id] = it
+			})
+
+			// 1. Tabs drop in through the panel's top edge, one per Ctrl+Click, and pile up over the editor.
+			items.forEach(function (it, i) {
+				if (it.sticky) return
+				var t = tabT[i]
+				gsap.set(it.el, { x: it.pile[0], y: it.pile[1] - 900, rotation: it.pile[2] })
+				tl.to(it.el, { y: it.pile[1], duration: 0.42, ease: 'power3.out' }, t)
+				if (it.py) tl.to(it.el.querySelector('.scrawl'), { opacity: 1, duration: 0.01 }, t + 0.45)
+			})
+			// The topic sticky and the "Python?!" sticky are only on the board.
+			;['topic', 'why'].forEach(function (id) { gsap.set(byId[id].el, { x: byId[id].board[0], y: byId[id].board[1], rotation: byId[id].board[2], opacity: 0 }) })
+
+			// 2. The board: the cork comes up through the panel's bottom edge, the tabs are pinned on it, red string runs
+			// between them and two notes are slapped on.
+			var b0 = B.board
+			gsap.set('#c-cork', { yPercent: 102 })
+			gsap.set('#c-dark', { opacity: 0 })
+			tl.to('#c-cork', { yPercent: 0, duration: 0.55, ease: 'power3.out' }, b0)
+			tl.set('#c-dark', { opacity: 1 }, b0 + 0.55)
+			tl.to(q, { yPercent: -108, duration: 0.35, ease: 'power2.in', stagger: 0.05 }, b0 - 0.1)
+			tl.to(bt, { yPercent: 0, duration: 0.45, ease: 'power3.out', stagger: 0.09 }, b0 + 0.3)
+			items.forEach(function (it, i) {
+				if (it.sticky) return
+				tl.to(it.el, { x: it.board[0], y: it.board[1], rotation: it.board[2], duration: 0.5, ease: 'power3.inOut' }, b0 + 0.15 + i * 0.05)
+				if (it.py) tl.to(it.el.querySelector('.scrawl'), { opacity: 0, duration: 0.01 }, b0 + 0.1)
+				tl.fromTo(it.el.querySelector('.pin'), { scale: 2.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.18, ease: 'power3.out' }, b0 + 0.7 + i * 0.06)
+			})
+			;['topic', 'why'].forEach(function (id, k) {
+				var t = b0 + 0.9 + k * 0.25
+				tl.fromTo(byId[id].el, { scale: 1.35, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.2, ease: 'power3.out' }, t)
+				tl.fromTo(byId[id].el.querySelector('.pin'), { scale: 2.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.18, ease: 'power3.out' }, t + 0.15)
+			})
+
+			// The string: a pin to a pin. Real edges of the flow, then three that are not (they come off at the snap).
+			var NS = 'http://www.w3.org/2000/svg'
+			var real = [['ctrl', 'svc'], ['svc', 'repo'], ['svc', 'bill'], ['bill', 'py'], ['svc', 'topic'], ['topic', 'ev']]
+			var wrong = [['ctrl', 'py'], ['repo', 'ev'], ['why', 'bill']]
+			var pinAt = function (it) { return { x: it.board[0], y: it.board[1] - (it.sticky ? 80 : 55) } }
+			var lines = []
+			real.concat(wrong).forEach(function (p, i) {
+				var a = pinAt(byId[p[0]]), b = pinAt(byId[p[1]])
+				var l = document.createElementNS(NS, 'line')
+				l.setAttribute('id', 'c-str' + i)
+				l.setAttribute('x1', a.x); l.setAttribute('y1', a.y); l.setAttribute('x2', b.x); l.setAttribute('y2', b.y)
+				var len = Math.hypot(b.x - a.x, b.y - a.y)
+				l.setAttribute('stroke-dasharray', len + ' ' + len)
+				l.setAttribute('stroke-dashoffset', len)
+				$('c-strings').appendChild(l)
+				tl.to(l, { attr: { 'stroke-dashoffset': 0 }, duration: 0.3, ease: 'power2.out' }, B.strings + i * 0.17)
+				lines.push({ el: l, p: p, len: len, real: i < real.length })
+			})
+
+			// The pet peeks up through the panel's bottom edge with a question of its own.
+			if (B.bubble) {
+				tl.to('#c-pet', { y: -250, duration: 0.4, ease: 'power3.out' }, B.bubble - 0.3)
+				tl.set('#c-bubble', { opacity: 1 }, B.bubble)
+				tl.set('#c-bubble', { opacity: 0 }, B.snap - 0.2)
+				tl.to('#c-pet', { y: 0, duration: 0.3, ease: 'power2.in' }, B.snap - 0.2)
+			}
+
+			// 3. The snap: the cork leaves through the bottom edge, the wrong string comes off, and every card lands on
+			// the box of its node in the real canvas (under the flow scene's first camera key), so the cut lands on them.
+			var s = B.snap
+			var fk = S.json(V.flowKey, {})
+			var box = function (n) { var a = at(fk, n[0], n[1]), b = at(fk, n[2], n[3]); return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, w: b.x - a.x, h: b.y - a.y, l: a.x, r: b.x } }
+			tl.to('#c-cork', { yPercent: 102, duration: 0.5, ease: 'power2.in' }, s)
+			tl.to(bt, { yPercent: -108, duration: 0.35, ease: 'power2.in', stagger: 0.05 }, s)
+			tl.to(byId.why.el, { y: 900 + byId.why.board[1], duration: 0.4, ease: 'power2.in' }, s)
+			items.forEach(function (it) {
+				var nb = box(it.node)
+				var w = it.sticky ? 250 : 380, h = it.sticky ? 180 : 110
+				tl.to(it.el.querySelector('.pin'), { scale: 0, duration: 0.15, ease: 'power2.in' }, s)
+				tl.to(it.el, { x: nb.x, y: nb.y, rotation: 0, scaleX: nb.w / w, scaleY: nb.h / h, duration: 0.7, ease: 'power3.inOut' }, s + 0.1)
+			})
+			lines.forEach(function (L) {
+				if (!L.real) { tl.to(L.el, { attr: { 'stroke-dashoffset': L.len }, duration: 0.25, ease: 'power2.in' }, s); return }
+				var a = box(byId[L.p[0]].node), b = box(byId[L.p[1]].node)
+				var x1 = a.r, y1 = a.y, x2 = b.l, y2 = b.y
+				tl.to(L.el, { attr: { x1: x1, y1: y1, x2: x2, y2: y2, 'stroke-dasharray': '2000 2000', 'stroke-dashoffset': 0 }, duration: 0.7, ease: 'power3.inOut' }, s + 0.1)
+			})
+			tl.to({}, { duration: dur }, 0)
+			window.__timelines['story-chaos'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

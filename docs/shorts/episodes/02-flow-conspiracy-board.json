@@ -1,0 +1,373 @@
+{
+	"id": "02-flow-conspiracy-board",
+	"series": "Dry Run",
+	"no": 2,
+	"title": "The conspiracy board",
+	"duration": 44,
+	"loop": 2.5,
+	"vo": {
+		"voices": {
+			"narrator": {
+				"ref": "%LOCALAPPDATA%/Temp/insilode-film-v3/audition/_refs/female-savage.wav",
+				"exaggeration": 0.4,
+				"cfg": 0.4,
+				"seed": 7
+			},
+			"cat": {
+				"ref": null,
+				"exaggeration": 0.5,
+				"cfg": 0.3,
+				"seed": 7
+			}
+		},
+		"lines": [
+			{
+				"id": "n1",
+				"t": 0.1,
+				"tempo": 0.92,
+				"text": "Day three at a new job. One ticket: what happens when someone places an *order*?",
+				"say": "Day three at a new job. One ticket... what happens when someone places an order?"
+			},
+			{
+				"id": "n2",
+				"t": 6,
+				"seed": 11,
+				"text": "Easy. Ctrl-click. Ctrl-click. *Ctrl-click*.",
+				"say": "Easy. Control-click. Control-click. Control-click."
+			},
+			{
+				"id": "n3",
+				"t": 10.2,
+				"text": "Wait. Why is it *Python* now?"
+			},
+			{
+				"id": "n4",
+				"t": 13,
+				"tempo": 0.92,
+				"text": "Then it sends a string into Kafka. Who listens to a *string*?"
+			},
+			{
+				"id": "n5",
+				"t": 17.6,
+				"tempo": 0.92,
+				"text": "By Thursday, I had *this*."
+			},
+			{
+				"id": "c1",
+				"who": "cat",
+				"t": 20,
+				"text": "Hey... are you *okay*?"
+			},
+			{
+				"id": "n6",
+				"t": 21.6,
+				"text": "I'm fine. It's all *connected*."
+			},
+			{
+				"id": "n7",
+				"t": 24.4,
+				"seed": 11,
+				"text": "And it is. Open the endpoint in Insilode, and it draws how that request actually *runs*.",
+				"say": "And it is. Open the endpoint in Insihlode... and it draws how that request actually runs.",
+				"tempo": 0.92
+			},
+			{
+				"id": "n8",
+				"t": 30.2,
+				"text": "The controller. The service. The *orders* table it writes."
+			},
+			{
+				"id": "n9",
+				"t": 34,
+				"text": "Over HTTP into *billing*. Over Kafka into shipping.",
+				"say": "Over H T T P into billing. Over Kafka into shipping."
+			},
+			{
+				"id": "n10",
+				"t": 38.8,
+				"text": "Three services. One *tab*."
+			}
+		]
+	},
+	"scenes": [
+		{
+			"src": "story-chaos",
+			"start": 0,
+			"duration": 25.3,
+			"captures": {
+				"captureUrl": "A1-editor"
+			},
+			"pets": {
+				"petUrl": "cat"
+			},
+			"vars": {
+				"question": "Where does this|request *go*?",
+				"boardText": "*Thursday.*",
+				"cam": [
+					{
+						"t": 0,
+						"cx": 0.24,
+						"cy": 0.47,
+						"w": 0.26
+					},
+					{
+						"t": 16,
+						"cx": 0.255,
+						"cy": 0.485,
+						"w": 0.22
+					}
+				],
+				"flowKey": {
+					"cx": 0.47,
+					"cy": 0.52,
+					"w": 0.64
+				},
+				"beats": {
+					"clicks": [
+						6.6,
+						7.7,
+						8.6,
+						9.9,
+						13.5
+					],
+					"tabs": [
+						6.1,
+						6.7,
+						7.8,
+						8.7,
+						9.95,
+						13.6
+					],
+					"board": 17.2,
+					"strings": 17.9,
+					"bubble": 20,
+					"snap": 24.45
+				}
+			}
+		},
+		{
+			"src": "story-flow",
+			"start": 25.3,
+			"duration": 16.2,
+			"captures": {
+				"captureUrl": "B3-sidebar"
+			},
+			"vars": {
+				"cam": [
+					{
+						"t": 0,
+						"cx": 0.47,
+						"cy": 0.52,
+						"w": 0.64
+					},
+					{
+						"t": 1.2,
+						"cx": 0.16,
+						"cy": 0.3,
+						"w": 0.34
+					},
+					{
+						"t": 3.6,
+						"cx": 0.47,
+						"cy": 0.52,
+						"w": 0.64
+					},
+					{
+						"t": 5.1,
+						"cx": 0.235,
+						"cy": 0.37,
+						"w": 0.2
+					},
+					{
+						"t": 6.1,
+						"cx": 0.375,
+						"cy": 0.425,
+						"w": 0.2
+					},
+					{
+						"t": 7,
+						"cx": 0.5,
+						"cy": 0.455,
+						"w": 0.2
+					},
+					{
+						"t": 10.3,
+						"cx": 0.61,
+						"cy": 0.565,
+						"w": 0.34
+					},
+					{
+						"t": 12.5,
+						"cx": 0.614,
+						"cy": 0.68,
+						"w": 0.34
+					},
+					{
+						"t": 13.6,
+						"cx": 0.47,
+						"cy": 0.52,
+						"w": 0.64
+					},
+					{
+						"t": 14.8,
+						"cx": 0.47,
+						"cy": 0.52,
+						"w": 0.64
+					},
+					{
+						"t": 16.15,
+						"cx": 0.233,
+						"cy": 0.362,
+						"w": 0.16
+					}
+				],
+				"rings": [
+					{
+						"t": 0.5,
+						"d": 1.8,
+						"cx": 0.04,
+						"cy": 0.25,
+						"w": 0.065,
+						"h": 0.03
+					},
+					{
+						"t": 7,
+						"d": 1.4,
+						"cx": 0.506,
+						"cy": 0.456,
+						"w": 0.11,
+						"h": 0.1
+					},
+					{
+						"t": 10.3,
+						"d": 1.4,
+						"cx": 0.719,
+						"cy": 0.582,
+						"w": 0.1,
+						"h": 0.055
+					},
+					{
+						"t": 12.5,
+						"d": 1.2,
+						"cx": 0.697,
+						"cy": 0.699,
+						"w": 0.155,
+						"h": 0.07
+					}
+				],
+				"hops": [
+					{
+						"t": 0.6,
+						"label": "POST /orders"
+					},
+					{
+						"t": 7,
+						"label": "writes orders"
+					},
+					{
+						"t": 10.3,
+						"label": "HTTP → billing (Python)"
+					},
+					{
+						"t": 12.5,
+						"label": "Kafka → shipping"
+					}
+				],
+				"texts": [
+					{
+						"t": 0.2,
+						"text": "Open the|*endpoint*."
+					},
+					{
+						"t": 4.6,
+						"text": "Follow it|*in order*."
+					},
+					{
+						"t": 13.4,
+						"text": "No string|*required*."
+					}
+				]
+			}
+		},
+		{
+			"src": "story-end",
+			"start": 41.5,
+			"duration": 2.5,
+			"captures": {
+				"captureUrl": "A1-editor"
+			},
+			"vars": {
+				"question": "Where does this|request *go*?",
+				"cam": {
+					"cx": 0.24,
+					"cy": 0.47,
+					"w": 0.26
+				}
+			}
+		}
+	],
+	"sfx": [
+		{
+			"t": 6.6,
+			"kind": "tick"
+		},
+		{
+			"t": 7.7,
+			"kind": "tick"
+		},
+		{
+			"t": 8.6,
+			"kind": "tick"
+		},
+		{
+			"t": 9.9,
+			"kind": "tick"
+		},
+		{
+			"t": 13.5,
+			"kind": "tick"
+		},
+		{
+			"t": 17.2,
+			"kind": "whoosh"
+		},
+		{
+			"t": 24.5,
+			"kind": "whoosh"
+		},
+		{
+			"t": 25.3,
+			"kind": "pop"
+		},
+		{
+			"t": 30.4,
+			"kind": "note",
+			"pitch": 0
+		},
+		{
+			"t": 32.3,
+			"kind": "note",
+			"pitch": 2
+		},
+		{
+			"t": 35.6,
+			"kind": "note",
+			"pitch": 4
+		},
+		{
+			"t": 37.8,
+			"kind": "note",
+			"pitch": 6
+		}
+	],
+	"music": {
+		"bpm": 92
+	},
+	"description": "Where does this request go? Day three at a new job, one ticket, and a Ctrl+Click rabbit hole across three services, until the editor draws the whole request: controller, service, the orders table, HTTP into billing, Kafka into shipping. Demo project (Harbor Goods). Real captures of Insilode, a code editor built on VS Code. Voice: synthetic (AI-generated). Music composed in code. Free and open source: insilode.dev",
+	"hashtags": [
+		"#dryrun",
+		"#codeeditor",
+		"#backend",
+		"#devtools"
+	]
+}

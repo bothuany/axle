@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- Story scene "end": the loop frame. The same editor capture, camera key and hook as the first frame of the chaos
+     scene, held still under the end tag, so a replay starts where the video ends. -->
+<html lang="en" data-composition-variables='[
+{"id":"question","type":"string","label":"Hook, lines split by |, *accent*","default":"Where does this|request *go*?"},
+{"id":"captureUrl","type":"string","label":"Editor capture","default":"assets/captures/A1-editor.jpg"},
+{"id":"cam","type":"string","label":"Camera key (JSON, the chaos scene's first)","default":"{\"cx\":0.24,\"cy\":0.47,\"w\":0.26}"},
+{"id":"duration","type":"number","label":"Scene length (s)","default":2.5}
+]'>
+<body>
+<template id="story-end-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#x-q { font-size: 100px; }
+		#x-panel { left: var(--px); top: 480px; width: var(--pw); height: 810px; }
+	</style>
+	<div id="root" data-composition-id="story-end" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="x-q" class="q hl"></div>
+		<div id="x-panel" class="panel">
+			<div id="x-cam" class="cam" data-layout-allow-overflow><img data-var-src="captureUrl" src="assets/blank.png#x" alt=""></div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('story-end'), S = Shorts
+			var tl = gsap.timeline({ paused: true })
+			var spans = S.lines(document.getElementById('x-q'), V.question, 'x-q')
+			// The hook rises back in as the picture cuts home; the picture itself is the first frame's.
+			S.rise(tl, spans, 0.05)
+			tl.set('#x-cam', S.fit(S.json(V.cam, {}), 972, 810), 0)
+			tl.to({}, { duration: V.duration }, 0)
+			window.__timelines['story-end'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>
