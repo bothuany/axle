@@ -370,7 +370,7 @@ test('docs: the documents of the repository are pages of the site, linked to eac
 	await page.click('.nav-links a[href="./docs/"]')
 	await page.waitForSelector('.doc-body')
 	assert.equal(await page.$eval('h1', h => h.textContent), 'Overview')
-	assert.deepEqual(await page.$$eval('.doc-nav a', as => as.map(a => a.textContent)), ['Overview', 'Install and build', 'Languages', 'Agent tools', 'Boards'])
+	assert.deepEqual(await page.$$eval('.doc-nav a', as => as.map(a => a.textContent)), ['Overview', 'Install and build', 'Languages', 'Agent tools', 'Boards', 'Privacy'])
 	// A link between documents stays on the site; a link to another file of the repository goes to GitHub.
 	const links = await page.$$eval('.doc-body a', as => as.map(a => a.href))
 	assert.ok(links.some(h => h.endsWith('/docs/languages/')), 'the support table link opens the Languages page')
@@ -400,7 +400,7 @@ test('the pages can be found: every page in the sitemap has its title, descripti
 	const sitemap = await fetch(new URL('sitemap.xml', url))
 	assert.equal(sitemap.status, 200, 'sitemap.xml is served')
 	const listed = [...(await sitemap.text()).matchAll(/<loc>([^<]*)<\/loc>/g)].map(m => m[1])
-	const pages = ['', 'try/', 'docs/', 'docs/agent-tools/', 'docs/boards/', 'docs/install/', 'docs/languages/']
+	const pages = ['', 'try/', 'docs/', 'docs/agent-tools/', 'docs/boards/', 'docs/install/', 'docs/languages/', 'docs/privacy/']
 	assert.deepEqual([...listed].sort(), pages.map(p => `${SITE_URL}/${p}`).sort())
 	const robots = await fetch(new URL('robots.txt', url))
 	assert.equal(robots.status, 200, 'robots.txt is served')
