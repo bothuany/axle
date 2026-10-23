@@ -1,0 +1,228 @@
+<!doctype html>
+<!-- Story scene "dave" (voiced stories, episode 03-flow-ask-dave): the real editor under the hook, then the comic, all
+     drawn: speech bubbles, a farewell card, a wiki page, an auto-reply, one sticky note and a marker diagram with a
+     Dave-shaped hole in it. Everything drawn looks drawn (paper, marker, graph paper): it never imitates Insilode's
+     own UI, and the only real UI in the scene is the editor capture under the hook. Times come from the episode
+     (`beats`, the big-text beats); the layout lives here. Dave is the warm one: the joke is on the missing
+     documentation, not on him. -->
+<html lang="en" data-composition-variables='[
+{"id":"question","type":"string","label":"Hook, lines split by |, *accent*","default":"How does|checkout *work*?"},
+{"id":"captureUrl","type":"string","label":"Editor capture","default":"assets/captures/A1-editor.jpg"},
+{"id":"cam","type":"string","label":"Editor camera keys (JSON)","default":"[{\"t\":0,\"cx\":0.29,\"cy\":0.47,\"w\":0.26}]"},
+{"id":"texts","type":"string","label":"Big text beats after the hook (JSON: t, text with | and *accent*)","default":"[]"},
+{"id":"beats","type":"string","label":"Times (JSON: bubble1, card, desk, pm, intern, wiki, wikiSee, reply, replyBody, sticky, stickyIt, stickyWord, diagram, hole)","default":"{}"},
+{"id":"duration","type":"number","label":"Scene length (s)","default":23.5}
+]'>
+<body>
+<template id="story-dave-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#d-q, #d-texts .q { font-size: 100px; }
+		#d-panel { left: var(--px); top: 480px; width: var(--pw); height: 810px; }
+		#d-dim { position: absolute; inset: 0; background: #0c1020; opacity: 0; }
+		#d-desk { position: absolute; inset: 0; background-color: #efe7d2;
+			background-image: linear-gradient(rgba(70, 110, 170, .24) 2px, transparent 2px), linear-gradient(90deg, rgba(70, 110, 170, .24) 2px, transparent 2px);
+			background-size: 54px 54px; box-shadow: inset 0 0 0 14px #cdbf9f, inset 0 0 70px rgba(80, 60, 20, .35); }
+		#d-desk::after { content: ""; position: absolute; left: 96px; top: 0; bottom: 0; width: 3px; background: rgba(208, 30, 42, .45); }
+		#d-items { position: absolute; inset: 0; z-index: 10; }
+		.it { position: absolute; left: 0; top: 0; }
+		.ink { color: #1d2a4a; }
+		/* People: a flat head and shoulders with a label under it. */
+		.who { width: 150px; margin-left: -75px; margin-top: -90px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+		.who svg { width: 120px; height: 130px; display: block; }
+		.who span { font-family: var(--mono); font-weight: 600; font-size: 28px; color: #1d2a4a; background: #fbf6e9; border-radius: 10px; padding: 2px 12px; letter-spacing: .02em; }
+		.bub { margin-top: -50px; background: #fff; color: #2a2318; font-family: var(--sans); font-weight: 700; letter-spacing: -0.02em; line-height: 1.04; border-radius: 30px; padding: 14px 30px 20px; box-shadow: 0 10px 22px rgba(0, 0, 0, .3); }
+		.bub::after { content: ""; position: absolute; bottom: 16px; border: 16px solid transparent; }
+		.bub.tr::after { right: -26px; border-left-color: #fff; }
+		.bub.tl::after { left: -26px; border-right-color: #fff; }
+		.paper { background: #fffdf6; box-shadow: 0 14px 28px rgba(0, 0, 0, .35); border-radius: 6px; }
+		/* The farewell card */
+		#d-card { width: 640px; height: 440px; margin-left: -320px; margin-top: -220px; background: #f9d3df; padding: 38px 44px; }
+		#d-card h3 { font-family: var(--sans); font-weight: 700; font-size: 74px; line-height: 1; letter-spacing: -0.03em; color: #5a2234; }
+		#d-card .sig { font-family: var(--mono); font-weight: 500; font-size: 28px; line-height: 1.25; color: #3a2a30; margin-top: 22px; }
+		#d-card .sig div { margin-bottom: 8px; }
+		#d-card .stamp2 { position: absolute; right: 30px; bottom: 26px; font-family: var(--mono); font-weight: 700; font-size: 28px; color: #d01e2a; border: 5px solid #d01e2a; border-radius: 10px; padding: 4px 14px; transform: rotate(-8deg); background: rgba(255, 253, 246, .6); }
+		/* The wiki page */
+		#d-wiki { width: 780px; height: 650px; margin-left: -390px; margin-top: -325px; overflow: hidden; }
+		#d-wiki .bar { height: 54px; background: #dfe3ea; display: flex; align-items: center; padding: 0 26px; font-family: var(--mono); font-size: 28px; color: #4a5160; }
+		#d-wiki h3 { font-family: var(--sans); font-weight: 700; font-size: 84px; letter-spacing: -0.03em; color: #1d2a4a; padding: 20px 34px 8px; }
+		#d-wiki .ln2 { height: 22px; margin: 0 34px 18px; background: #d6d9e0; border-radius: 11px; }
+		#d-wiki .see { position: absolute; left: 44px; top: 400px; font-family: var(--sans); font-weight: 700; font-size: 100px; color: #d01e2a; transform: rotate(-4deg); letter-spacing: -0.03em; white-space: nowrap; }
+		#d-wiki .foot { position: absolute; left: 34px; bottom: 22px; font-family: var(--mono); font-size: 28px; color: #6a7080; }
+		/* The auto-reply */
+		#d-reply { width: 760px; height: 560px; margin-left: -380px; margin-top: -280px; padding: 0; overflow: hidden; }
+		#d-reply .hd { background: #e7ecf5; padding: 18px 34px; font-family: var(--mono); font-size: 28px; line-height: 1.35; color: #3a4258; }
+		#d-reply .bd { padding: 30px 34px; font-family: var(--sans); font-weight: 650; font-size: 62px; line-height: 1.08; letter-spacing: -0.02em; color: #1d2a4a; }
+		#d-reply .bd div { margin-bottom: 18px; }
+		#d-reply .k2 { color: #d01e2a; font-style: normal; }
+		/* The sticky note */
+		#d-sticky { width: 520px; height: 520px; margin-left: -260px; margin-top: -260px; background: #ffe56b; box-shadow: 0 16px 28px rgba(0, 0, 0, .4); padding: 70px 44px 0; }
+		#d-sticky .tape { position: absolute; left: 190px; top: -22px; width: 150px; height: 46px; background: rgba(255, 255, 255, .55); transform: rotate(3deg); box-shadow: 0 2px 4px rgba(0, 0, 0, .15); }
+		#d-sticky b { display: block; font-family: var(--sans); font-weight: 700; font-size: 68px; line-height: 1.02; letter-spacing: -0.03em; color: #2a2318; }
+		#d-sticky .sign { position: absolute; right: 44px; bottom: 34px; font-family: var(--sans); font-weight: 700; font-size: 64px; color: #2a2318; }
+		/* The marker diagram */
+		#d-diag { width: 880px; height: 700px; margin-left: -440px; margin-top: -350px; }
+		#d-diag svg { position: absolute; inset: 0; width: 880px; height: 700px; overflow: visible; }
+		#d-diag svg path.m { fill: none; stroke: #1d2a4a; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+		#d-diag svg path.red { stroke: #d01e2a; }
+		#d-diag svg path.dash { stroke-dasharray: 16 14; }
+		#d-diag .lbl { position: absolute; font-family: var(--mono); font-weight: 600; font-size: 34px; color: #1d2a4a; width: 240px; text-align: center; }
+		#d-diag .dave { position: absolute; left: 290px; top: 484px; width: 300px; text-align: center; font-family: var(--sans); font-weight: 700; font-size: 62px; color: #d01e2a; letter-spacing: -0.02em; }
+		#d-diag .bear { position: absolute; left: 566px; top: 360px; font-family: var(--sans); font-weight: 700; font-size: 44px; line-height: 1; color: #d01e2a; transform: rotate(-7deg); }
+		#d-diag .gone { position: absolute; left: 60px; top: 372px; width: 250px; font-family: var(--mono); font-weight: 500; font-size: 28px; line-height: 1.2; color: #4a5160; text-align: left; }
+	</style>
+	<div id="root" data-composition-id="story-dave" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="d-q" class="q hl" data-layout-allow-overlap></div>
+		<div id="d-texts"></div>
+		<div id="d-panel" class="panel">
+			<div id="d-cam" class="cam" data-layout-allow-overflow><img data-var-src="captureUrl" src="assets/blank.png#d" alt=""></div>
+			<div id="d-dim" data-layout-allow-occlusion></div>
+			<div id="d-desk" data-layout-allow-occlusion data-layout-allow-overflow></div>
+			<div id="d-items" data-layout-allow-overflow></div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('story-dave'), S = Shorts
+			var tl = gsap.timeline({ paused: true })
+			var $ = function (id) { return document.getElementById(id) }
+			var PW = 972, PH = 810
+			var B = S.json(V.beats, {})
+			var dur = V.duration
+			var NS = 'http://www.w3.org/2000/svg'
+
+			// The hook is on screen, fully formed, at frame 0 (the same picture the loop returns to).
+			var q = S.lines($('d-q'), V.question, 'd-q')
+			var texts = S.json(V.texts, [])
+			S.camera(tl, '#d-cam', S.json(V.cam, []), PW, PH)
+
+			// A drawn thing in the panel: a div at a point, which every layout check is told is meant to overlap.
+			var add = function (id, cls, html, x, y, rot, z) {
+				var el = document.createElement('div')
+				el.id = id
+				el.className = 'it ' + cls
+				el.setAttribute('data-layout-allow-overflow', '')
+				el.setAttribute('data-layout-allow-occlusion', '')
+				el.setAttribute('data-layout-allow-overlap', '')
+				el.innerHTML = html
+				el.style.zIndex = String(z || 1)
+				$('d-items').appendChild(el)
+				gsap.set(el, { x: x, y: y, rotation: rot || 0, opacity: 0 })
+				return el
+			}
+			var HEAD = function (c) { return '<svg viewBox="0 0 120 130"><circle cx="60" cy="42" r="30" fill="' + c + '"/><path d="M8 130C8 86 30 76 60 76C90 76 112 86 112 130Z" fill="' + c + '"/></svg>' }
+			var person = function (id, label, color, x, y) { return add(id, 'who', HEAD(color) + '<span>' + label + '</span>', x, y, 0, 3) }
+			var bubble = function (id, text, side, x, y, size, w) { var el = add(id, 'bub ' + side, S.esc(text), x, y, 0, 4); el.style.fontSize = size + 'px'; if (w) el.style.width = w + 'px'; return el }
+			// Pops in from its own size, no fade.
+			var pop = function (el, t, s) { tl.fromTo(el, { scale: s || 0.5, opacity: 1 }, { scale: 1, opacity: 1, duration: 0.22, ease: 'back.out(2)', immediateRender: false }, t) }
+			// Drops in through the panel's top edge / leaves through its bottom edge.
+			var drop = function (el, t, y, rot) { tl.fromTo(el, { y: y - 900, opacity: 1 }, { y: y, duration: 0.42, ease: 'power3.out', immediateRender: false }, t) }
+			var out = function (el, t, y) { tl.to(el, { y: y + 1000, duration: 0.4, ease: 'power2.in' }, t); tl.set(el, { opacity: 0 }, t + 0.45) }
+
+			// 1. "Just ask Dave." over the real editor: the lead, in the corner, with a bubble.
+			var lead = person('d-lead', 'LEAD', '#5b7c99', 805, 700)
+			var b1 = bubble('d-b1', 'Just ask Dave.', 'tr', 300, 590, 60)
+			pop(lead, B.bubble1 - 0.1)
+			pop(b1, B.bubble1)
+
+			// 2. Dave's farewell card drops onto the editor: "Dave left in March."
+			tl.to('#d-dim', { opacity: 0.55, duration: 0.3 }, B.card - 0.05)
+			var card = add('d-card', 'paper', '<h3>Good luck,<br>Dave!</h3><div class="sig"><div>We will miss you! - Priya</div><div>P.S. where is the checkout doc?? - Sam</div></div><span class="stamp2" data-layout-allow-overlap>last day: March</span>', 486, 400, -3, 5)
+			tl.to([lead, b1], { y: '+=1000', duration: 0.35, ease: 'power2.in' }, B.card - 0.05)
+			drop(card, B.card, 400)
+
+			// 3. "So I asked around." The card leaves, graph paper comes up from the bottom edge, three people answer.
+			gsap.set('#d-desk', { yPercent: 102 })
+			tl.to(card, { y: 400 + 1000, duration: 0.4, ease: 'power2.in' }, B.desk - 0.2)
+			tl.to('#d-desk', { yPercent: 0, duration: 0.5, ease: 'power3.out' }, B.desk - 0.1)
+			var pm = person('d-pm', 'PM', '#c06c84', 130, 250)
+			var bpm = bubble('d-bpm', 'Dave knows.', 'tl', 235, 215, 64)
+			var intern = person('d-intern', 'INTERN', '#6c9a6c', 835, 600)
+			var bin = bubble('d-bin', 'I was going to ask Dave.', 'tr', 330, 470, 56, 460)
+			pop(pm, B.pm - 0.1); pop(bpm, B.pm)
+			pop(intern, B.intern - 0.1); pop(bin, B.intern)
+			var gone1 = [pm, bpm, intern, bin]
+			tl.to(gone1, { y: '+=1000', duration: 0.4, ease: 'power2.in', stagger: 0.04 }, B.wiki - 0.2)
+
+			// 4. The wiki: one page, one line of content.
+			var wiki = add('d-wiki', 'paper', '<div class="bar">wiki / Checkout</div><h3>Checkout</h3><div class="ln2" style="width:520px"></div><div class="ln2" style="width:610px"></div><div class="ln2" style="width:440px"></div><span class="see" id="d-see" data-layout-allow-overlap>See Dave.</span><div class="foot">last edited 2021 by Dave</div>', 486, 405, -2, 5)
+			drop(wiki, B.wiki, 405)
+			gsap.set('#d-see', { opacity: 0 })
+			tl.fromTo('#d-see', { clipPath: 'inset(0 100% 0 0)', opacity: 1 }, { clipPath: 'inset(0 0% 0 0)', duration: 0.5, ease: 'none', immediateRender: false }, B.wikiSee)
+			out(wiki, B.reply - 0.15, 405)
+
+			// 5. His auto-reply: for checkout questions, ask Dave.
+			var reply = add('d-reply', 'paper', '<div class="hd">From: Dave<br>Re: checkout?</div><div class="bd"><div id="d-r1">I have left the company.</div><div id="d-r2">For checkout questions, <i class="k2">ask Dave.</i></div></div>', 486, 405, 2, 5)
+			drop(reply, B.reply, 405)
+			gsap.set('#d-r1', { opacity: 0 })
+			gsap.set('#d-r2', { opacity: 0 })
+			tl.set('#d-r1', { opacity: 1 }, B.reply + 0.35)
+			tl.set('#d-r2', { opacity: 1 }, B.replyBody)
+			out(reply, B.sticky - 0.2, 405)
+
+			// 6. The only documentation: one sticky note, and what it says.
+			var st = add('d-sticky', 'ink', '<i class="tape"></i><b id="d-s1">it\'s</b><b id="d-s2">complicated.</b><span class="sign" id="d-s3">- D</span>', 486, 405, -4, 5)
+			st.style.background = '#ffe56b'
+			st.style.width = '520px'; st.style.height = '520px'
+			st.style.boxShadow = '0 16px 28px rgba(0,0,0,.4)'
+			gsap.set(['#d-s1', '#d-s2', '#d-s3'], { opacity: 0 })
+			tl.fromTo(st, { y: 405 + 900, opacity: 1 }, { y: 405, duration: 0.45, ease: 'power3.out', immediateRender: false }, B.sticky)
+			tl.set('#d-s1', { opacity: 1 }, B.stickyIt)
+			tl.set('#d-s2', { opacity: 1 }, B.stickyWord)
+			tl.set('#d-s3', { opacity: 1 }, B.stickyWord + 0.55)
+			out(st, B.diagram - 0.2, 405)
+
+			// 7. The architecture, drawn in marker: every box leans on one person-shaped hole.
+			var wob = function (x, y, w, h, k) {
+				var j = function (i) { return ((Math.sin((k + i) * 12.9898) * 43758.5453) % 1) * 5 }
+				return 'M' + (x + j(1)) + ' ' + (y + j(2)) + 'L' + (x + w + j(3)) + ' ' + (y + j(4)) + 'L' + (x + w + j(5)) + ' ' + (y + h + j(6)) + 'L' + (x + j(7)) + ' ' + (y + h + j(8)) + 'L' + (x + j(9)) + ' ' + (y - 8 + j(10))
+			}
+			var boxes = [[60, 50, 240, 80, 'checkout'], [580, 50, 240, 80, 'orders db'], [60, 570, 240, 80, 'billing'], [580, 570, 240, 80, 'shipping']]
+			var svg = '<svg viewBox="0 0 880 700">'
+			boxes.forEach(function (b, i) { svg += '<path class="m" id="d-bx' + i + '" d="' + wob(b[0], b[1], b[2], b[3], i * 3) + '" pathLength="1"/>' })
+			var hub = [[300, 130, 392, 304], [580, 130, 488, 304], [300, 570, 338, 458], [580, 570, 542, 458]]
+			hub.forEach(function (l, i) { svg += '<path class="m" id="d-ln' + i + '" d="M' + l[0] + ' ' + l[1] + 'Q' + ((l[0] + l[2]) / 2 + (i % 2 ? 14 : -14)) + ' ' + ((l[1] + l[3]) / 2) + ' ' + l[2] + ' ' + l[3] + '" pathLength="1"/>' })
+			svg += '<g id="d-hole"><path class="m dash red" d="M440 275C407 275 384 298 384 330C384 362 407 385 440 385C473 385 496 362 496 330C496 298 473 275 440 275Z M330 470C330 410 372 392 440 392C508 392 550 410 550 470Z"/></g>'
+			svg += '</svg>'
+			var diag = add('d-diag', 'paper', svg + boxes.map(function (b) { return '<div class="lbl" style="left:' + b[0] + 'px;top:' + (b[1] + 22) + 'px" id="d-lb' + boxes.indexOf(b) + '">' + b[4] + '</div>' }).join('') + '<div class="dave" id="d-dv">Dave</div><div class="bear" id="d-br">load-bearing</div><div class="gone" id="d-gn">(left in March)</div>', 486, 405, 1, 5)
+			diag.style.background = '#fffdf6'
+			drop(diag, B.diagram, 405)
+			boxes.forEach(function (b, i) {
+				gsap.set('#d-bx' + i, { strokeDasharray: 1, strokeDashoffset: 1 })
+				gsap.set('#d-ln' + i, { strokeDasharray: 1, strokeDashoffset: 1 })
+				tl.to('#d-bx' + i, { strokeDashoffset: 0, duration: 0.3, ease: 'none' }, B.diagram + 0.2 + i * 0.16)
+				tl.to('#d-ln' + i, { strokeDashoffset: 0, duration: 0.3, ease: 'none' }, B.diagram + 0.5 + i * 0.16)
+			})
+			gsap.set('#d-hole path', { strokeDasharray: '16 14', opacity: 0 })
+			gsap.set(['#d-lb0', '#d-lb1', '#d-lb2', '#d-lb3'], { opacity: 0 })
+			boxes.forEach(function (b, i) { tl.set('#d-lb' + i, { opacity: 1 }, B.diagram + 0.3 + i * 0.16) })
+			gsap.set(['#d-dv', '#d-br', '#d-gn'], { opacity: 0 })
+			tl.set('#d-hole path', { opacity: 1 }, B.hole)
+			tl.fromTo('#d-hole path', { scale: 0.85, svgOrigin: '440 380' }, { scale: 1, duration: 0.25, ease: 'back.out(2)', immediateRender: false }, B.hole)
+			tl.set('#d-dv', { opacity: 1 }, B.hole + 0.05)
+			tl.set('#d-br', { opacity: 1 }, B.hole + 0.35)
+			tl.set('#d-gn', { opacity: 1 }, B.hole + 0.8)
+
+			// Big text: the hook leaves upward, then one beat after another rises into its own clip box.
+			tl.to(q, { yPercent: -108, duration: 0.35, ease: 'power2.in', stagger: 0.05 }, texts.length ? texts[0].t - 0.4 : dur)
+			texts.forEach(function (b, i) {
+				var box = document.createElement('div')
+				box.className = 'q hl'
+				box.setAttribute('data-layout-allow-overlap', '')
+				box.setAttribute('data-layout-allow-occlusion', '')
+				$('d-texts').appendChild(box)
+				var spans = S.lines(box, b.text, 'd-t' + i)
+				spans.forEach(function (sp) { [sp].concat([].slice.call(sp.querySelectorAll('*'))).forEach(function (e) { e.setAttribute('data-layout-allow-occlusion', '') }) })
+				tl.set(spans, { yPercent: 108 }, 0)
+				S.rise(tl, spans, b.t)
+				var next = texts[i + 1]
+				S.leave(tl, spans, next ? next.t - 0.4 : dur - 0.3)
+			})
+			tl.to({}, { duration: dur }, 0)
+			window.__timelines['story-dave'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>

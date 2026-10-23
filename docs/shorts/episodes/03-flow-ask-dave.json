@@ -1,0 +1,526 @@
+{
+	"id": "03-flow-ask-dave",
+	"series": "Dry Run",
+	"no": 3,
+	"title": "Ask Dave",
+	"duration": 44.5,
+	"loop": 2.5,
+	"vo": {
+		"voices": {
+			"narrator": {
+				"ref": "%LOCALAPPDATA%/Temp/insilode-film-v3/audition/_refs/female-savage.wav",
+				"exaggeration": 0.4,
+				"cfg": 0.4,
+				"seed": 7
+			},
+			"lead": {
+				"ref": "%LOCALAPPDATA%/Temp/insilode-film-v3/audition/_refs/male.wav",
+				"exaggeration": 0.5,
+				"cfg": 0.4,
+				"seed": 3
+			},
+			"intern": {
+				"ref": "%LOCALAPPDATA%/Temp/insilode-film-v3/audition/_refs/male.wav",
+				"exaggeration": 0.7,
+				"cfg": 0.3,
+				"seed": 21
+			},
+			"pm": {
+				"ref": null,
+				"exaggeration": 0.5,
+				"cfg": 0.4,
+				"seed": 5
+			},
+			"cat": {
+				"ref": null,
+				"exaggeration": 0.5,
+				"cfg": 0.3,
+				"seed": 7
+			}
+		},
+		"lines": [
+			{
+				"id": "n1",
+				"t": 0.1,
+				"text": "How does *checkout* work?"
+			},
+			{
+				"id": "l1",
+				"who": "lead",
+				"t": 1.9,
+				"text": "Just ask *Dave*.",
+				"seed": 3
+			},
+			{
+				"id": "n2",
+				"t": 3.15,
+				"text": "Dave left in *March*."
+			},
+			{
+				"id": "n3",
+				"t": 5,
+				"text": "So I asked *around*."
+			},
+			{
+				"id": "l2",
+				"who": "pm",
+				"t": 6.3,
+				"text": "Dave *knows*."
+			},
+			{
+				"id": "l3",
+				"who": "intern",
+				"t": 7.6,
+				"text": "I was going to ask *Dave*."
+			},
+			{
+				"id": "n4",
+				"t": 9.6,
+				"text": "The wiki just says: *see Dave*."
+			},
+			{
+				"id": "n5",
+				"t": 12.1,
+				"text": "His auto-reply? For checkout questions, *ask Dave*."
+			},
+			{
+				"id": "n6",
+				"t": 15.6,
+				"text": "The only thing he left behind: one sticky note."
+			},
+			{
+				"id": "n7",
+				"t": 18.3,
+				"text": "It says: *it's complicated*."
+			},
+			{
+				"id": "n8",
+				"t": 20.7,
+				"text": "Our architecture had one load-bearing *Dave*."
+			},
+			{
+				"id": "n9",
+				"t": 23.7,
+				"seed": 11,
+				"text": "So I opened the *endpoint* in Insilode.",
+				"say": "So I opened the endpoint in Insihlode."
+			},
+			{
+				"id": "n10",
+				"t": 26,
+				"text": "It draws how the request actually *runs*."
+			},
+			{
+				"id": "n11",
+				"t": 28.8,
+				"text": "The controller. The service. The *orders* table."
+			},
+			{
+				"id": "n12",
+				"t": 32.4,
+				"text": "Over HTTP into *billing*. Over Kafka into shipping.",
+				"say": "Over H T T P into billing. Over Kafka into shipping."
+			},
+			{
+				"id": "n13",
+				"t": 37.2,
+				"text": "Dave left in March. The code *didn't*.",
+				"seed": 13
+			},
+			{
+				"id": "n14",
+				"t": 39.9,
+				"text": "Dave's still in *there*."
+			},
+			{
+				"id": "c1",
+				"who": "cat",
+				"t": 41.4,
+				"text": "Hey."
+			}
+		]
+	},
+	"scenes": [
+		{
+			"src": "story-dave",
+			"start": 0,
+			"duration": 23.5,
+			"captures": {
+				"captureUrl": "A1-editor"
+			},
+			"vars": {
+				"question": "How does|checkout *work*?",
+				"cam": [
+					{
+						"t": 0,
+						"cx": 0.29,
+						"cy": 0.47,
+						"w": 0.26
+					},
+					{
+						"t": 4.8,
+						"cx": 0.305,
+						"cy": 0.485,
+						"w": 0.23
+					}
+				],
+				"texts": [
+					{
+						"t": 5,
+						"text": "So I *asked*|around."
+					},
+					{
+						"t": 9.5,
+						"text": "The *wiki*?"
+					},
+					{
+						"t": 12,
+						"text": "His|*auto-reply*?"
+					},
+					{
+						"t": 15.5,
+						"text": "What he|*left behind*."
+					},
+					{
+						"t": 17,
+						"text": "One *sticky*|note."
+					},
+					{
+						"t": 18.9,
+						"text": "It's|*complicated*."
+					},
+					{
+						"t": 20.6,
+						"text": "Load-bearing|*Dave*."
+					}
+				],
+				"beats": {
+					"bubble1": 2,
+					"card": 3.3,
+					"desk": 4.95,
+					"pm": 6.3,
+					"intern": 7.6,
+					"wiki": 9.7,
+					"wikiSee": 10.64,
+					"reply": 12.2,
+					"replyBody": 13.6,
+					"sticky": 16.7,
+					"stickyIt": 19.1,
+					"stickyWord": 19.5,
+					"diagram": 20.8,
+					"hole": 22
+				}
+			}
+		},
+		{
+			"src": "story-dave-flow",
+			"start": 23.5,
+			"duration": 18.5,
+			"captures": {
+				"pickUrl": "B1-endpoints",
+				"flowUrl": "B3-sidebar"
+			},
+			"pets": {
+				"petUrl": "cat"
+			},
+			"vars": {
+				"swapAt": 2.5,
+				"sticker": 16.4,
+				"peek": 17.6,
+				"camPick": [
+					{
+						"t": 0,
+						"cx": 0.5,
+						"cy": 0.2,
+						"w": 0.34
+					}
+				],
+				"cam": [
+					{
+						"t": 2.5,
+						"cx": 0.47,
+						"cy": 0.52,
+						"w": 0.64
+					},
+					{
+						"t": 4.9,
+						"cx": 0.47,
+						"cy": 0.52,
+						"w": 0.64
+					},
+					{
+						"t": 5.6,
+						"cx": 0.235,
+						"cy": 0.37,
+						"w": 0.2
+					},
+					{
+						"t": 6.6,
+						"cx": 0.375,
+						"cy": 0.425,
+						"w": 0.2
+					},
+					{
+						"t": 7.4,
+						"cx": 0.5,
+						"cy": 0.455,
+						"w": 0.2
+					},
+					{
+						"t": 10.5,
+						"cx": 0.61,
+						"cy": 0.565,
+						"w": 0.34
+					},
+					{
+						"t": 11.9,
+						"cx": 0.614,
+						"cy": 0.68,
+						"w": 0.34
+					},
+					{
+						"t": 13.2,
+						"cx": 0.47,
+						"cy": 0.52,
+						"w": 0.64
+					},
+					{
+						"t": 15,
+						"cx": 0.47,
+						"cy": 0.52,
+						"w": 0.64
+					},
+					{
+						"t": 16.3,
+						"cx": 0.233,
+						"cy": 0.362,
+						"w": 0.16
+					}
+				],
+				"rings": [
+					{
+						"t": 0.9,
+						"d": 0.95,
+						"cx": 0.5,
+						"cy": 0.208,
+						"w": 0.31,
+						"h": 0.045
+					},
+					{
+						"t": 2.9,
+						"d": 1.5,
+						"cx": 0.233,
+						"cy": 0.362,
+						"w": 0.13,
+						"h": 0.09
+					},
+					{
+						"t": 7.4,
+						"d": 1.4,
+						"cx": 0.506,
+						"cy": 0.456,
+						"w": 0.11,
+						"h": 0.1
+					},
+					{
+						"t": 10.5,
+						"d": 1.2,
+						"cx": 0.719,
+						"cy": 0.582,
+						"w": 0.1,
+						"h": 0.055
+					},
+					{
+						"t": 11.9,
+						"d": 1.1,
+						"cx": 0.697,
+						"cy": 0.699,
+						"w": 0.155,
+						"h": 0.07
+					}
+				],
+				"hops": [
+					{
+						"t": 2.7,
+						"label": "POST /orders",
+						"out": 13.2
+					},
+					{
+						"t": 7.4,
+						"label": "writes orders",
+						"out": 13.2
+					},
+					{
+						"t": 10.5,
+						"label": "HTTP → billing (Python)",
+						"out": 13.2
+					},
+					{
+						"t": 11.9,
+						"label": "Kafka → shipping",
+						"out": 13.2
+					}
+				],
+				"texts": [
+					{
+						"t": 0.1,
+						"text": "Open the|*endpoint*."
+					},
+					{
+						"t": 2.7,
+						"text": "It draws|how it *runs*."
+					},
+					{
+						"t": 5.1,
+						"text": "Follow it|*in order*."
+					},
+					{
+						"t": 13.5,
+						"text": "No *Dave*|required."
+					},
+					{
+						"t": 16.2,
+						"text": "Dave's still|in *there*."
+					}
+				]
+			}
+		},
+		{
+			"src": "story-end",
+			"start": 42,
+			"duration": 2.5,
+			"captures": {
+				"captureUrl": "A1-editor"
+			},
+			"vars": {
+				"question": "How does|checkout *work*?",
+				"cam": {
+					"cx": 0.29,
+					"cy": 0.47,
+					"w": 0.26
+				}
+			}
+		}
+	],
+	"sfx": [
+		{
+			"t": 2,
+			"kind": "pop"
+		},
+		{
+			"t": 3.3,
+			"kind": "whoosh"
+		},
+		{
+			"t": 4.95,
+			"kind": "whoosh"
+		},
+		{
+			"t": 6.3,
+			"kind": "pop"
+		},
+		{
+			"t": 7.6,
+			"kind": "pop"
+		},
+		{
+			"t": 9.7,
+			"kind": "tick"
+		},
+		{
+			"t": 10.64,
+			"kind": "tick"
+		},
+		{
+			"t": 12.2,
+			"kind": "tick"
+		},
+		{
+			"t": 13.6,
+			"kind": "tick"
+		},
+		{
+			"t": 16.7,
+			"kind": "whoosh"
+		},
+		{
+			"t": 19.1,
+			"kind": "tick"
+		},
+		{
+			"t": 19.5,
+			"kind": "tick"
+		},
+		{
+			"t": 21,
+			"kind": "tick"
+		},
+		{
+			"t": 21.16,
+			"kind": "tick"
+		},
+		{
+			"t": 21.32,
+			"kind": "tick"
+		},
+		{
+			"t": 21.48,
+			"kind": "tick"
+		},
+		{
+			"t": 22,
+			"kind": "pop"
+		},
+		{
+			"t": 23.5,
+			"kind": "pop"
+		},
+		{
+			"t": 26,
+			"kind": "tick"
+		},
+		{
+			"t": 29.04,
+			"kind": "note",
+			"pitch": 0
+		},
+		{
+			"t": 30,
+			"kind": "note",
+			"pitch": 2
+		},
+		{
+			"t": 30.8,
+			"kind": "note",
+			"pitch": 4
+		},
+		{
+			"t": 34,
+			"kind": "note",
+			"pitch": 6
+		},
+		{
+			"t": 35.12,
+			"kind": "note",
+			"pitch": 7
+		},
+		{
+			"t": 39.9,
+			"kind": "pop"
+		},
+		{
+			"t": 41.4,
+			"kind": "tick"
+		}
+	],
+	"music": {
+		"bpm": 92
+	},
+	"description": "How does checkout work? Ask Dave. Dave left in March. A new hire asks around, finds a farewell card, a wiki page that says see Dave, an auto-reply that says ask Dave and one sticky note, then opens the endpoint in Insilode and sees how the request actually runs: controller, service, the orders table, HTTP into billing, Kafka into shipping. Demo project (Harbor Goods). Real captures of Insilode, a code editor built on VS Code. Voice: synthetic (AI-generated). Music composed in code. Free and open source: insilode.dev",
+	"hashtags": [
+		"#dryrun",
+		"#codeeditor",
+		"#backend",
+		"#devtools"
+	]
+}

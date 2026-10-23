@@ -254,7 +254,10 @@ Every voiced episode's description says "Voice: synthetic (AI-generated)", and t
 - The joke: the string-and-pins conspiracy board every developer has drawn in their head, and the punchline that it *is* all connected; the editor draws it for you.
 - Why it was picked: the joke turns into the product picture (the board becomes the canvas), and the pain (the first week, the Ctrl+Click rabbit hole) is universal.
 
-**B. Ask Dave**
+**B. Ask Dave** (built: [episodes/03-flow-ask-dave.json](../shorts/episodes/03-flow-ask-dave.json), 44.5 s, scenes `story-dave` and `story-dave-flow`)
+
+- As built: three colleague voices say "ask Dave" (lead, PM, intern; the captions name the speaker), then drawn paper: Dave's farewell card, a wiki page that says "See Dave.", his auto-reply ("for checkout questions, ask Dave"), one sticky note ("it's complicated."), and a marker diagram with a dashed Dave-shaped hole that every box leans on. The reveal opens the real endpoint picker, cuts to the real canvas and rides it (controller, service, orders table, HTTP into billing, Kafka into shipping). Payoff: a drawn "HELLO my name is DAVE" sticker on the controller node, the cat peeks in with a name tag and says "Hey.", then the hook frame and the tag. The search-for-"invoice" beat of the pitch was dropped (no real capture of it). The "checkout" of the hook is the demo project's POST /orders.
+- Pitch as first written:
 
 - Hook: "How does checkout work?" "Ask Dave." "Dave left in March."
 - Beats: Dave's farewell card (drawn) → the only documentation Dave left is a sticky note: "it's complicated" → a search for "invoice" returns everything → the narrator opens the endpoint: the flow is drawn from the code as it is today → "Dave's in a tab now." The pet wears a tiny "Dave" name badge.

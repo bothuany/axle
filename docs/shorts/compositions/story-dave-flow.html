@@ -1,0 +1,122 @@
+<!doctype html>
+<!-- Story scene "dave-flow" (voiced stories, episode 03-flow-ask-dave): the reveal on real captures. First the real
+     "open an endpoint" picker (the voice says "I opened the endpoint"), a hard cut to the real call-flow canvas, then the
+     camera rides the request in the order the code runs, a ring marks what the voice names and a chip lands per hop.
+     The last beat is the joke's payoff: a drawn "HELLO my name is DAVE" sticker is slapped on the controller node (it is
+     paper, clearly not part of the app) and the pet peeks in wearing a drawn name tag. Times are the scene's own
+     (0 = the cut from the comic). -->
+<html lang="en" data-composition-variables='[
+{"id":"pickUrl","type":"string","label":"Endpoint picker capture","default":"assets/captures/B1-endpoints.jpg"},
+{"id":"flowUrl","type":"string","label":"Flow capture","default":"assets/captures/B3-sidebar.jpg"},
+{"id":"petUrl","type":"string","label":"Pet","default":"assets/pets/cat.png"},
+{"id":"swapAt","type":"number","label":"Cut from the picker to the canvas (s)","default":2.5},
+{"id":"camPick","type":"string","label":"Camera keys on the picker (JSON)","default":"[{\"t\":0,\"cx\":0.5,\"cy\":0.2,\"w\":0.34}]"},
+{"id":"cam","type":"string","label":"Camera keys on the canvas (JSON, the first is at swapAt)","default":"[{\"t\":2.5,\"cx\":0.47,\"cy\":0.52,\"w\":0.64}]"},
+{"id":"rings","type":"string","label":"Rings (JSON: t, d, cx, cy, w, h)","default":"[]"},
+{"id":"hops","type":"string","label":"Hop chips (JSON: t, label)","default":"[]"},
+{"id":"texts","type":"string","label":"Big text beats (JSON: t, text with | and *accent*)","default":"[]"},
+{"id":"sticker","type":"number","label":"When the DAVE sticker is slapped on (s)","default":16.5},
+{"id":"peek","type":"number","label":"When the pet peeks in (s)","default":17.8},
+{"id":"duration","type":"number","label":"Scene length (s)","default":18.5}
+]'>
+<body>
+<template id="story-dave-flow-template">
+	<style>
+		#root { position: absolute; inset: 0; }
+		#v-texts .q { font-size: 100px; }
+		#v-panel { left: var(--px); top: 480px; width: var(--pw); height: 810px; }
+		#v-flow { opacity: 0; }
+		#v-chips { position: absolute; left: 22px; bottom: 22px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+		#v-chips .chip { font-size: 32px; background: rgba(12, 16, 32, .92); }
+		/* The sticker is paper: a name tag, drawn in marker, slapped on the node. */
+		#v-tag { position: absolute; z-index: 15; left: 0; top: 0; width: 330px; height: 220px; margin-left: -165px; margin-top: -110px; background: #fffdf6; border-radius: 10px; box-shadow: 0 10px 22px rgba(0, 0, 0, .45); overflow: hidden; opacity: 0; }
+		#v-tag .hello { height: 74px; background: #d01e2a; color: #fff; font-family: var(--sans); font-weight: 700; font-size: 52px; letter-spacing: .06em; text-align: center; line-height: 74px; }
+		#v-tag .my { font-family: var(--mono); font-weight: 500; font-size: 28px; color: #3a2a30; text-align: center; margin-top: 6px; }
+		#v-tag .dv { font-family: var(--sans); font-weight: 700; font-size: 84px; line-height: 1; letter-spacing: -0.02em; color: #1d2a4a; text-align: center; margin-top: 2px; }
+		#v-pet { position: absolute; z-index: 20; right: 40px; bottom: -230px; width: 176px; height: 176px; image-rendering: pixelated; border-radius: 26px; }
+		#v-pettag { position: absolute; z-index: 21; right: 62px; bottom: -214px; width: 132px; height: 62px; background: #fffdf6; border-top: 12px solid #d01e2a; border-radius: 6px; box-shadow: 0 4px 8px rgba(0, 0, 0, .4); font-family: var(--sans); font-weight: 700; font-size: 34px; line-height: 50px; text-align: center; color: #1d2a4a; letter-spacing: .04em; }
+	</style>
+	<div id="root" data-composition-id="story-dave-flow" data-width="1080" data-height="1920">
+		<div class="demo">demo project</div>
+		<div id="v-texts"></div>
+		<div id="v-panel" class="panel">
+			<div id="v-cam" class="cam" data-layout-allow-overflow>
+				<img id="v-pick" data-var-src="pickUrl" src="assets/blank.png#vp" alt="">
+				<img id="v-flow" data-var-src="flowUrl" src="assets/blank.png#vf" alt="" style="position:absolute;left:0;top:0">
+			</div>
+			<div id="v-chips"></div>
+			<div id="v-tag" data-layout-allow-overflow data-layout-allow-occlusion data-layout-allow-overlap><div class="hello">HELLO</div><div class="my">my name is</div><div class="dv">DAVE</div></div>
+			<img id="v-pet" data-var-src="petUrl" src="assets/blank.png#vc" alt="" data-layout-allow-overflow>
+			<div id="v-pettag" data-layout-allow-overflow data-layout-allow-occlusion>DAVE</div>
+		</div>
+	</div>
+	<script>
+		(function () {
+			var V = Shorts.vars('story-dave-flow'), S = Shorts
+			var tl = gsap.timeline({ paused: true })
+			var $ = function (id) { return document.getElementById(id) }
+			var dur = V.duration
+			var PW = 972, PH = 810
+
+			// The camera: the picker's keys first, then (after the cut to the canvas) the canvas's own.
+			S.camera(tl, '#v-cam', S.json(V.camPick, []), PW, PH)
+			tl.set('#v-flow', { opacity: 1 }, V.swapAt)
+			tl.set('#v-pick', { opacity: 0 }, V.swapAt)
+			var keys = S.json(V.cam, [])
+			tl.set('#v-cam', S.fit(keys[0], PW, PH), V.swapAt)
+			for (var i = 1; i < keys.length; i++) {
+				var d = keys[i].t - keys[i - 1].t
+				if (d <= 0) continue
+				var to = S.fit(keys[i], PW, PH)
+				to.duration = d
+				to.ease = 'power2.inOut'
+				tl.to('#v-cam', to, keys[i - 1].t)
+			}
+			S.rings(tl, $('v-cam'), S.json(V.rings, []))
+
+			// Big text: each beat rises into its own clip box and leaves upward before the next one.
+			var texts = S.json(V.texts, [])
+			texts.forEach(function (b, i) {
+				var box = document.createElement('div')
+				box.className = 'q hl'
+				box.setAttribute('data-layout-allow-overlap', '')
+				box.setAttribute('data-layout-allow-occlusion', '')
+				$('v-texts').appendChild(box)
+				var spans = S.lines(box, b.text, 'v-t' + i)
+				spans.forEach(function (sp) { [sp].concat([].slice.call(sp.querySelectorAll('*'))).forEach(function (e) { e.setAttribute('data-layout-allow-occlusion', '') }) })
+				tl.set(spans, { yPercent: 108 }, 0)
+				S.rise(tl, spans, b.t)
+				var next = texts[i + 1]
+				S.leave(tl, spans, next ? next.t - 0.4 : dur - 0.3)
+			})
+
+			// A chip per hop, stacked bottom-left; they leave down through the panel's edge together before the end.
+			S.json(V.hops, []).forEach(function (h, i) {
+				var chip = document.createElement('span')
+				chip.className = 'chip'
+				chip.id = 'v-chip' + i
+				chip.setAttribute('data-layout-allow-occlusion', '')
+				chip.setAttribute('data-layout-allow-overflow', '')
+				chip.textContent = h.label
+				$('v-chips').appendChild(chip)
+				tl.fromTo(chip, { y: 300 }, { y: 0, duration: 0.4, ease: 'power3.out' }, h.t)
+				tl.to(chip, { y: 300, duration: 0.3, ease: 'power2.in' }, h.out || dur - 5)
+			})
+
+			// The payoff: the name tag lands on the controller node (the camera's last key is centred on it).
+			var last = keys[keys.length - 1]
+			var f = S.fit(last, PW, PH)
+			var node = { x: f.x + f.scale * 0.294 * S.IW, y: f.y + f.scale * 0.322 * S.IH }
+			gsap.set('#v-tag', { x: node.x - 130, y: node.y + 20, rotation: 7 })
+			tl.fromTo('#v-tag', { scale: 2.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.18, ease: 'power3.in', immediateRender: false }, V.sticker)
+			tl.fromTo('#v-tag', { rotation: 3 }, { rotation: 7, duration: 0.25, ease: 'back.out(3)', immediateRender: false }, V.sticker + 0.18)
+
+			// The pet peeks up through the panel's bottom edge with a name tag of its own.
+			tl.to(['#v-pet', '#v-pettag'], { y: -250, duration: 0.4, ease: 'power3.out' }, V.peek)
+			tl.to({}, { duration: dur }, 0)
+			window.__timelines['story-dave-flow'] = tl
+		})()
+	</script>
+</template>
+</body>
+</html>
