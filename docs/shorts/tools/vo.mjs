@@ -76,7 +76,10 @@ const placed = []
 for (const l of ep.vo.lines) {
 	const out = join(work, 'lines', `${l.id}.wav`)
 	const stretch = l.tempo && l.tempo !== 1 ? `rubberband=tempo=${l.tempo}:transients=smooth:formant=preserved:pitchq=quality,` : ''
-	ff(['-i', join(work, 'raw', `${l.id}.wav`), '-af', `${TRIM},aresample=${SR},${stretch}loudnorm=I=-16:TP=-1.5:LRA=11,aresample=${SR}`, '-ac', '1', '-ar', String(SR), '-c:a', 'pcm_s16le', out])
+	// A gentle compressor first: a take can get 6 dB hotter on one phrase, and the line's loudness alone does not
+	// even that out.
+	const comp = 'acompressor=threshold=-24dB:ratio=3:attack=8:release=150:makeup=1'
+	ff(['-i', join(work, 'raw', `${l.id}.wav`), '-af', `${TRIM},aresample=${SR},${stretch}${comp},loudnorm=I=-16:TP=-1.5:LRA=7,aresample=${SR}`, '-ac', '1', '-ar', String(SR), '-c:a', 'pcm_s16le', out])
 	const words = transcribe(out)
 	const pcm = readWav(out)
 	const dur = pcm.length / SR
