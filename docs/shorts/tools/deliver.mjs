@@ -1,7 +1,7 @@
-// Delivers one rendered episode: the render, a phone copy (H.264 High, yuv420p, 30 fps, AAC 48 kHz, faststart, loudness
+// Delivers one rendered episode: the render (its picture untouched, its sound at the loudness below), a phone copy (H.264 High, yuv420p, 30 fps, AAC 48 kHz, faststart, loudness
 // normalized to -15 LUFS with true peak under -1.5 dBFS, two-pass) and a contact sheet, then measures the copy.
 //   node tools/deliver.mjs <render.mp4> <out dir> <name>      writes <name>.mp4, <name>-phone.mp4, <name>-contact-sheet.jpg
-import { copyFileSync, mkdirSync, openSync, readSync, closeSync } from 'node:fs'
+import { mkdirSync, openSync, readSync, closeSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
@@ -15,12 +15,13 @@ const run = (cmd, a) => {
 }
 const full = join(out, `${name}.mp4`)
 const phone = join(out, `${name}-phone.mp4`)
-copyFileSync(src, full)
 
 // Loudness, pass one: measure.
 const LN = 'loudnorm=I=-15:TP=-1.5:LRA=11'
 const m = JSON.parse(run('ffmpeg', ['-hide_banner', '-i', src, '-af', `${LN}:print_format=json`, '-f', 'null', '-']).match(/\{[^{}]*"input_i"[^{}]*\}/)[0])
 const pass2 = `${LN}:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:offset=${m.target_offset}:linear=true,aresample=48000`
+// The delivered file keeps the rendered picture as it is and gets the same loudness as the phone copy.
+run('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-c:v', 'copy', '-af', pass2, '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-movflags', '+faststart', full])
 run('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-r', '30', '-af', pass2, '-c:a', 'aac', '-b:a', '160k', '-ar', '48000', '-movflags', '+faststart', phone])
 
 // Measure the copy: loudness, true peak, the stream, and that moov comes before mdat.

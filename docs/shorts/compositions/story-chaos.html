@@ -81,7 +81,7 @@
 			// Ctrl+Click on `service.place(order)`: a ring and the chord, once per click.
 			var call = at(keys[0], 0.275, 0.503)
 			gsap.set('#c-click', { x: call.x, y: call.y })
-			gsap.set('#c-ctrl', { x: call.x + 70, y: call.y - 110 })
+			gsap.set('#c-ctrl', { x: call.x + 80, y: call.y + 50 })
 			;(B.clicks || []).forEach(function (t) {
 				tl.fromTo('#c-click', { scale: 0.4, opacity: 1 }, { scale: 1.4, opacity: 0, duration: 0.45, ease: 'power2.out', immediateRender: false }, t)
 				tl.set('#c-ctrl', { opacity: 1 }, t)
